@@ -37,6 +37,65 @@ export function formatScheduleSlot(slot: Pick<ScheduleSlot, "day_of_week" | "sta
   return `${DAY_LABELS[slot.day_of_week]} ${formatTimeRange(slot.start_time, slot.end_time)}`;
 }
 
+// 표시용 요일 순서: 월화수목금토일
+export const DAY_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
+const dayRank = new Map<number, number>(DAY_DISPLAY_ORDER.map((day, index) => [day, index]));
+
+export function sortDays(days: number[]) {
+  return [...days].sort((a, b) => (dayRank.get(a) ?? 9) - (dayRank.get(b) ?? 9));
+}
+
+export function formatDayList(days: number[]) {
+  return sortDays(days)
+    .map((day) => DAY_LABELS[day])
+    .join(" · ");
+}
+
+export type GroupedScheduleBlock = {
+  key: string;
+  days: number[];
+  startTime: string; // "HH:MM"
+  endTime: string;
+  slotIds: string[];
+};
+
+// 같은 시작~종료 시간의 요일별 schedule row들을 표시용 블록으로 묶는다.
+// (DB는 요일별 row 그대로 — 이건 순수 view 유틸)
+export function groupSchedulesByTime(
+  slots: { id?: string; day_of_week: number; start_time: string; end_time: string }[],
+): GroupedScheduleBlock[] {
+  const map = new Map<string, GroupedScheduleBlock>();
+
+  for (const slot of slots) {
+    const startTime = formatTimeHM(slot.start_time);
+    const endTime = formatTimeHM(slot.end_time);
+    const key = `${startTime}-${endTime}`;
+    const block = map.get(key) ?? { key, days: [], startTime, endTime, slotIds: [] };
+
+    if (!block.days.includes(slot.day_of_week)) {
+      block.days.push(slot.day_of_week);
+    }
+
+    if (slot.id) {
+      block.slotIds.push(slot.id);
+    }
+
+    map.set(key, block);
+  }
+
+  return [...map.values()]
+    .map((block) => ({ ...block, days: sortDays(block.days) }))
+    .sort(
+      (a, b) =>
+        a.startTime.localeCompare(b.startTime) ||
+        (dayRank.get(a.days[0]) ?? 9) - (dayRank.get(b.days[0]) ?? 9),
+    );
+}
+
+export function formatScheduleBlock(block: Pick<GroupedScheduleBlock, "days" | "startTime" | "endTime">) {
+  return `${formatDayList(block.days)} ${block.startTime} ~ ${block.endTime}`;
+}
+
 // Today's date parts as seen in APP_TIMEZONE, regardless of server timezone.
 export function getAppTimezoneToday(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {

@@ -15,9 +15,10 @@ import {
   updateGroupPreparationItems,
 } from "@/lib/supabase/queries/groups";
 import {
-  addGroupSchedule,
-  deleteGroupSchedule,
+  addGroupSchedules,
+  deleteGroupSchedules,
   getCurrentUserSchedulesWithGroup,
+  replaceGroupSchedules,
 } from "@/lib/supabase/queries/schedules";
 import { formatScheduleSlot, slotsOverlap } from "@/lib/schedule";
 import { preparationItemSchema, preparationItemsSchema } from "@/lib/validation/daily-log";
@@ -225,30 +226,101 @@ export async function updateGroupHighlightAction(groupId: string, text: string) 
   return { success: true as const };
 }
 
-export async function addGroupScheduleAction(groupId: string, formData: FormData) {
-  const parsed = groupScheduleSchema.safeParse({
-    dayOfWeek: String(formData.get("dayOfWeek") ?? ""),
-    startTime: String(formData.get("startTime") ?? ""),
-    endTime: String(formData.get("endTime") ?? ""),
-  });
+type ScheduleSetValues = { days: number[]; startTime: string; endTime: string };
 
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "수업 시간을 다시 확인해주세요.");
+function parseScheduleSet(values: ScheduleSetValues) {
+  if (!Array.isArray(values.days) || values.days.length === 0) {
+    return { error: "수업 요일을 하나 이상 선택해주세요." } as const;
   }
 
-  await addGroupSchedule(groupId, parsed.data);
-  revalidatePath(`/groups/${groupId}`);
-  revalidatePath("/groups");
-  revalidatePath("/dashboard");
-  redirect(`/groups/${groupId}?edit=1`);
+  const rows: { dayOfWeek: number; startTime: string; endTime: string }[] = [];
+
+  for (const day of [...new Set(values.days)]) {
+    const parsed = groupScheduleSchema.safeParse({
+      dayOfWeek: String(day),
+      startTime: values.startTime,
+      endTime: values.endTime,
+    });
+
+    if (!parsed.success) {
+      return {
+        error: parsed.error.issues[0]?.message ?? "수업 시간을 다시 확인해주세요.",
+      } as const;
+    }
+
+    rows.push(parsed.data);
+  }
+
+  return { rows } as const;
 }
 
-export async function deleteGroupScheduleAction(groupId: string, scheduleId: string) {
-  await deleteGroupSchedule(scheduleId);
+function revalidateSchedulePages(groupId: string) {
   revalidatePath(`/groups/${groupId}`);
   revalidatePath("/groups");
+  revalidatePath("/students");
   revalidatePath("/dashboard");
-  redirect(`/groups/${groupId}?edit=1`);
+  revalidatePath("/daily-logs");
+}
+
+export async function addGroupScheduleSetAction(
+  groupId: string,
+  values: ScheduleSetValues,
+): Promise<{ error: string } | { success: true }> {
+  const parsed = parseScheduleSet(values);
+
+  if ("error" in parsed) {
+    return { error: parsed.error ?? "수업 시간을 다시 확인해주세요." };
+  }
+
+  try {
+    await addGroupSchedules(groupId, parsed.rows);
+  } catch (error) {
+    return {
+      error: error instanceof Error && error.message ? error.message : "수업 시간을 저장하지 못했어요.",
+    };
+  }
+
+  revalidateSchedulePages(groupId);
+  return { success: true };
+}
+
+export async function replaceGroupScheduleSetAction(
+  groupId: string,
+  deleteIds: string[],
+  values: ScheduleSetValues,
+): Promise<{ error: string } | { success: true }> {
+  const parsed = parseScheduleSet(values);
+
+  if ("error" in parsed) {
+    return { error: parsed.error ?? "수업 시간을 다시 확인해주세요." };
+  }
+
+  try {
+    await replaceGroupSchedules(groupId, deleteIds, parsed.rows);
+  } catch (error) {
+    return {
+      error: error instanceof Error && error.message ? error.message : "수업 시간을 수정하지 못했어요.",
+    };
+  }
+
+  revalidateSchedulePages(groupId);
+  return { success: true };
+}
+
+export async function deleteGroupScheduleSetAction(
+  groupId: string,
+  scheduleIds: string[],
+): Promise<{ error: string } | { success: true }> {
+  try {
+    await deleteGroupSchedules(scheduleIds);
+  } catch (error) {
+    return {
+      error: error instanceof Error && error.message ? error.message : "수업 시간을 삭제하지 못했어요.",
+    };
+  }
+
+  revalidateSchedulePages(groupId);
+  return { success: true };
 }
 
 async function getOwnedPreparationItems(groupId: string) {

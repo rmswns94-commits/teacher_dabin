@@ -22,6 +22,7 @@ import {
 import { AppShell } from "@/components/app-shell";
 import { HighlightCard } from "@/components/highlight-card";
 import { PageHeader } from "@/components/page-header";
+import { ScheduleSetEditor } from "@/components/schedule-set-editor";
 import { TextbookFieldsEditor } from "@/components/textbook-fields-editor";
 import { PendingButton } from "@/components/pending-button";
 import { DailyLogStatusBadge } from "@/components/status-badge";
@@ -38,14 +39,12 @@ import {
 import { gradeDisplay, gradeOptions } from "@/lib/grades";
 import { getCurrentUserMakeups } from "@/lib/supabase/queries/makeups";
 import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
-import { DAY_LABELS, formatScheduleSlot } from "@/lib/schedule";
+import { formatScheduleBlock, groupSchedulesByTime } from "@/lib/schedule";
 import type { PreparationItem } from "@/lib/supabase/types";
 import {
-  addGroupScheduleAction,
   addPreparationItemAction,
   addStudentToGroupAction,
   archiveGroupAction,
-  deleteGroupScheduleAction,
   deletePreparationItemAction,
   removeStudentFromGroupAction,
   togglePreparationItemAction,
@@ -135,9 +134,9 @@ export default async function GroupDetailPage({
             {schedules.length === 0 ? (
               <span className="text-[#8a7b77]">아직 등록된 수업 시간이 없어요.</span>
             ) : (
-              schedules.map((slot) => (
-                <span key={slot.id} className="rounded-full bg-[#f2edf9] px-2.5 py-1 text-xs tabular-nums text-[#4a3f6d]">
-                  {formatScheduleSlot(slot)}
+              groupSchedulesByTime(schedules).map((block) => (
+                <span key={block.key} className="rounded-full bg-[#f2edf9] px-2.5 py-1 text-xs tabular-nums text-[#4a3f6d]">
+                  {formatScheduleBlock(block)}
                 </span>
               ))
             )}
@@ -220,61 +219,7 @@ export default async function GroupDetailPage({
                 </div>
                 <p className="mb-3 text-xs text-[#8a7b77]">수업 시간 변경은 바로 저장돼요.</p>
 
-                {schedules.length === 0 ? (
-                  <div className="mb-3 rounded-2xl bg-[#f8f3ef] p-3 text-sm text-[#655d5d]">
-                    아직 등록된 수업 시간이 없어요.
-                  </div>
-                ) : (
-                  <ul className="mb-3 space-y-1.5">
-                    {schedules.map((slot) => (
-                      <li
-                        key={slot.id}
-                        className="flex items-center justify-between rounded-xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-sm"
-                      >
-                        <span className="text-[#2b2323]">{formatScheduleSlot(slot)}</span>
-                        <form action={deleteGroupScheduleAction.bind(null, id, slot.id)}>
-                          <button
-                            type="submit"
-                            aria-label={`${formatScheduleSlot(slot)} 삭제`}
-                            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-[#8f625f] transition hover:bg-[#fdf4f1]"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> 삭제
-                          </button>
-                        </form>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                <form action={addGroupScheduleAction.bind(null, id)} className="flex flex-wrap items-center gap-2">
-                  <select
-                    name="dayOfWeek"
-                    defaultValue=""
-                    className="rounded-xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-sm outline-none"
-                    required
-                  >
-                    <option value="" disabled>요일</option>
-                    {[1, 2, 3, 4, 5, 6, 0].map((day) => (
-                      <option key={day} value={day}>{DAY_LABELS[day]}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="time"
-                    name="startTime"
-                    className="rounded-xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-sm outline-none"
-                    required
-                  />
-                  <span className="text-sm text-[#8a7b77]">~</span>
-                  <input
-                    type="time"
-                    name="endTime"
-                    className="rounded-xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-sm outline-none"
-                    required
-                  />
-                  <PendingButton variant="secondary" size="sm" pendingText="추가 중..." className="gap-1">
-                    <Plus className="h-3.5 w-3.5" /> 수업 시간 추가
-                  </PendingButton>
-                </form>
+                <ScheduleSetEditor groupId={id} slots={schedules} />
               </div>
 
               <form action={archiveGroupAction.bind(null, id)} className="mt-4 border-t border-[#f0e7e2] pt-4">

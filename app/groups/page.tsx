@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PendingButton } from "@/components/pending-button";
 import { formatGrade } from "@/lib/grades";
-import { formatScheduleSlot } from "@/lib/schedule";
+import { formatScheduleBlock, groupSchedulesByTime } from "@/lib/schedule";
 import { getAllGroupStudentCounts, getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import { restoreGroupAction } from "./actions";
@@ -26,12 +26,9 @@ export default async function GroupsPage({
     getCurrentUserSchedulesWithGroup(),
   ]);
 
-  const schedulesByGroup = new Map<string, string[]>();
+  const schedulesByGroup = new Map<string, typeof schedules>();
   for (const slot of schedules) {
-    schedulesByGroup.set(slot.group_id, [
-      ...(schedulesByGroup.get(slot.group_id) ?? []),
-      formatScheduleSlot(slot),
-    ]);
+    schedulesByGroup.set(slot.group_id, [...(schedulesByGroup.get(slot.group_id) ?? []), slot]);
   }
   const groups = allGroups.filter((group) => !group.archived);
   const archivedGroups = allGroups.filter((group) => group.archived);
@@ -84,7 +81,9 @@ export default async function GroupsPage({
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {visibleGroups.map((group) => {
-              const groupTimes = schedulesByGroup.get(group.id) ?? [];
+              const groupTimes = groupSchedulesByTime(schedulesByGroup.get(group.id) ?? []).map(
+                formatScheduleBlock,
+              );
               const textbooks = (group.textbook ?? "")
                 .split("\n")
                 .map((line) => line.trim())

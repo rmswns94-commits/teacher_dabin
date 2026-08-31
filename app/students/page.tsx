@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatShortMonthDay } from "@/lib/dates";
 import { formatGrade } from "@/lib/grades";
-import { formatScheduleSlot } from "@/lib/schedule";
+import { formatScheduleBlock, groupSchedulesByTime } from "@/lib/schedule";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import { getCurrentUserMemberships, getCurrentUserStudents } from "@/lib/supabase/queries/students";
@@ -84,12 +84,9 @@ export default async function StudentsPage({
 
   const unassigned = activeStudents.filter((student) => !assignedStudentIds.has(student.id));
 
-  const schedulesByGroup = new Map<string, string[]>();
+  const schedulesByGroup = new Map<string, typeof schedules>();
   for (const slot of schedules) {
-    schedulesByGroup.set(slot.group_id, [
-      ...(schedulesByGroup.get(slot.group_id) ?? []),
-      formatScheduleSlot(slot),
-    ]);
+    schedulesByGroup.set(slot.group_id, [...(schedulesByGroup.get(slot.group_id) ?? []), slot]);
   }
 
   const sections = groups.map((group) => {
@@ -100,7 +97,7 @@ export default async function StudentsPage({
       group,
       total: groupStudents.length,
       students: groupStudents.filter(matches),
-      times: schedulesByGroup.get(group.id) ?? [],
+      times: groupSchedulesByTime(schedulesByGroup.get(group.id) ?? []).map(formatScheduleBlock),
     };
   });
 
