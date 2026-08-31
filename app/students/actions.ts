@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { createStudent, updateStudent, archiveStudent, restoreStudent } from "@/lib/supabase/queries/students";
+import { createStudent, deleteStudent, updateStudent, archiveStudent, restoreStudent } from "@/lib/supabase/queries/students";
 import { studentSchema } from "@/lib/validation/student";
 
 // 학생 목록 페이지의 등록 다이얼로그에서 사용. 성공 시 목록에 머문다.
@@ -73,7 +73,23 @@ export async function updateStudentAction(studentId: string, formData: FormData)
 
   revalidatePath("/students");
   revalidatePath(`/students/${studentId}`);
-  redirect(`/students/${studentId}?saved=1`);
+  redirect("/students?saved=1");
+}
+
+// 학생 완전 삭제 (수업/보충 기록 포함). 클라이언트에서 확인을 거친 뒤 호출된다.
+export async function deleteStudentAction(studentId: string): Promise<{ error: string } | never> {
+  try {
+    await deleteStudent(studentId);
+  } catch (error) {
+    return {
+      error: error instanceof Error && error.message ? error.message : "학생을 삭제하지 못했어요.",
+    };
+  }
+
+  revalidatePath("/students");
+  revalidatePath("/groups");
+  revalidatePath("/dashboard");
+  redirect("/students?deleted=1");
 }
 
 export async function archiveStudentAction(studentId: string) {

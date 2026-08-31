@@ -274,6 +274,63 @@ export async function restoreStudent(studentId: string) {
   return true;
 }
 
+// 학생 완전 삭제. 수업 기록/보충 기록이 FK(restrict)로 연결되어 있어
+// 보충 → 학생별 수업 기록 → 학생 순서로 지운다 (멤버십은 cascade).
+export async function deleteStudent(studentId: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  const { data: existing } = await supabase
+    .from("students")
+    .select("id")
+    .eq("id", studentId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!existing) {
+    throw new Error("학생 정보를 찾을 수 없어요.");
+  }
+
+  const { error: makeupError } = await supabase
+    .from("makeup_lessons")
+    .delete()
+    .eq("student_id", studentId)
+    .eq("user_id", user.id);
+
+  if (makeupError) {
+    console.error("deleteStudent makeup error", makeupError);
+    throw new Error("학생의 보충 기록을 삭제하지 못했어요.");
+  }
+
+  const { error: lessonError } = await supabase
+    .from("student_lesson_logs")
+    .delete()
+    .eq("student_id", studentId)
+    .eq("user_id", user.id);
+
+  if (lessonError) {
+    console.error("deleteStudent lesson error", lessonError);
+    throw new Error("학생의 수업 기록을 삭제하지 못했어요.");
+  }
+
+  const { error } = await supabase
+    .from("students")
+    .delete()
+    .eq("id", studentId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("deleteStudent error", error);
+    throw new Error("학생을 삭제하지 못했어요.");
+  }
+
+  return true;
+}
+
 export async function getStudentOrThrow(studentId: string) {
   const student = await getStudentByIdForCurrentUser(studentId);
 

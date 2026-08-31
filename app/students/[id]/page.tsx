@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Archive, BookOpen, PencilLine, Sparkles, Target } from "lucide-react";
+import { BookOpen, PencilLine, Sparkles, Target } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
+import { StudentDeleteButton } from "@/components/student-delete-button";
 import { GuardedForm } from "@/components/unsaved-guard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,18 +20,15 @@ import {
   summarizeAttendance,
 } from "@/lib/supabase/queries/student-history";
 import { getStudentByIdForCurrentUser, getStudentGroupsForCurrentUser } from "@/lib/supabase/queries/students";
-import { archiveStudentAction, updateStudentAction } from "../actions";
+import { updateStudentAction } from "../actions";
 
 
 export default async function StudentDetailPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ saved?: string }>;
 }) {
   const { id } = await params;
-  const { saved } = (await searchParams) ?? {};
   const [student, groups, studentGroups, history, makeups] = await Promise.all([
     getStudentByIdForCurrentUser(id),
     getCurrentUserGroups(),
@@ -74,12 +72,6 @@ export default async function StudentDetailPage({
             </Button>
           }
         />
-
-        {saved ? (
-          <div className="mb-5 rounded-2xl border border-[#d8ebe0] bg-[#f0faf5] px-4 py-3 text-sm text-[#2f6d54]">
-            학생 정보를 수정했어요.
-          </div>
-        ) : null}
 
         <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-5">
@@ -185,15 +177,9 @@ export default async function StudentDetailPage({
                   </div>
                 </GuardedForm>
 
-                <form action={async () => {
-                  "use server";
-                  await archiveStudentAction(id);
-                }} className="mt-3">
-                  <Button type="submit" variant="outline" className="gap-2">
-                    <Archive className="h-4 w-4" />
-                    학생 보관
-                  </Button>
-                </form>
+                <div className="mt-3">
+                  <StudentDeleteButton studentId={id} studentName={student.name} />
+                </div>
               </CardContent>
             </Card>
 

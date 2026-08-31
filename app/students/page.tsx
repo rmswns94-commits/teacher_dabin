@@ -44,7 +44,7 @@ const FILTERS = [
 export default async function StudentsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; filter?: string }>;
+  searchParams?: Promise<{ q?: string; filter?: string; saved?: string; deleted?: string }>;
 }) {
   const params = (await searchParams) ?? {};
   const q = (params.q ?? "").trim().toLowerCase();
@@ -157,6 +157,17 @@ export default async function StudentsPage({
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
         <div className="mx-auto w-full max-w-[860px]">
           <PageHeader title="학생" description="학생 한 명 한 명의 최근 모습을 확인해요." />
+
+          {params.saved ? (
+            <div className="mb-4 rounded-2xl border border-[#d8ebe0] bg-[#f0faf5] px-4 py-3 text-sm text-[#2f6d54]">
+              학생 정보를 수정했어요.
+            </div>
+          ) : null}
+          {params.deleted ? (
+            <div className="mb-4 rounded-2xl border border-[#e9d8d3] bg-[#faf3f0] px-4 py-3 text-sm text-[#7f5d57]">
+              학생을 삭제했어요.
+            </div>
+          ) : null}
 
           <Card className="mb-3">
             <CardContent className="py-4">
