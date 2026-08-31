@@ -5,6 +5,7 @@ import {
   BookMarked,
   BookOpen,
   CalendarClock,
+  Check,
   CircleArrowRight,
   History,
   ListChecks,
@@ -12,8 +13,6 @@ import {
   NotebookTabs,
   Pencil,
   Plus,
-  Square,
-  SquareCheck,
   Trash2,
   UserRoundPlus,
   Users,
@@ -36,10 +35,11 @@ import {
   getGroupRecentLogs,
   getGroupStudentsForCurrentUser,
 } from "@/lib/supabase/queries/groups";
+import { gradeDisplay, gradeOptions } from "@/lib/grades";
 import { getCurrentUserMakeups } from "@/lib/supabase/queries/makeups";
 import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
 import { DAY_LABELS, formatScheduleSlot } from "@/lib/schedule";
-import type { PreparationItem, StudentGrade } from "@/lib/supabase/types";
+import type { PreparationItem } from "@/lib/supabase/types";
 import {
   addGroupScheduleAction,
   addPreparationItemAction,
@@ -51,13 +51,6 @@ import {
   togglePreparationItemAction,
   updateGroupAction,
 } from "../actions";
-
-const gradeDisplay: Record<StudentGrade, string> = {
-  middle_1: "중1",
-  middle_2: "중2",
-  middle_3: "중3",
-  high_1: "고1",
-};
 
 function cnCheckItem(completed: boolean) {
   return [
@@ -179,10 +172,9 @@ export default async function GroupDetailPage({
                       defaultValue={group.grade}
                       className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
                     >
-                      <option value="middle_1">중1</option>
-                      <option value="middle_2">중2</option>
-                      <option value="middle_3">중3</option>
-                      <option value="high_1">고1</option>
+                      {gradeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
                     </select>
                   </label>
                 </div>
@@ -370,9 +362,17 @@ export default async function GroupDetailPage({
                             aria-pressed={item.completed}
                           >
                             {item.completed ? (
-                              <SquareCheck className="h-4 w-4 shrink-0 text-[#3d7f64]" />
+                              <span
+                                aria-hidden
+                                className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[#8fc7ab]"
+                              >
+                                <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                              </span>
                             ) : (
-                              <Square className="h-4 w-4 shrink-0 text-[#a79996]" />
+                              <span
+                                aria-hidden
+                                className="h-[18px] w-[18px] shrink-0 rounded-full border-2 border-[#d9c8f0] bg-white"
+                              />
                             )}
                             <span className={item.completed ? "line-through opacity-60" : undefined}>
                               {item.text}

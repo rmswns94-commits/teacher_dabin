@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -121,7 +121,7 @@ export async function createGroupAction(_prevState: GroupCreateState, formData: 
   try {
     const group = await createGroupWithDetails({
       name: parsed.data.name,
-      grade: parsed.data.grade as "middle_1" | "middle_2" | "middle_3" | "high_1",
+      grade: parsed.data.grade,
       memo: parsed.data.memo || null,
       textbook: parsed.data.textbook || null,
       schedules: scheduleResult.rows,
@@ -155,7 +155,7 @@ export async function updateGroupAction(groupId: string, formData: FormData) {
 
   await updateGroup(groupId, {
     name: parsed.data.name,
-    grade: parsed.data.grade as "middle_1" | "middle_2" | "middle_3" | "high_1",
+    grade: parsed.data.grade,
     memo: parsed.data.memo || null,
     textbook: parsed.data.textbook || null,
     highlightMemo: parsed.data.highlightMemo || null,

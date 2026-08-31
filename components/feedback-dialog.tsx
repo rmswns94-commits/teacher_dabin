@@ -73,7 +73,7 @@ export function FeedbackDialog() {
               </div>
             ) : (
               <>
-                <div className="text-base font-semibold text-[#2a2323]">피드백 보내기</div>
+                <div className="text-base font-semibold text-[#2a2323]">피드백 보내기 💌</div>
                 <p className="mt-1 text-xs text-[#8a7b77]">어떤 점이 불편했나요?</p>
 
                 <div className="mt-3 flex flex-wrap gap-1.5">

@@ -5,16 +5,10 @@ import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { formatGrade, gradeOptions } from "@/lib/grades";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getCurrentUserStudents } from "@/lib/supabase/queries/students";
 import { createStudentAction } from "./actions";
-
-const gradeOptions = [
-  { value: "middle_1", label: "중1" },
-  { value: "middle_2", label: "중2" },
-  { value: "middle_3", label: "중3" },
-  { value: "high_1", label: "고1" },
-];
 
 export default async function StudentsPage({
   searchParams,
@@ -167,7 +161,7 @@ export default async function StudentsPage({
                         </span>
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-[#665b5a]">
-                        <span>{student.grade === "middle_1" ? "중1" : student.grade === "middle_2" ? "중2" : student.grade === "middle_3" ? "중3" : "고1"}</span>
+                        <span>{formatGrade(student.grade)}</span>
                         <span>•</span>
                         <span>{student.school || "학교 미입력"}</span>
                       </div>

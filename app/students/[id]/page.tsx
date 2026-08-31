@@ -8,6 +8,7 @@ import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatKoreanDate } from "@/lib/dates";
+import { gradeDisplay, gradeOptions } from "@/lib/grades";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import {
   getStudentLessonHistory,
@@ -17,12 +18,6 @@ import {
 import { getStudentByIdForCurrentUser, getStudentGroupsForCurrentUser } from "@/lib/supabase/queries/students";
 import { archiveStudentAction, updateStudentAction } from "../actions";
 
-const gradeDisplay = {
-  middle_1: "중1",
-  middle_2: "중2",
-  middle_3: "중3",
-  high_1: "고1",
-} as const;
 
 export default async function StudentDetailPage({
   params,
@@ -92,10 +87,9 @@ export default async function StudentDetailPage({
                         defaultValue={student.grade}
                         className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
                       >
-                        <option value="middle_1">중1</option>
-                        <option value="middle_2">중2</option>
-                        <option value="middle_3">중3</option>
-                        <option value="high_1">고1</option>
+                        {gradeOptions.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
                       </select>
                     </label>
 

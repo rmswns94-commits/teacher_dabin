@@ -1,18 +1,17 @@
 import Link from "next/link";
 import {
   BookOpenCheck,
+  Check,
   CirclePlay,
   Clock3,
   ListTodo,
   NotebookPen,
   NotebookTabs,
   Plus,
-  Square,
-  SquareCheck,
 } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
-import { Doodle } from "@/components/doodle";
+import { Doodle, Tape } from "@/components/doodle";
 import { EncouragementCard } from "@/components/encouragement-card";
 import { NextClassCountdown } from "@/components/next-class-countdown";
 import { PendingButton } from "@/components/pending-button";
@@ -152,7 +151,9 @@ export default async function DashboardPage() {
           </div>
 
           {stats.groups === 0 && stats.students === 0 ? (
-            <Card className="mb-5 border-[#e8ddf3] bg-gradient-to-br from-[#fbf8ff] to-[#fdf9f4]">
+            <div className="relative mb-5">
+              <Tape />
+            <Card className="border-[#e8ddf3] bg-gradient-to-br from-[#fbf8ff] to-[#fdf9f4]">
               <CardContent className="p-5">
                 <div className="font-display text-lg font-semibold text-[#2a2323]">환영해요 🌷</div>
                 <p className="mt-2 text-sm leading-6 text-[#564d4d]">
@@ -170,6 +171,7 @@ export default async function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           ) : null}
 
           {slots.length === 0 ? (
@@ -307,7 +309,7 @@ export default async function DashboardPage() {
                   <CardContent className="space-y-3">
                     {prepItems.length === 0 ? (
                       <div className="rounded-2xl bg-[#faf5f0] p-3 text-sm text-[#655d5d]">
-                        지금 준비할 항목이 없어요.
+                        지금 준비할 항목이 없어요 🍃
                       </div>
                     ) : (
                       <ul className="space-y-0.5">
@@ -320,9 +322,17 @@ export default async function DashboardPage() {
                                 className="flex min-h-11 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm transition hover:bg-[#f2edf9]"
                               >
                                 {item.completed ? (
-                                  <SquareCheck className="h-[18px] w-[18px] shrink-0 text-[#5f9c81]" />
+                                  <span
+                                    aria-hidden
+                                    className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[#8fc7ab]"
+                                  >
+                                    <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                                  </span>
                                 ) : (
-                                  <Square className="h-[18px] w-[18px] shrink-0 text-[#b9a9a4]" />
+                                  <span
+                                    aria-hidden
+                                    className="h-[18px] w-[18px] shrink-0 rounded-full border-2 border-[#d9c8f0] bg-white"
+                                  />
                                 )}
                                 <span
                                   className={
@@ -414,7 +424,7 @@ export default async function DashboardPage() {
                 <CardContent className="space-y-1.5">
                   {overview.todayLogs.length === 0 ? (
                     <div className="rounded-2xl bg-[#faf5f0] p-4 text-sm text-[#655d5d]">
-                      아직 오늘 작성한 수업일지가 없어요.
+                      아직 오늘 작성한 수업일지가 없어요 ☁️
                     </div>
                   ) : (
                     overview.todayLogs.map((log) => (

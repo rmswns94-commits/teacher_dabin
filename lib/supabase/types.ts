@@ -1,4 +1,14 @@
-export type StudentGrade = "middle_1" | "middle_2" | "middle_3" | "high_1";
+export type StudentGrade =
+  | "elementary_1"
+  | "elementary_2"
+  | "elementary_3"
+  | "elementary_4"
+  | "elementary_5"
+  | "elementary_6"
+  | "middle_1"
+  | "middle_2"
+  | "middle_3"
+  | "high_1";
 
 export type StudentRecord = {
   id: string;

@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -23,7 +23,7 @@ export async function createStudentAction(formData: FormData) {
 
   const student = await createStudent({
     name: parsed.data.name,
-    grade: parsed.data.grade as "middle_1" | "middle_2" | "middle_3" | "high_1",
+    grade: parsed.data.grade,
     school: parsed.data.school || null,
     memo: parsed.data.memo || null,
     groupId: parsed.data.groupId || null,
@@ -50,7 +50,7 @@ export async function updateStudentAction(studentId: string, formData: FormData)
 
   await updateStudent(studentId, {
     name: parsed.data.name,
-    grade: parsed.data.grade as "middle_1" | "middle_2" | "middle_3" | "high_1",
+    grade: parsed.data.grade,
     school: parsed.data.school || null,
     memo: parsed.data.memo || null,
     groupId: parsed.data.groupId || null,

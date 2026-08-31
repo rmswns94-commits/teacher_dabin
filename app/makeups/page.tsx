@@ -7,16 +7,10 @@ import { MakeupStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatKoreanDate, todayDateString, toDateString } from "@/lib/dates";
+import { gradeDisplay } from "@/lib/grades";
 import { getCurrentUserMakeups, type MakeupWithStudent } from "@/lib/supabase/queries/makeups";
-import type { StudentGrade } from "@/lib/supabase/types";
 import { cancelMakeupAction, completeMakeupAction, scheduleMakeupAction } from "./actions";
 
-const gradeDisplay: Record<StudentGrade, string> = {
-  middle_1: "중1",
-  middle_2: "중2",
-  middle_3: "중3",
-  high_1: "고1",
-};
 
 function endOfWeekDateString(today: string) {
   const [y, m, d] = today.split("-").map(Number);

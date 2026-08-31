@@ -21,15 +21,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MakeupStatusBadge } from "@/components/status-badge";
 import { saveDailyLogAction } from "@/app/daily-logs/actions";
 import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comments";
+import { gradeDisplay } from "@/lib/grades";
 import type { AttendanceStatus, StudentGrade } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
-
-const gradeDisplay: Record<StudentGrade, string> = {
-  middle_1: "중1",
-  middle_2: "중2",
-  middle_3: "중3",
-  high_1: "고1",
-};
 
 export type DailyLogFormStudent = {
   studentId: string;

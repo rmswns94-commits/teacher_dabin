@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { Layers3, Search } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PendingButton } from "@/components/pending-button";
+import { formatGrade } from "@/lib/grades";
 import { getAllGroupStudentCounts, getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { restoreGroupAction } from "./actions";
 
@@ -83,7 +84,7 @@ export default async function GroupsPage({
         {visibleGroups.length === 0 ? (
           <Card>
             <CardContent className="p-6 text-sm text-[#655d5d]">
-              {q ? "검색 결과가 없어요." : "아직 만든 수업 그룹이 없어요. 첫 번째 반을 만들어보세요."}
+              {q ? "검색 결과가 없어요." : "아직 만든 수업 그룹이 없어요. 첫 번째 반을 만들어볼까요? 🌱"}
             </CardContent>
           </Card>
         ) : (
@@ -94,7 +95,7 @@ export default async function GroupsPage({
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-lg font-semibold text-[#2b2323]">{group.name}</div>
                     <span className="rounded-full bg-[#f2effc] px-2 py-1 text-[10px] text-[#5f54b8]">
-                      {group.grade === "middle_1" ? "중1" : group.grade === "middle_2" ? "중2" : group.grade === "middle_3" ? "중3" : "고1"}
+                      {formatGrade(group.grade)}
                     </span>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-sm text-[#655d5d]">
@@ -122,7 +123,7 @@ export default async function GroupsPage({
                     <div>
                       <div className="font-medium text-[#2b2323]">{group.name}</div>
                       <div className="mt-0.5 text-xs text-[#8a7b77]">
-                        {group.grade === "middle_1" ? "중1" : group.grade === "middle_2" ? "중2" : group.grade === "middle_3" ? "중3" : "고1"}
+                        {formatGrade(group.grade)}
                         {group.memo ? ` · ${group.memo}` : ""}
                       </div>
                     </div>

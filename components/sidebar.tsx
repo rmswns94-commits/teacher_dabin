@@ -162,7 +162,7 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
         )}
       >
       <div className="flex items-center gap-3 border-b border-[#efe4dc] px-5 py-5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[#f4dfe6] via-[#e8e1ff] to-[#dcefe8] text-[#4a3c52] shadow-sm">
+        <div className="flex h-10 w-10 rotate-[-4deg] items-center justify-center rounded-2xl bg-gradient-to-br from-[#f4dfe6] via-[#e8e1ff] to-[#dcefe8] text-[#4a3c52] shadow-sm">
           <NotebookPen className="h-5 w-5" />
         </div>
         <div className="flex-1">

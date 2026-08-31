@@ -8,13 +8,7 @@ import { PendingButton } from "@/components/pending-button";
 import { Button } from "@/components/ui/button";
 import { ScheduleFieldsEditor } from "@/components/schedule-fields-editor";
 import { TextbookFieldsEditor } from "@/components/textbook-fields-editor";
-
-const gradeOptions = [
-  { value: "middle_1", label: "중1" },
-  { value: "middle_2", label: "중2" },
-  { value: "middle_3", label: "중3" },
-  { value: "high_1", label: "고1" },
-];
+import { gradeOptions } from "@/lib/grades";
 
 export function GroupCreateForm() {
   const [state, formAction] = useActionState<GroupCreateState, FormData>(createGroupAction, undefined);
