@@ -1,6 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Hi_Melody } from "next/font/google";
 import "./globals.css";
+
+import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,9 +24,26 @@ const hiMelody = Hi_Melody({
 
 export const metadata: Metadata = {
   title: "다빈이의 강사일기",
+  applicationName: "다빈이의 강사일기",
   description: "따뜻한 수업 기록 도우미 — 학생 관리와 영어 수업 자료를 한 번에 정리하는 웹앱",
   // Private beta: 검색엔진 노출을 막는다 (보안 수단이 아니라 노출 최소화 목적).
   robots: { index: false, follow: false },
+  // iOS 홈 화면 설치(standalone) 지원. statusBarStyle은 밝은 배경과 자연스러운 default.
+  appleWebApp: {
+    capable: true,
+    title: "강사일기",
+    statusBarStyle: "default",
+  },
+  icons: {
+    apple: "/icons/apple-touch-icon.png",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // 상단 바/사이드바가 화이트라 브라우저 UI 색도 화이트로 맞춘다.
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -33,7 +52,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} ${hiMelody.variable} h-full antialiased`}
     >
-      <body className="min-h-full text-[#2d2928]">{children}</body>
+      <body className="min-h-full text-[#2d2928]">
+        <ServiceWorkerRegistration />
+        {children}
+      </body>
     </html>
   );
 }

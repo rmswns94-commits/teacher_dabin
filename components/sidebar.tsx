@@ -19,6 +19,7 @@ import {
 import { useEffect, useState } from "react";
 
 import { FeedbackDialog } from "@/components/feedback-dialog";
+import { InstallAppButton } from "@/components/install-app";
 import { createClient } from "@/lib/supabase/client";
 import { getDisplayName } from "@/lib/supabase/auth";
 import { cn } from "@/lib/utils";
@@ -325,6 +326,8 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
             {userEmail ? <div className="truncate text-[11px] text-[#8a8a93]">{userEmail}</div> : null}
           </div>
         </div>
+
+        <InstallAppButton />
 
         <FeedbackDialog />
 
