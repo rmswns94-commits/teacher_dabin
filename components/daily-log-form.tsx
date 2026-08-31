@@ -607,7 +607,7 @@ function CompletionSummary({
       aria-modal="true"
       aria-label="오늘 수업 마무리"
     >
-      <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+      <div className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
         <div className="flex items-center gap-2 text-lg font-semibold text-[#2a2323]">
           <CheckCheck className="h-5 w-5 text-[#6852b8]" />
           오늘 수업 마무리

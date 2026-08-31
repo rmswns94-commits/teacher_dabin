@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -134,7 +134,7 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
 
   return (
     <>
-      <div className="fixed inset-x-0 top-0 z-40 flex h-14 items-center gap-3 border-b border-[#efe4dc] bg-[#fffaf7]/95 px-4 backdrop-blur-sm md:hidden">
+      <div className="fixed inset-x-0 top-0 z-40 flex h-14 items-center gap-3 border-b border-[#efe4dc] bg-[#fffaf7]/95 px-4 backdrop-blur-sm lg:hidden">
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
@@ -149,7 +149,7 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
 
       {mobileOpen ? (
         <div
-          className="fixed inset-0 z-40 bg-[#2b2323]/30 md:hidden"
+          className="fixed inset-0 z-40 bg-[#2b2323]/30 lg:hidden"
           aria-hidden
           onClick={() => setMobileOpen(false)}
         />
@@ -158,8 +158,8 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
       <aside
         className={cn(
           "flex h-screen w-full max-w-[260px] flex-col border-r border-[#efe4dc] bg-[#fffaf7]/90 backdrop-blur-sm",
-          "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:w-[260px] max-md:bg-[#fffaf7] max-md:transition-transform max-md:duration-200",
-          mobileOpen ? "max-md:translate-x-0 max-md:shadow-2xl" : "max-md:-translate-x-full",
+          "max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-50 max-lg:w-[260px] max-lg:bg-[#fffaf7] max-lg:transition-transform max-lg:duration-200",
+          mobileOpen ? "max-lg:translate-x-0 max-lg:shadow-2xl" : "max-lg:-translate-x-full",
         )}
       >
       <div className="flex items-center gap-3 border-b border-[#efe4dc] px-5 py-5">
@@ -179,7 +179,7 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
           type="button"
           onClick={() => setMobileOpen(false)}
           aria-label="메뉴 닫기"
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#8a7b77] transition hover:bg-[#f8f3f0] md:hidden"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#8a7b77] transition hover:bg-[#f8f3f0] lg:hidden"
         >
           <X className="h-4 w-4" aria-hidden />
         </button>

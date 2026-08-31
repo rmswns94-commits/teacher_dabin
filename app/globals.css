@@ -48,11 +48,23 @@ textarea {
   font: inherit;
 }
 
-/* 모바일에서는 상단 바(3.5rem) 아래에 페이지 스크롤 영역을 맞춘다.
-   각 페이지의 <main class="h-screen">를 덮어써서 하단이 잘리지 않게 한다. */
-@media (max-width: 767px) {
+/* lg 미만(아이폰·아이패드 세로)에서는 상단 바(3.5rem) 아래에 페이지 스크롤
+   영역을 맞춘다. 각 페이지의 <main class="h-screen">를 덮어써서 하단이
+   잘리지 않게 하고, 홈 인디케이터 영역만큼 아래 여백을 준다. */
+@media (max-width: 1023px) {
   .app-main > main {
     height: calc(100dvh - 3.5rem);
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* iOS Safari는 input 글자가 16px보다 작으면 포커스 시 화면을 자동 확대한다.
+   폰에서만 입력 요소 글자를 16px로 강제해 확대 점프를 막는다. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }
 

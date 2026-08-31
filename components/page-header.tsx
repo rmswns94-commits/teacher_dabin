@@ -14,7 +14,7 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("mb-6 flex items-center justify-between gap-4", className)}>
+    <div className={cn("mb-6 flex flex-wrap items-center justify-between gap-3", className)}>
       <div>
         <h1 className="font-display text-2xl font-semibold tracking-[-0.01em] text-[#2a2323]">
           {title}
