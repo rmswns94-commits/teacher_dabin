@@ -170,7 +170,7 @@ export default async function DashboardPage() {
                 </ol>
                 <div className="mt-4">
                   <Button className="gap-2" asChild>
-                    <Link href="/groups#new-group">첫 수업 그룹 만들기</Link>
+                    <Link href="/groups">첫 수업 그룹 만들기</Link>
                   </Button>
                 </div>
               </CardContent>

@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { Plus, Search, Users } from "lucide-react";
+import { Search } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
+import { StudentCreateDialog } from "@/components/student-create-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatGrade, gradeOptions } from "@/lib/grades";
+import { formatGrade } from "@/lib/grades";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getCurrentUserStudents } from "@/lib/supabase/queries/students";
-import { createStudentAction } from "./actions";
 
 export default async function StudentsPage({
   searchParams,
@@ -28,94 +28,7 @@ export default async function StudentsPage({
   return (
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
-        <PageHeader
-          title="학생 관리"
-          description="학생 정보와 수업 그룹을 관리해요."
-          action={
-            <Button className="gap-2" asChild>
-              <a href="#new-student">
-                <Plus className="h-4 w-4" />
-                학생 추가
-              </a>
-            </Button>
-          }
-        />
-
-        <Card className="mb-5" id="new-student">
-          <CardContent className="p-5">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f6f0fb] text-[#5e4eb5]">
-                <Users className="h-4 w-4" />
-              </div>
-              <div>
-                <div className="font-semibold text-[#2d2424]">학생 등록</div>
-                <div className="text-xs text-[#7b6d6b]">이름, 학년, 학교, 그룹을 함께 추가하세요.</div>
-              </div>
-            </div>
-
-            <form action={createStudentAction} className="grid gap-4 md:grid-cols-2">
-              <label className="block md:col-span-1">
-                <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">학생 이름</span>
-                <input
-                  name="name"
-                  className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none placeholder:text-[#a79996]"
-                  placeholder="김다빈"
-                  required
-                />
-              </label>
-
-              <label className="block md:col-span-1">
-                <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">학년</span>
-                <select
-                  name="grade"
-                  className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
-                  defaultValue="middle_2"
-                  required
-                >
-                  {gradeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block md:col-span-1">
-                <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">학교</span>
-                <input
-                  name="school"
-                  className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none placeholder:text-[#a79996]"
-                  placeholder="테스트중학교"
-                />
-              </label>
-
-              <label className="block md:col-span-1">
-                <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">수업 그룹</span>
-                <select name="groupId" className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none">
-                  <option value="">그룹 선택</option>
-                  {groups.map((group) => (
-                    <option key={group.id} value={group.id}>{group.name}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block md:col-span-2">
-                <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">메모</span>
-                <textarea
-                  name="memo"
-                  rows={3}
-                  className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none placeholder:text-[#a79996]"
-                  placeholder="단어 암기 점검 필요"
-                />
-              </label>
-
-              <div className="md:col-span-2">
-                <Button type="submit" className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  학생 등록
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+        <PageHeader title="학생" description="등록된 학생을 한눈에 확인하고 관리해요." />
 
         <Card className="mb-5">
           <CardContent className="py-4">
@@ -143,8 +56,18 @@ export default async function StudentsPage({
 
         {visibleStudents.length === 0 ? (
           <Card>
-            <CardContent className="p-6 text-sm text-[#655d5d]">
-              {q ? "검색 결과가 없어요." : "아직 등록된 학생이 없어요. 첫 학생을 등록해보세요."}
+            <CardContent className="flex flex-col items-start gap-3 p-6 text-sm text-[#655d5d]">
+              {q ? (
+                "검색 결과가 없어요."
+              ) : (
+                <>
+                  아직 등록된 학생이 없어요 🌱
+                  <StudentCreateDialog
+                    groups={groups.map((group) => ({ id: group.id, name: group.name }))}
+                    label="첫 학생 등록하기"
+                  />
+                </>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -182,6 +105,16 @@ export default async function StudentsPage({
               </Link>
             ))}
           </div>
+        )}
+
+        {visibleStudents.length > 0 ? (
+          <div className="mt-6 flex justify-end pb-8">
+            <StudentCreateDialog
+              groups={groups.map((group) => ({ id: group.id, name: group.name }))}
+            />
+          </div>
+        ) : (
+          <div className="pb-8" />
         )}
       </main>
     </AppShell>

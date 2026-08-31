@@ -10,7 +10,7 @@ import { ScheduleFieldsEditor } from "@/components/schedule-fields-editor";
 import { TextbookFieldsEditor } from "@/components/textbook-fields-editor";
 import { gradeOptions } from "@/lib/grades";
 
-export function GroupCreateForm() {
+export function GroupCreateForm({ onCancel }: { onCancel?: () => void }) {
   const [state, formAction] = useActionState<GroupCreateState, FormData>(createGroupAction, undefined);
   // 취소 시 key를 바꿔 동적 행 편집기(수업 시간/교재)를 초기 상태로 되돌린다.
   const [resetKey, setResetKey] = useState(0);
@@ -78,9 +78,15 @@ export function GroupCreateForm() {
       ) : null}
 
       <div className="flex justify-end gap-2">
-        <Button type="reset" variant="outline" onClick={() => setResetKey((key) => key + 1)}>
-          취소
-        </Button>
+        {onCancel ? (
+          <Button type="button" variant="outline" onClick={onCancel}>
+            취소
+          </Button>
+        ) : (
+          <Button type="reset" variant="outline" onClick={() => setResetKey((key) => key + 1)}>
+            취소
+          </Button>
+        )}
         <PendingButton pendingText="등록 중..." className="gap-2">
           <Plus className="h-4 w-4" aria-hidden /> 등록
         </PendingButton>
