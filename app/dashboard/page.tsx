@@ -1,9 +1,7 @@
 import Link from "next/link";
 import {
   BookOpenCheck,
-  CalendarCheck,
   CirclePlay,
-  CircleX,
   Clock3,
   ListTodo,
   NotebookPen,
@@ -11,7 +9,6 @@ import {
   Plus,
   Square,
   SquareCheck,
-  Users,
 } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
@@ -20,7 +17,6 @@ import { EncouragementCard } from "@/components/encouragement-card";
 import { NextClassCountdown } from "@/components/next-class-countdown";
 import { PageHeader } from "@/components/page-header";
 import { PendingButton } from "@/components/pending-button";
-import { StatCard } from "@/components/stat-card";
 import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -103,8 +99,6 @@ export default async function DashboardPage() {
     : undefined;
   const showEndedNudge = Boolean(lastEnded && endedGroupLog?.status !== "completed");
 
-  const todayStudentCount = overview.todayLogs.reduce((sum, log) => sum + log.attendanceCounts.total, 0);
-  const todayAbsentCount = overview.todayLogs.reduce((sum, log) => sum + log.attendanceCounts.absent, 0);
   const draftToday = overview.todayLogs.filter((log) => log.status === "draft");
   const todayMakeups = overview.openMakeups.filter((makeup) => makeup.scheduled_date === overview.today);
   const unscheduledMakeups = overview.openMakeups.filter((makeup) => makeup.status === "required");
@@ -170,19 +164,7 @@ export default async function DashboardPage() {
           </Card>
         ) : null}
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="오늘 수업" value={`${overview.todayLogs.length}개`} icon={NotebookPen} tone="lavender" />
-          <StatCard
-            label="오늘 학생 / 결석"
-            value={`${todayStudentCount}명 / ${todayAbsentCount}명`}
-            icon={CircleX}
-            tone="rose"
-          />
-          <StatCard label="밀린 보충" value={`${overview.openMakeups.length}건`} icon={CalendarCheck} tone="mint" />
-          <StatCard label="등록된 학생" value={`${stats.students}명`} icon={Users} tone="pink" />
-        </div>
-
-        <div className="mt-6 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-4">
             {slots.length === 0 ? (
               <Card className="border-[#e8ddf3] bg-gradient-to-br from-[#fbf8ff] to-[#fdf9f4]">
