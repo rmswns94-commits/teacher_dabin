@@ -110,6 +110,24 @@ export default async function DailyLogsPage({
 
   const groupOptions = groups.map((group) => ({ id: group.id, name: group.name }));
 
+  // 기간 일정이 날짜를 넘어 이어져 보이도록, 겹치는 일정끼리는 서로 다른
+  // "레인"에 고정 배정한다 (달력에는 위 2개 레인만 바로 표시).
+  const sortedEvents = [...events].sort(
+    (a, b) => a.start_date.localeCompare(b.start_date) || a.created_at.localeCompare(b.created_at),
+  );
+  const laneEnds: string[] = [];
+  const laneOf = new Map<string, number>();
+  for (const event of sortedEvents) {
+    let lane = laneEnds.findIndex((end) => end < event.start_date);
+    if (lane === -1) {
+      lane = laneEnds.length;
+      laneEnds.push(event.end_date);
+    } else {
+      laneEnds[lane] = event.end_date;
+    }
+    laneOf.set(event.id, lane);
+  }
+
   const dateParamValid = params.date && params.date.slice(0, 7) === month ? params.date : null;
   const selectedDate = dateParamValid ?? (month === currentMonth ? today : null);
   const dateLogs = selectedDate ? byDate.get(selectedDate) ?? [] : [];
@@ -180,8 +198,10 @@ export default async function DailyLogsPage({
               </div>
 
               <div className="mt-3 grid grid-cols-7 text-center text-[11px] font-medium text-[#b9a2a8]">
-                {WEEKDAY_HEADERS.map((day) => (
-                  <div key={day} className="py-1">{day}</div>
+                {WEEKDAY_HEADERS.map((day, headerIndex) => (
+                  <div key={day} className={cn("py-1", headerIndex === 0 && "text-[#c97a7a]")}>
+                    {day}
+                  </div>
                 ))}
               </div>
 
@@ -198,6 +218,17 @@ export default async function DailyLogsPage({
                   const isSelected = date === selectedDate;
                   const isToday = date === today;
                   const dayNumber = Number(date.slice(8));
+                  const isSunday = index % 7 === 0;
+                  const hasHoliday = dayEvents.some((event) => event.event_type === "holiday");
+
+                  // 레인별 첫 일정만 바로 표시 (연속 표시용)
+                  const laneEvents: (CalendarEventWithGroup | null)[] = [null, null];
+                  for (const event of dayEvents) {
+                    const lane = laneOf.get(event.id) ?? 0;
+                    if (lane < 2 && !laneEvents[lane]) {
+                      laneEvents[lane] = event;
+                    }
+                  }
 
                   const labelParts = [
                     formatKoreanDate(date),
@@ -217,42 +248,60 @@ export default async function DailyLogsPage({
                       aria-label={labelParts.join(", ")}
                       aria-current={isSelected ? "date" : undefined}
                       title={labelParts.slice(1).join(" · ")}
-                      className={cn(
-                        "mx-auto flex h-14 w-12 flex-col items-center justify-center rounded-2xl text-sm tabular-nums transition",
-                        isSelected
-                          ? "bg-[#fbe9f0] font-semibold text-[#6d4a5c] ring-1 ring-[#f4d8e2]"
-                          : "text-[#4a423f] hover:bg-[#faf0f2]",
-                        isToday && !isSelected && "ring-1 ring-[#d9c1e8]",
-                      )}
+                      className="group flex flex-col items-center"
                     >
-                      <span>{dayNumber}</span>
-                      {logs.length > 0 ? (
-                        <span aria-hidden className="mt-0.5 flex items-center gap-0.5">
-                          {completedCount > 0 ? (
-                            <span className="h-1.5 w-1.5 rounded-full bg-[#8fc7ab]" />
-                          ) : null}
-                          {draftCount > 0 ? (
-                            <span className="h-1.5 w-1.5 rounded-full bg-[#eebfa0]" />
-                          ) : null}
-                          {logs.length > 1 ? (
-                            <span className="text-[9px] leading-none text-[#a08d97]">{logs.length}</span>
-                          ) : null}
-                        </span>
-                      ) : (
-                        <span aria-hidden className="mt-0.5 h-1.5" />
-                      )}
-                      {dayEvents.length > 0 ? (
-                        <span aria-hidden className="mt-0.5 flex items-center gap-0.5">
-                          <span
-                            className={cn("h-1 w-5 rounded-full", eventMetaOf(dayEvents[0].event_type).bar)}
-                          />
-                          {dayEvents.length > 1 ? (
-                            <span className="text-[9px] leading-none text-[#a08d97]">+{dayEvents.length - 1}</span>
-                          ) : null}
-                        </span>
-                      ) : (
-                        <span aria-hidden className="mt-0.5 h-1" />
-                      )}
+                      <span
+                        className={cn(
+                          "flex h-11 w-11 flex-col items-center justify-center rounded-2xl text-sm tabular-nums transition",
+                          isSelected
+                            ? "bg-[#fbe9f0] font-semibold ring-1 ring-[#f4d8e2]"
+                            : "group-hover:bg-[#faf0f2]",
+                          isToday && !isSelected && "ring-1 ring-[#d9c1e8]",
+                          hasHoliday
+                            ? "text-[#cf4f4f]"
+                            : isSunday
+                              ? "text-[#c97a7a]"
+                              : isSelected
+                                ? "text-[#6d4a5c]"
+                                : "text-[#4a423f]",
+                        )}
+                      >
+                        <span>{dayNumber}</span>
+                        {logs.length > 0 ? (
+                          <span aria-hidden className="mt-0.5 flex items-center gap-0.5">
+                            {completedCount > 0 ? (
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#8fc7ab]" />
+                            ) : null}
+                            {draftCount > 0 ? (
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#eebfa0]" />
+                            ) : null}
+                            {logs.length > 1 ? (
+                              <span className="text-[9px] leading-none text-[#a08d97]">{logs.length}</span>
+                            ) : null}
+                          </span>
+                        ) : (
+                          <span aria-hidden className="mt-0.5 h-1.5" />
+                        )}
+                      </span>
+
+                      {/* 일정 바: 같은 일정은 옆 날짜와 이어져 보이도록 셀 전체 폭 사용 */}
+                      <span aria-hidden className="mt-0.5 flex h-[13px] w-full flex-col gap-[3px]">
+                        {laneEvents.map((event, laneIndex) =>
+                          event ? (
+                            <span
+                              key={laneIndex}
+                              className={cn(
+                                "h-[5px] w-full",
+                                eventMetaOf(event.event_type).bar,
+                                date === event.start_date && "rounded-l-full",
+                                date === event.end_date && "rounded-r-full",
+                              )}
+                            />
+                          ) : (
+                            <span key={laneIndex} className="h-[5px]" />
+                          ),
+                        )}
+                      </span>
                     </Link>
                   );
                 })}
