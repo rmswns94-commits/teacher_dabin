@@ -73,7 +73,7 @@ export async function updateStudentAction(studentId: string, formData: FormData)
 
   revalidatePath("/students");
   revalidatePath(`/students/${studentId}`);
-  redirect(`/students/${studentId}`);
+  redirect(`/students/${studentId}?saved=1`);
 }
 
 export async function archiveStudentAction(studentId: string) {
