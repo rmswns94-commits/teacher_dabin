@@ -81,7 +81,7 @@ export function EncouragementCard() {
   return (
     <div className="relative">
       <Tape />
-      <Card className="relative overflow-hidden border-[#f2ddcf] bg-gradient-to-br from-[#fff8f3] to-[#fdf3ea]">
+      <Card className="relative overflow-hidden border border-solid border-[#f2ddcf] bg-gradient-to-br from-[#fff8f3] to-[#fdf3ea]">
         <CatDoodle variant="heart" className="absolute bottom-1 right-3 h-14 w-16" />
         <Doodle kind="sparkle" className="absolute right-20 top-4 h-4 w-4 text-[#ecd9c7]" />
 
@@ -100,7 +100,7 @@ export function EncouragementCard() {
                 {entry.emoji}
               </span>
             ) : null}
-            <p className="whitespace-pre-line pt-1 font-display text-[15px] leading-7 text-[#544639]">
+            <p className="whitespace-pre-line pt-1 font-display text-[19px] leading-8 text-[#544639]">
               {entry?.message ?? ""}
             </p>
           </div>

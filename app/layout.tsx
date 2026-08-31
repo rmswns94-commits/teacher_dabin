@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Gowun_Dodum } from "next/font/google";
+import { Geist, Geist_Mono, Hi_Melody } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,10 +12,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Display font: 제목·인사말·로고에만 제한적으로 사용하는 부드러운 한글 폰트.
+// Display font: 제목·인사말·감성 문구에 쓰는 귀여운 손글씨 한글 폰트.
 // (본문/입력/숫자는 가독성을 위해 기존 sans를 유지한다.)
-const gowunDodum = Gowun_Dodum({
-  variable: "--font-gowun",
+const hiMelody = Hi_Melody({
+  variable: "--font-hand",
   weight: "400",
   subsets: ["latin"],
 });
@@ -31,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="ko"
-      className={`${geistSans.variable} ${geistMono.variable} ${gowunDodum.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${hiMelody.variable} h-full antialiased`}
     >
       <body className="min-h-full text-[#2d2928]">{children}</body>
     </html>

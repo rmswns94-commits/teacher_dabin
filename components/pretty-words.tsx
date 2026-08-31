@@ -60,7 +60,7 @@ export function PrettyWordsHero({
           오늘 꺼내본 문장
         </div>
 
-        <p className="mx-auto mt-4 max-w-xl whitespace-pre-line font-display text-lg leading-8 text-[#443b4f]">
+        <p className="mx-auto mt-4 max-w-xl whitespace-pre-line font-display text-[23px] leading-9 text-[#443b4f]">
           {word.content}
         </p>
 
@@ -351,7 +351,7 @@ export function PrettyWordCard({ word }: { word: PrettyWordRecord }) {
           </details>
         </div>
 
-        <p className="mt-1 flex-1 whitespace-pre-line font-display text-[15px] leading-7 text-[#3d3542]">
+        <p className="mt-1 flex-1 whitespace-pre-line font-display text-[19px] leading-8 text-[#3d3542]">
           {word.content}
         </p>
 

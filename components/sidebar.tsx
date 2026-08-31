@@ -143,7 +143,7 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
         >
           <Menu className="h-5 w-5" aria-hidden />
         </button>
-        <span className="font-display text-sm font-semibold text-[#2d2424]">다빈이의 강사일기</span>
+        <span className="font-display text-lg font-semibold text-[#2d2424]">다빈이의 강사일기</span>
         <BetaBadge />
       </div>
 
@@ -168,7 +168,7 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-1.5">
-            <div className="font-display text-base font-semibold text-[#2d2424]">
+            <div className="font-display text-xl font-semibold text-[#2d2424]">
               다빈이의 강사일기
             </div>
             <BetaBadge />

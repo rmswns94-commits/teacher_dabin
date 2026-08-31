@@ -36,7 +36,7 @@
   --color-diary-border: var(--diary-border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-gowun), var(--font-geist-sans), sans-serif;
+  --font-display: var(--font-hand), var(--font-geist-sans), sans-serif;
 }
 
 html {
