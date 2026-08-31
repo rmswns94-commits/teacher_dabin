@@ -75,20 +75,20 @@ export default async function GroupDetailPage({
 }) {
   const { id } = await params;
   const { edit, saved } = (await searchParams) ?? {};
-  const group = await getGroupByIdForCurrentUser(id);
+  const [group, allMembers, latestProgress, recentLogs, availableStudents, allMakeups, schedules] =
+    await Promise.all([
+      getGroupByIdForCurrentUser(id),
+      getGroupStudentsForCurrentUser(id),
+      getGroupLatestProgress(id),
+      getGroupRecentLogs(id, 5),
+      getAvailableStudentsForGroup(),
+      getCurrentUserMakeups(),
+      getGroupSchedules(id),
+    ]);
 
   if (!group) {
     notFound();
   }
-
-  const [allMembers, latestProgress, recentLogs, availableStudents, allMakeups, schedules] = await Promise.all([
-    getGroupStudentsForCurrentUser(id),
-    getGroupLatestProgress(id),
-    getGroupRecentLogs(id, 5),
-    getAvailableStudentsForGroup(),
-    getCurrentUserMakeups(),
-    getGroupSchedules(id),
-  ]);
 
   const members = allMembers.filter((student) => !student.archived);
   const memberSet = new Set(allMembers.map((student) => student.id));

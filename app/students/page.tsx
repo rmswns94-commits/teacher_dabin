@@ -23,8 +23,10 @@ export default async function StudentsPage({
 }) {
   const params = (await searchParams) ?? {};
   const q = (params.q ?? "").trim();
-  const students = await getCurrentUserStudents();
-  const groups = await getCurrentUserGroups();
+  const [students, groups] = await Promise.all([
+    getCurrentUserStudents(),
+    getCurrentUserGroups(),
+  ]);
   const visibleStudents = students.filter((student) =>
     !q || student.name.toLowerCase().includes(q.toLowerCase()),
   );

@@ -1,8 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
-export async function createServerSupabaseClient() {
+// React cache(): 한 서버 요청 안에서 클라이언트 생성과 auth.getUser()를
+// 각 1회로 dedupe한다. 여러 쿼리 헬퍼가 각각 auth를 왕복 호출하던
+// 오버헤드를 없애는 것으로, 요청마다 여전히 토큰 검증은 수행된다.
+export const createServerSupabaseClient = cache(async () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
@@ -28,9 +32,9 @@ export async function createServerSupabaseClient() {
       },
     },
   });
-}
+});
 
-export async function getServerUser() {
+export const getServerUser = cache(async () => {
   const supabase = await createServerSupabaseClient();
 
   if (!supabase) {
@@ -47,7 +51,7 @@ export async function getServerUser() {
   }
 
   return user;
-}
+});
 
 export async function requireUser() {
   const user = await getServerUser();

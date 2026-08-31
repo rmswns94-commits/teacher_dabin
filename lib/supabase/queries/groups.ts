@@ -1,9 +1,12 @@
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type { ClassGroupRecord, StudentGrade, StudentRecord } from "@/lib/supabase/types";
 
-export async function getCurrentUserGroups(includeArchived = false) {
+// cache(): AppShell(사이드바)과 페이지가 같은 요청 안에서 그룹 목록을
+// 각각 조회해도 실제 쿼리는 인자별로 1회만 나간다.
+export const getCurrentUserGroups = cache(async (includeArchived = false) => {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
@@ -29,6 +32,33 @@ export async function getCurrentUserGroups(includeArchived = false) {
   }
 
   return (data ?? []) as ClassGroupRecord[];
+});
+
+// 그룹별 학생 수를 쿼리 1번으로 모두 계산한다 (그룹당 count 쿼리 N+1 방지).
+export async function getAllGroupStudentCounts() {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+  const counts = new Map<string, number>();
+
+  if (!supabase || !user) {
+    return counts;
+  }
+
+  const { data, error } = await supabase
+    .from("student_group_memberships")
+    .select("group_id")
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("getAllGroupStudentCounts error", error);
+    return counts;
+  }
+
+  for (const row of data ?? []) {
+    counts.set(row.group_id, (counts.get(row.group_id) ?? 0) + 1);
+  }
+
+  return counts;
 }
 
 export async function getGroupByIdForCurrentUser(groupId: string) {

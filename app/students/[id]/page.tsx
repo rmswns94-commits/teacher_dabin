@@ -30,18 +30,17 @@ export default async function StudentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const student = await getStudentByIdForCurrentUser(id);
-
-  if (!student) {
-    notFound();
-  }
-
-  const [groups, studentGroups, history, makeups] = await Promise.all([
+  const [student, groups, studentGroups, history, makeups] = await Promise.all([
+    getStudentByIdForCurrentUser(id),
     getCurrentUserGroups(),
     getStudentGroupsForCurrentUser(id),
     getStudentLessonHistory(id),
     getStudentMakeups(id),
   ]);
+
+  if (!student) {
+    notFound();
+  }
 
   const attendanceSummary = summarizeAttendance(history);
   const recentLessons = history.slice(0, 5);

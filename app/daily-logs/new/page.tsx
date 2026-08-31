@@ -19,18 +19,22 @@ export default async function NewDailyLogPage({
   searchParams?: Promise<{ groupId?: string; date?: string }>;
 }) {
   const params = (await searchParams) ?? {};
-  const groups = await getCurrentUserGroups();
-  const selectedGroup = params.groupId ? groups.find((group) => group.id === params.groupId) : undefined;
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : todayDateString();
+  const requestedGroupId = params.groupId || null;
 
-  const [groupStudents, lastLesson] = selectedGroup
-    ? await Promise.all([
-        getGroupStudentsForCurrentUser(selectedGroup.id).then((students) =>
-          students.filter((student) => !student.archived),
-        ),
-        getGroupLatestProgress(selectedGroup.id),
-      ])
-    : [[], null];
+  // 그룹 목록과 (선택된 그룹의) 학생/직전 수업을 한 번에 병렬 조회한다.
+  const [groups, groupStudentsRaw, lastLesson] = await Promise.all([
+    getCurrentUserGroups(),
+    requestedGroupId ? getGroupStudentsForCurrentUser(requestedGroupId) : Promise.resolve([]),
+    requestedGroupId ? getGroupLatestProgress(requestedGroupId) : Promise.resolve(null),
+  ]);
+
+  const selectedGroup = requestedGroupId
+    ? groups.find((group) => group.id === requestedGroupId)
+    : undefined;
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : todayDateString();
+  const groupStudents = selectedGroup
+    ? groupStudentsRaw.filter((student) => !student.archived)
+    : [];
 
   return (
     <AppShell>

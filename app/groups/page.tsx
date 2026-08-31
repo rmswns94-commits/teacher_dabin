@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PendingButton } from "@/components/pending-button";
-import { getCurrentUserGroups, getGroupStudentCount } from "@/lib/supabase/queries/groups";
+import { getAllGroupStudentCounts, getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { restoreGroupAction } from "./actions";
 
 export default async function GroupsPage({
@@ -17,13 +17,15 @@ export default async function GroupsPage({
 }) {
   const params = (await searchParams) ?? {};
   const q = (params.q ?? "").trim();
-  const allGroups = await getCurrentUserGroups(true);
+  const [allGroups, counts] = await Promise.all([
+    getCurrentUserGroups(true),
+    getAllGroupStudentCounts(),
+  ]);
   const groups = allGroups.filter((group) => !group.archived);
   const archivedGroups = allGroups.filter((group) => group.archived);
   const visibleGroups = groups.filter((group) =>
     !q || group.name.toLowerCase().includes(q.toLowerCase()),
   );
-  const counts = await Promise.all(visibleGroups.map((group) => getGroupStudentCount(group.id)));
 
   return (
     <AppShell>
@@ -86,7 +88,7 @@ export default async function GroupsPage({
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {visibleGroups.map((group, index) => (
+            {visibleGroups.map((group) => (
               <Link key={group.id} href={`/groups/${group.id}`}>
                 <Card className="h-full p-4 transition hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(120,109,164,0.12)]">
                   <div className="flex items-center justify-between gap-3">
@@ -97,7 +99,7 @@ export default async function GroupsPage({
                   </div>
                   <div className="mt-3 flex items-center justify-between text-sm text-[#655d5d]">
                     <span>학생 수</span>
-                    <strong>{counts[index]}명</strong>
+                    <strong>{counts.get(group.id) ?? 0}명</strong>
                   </div>
                   <div className="mt-3 rounded-2xl bg-[#f8f3ef] p-3 text-sm text-[#564d4d]">
                     {group.memo || "등록된 메모가 아직 없어요."}
