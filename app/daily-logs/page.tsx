@@ -199,7 +199,10 @@ export default async function DailyLogsPage({
 
               <div className="mt-3 grid grid-cols-7 text-center text-[11px] font-medium text-[#b9a2a8]">
                 {WEEKDAY_HEADERS.map((day, headerIndex) => (
-                  <div key={day} className={cn("py-1", headerIndex === 0 && "text-[#c97a7a]")}>
+                  <div
+                    key={day}
+                    className={cn("py-1", (headerIndex === 0 || headerIndex === 6) && "text-[#c97a7a]")}
+                  >
                     {day}
                   </div>
                 ))}
@@ -218,7 +221,7 @@ export default async function DailyLogsPage({
                   const isSelected = date === selectedDate;
                   const isToday = date === today;
                   const dayNumber = Number(date.slice(8));
-                  const isSunday = index % 7 === 0;
+                  const isWeekend = index % 7 === 0 || index % 7 === 6;
                   const hasHoliday = dayEvents.some((event) => event.event_type === "holiday");
 
                   // 레인별 첫 일정만 바로 표시 (연속 표시용)
@@ -259,7 +262,7 @@ export default async function DailyLogsPage({
                           isToday && !isSelected && "ring-1 ring-[#d9c1e8]",
                           hasHoliday
                             ? "text-[#cf4f4f]"
-                            : isSunday
+                            : isWeekend
                               ? "text-[#c97a7a]"
                               : isSelected
                                 ? "text-[#6d4a5c]"
