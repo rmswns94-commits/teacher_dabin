@@ -12,7 +12,9 @@ export async function createStudentAction(values: {
   grade: string;
   school: string;
   memo: string;
-  groupId: string;
+  gender: string;
+  birthDate: string;
+  groupIds: string[];
 }): Promise<{ error: string } | { success: true }> {
   const parsed = studentSchema.safeParse(values);
 
@@ -26,7 +28,9 @@ export async function createStudentAction(values: {
       grade: parsed.data.grade,
       school: parsed.data.school || null,
       memo: parsed.data.memo || null,
-      groupId: parsed.data.groupId || null,
+      gender: parsed.data.gender || null,
+      birthDate: parsed.data.birthDate || null,
+      groupIds: parsed.data.groupIds ?? [],
     });
   } catch (error) {
     return {
@@ -46,6 +50,8 @@ export async function updateStudentAction(studentId: string, formData: FormData)
     grade: String(formData.get("grade") ?? ""),
     school: String(formData.get("school") ?? ""),
     memo: String(formData.get("memo") ?? ""),
+    gender: String(formData.get("gender") ?? ""),
+    birthDate: String(formData.get("birthDate") ?? ""),
     groupId: String(formData.get("groupId") ?? ""),
   };
 
@@ -60,6 +66,8 @@ export async function updateStudentAction(studentId: string, formData: FormData)
     grade: parsed.data.grade,
     school: parsed.data.school || null,
     memo: parsed.data.memo || null,
+    gender: parsed.data.gender || null,
+    birthDate: parsed.data.birthDate || null,
     groupId: parsed.data.groupId || null,
   });
 

@@ -17,6 +17,30 @@ export function todayDateString() {
   return toDateString(new Date());
 }
 
+export function formatKoreanDateFull(ymd: string | null | undefined) {
+  if (!ymd) {
+    return "";
+  }
+
+  const [y, m, d] = ymd.split("-").map(Number);
+
+  if (!y || !m || !d) {
+    return ymd;
+  }
+
+  return `${y}년 ${m}월 ${d}일`;
+}
+
+// "4/17" 같은 아주 짧은 생일 표기용
+export function formatShortMonthDay(ymd: string | null | undefined) {
+  if (!ymd) {
+    return "";
+  }
+
+  const [, m, d] = ymd.split("-").map(Number);
+  return m && d ? `${m}/${d}` : "";
+}
+
 export function formatKoreanDate(ymd: string | null | undefined, withWeekday = false) {
   if (!ymd) {
     return "날짜 미정";

@@ -1,14 +1,27 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { UserRoundPlus } from "lucide-react";
+import { Check, UserRoundPlus } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { createStudentAction } from "@/app/students/actions";
 import { Button } from "@/components/ui/button";
+import { todayDateString } from "@/lib/dates";
 import { gradeOptions } from "@/lib/grades";
+import { genderLabels } from "@/lib/validation/student";
+import { cn } from "@/lib/utils";
 
 type GroupOption = { id: string; name: string };
+
+type FormValues = {
+  name: string;
+  grade: string;
+  school: string;
+  memo: string;
+  gender: string;
+  birthDate: string;
+  groupIds: string[];
+};
 
 // 다이얼로그를 열 때마다 mount되므로 이전 임시 입력이 남지 않는다.
 function StudentFormDialog({
@@ -22,17 +35,25 @@ function StudentFormDialog({
   isPending: boolean;
   error: string;
   onCancel: () => void;
-  onSubmit: (values: { name: string; grade: string; school: string; memo: string; groupId: string }) => void;
+  onSubmit: (values: FormValues) => void;
 }) {
   const [name, setName] = useState("");
   const [grade, setGrade] = useState("middle_2");
   const [school, setSchool] = useState("");
   const [memo, setMemo] = useState("");
-  const [groupId, setGroupId] = useState("");
+  const [gender, setGender] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [groupIds, setGroupIds] = useState<string[]>([]);
+
+  const toggleGroup = (groupId: string) => {
+    setGroupIds((prev) =>
+      prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId],
+    );
+  };
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2b2323]/30 px-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2b2323]/30 px-4 py-6"
       role="dialog"
       aria-modal="true"
       aria-label="학생 등록"
@@ -72,6 +93,30 @@ function StudentFormDialog({
           </label>
 
           <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">성별 (선택)</span>
+            <select
+              value={gender}
+              onChange={(event) => setGender(event.target.value)}
+              className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+            >
+              <option value="">성별 선택</option>
+              <option value="male">{genderLabels.male}</option>
+              <option value="female">{genderLabels.female}</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">생일 (선택)</span>
+            <input
+              type="date"
+              value={birthDate}
+              max={todayDateString()}
+              onChange={(event) => setBirthDate(event.target.value)}
+              className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+            />
+          </label>
+
+          <label className="block">
             <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">학교 (선택)</span>
             <input
               value={school}
@@ -83,19 +128,43 @@ function StudentFormDialog({
           </label>
         </div>
 
-        <label className="mt-3 block">
-          <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">수업 그룹 (선택)</span>
-          <select
-            value={groupId}
-            onChange={(event) => setGroupId(event.target.value)}
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
-          >
-            <option value="">그룹 선택 안 함</option>
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>{group.name}</option>
-            ))}
-          </select>
-        </label>
+        <div className="mt-3">
+          <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">소속 수업 그룹 (선택)</span>
+          {groups.length === 0 ? (
+            <p className="text-xs text-[#a79996]">아직 만든 수업 그룹이 없어요. 나중에 배정할 수 있어요.</p>
+          ) : (
+            <div className="max-h-36 space-y-1 overflow-y-auto rounded-2xl border border-[#ece0db] bg-white p-2">
+              {groups.map((group) => {
+                const checked = groupIds.includes(group.id);
+
+                return (
+                  <button
+                    key={group.id}
+                    type="button"
+                    onClick={() => toggleGroup(group.id)}
+                    aria-pressed={checked}
+                    className="flex min-h-9 w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm transition hover:bg-[#faf0f2]"
+                  >
+                    {checked ? (
+                      <span
+                        aria-hidden
+                        className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md bg-[#8fc7ab]"
+                      >
+                        <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                      </span>
+                    ) : (
+                      <span
+                        aria-hidden
+                        className="h-[18px] w-[18px] shrink-0 rounded-md border-2 border-[#d9c8f0] bg-white"
+                      />
+                    )}
+                    <span className={cn(checked ? "text-[#2d2928]" : "text-[#655d5d]")}>{group.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         <label className="mt-3 block">
           <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">메모 (선택)</span>
@@ -123,9 +192,9 @@ function StudentFormDialog({
             type="button"
             size="sm"
             disabled={isPending || !name.trim()}
-            onClick={() => onSubmit({ name, grade, school, memo, groupId })}
+            onClick={() => onSubmit({ name, grade, school, memo, gender, birthDate, groupIds })}
           >
-            {isPending ? "등록 중..." : "등록"}
+            {isPending ? "등록 중..." : "학생 등록"}
           </Button>
         </div>
       </div>
@@ -146,7 +215,7 @@ export function StudentCreateDialog({
   const [savedMessage, setSavedMessage] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  const submit = (values: { name: string; grade: string; school: string; memo: string; groupId: string }) => {
+  const submit = (values: FormValues) => {
     setError("");
     startTransition(async () => {
       const result = await createStudentAction(values);

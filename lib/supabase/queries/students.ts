@@ -89,7 +89,9 @@ export async function createStudent(input: {
   grade: StudentGrade;
   school?: string | null;
   memo?: string | null;
-  groupId?: string | null;
+  gender?: "male" | "female" | null;
+  birthDate?: string | null;
+  groupIds?: string[];
 }) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
@@ -106,27 +108,58 @@ export async function createStudent(input: {
       grade: input.grade,
       school: input.school?.trim() || null,
       memo: input.memo?.trim() || null,
+      gender: input.gender || null,
+      birth_date: input.birthDate || null,
     })
     .select()
     .single();
 
   if (studentError || !student) {
+    console.error("createStudent error", studentError);
     throw new Error("학생을 등록하지 못했어요. 다시 시도해주세요.");
   }
 
-  if (input.groupId) {
-    const { error: membershipError } = await supabase.from("student_group_memberships").insert({
-      user_id: user.id,
-      student_id: student.id,
-      group_id: input.groupId,
-    });
+  const groupIds = [...new Set(input.groupIds ?? [])];
+
+  if (groupIds.length > 0) {
+    const { error: membershipError } = await supabase.from("student_group_memberships").insert(
+      groupIds.map((groupId) => ({
+        user_id: user.id,
+        student_id: student.id,
+        group_id: groupId,
+      })),
+    );
 
     if (membershipError) {
+      // 학생 자체는 등록됐으므로 되돌리지 않고 명확하게 알려준다.
       console.error("createStudent membership error", membershipError);
+      throw new Error("학생은 등록됐지만 반 배정에 실패했어요. 학생 상세에서 다시 배정해주세요.");
     }
   }
 
   return student;
+}
+
+// 반별 명단 구성용: 현재 사용자의 모든 membership을 한 번에 가져온다.
+export async function getCurrentUserMemberships() {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as { student_id: string; group_id: string }[];
+  }
+
+  const { data, error } = await supabase
+    .from("student_group_memberships")
+    .select("student_id, group_id")
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("getCurrentUserMemberships error", error);
+    return [] as { student_id: string; group_id: string }[];
+  }
+
+  return (data ?? []) as { student_id: string; group_id: string }[];
 }
 
 export async function updateStudent(studentId: string, input: {
@@ -134,6 +167,8 @@ export async function updateStudent(studentId: string, input: {
   grade: StudentGrade;
   school?: string | null;
   memo?: string | null;
+  gender?: "male" | "female" | null;
+  birthDate?: string | null;
   groupId?: string | null;
 }) {
   const supabase = await createServerSupabaseClient();
@@ -161,6 +196,8 @@ export async function updateStudent(studentId: string, input: {
       grade: input.grade,
       school: input.school?.trim() || null,
       memo: input.memo?.trim() || null,
+      gender: input.gender || null,
+      birth_date: input.birthDate || null,
     })
     .eq("id", studentId)
     .eq("user_id", user.id);

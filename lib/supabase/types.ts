@@ -17,6 +17,8 @@ export type StudentRecord = {
   grade: StudentGrade;
   school: string | null;
   memo: string | null;
+  gender: "male" | "female" | null;
+  birth_date: string | null;
   archived: boolean;
   created_at: string;
   updated_at: string;

@@ -7,8 +7,9 @@ import { PageHeader } from "@/components/page-header";
 import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatKoreanDate } from "@/lib/dates";
+import { formatKoreanDate, formatKoreanDateFull, todayDateString } from "@/lib/dates";
 import { gradeDisplay, gradeOptions } from "@/lib/grades";
+import { genderLabels } from "@/lib/validation/student";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import {
   getStudentLessonHistory,
@@ -50,7 +51,14 @@ export default async function StudentDetailPage({
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
         <PageHeader
           title={student.name}
-          description={`${gradeDisplay[student.grade as keyof typeof gradeDisplay]} · ${student.school || "학교 미입력"}`}
+          description={[
+            gradeDisplay[student.grade as keyof typeof gradeDisplay],
+            student.gender ? genderLabels[student.gender] : "",
+            student.school || "학교 미입력",
+            student.birth_date ? `🎂 ${formatKoreanDateFull(student.birth_date)}` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")}
           action={
             <Button variant="secondary" asChild>
               <Link href="/students">목록으로</Link>
@@ -100,6 +108,30 @@ export default async function StudentDetailPage({
                         defaultValue={student.school ?? ""}
                         className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
                         placeholder="학교명"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">성별</span>
+                      <select
+                        name="gender"
+                        defaultValue={student.gender ?? ""}
+                        className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
+                      >
+                        <option value="">성별 선택</option>
+                        <option value="male">{genderLabels.male}</option>
+                        <option value="female">{genderLabels.female}</option>
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">생일</span>
+                      <input
+                        type="date"
+                        name="birthDate"
+                        defaultValue={student.birth_date ?? ""}
+                        max={todayDateString()}
+                        className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
                       />
                     </label>
                   </div>
