@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Heart } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
-import { CatDoodle } from "@/components/cat-doodle";
 import { Doodle } from "@/components/doodle";
 import { PrettyWordCard, PrettyWordCreateButton, PrettyWordsHero } from "@/components/pretty-words";
 import { getCurrentUserPrettyWords, pickRandomHeroIndex } from "@/lib/supabase/queries/pretty-words";
@@ -65,7 +64,6 @@ export default async function PrettyWordsPage({
           {words.length === 0 ? (
             <div className="relative mt-10">
               <div className="mx-auto flex max-w-md flex-col items-center gap-4 rounded-[28px] border border-[#f0dbe2] bg-gradient-to-br from-[#fdf7f9] to-[#fdfaf5] px-6 py-12 text-center">
-                <CatDoodle variant="heart" className="h-16 w-20" />
                 <div className="font-display text-lg text-[#4a3f47]">아직 모아둔 문장이 없어요.</div>
                 <p className="text-sm leading-6 text-[#8a7b83]">
                   오늘 마음에 남은 한마디를

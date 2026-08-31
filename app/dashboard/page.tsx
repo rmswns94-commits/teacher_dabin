@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
-import { CatDoodle } from "@/components/cat-doodle";
 import { Doodle, Tape } from "@/components/doodle";
 import { EncouragementCard } from "@/components/encouragement-card";
 import { NextClassCountdown } from "@/components/next-class-countdown";
@@ -144,7 +143,6 @@ export default async function DashboardPage() {
                   <Doodle kind="leaf" className="h-4 w-4 text-[#9dbfa8]" />
                 </p>
               </div>
-              <CatDoodle className="mb-1 h-12 w-14" />
             </div>
             <Button className="gap-2" asChild>
               <Link href="/daily-logs/new">
@@ -193,10 +191,6 @@ export default async function DashboardPage() {
           ) : hero ? (
             <div className="relative overflow-hidden rounded-[28px] border border-[#e2d8f3] bg-gradient-to-br from-[#eeeafb] via-[#f8f4fd] to-[#fdfaf5] shadow-[0_10px_30px_rgba(139,122,230,0.08)]">
               <div aria-hidden className="dot-pattern absolute inset-y-0 right-0 w-1/3 opacity-60" />
-              <CatDoodle
-                variant="book"
-                className="absolute bottom-3 right-5 h-16 w-20 rotate-[3deg] max-md:hidden"
-              />
               <Doodle kind="sparkle" className="absolute bottom-16 right-9 h-5 w-5 text-[#d9cdf0] max-md:hidden" />
 
               <div className="relative p-6 md:p-7">
