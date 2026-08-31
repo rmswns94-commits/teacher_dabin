@@ -41,6 +41,8 @@
 
 html {
   scroll-behavior: smooth;
+  /* 손글씨체 가독성을 위해 전체 스케일을 살짝 키운다 (rem 기준 일괄 적용) */
+  font-size: 17px;
 }
 
 body {
@@ -54,7 +56,9 @@ body {
   background-color: var(--background);
   background-attachment: fixed;
   color: var(--foreground);
-  font-family: var(--font-geist-sans), "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif;
+  /* 앱 전체 기본 글씨체도 손글씨체로 — 다이어리 한 권 같은 통일감 */
+  font-family: var(--font-hand), var(--font-geist-sans), "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif;
+  letter-spacing: 0.01em;
 }
 
 /* Hero 카드 등 일부 영역에만 쓰는 아주 연한 도트 패턴 */
