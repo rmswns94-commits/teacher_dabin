@@ -34,23 +34,23 @@
   --color-diary-ink: var(--diary-ink);
   --color-diary-muted: var(--diary-muted);
   --color-diary-border: var(--diary-border);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", var(--font-geist-sans), Arial, sans-serif;
   --font-mono: var(--font-geist-mono);
   --font-display: var(--font-hand), var(--font-geist-sans), sans-serif;
 
-  /* 본문 계열 글자 크기를 기본값보다 ~2px 키운다 (제목 스케일은 그대로).
-     text-xs/sm/base 유틸리티가 앱 전역에서 이 값을 쓴다. */
-  --text-xs: 0.87rem;
-  --text-xs--line-height: 1.4;
-  --text-sm: 1rem;
+  /* 본문 글자 크기: 고딕 기준 표준 스케일. (예전 확대치는 손글씨체 보정용이었음)
+     루트 17px 덕분에 기본값이어도 표준보다 살짝 크게 렌더링된다. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.45;
+  --text-sm: 0.875rem;
   --text-sm--line-height: 1.55;
-  --text-base: 1.12rem;
+  --text-base: 1rem;
   --text-base--line-height: 1.6;
 }
 
 html {
   scroll-behavior: smooth;
-  /* 손글씨체 가독성을 위해 전체 스케일을 살짝 키운다 (rem 기준 일괄 적용) */
+  /* 전체 스케일을 살짝 키운다 (rem 기준 일괄 적용 — 제목 손글씨체 가독성 포함) */
   font-size: 17px;
 }
 
@@ -65,9 +65,9 @@ body {
   background-color: var(--background);
   background-attachment: fixed;
   color: var(--foreground);
-  /* 앱 전체 기본 글씨체도 손글씨체로 — 다이어리 한 권 같은 통일감 */
-  font-family: var(--font-hand), var(--font-geist-sans), "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif;
-  letter-spacing: 0.01em;
+  /* 본문은 가독성 좋은 고딕 계열(맑은 고딕 우선, iOS/맥은 Apple SD Gothic Neo).
+     손글씨체(Hi Melody)는 font-display 유틸을 쓰는 제목·감성 문구에만 남긴다. */
+  font-family: "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", var(--font-geist-sans), Arial, sans-serif;
 }
 
 /* Hero 카드 등 일부 영역에만 쓰는 아주 연한 도트 패턴 */
