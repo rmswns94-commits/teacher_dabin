@@ -3,6 +3,7 @@
 import { RefreshCw, Sprout } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
+import { CatDoodle } from "@/components/cat-doodle";
 import { Doodle, Tape } from "@/components/doodle";
 import { Card, CardContent } from "@/components/ui/card";
 import { encouragementMessages } from "@/lib/constants/encouragement-messages";
@@ -81,11 +82,8 @@ export function EncouragementCard() {
     <div className="relative">
       <Tape />
       <Card className="relative overflow-hidden border-[#f2ddcf] bg-gradient-to-br from-[#fff8f3] to-[#fdf3ea]">
-        <Doodle
-          kind="flower"
-          className="absolute -bottom-3 -right-3 h-20 w-20 rotate-12 text-[#f0dcc9]"
-        />
-        <Doodle kind="sparkle" className="absolute right-14 top-4 h-4 w-4 text-[#ecd9c7]" />
+        <CatDoodle variant="heart" className="absolute bottom-1 right-3 h-14 w-16" />
+        <Doodle kind="sparkle" className="absolute right-20 top-4 h-4 w-4 text-[#ecd9c7]" />
 
         <CardContent className="relative p-5">
           <div className="flex items-center gap-2 text-sm font-semibold text-[#7a6455]">

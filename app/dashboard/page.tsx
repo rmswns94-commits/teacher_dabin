@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { CatDoodle } from "@/components/cat-doodle";
 import { Doodle, Tape } from "@/components/doodle";
 import { EncouragementCard } from "@/components/encouragement-card";
 import { NextClassCountdown } from "@/components/next-class-countdown";
@@ -131,16 +132,19 @@ export default async function DashboardPage() {
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
         <div className="mx-auto w-full max-w-[1150px]">
           <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="font-display text-[26px] font-semibold leading-snug tracking-[-0.01em] text-[#2d2928] md:text-3xl">
-                안녕하세요,
-                <br />
-                {displayName} 선생님 <span aria-hidden>🌷</span>
-              </h1>
-              <p className="mt-2 flex items-center gap-1.5 text-sm text-[#7b746f]">
-                오늘도 하나씩 준비해볼까요?
-                <Doodle kind="leaf" className="h-4 w-4 text-[#9dbfa8]" />
-              </p>
+            <div className="flex items-end gap-3">
+              <div>
+                <h1 className="font-display text-[26px] font-semibold leading-snug tracking-[-0.01em] text-[#2d2928] md:text-3xl">
+                  안녕하세요,
+                  <br />
+                  {displayName} 선생님 <span aria-hidden>🌷</span>
+                </h1>
+                <p className="mt-2 flex items-center gap-1.5 text-sm text-[#7b746f]">
+                  오늘도 하나씩 준비해볼까요?
+                  <Doodle kind="leaf" className="h-4 w-4 text-[#9dbfa8]" />
+                </p>
+              </div>
+              <CatDoodle className="mb-1 h-12 w-14" />
             </div>
             <Button className="gap-2" asChild>
               <Link href="/daily-logs/new">
@@ -189,11 +193,11 @@ export default async function DashboardPage() {
           ) : hero ? (
             <div className="relative overflow-hidden rounded-[28px] border border-[#e2d8f3] bg-gradient-to-br from-[#eeeafb] via-[#f8f4fd] to-[#fdfaf5] shadow-[0_10px_30px_rgba(139,122,230,0.08)]">
               <div aria-hidden className="dot-pattern absolute inset-y-0 right-0 w-1/3 opacity-60" />
-              <Doodle
-                kind="notebook"
-                className="absolute bottom-4 right-5 h-14 w-14 rotate-[6deg] text-[#c9bce8] max-md:hidden"
+              <CatDoodle
+                variant="book"
+                className="absolute bottom-3 right-5 h-16 w-20 rotate-[3deg] max-md:hidden"
               />
-              <Doodle kind="pencil" className="absolute bottom-9 right-16 h-8 w-8 rotate-[-14deg] text-[#d9cdf0] max-md:hidden" />
+              <Doodle kind="sparkle" className="absolute bottom-16 right-9 h-5 w-5 text-[#d9cdf0] max-md:hidden" />
 
               <div className="relative p-6 md:p-7">
                 {allDoneToday ? (

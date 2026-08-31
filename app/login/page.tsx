@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, BookOpenText, LockKeyhole, Mail } from "lucide-react";
+import { ArrowRight, LockKeyhole, Mail } from "lucide-react";
 import { FormEvent, Suspense, useState } from "react";
 
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getAuthErrorMessage } from "@/lib/supabase/auth";
+import { CatDoodle } from "@/components/cat-doodle";
 import { Doodle } from "@/components/doodle";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -59,9 +60,7 @@ function LoginForm() {
     <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_#f7f1eb,_#f3f7f4_45%,_#f8f5fa_100%)] px-4 py-10">
       <Card className="w-full max-w-md p-4 shadow-[0_22px_60px_rgba(120,109,164,0.12)]">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#ebe2ff] to-[#f6dfe9] text-[#433a57] shadow-sm">
-            <BookOpenText className="h-5 w-5" />
-          </div>
+          <CatDoodle variant="heart" className="h-16 w-20" />
           <div className="mt-4 flex items-center gap-2">
             <Doodle kind="flower" className="h-5 w-5 text-[#c9a9c4]" />
             <h1 className="font-display text-2xl font-semibold tracking-[-0.01em] text-[#2a2323]">
