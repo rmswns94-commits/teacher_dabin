@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f3ee;
+  --foreground: #241d1d;
+
+  /* 다이어리 팔레트 토큰 — 새 스타일을 만들 때 이 색을 우선 사용한다. */
+  --diary-lavender: #ede7f6;
+  --diary-cream: #fff9f0;
+  --diary-pink: #f8e5ea;
+  --diary-mint: #e7f4ef;
+  --diary-warm-gray: #f5f3f1;
+  --diary-border: #eadfd8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-diary-lavender: var(--diary-lavender);
+  --color-diary-cream: var(--diary-cream);
+  --color-diary-pink: var(--diary-pink);
+  --color-diary-mint: var(--diary-mint);
+  --color-diary-warm-gray: var(--diary-warm-gray);
+  --color-diary-border: var(--diary-border);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-gowun), var(--font-geist-sans), sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+/* 모바일에서는 상단 바(3.5rem) 아래에 페이지 스크롤 영역을 맞춘다.
+   각 페이지의 <main class="h-screen">를 덮어써서 하단이 잘리지 않게 한다. */
+@media (max-width: 767px) {
+  .app-main > main {
+    height: calc(100dvh - 3.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
