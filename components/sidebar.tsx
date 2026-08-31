@@ -185,8 +185,9 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
         </button>
       </div>
 
-      <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
-        <ul className="space-y-1.5">
+      {/* 섹션 사이는 divide-y 구분선으로 깔끔하게 나눈다 */}
+      <nav className="flex-1 divide-y divide-[#ececf0] overflow-y-auto px-3">
+        <ul className="space-y-1.5 py-4">
           {topItems.map((item) => (
             <li key={item.href}>
               <NavLink {...item} isActive={isActive(item.href)} />
@@ -194,8 +195,8 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
           ))}
         </ul>
 
-        <div>
-          <div className="mb-2 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9a9aa3] before:h-1 before:w-1 before:rounded-full before:bg-[#c9c9d2] before:content-['']">
+        <div className="py-4">
+          <div className="mb-2 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9a9aa3]">
             수업 관리
           </div>
           <ul className="space-y-1.5">
@@ -284,8 +285,8 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
           </ul>
         </div>
 
-        <div>
-          <div className="mb-2 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9a9aa3] before:h-1 before:w-1 before:rounded-full before:bg-[#c9c9d2] before:content-['']">
+        <div className="py-4">
+          <div className="mb-2 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9a9aa3]">
             수업 자료
           </div>
           <ul className="space-y-1.5">
@@ -297,7 +298,7 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
           </ul>
         </div>
 
-        <div>
+        <div className="py-4">
           <ul className="space-y-1.5">
             <li>
               <NavLink
