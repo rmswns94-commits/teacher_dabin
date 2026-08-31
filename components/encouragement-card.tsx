@@ -3,7 +3,7 @@
 import { RefreshCw, Sprout } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
-import { Doodle } from "@/components/doodle";
+import { Doodle, Tape } from "@/components/doodle";
 import { Card, CardContent } from "@/components/ui/card";
 import { encouragementMessages } from "@/lib/constants/encouragement-messages";
 
@@ -78,44 +78,48 @@ export function EncouragementCard() {
   const entry = encouragementMessages.find((item) => item.id === messageId);
 
   return (
-    <Card className="relative overflow-hidden border-[#ece2f0] bg-gradient-to-br from-[#fdfaf4] via-[#faf7fc] to-[#fbf6f4]">
-      <Doodle
-        kind="flower"
-        className="absolute -bottom-3 -right-3 h-20 w-20 rotate-12 text-[#e6dbf0]"
-      />
-      <Doodle kind="sparkle" className="absolute right-14 top-4 h-4 w-4 text-[#dfd2ee]" />
+    <div className="relative">
+      <Tape />
+      <Card className="relative overflow-hidden border-[#f2ddcf] bg-gradient-to-br from-[#fff8f3] to-[#fdf3ea]">
+        <Doodle
+          kind="flower"
+          className="absolute -bottom-3 -right-3 h-20 w-20 rotate-12 text-[#f0dcc9]"
+        />
+        <Doodle kind="sparkle" className="absolute right-14 top-4 h-4 w-4 text-[#ecd9c7]" />
 
-      <CardContent className="relative p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-[#5d5370]">
+        <CardContent className="relative p-5">
+          <div className="flex items-center gap-2 text-sm font-semibold text-[#7a6455]">
             <Sprout className="h-4 w-4 text-[#5f8d6f]" aria-hidden />
             오늘의 한마디
           </div>
-          <button
-            type="button"
-            onClick={refreshMessage}
-            disabled={!entry}
-            aria-label="다른 한마디 보기"
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-[#9d8fb0] transition hover:bg-white/70 hover:text-[#5d5370] disabled:opacity-40"
-          >
-            <RefreshCw className="h-4 w-4" aria-hidden />
-          </button>
-        </div>
 
-        <div className="mt-3 flex min-h-14 items-start gap-3">
-          {entry ? (
-            <span
-              aria-hidden
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/85 text-2xl shadow-[0_3px_10px_rgba(120,109,164,0.1)]"
+          <div className="mt-3 flex min-h-14 items-start gap-3">
+            {entry ? (
+              <span
+                aria-hidden
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/85 text-2xl shadow-[0_3px_10px_rgba(164,130,109,0.12)]"
+              >
+                {entry.emoji}
+              </span>
+            ) : null}
+            <p className="whitespace-pre-line pt-1 font-display text-[15px] leading-7 text-[#544639]">
+              {entry?.message ?? ""}
+            </p>
+          </div>
+
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={refreshMessage}
+              disabled={!entry}
+              aria-label="다른 한마디 보기"
+              className="flex min-h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs text-[#a2886f] transition hover:bg-white/70 hover:text-[#7a6455] disabled:opacity-40"
             >
-              {entry.emoji}
-            </span>
-          ) : null}
-          <p className="whitespace-pre-line pt-1 font-display text-[15px] leading-7 text-[#4a4152]">
-            {entry?.message ?? ""}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+              다른 한마디 <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

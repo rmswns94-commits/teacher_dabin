@@ -25,7 +25,37 @@ const paths: Record<string, React.ReactNode> = {
       strokeLinejoin="round"
     />
   ),
+  notebook: (
+    <>
+      <rect x="6" y="4" width="13" height="16" rx="2.5" strokeLinejoin="round" />
+      <path d="M4.5 8h3M4.5 12h3M4.5 16h3" strokeLinecap="round" />
+      <path d="M10 9.5c1.8-.8 4.2-.8 6 0M10 13c1.8-.8 4.2-.8 6 0" strokeLinecap="round" opacity="0.7" />
+    </>
+  ),
+  pencil: (
+    <>
+      <path
+        d="M14.5 5.5l4 4L9 19l-4.6 1.1L5.5 15.5l9-10Z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M12.5 7.5l4 4" strokeLinecap="round" opacity="0.7" />
+    </>
+  ),
 };
+
+// 카드 상단에 붙이는 작은 마스킹테이프 장식. 감성 카드 1~2곳에만 사용한다.
+export function Tape({ className }: { className?: string }) {
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute -top-2 left-1/2 z-10 h-4 w-16 -translate-x-1/2 rotate-[-3deg] rounded-[3px] bg-[#f2e4d3]/85 shadow-[0_1px_3px_rgba(120,100,80,0.18)] select-none",
+        className,
+      )}
+    />
+  );
+}
 
 export function Doodle({
   kind,

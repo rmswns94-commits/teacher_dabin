@@ -1,15 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f3ee;
-  --foreground: #241d1d;
+  --background: #fbf8f4;
+  --foreground: #2d2928;
 
-  /* 다이어리 팔레트 토큰 — 새 스타일을 만들 때 이 색을 우선 사용한다. */
-  --diary-lavender: #ede7f6;
-  --diary-cream: #fff9f0;
-  --diary-pink: #f8e5ea;
-  --diary-mint: #e7f4ef;
+  /* 다이어리 팔레트 토큰 — 의미 기반으로 사용한다.
+     lavender=계획/기본, mint=완료/출석, peach=리마인더/숙제,
+     cream=메모/하이라이트, rose=결석/주의 */
+  --diary-lavender: #eeeafb;
+  --diary-lavender-strong: #8b7ae6;
+  --diary-lilac: #dccff7;
+  --diary-cream: #fff8ee;
+  --diary-peach: #fbe8df;
+  --diary-pink: #f4dfe5;
+  --diary-mint: #e4f4ec;
   --diary-warm-gray: #f5f3f1;
+  --diary-ink: #2d2928;
+  --diary-muted: #7b746f;
   --diary-border: #eadfd8;
 }
 
@@ -17,10 +24,15 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-diary-lavender: var(--diary-lavender);
+  --color-diary-lavender-strong: var(--diary-lavender-strong);
+  --color-diary-lilac: var(--diary-lilac);
   --color-diary-cream: var(--diary-cream);
+  --color-diary-peach: var(--diary-peach);
   --color-diary-pink: var(--diary-pink);
   --color-diary-mint: var(--diary-mint);
   --color-diary-warm-gray: var(--diary-warm-gray);
+  --color-diary-ink: var(--diary-ink);
+  --color-diary-muted: var(--diary-muted);
   --color-diary-border: var(--diary-border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -33,9 +45,20 @@ html {
 
 body {
   min-height: 100vh;
-  background: var(--background);
+  /* warm ivory 위에 아주 은은한 lavender/peach glow — 가독성을 해치지 않는 수준 */
+  background:
+    radial-gradient(640px 420px at 88% -6%, rgba(139, 122, 230, 0.06), transparent 62%),
+    radial-gradient(560px 400px at -8% 104%, rgba(251, 232, 223, 0.45), transparent 60%),
+    var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-geist-sans), "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif;
+}
+
+/* Hero 카드 등 일부 영역에만 쓰는 아주 연한 도트 패턴 */
+.dot-pattern {
+  background-image: radial-gradient(rgba(139, 122, 230, 0.09) 1px, transparent 1.5px);
+  background-size: 16px 16px;
 }
 
 * {

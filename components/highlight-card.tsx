@@ -5,6 +5,7 @@ import { Pencil, Plus, Sparkles } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { updateGroupHighlightAction } from "@/app/groups/actions";
+import { Tape } from "@/components/doodle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -50,7 +51,9 @@ export function HighlightCard({
   };
 
   return (
-    <Card className="mt-4 border-[#e8ddf3] bg-gradient-to-br from-[#fbf8ff] to-[#fdf9f4]">
+    <div className="relative mt-5">
+      <Tape className="rotate-[2deg] bg-[#e6ddf5]/85" />
+      <Card className="border-[#e8ddf3] bg-gradient-to-br from-[#fbf8ff] to-[#fdf6ee]">
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#6d5aa8]">
@@ -103,6 +106,7 @@ export function HighlightCard({
           </div>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </div>
   );
 }

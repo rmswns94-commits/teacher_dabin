@@ -33,7 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} ${gowunDodum.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-[#f7f3ee] text-[#241d1d]">{children}</body>
+      <body className="min-h-full text-[#2d2928]">{children}</body>
     </html>
   );
 }

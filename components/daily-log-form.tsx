@@ -314,6 +314,12 @@ export function DailyLogForm({
             <Card key={student.studentId} className="p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
+                  <span
+                    aria-hidden
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#e8e1ff] to-[#f6dfe9] text-xs font-semibold text-[#4a3c52]"
+                  >
+                    {student.name.charAt(0)}
+                  </span>
                   <span className="font-semibold text-[#2b2323]">{student.name}</span>
                   <span className="rounded-full bg-[#f2effc] px-2 py-0.5 text-[10px] text-[#5f54b8]">
                     {gradeDisplay[student.grade]}

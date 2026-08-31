@@ -12,7 +12,6 @@ import {
   LogOut,
   Menu,
   NotebookPen,
-  UserRound,
   Users,
   X,
 } from "lucide-react";
@@ -195,7 +194,7 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
         </ul>
 
         <div>
-          <div className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9d8a86]">
+          <div className="mb-2 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#a8968f] before:h-1 before:w-1 before:rounded-full before:bg-[#dccff7] before:content-['']">
             수업 관리
           </div>
           <ul className="space-y-1.5">
@@ -285,7 +284,7 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
         </div>
 
         <div>
-          <div className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9d8a86]">
+          <div className="mb-2 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#a8968f] before:h-1 before:w-1 before:rounded-full before:bg-[#dccff7] before:content-['']">
             수업 자료
           </div>
           <ul className="space-y-1.5">
@@ -299,15 +298,16 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
       </nav>
 
       <div className="border-t border-[#efe4dc] p-4 space-y-3">
-        <div className="rounded-2xl bg-[#f7f3ef] px-3 py-3 text-xs text-[#655d5d]">
-          <div className="flex items-center gap-2 text-[#312d2d]">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-[#5b4db0]">
-              <UserRound className="h-4 w-4" />
-            </span>
-            <div>
-              <div className="font-semibold text-[#2b2323]">{userName}</div>
-              {userEmail ? <div className="text-[11px] text-[#7d6d6b]">{userEmail}</div> : null}
-            </div>
+        <div className="flex items-center gap-2.5 rounded-2xl bg-[#f7f3ef] px-3 py-2.5 text-xs text-[#655d5d]">
+          <span
+            aria-hidden
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#e8e1ff] to-[#f6dfe9] font-display text-sm font-semibold text-[#4a3c52] shadow-sm"
+          >
+            {userName.trim().charAt(0) || "선"}
+          </span>
+          <div className="min-w-0">
+            <div className="truncate font-semibold text-[#2b2323]">{userName}</div>
+            {userEmail ? <div className="truncate text-[11px] text-[#7d6d6b]">{userEmail}</div> : null}
           </div>
         </div>
 
@@ -316,7 +316,7 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
         <button
           type="button"
           onClick={handleSignOut}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#f0e2df] bg-white px-3 py-2 text-sm font-medium text-[#564d4d] transition hover:bg-[#f7f2f0]"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm text-[#8a7b77] transition hover:bg-[#f8f3f0] hover:text-[#564d4d]"
         >
           <LogOut className="h-4 w-4" />
           로그아웃

@@ -118,6 +118,7 @@ export default async function GroupDetailPage({
   return (
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
+        <div className="mx-auto w-full max-w-[1150px]">
         <PageHeader
           title={group.name}
           description={`${gradeDisplay[group.grade]} · 학생 ${members.length}명${group.memo ? ` · ${group.memo}` : ""}`}
@@ -142,7 +143,7 @@ export default async function GroupDetailPage({
               <span className="text-[#8a7b77]">아직 등록된 수업 시간이 없어요.</span>
             ) : (
               schedules.map((slot) => (
-                <span key={slot.id} className="rounded-full bg-[#f2edf9] px-2.5 py-1 text-xs text-[#4a3f6d]">
+                <span key={slot.id} className="rounded-full bg-[#f2edf9] px-2.5 py-1 text-xs tabular-nums text-[#4a3f6d]">
                   {formatScheduleSlot(slot)}
                 </span>
               ))
@@ -511,8 +512,16 @@ export default async function GroupDetailPage({
                     <div className="space-y-1.5">
                       {members.map((student) => (
                         <Link key={student.id} href={`/students/${student.id}`} className="block">
-                          <div className="flex items-center justify-between rounded-xl border border-[#f0e7e2] bg-[#fffdfb] px-3 py-2 transition hover:bg-[#faf6f3]">
-                            <span className="text-sm font-medium text-[#2b2323]">{student.name}</span>
+                          <div className="flex min-h-11 items-center justify-between gap-2 rounded-xl border border-[#f0e7e2] bg-[#fffdfb] px-3 py-2 transition hover:bg-[#f7f2fb]">
+                            <span className="flex items-center gap-2 text-sm font-medium text-[#2b2323]">
+                              <span
+                                aria-hidden
+                                className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-[#e8e1ff] to-[#f6dfe9] text-[10px] font-semibold text-[#4a3c52]"
+                              >
+                                {student.name.charAt(0)}
+                              </span>
+                              {student.name}
+                            </span>
                             <span className="text-xs text-[#8a7b77]">
                               {gradeDisplay[student.grade]}
                               {student.school ? ` · ${student.school}` : ""}
@@ -584,6 +593,7 @@ export default async function GroupDetailPage({
             </div>
           </>
         )}
+        </div>
       </main>
     </AppShell>
   );
