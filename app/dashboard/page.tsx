@@ -203,11 +203,11 @@ export default async function DashboardPage() {
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8b7ae6]">
                   {isCurrentClass ? (
                     <>
-                      <CirclePlay className="h-3.5 w-3.5" /> 현재 수업
+                      <CirclePlay className="h-3.5 w-3.5" /> Current class
                     </>
                   ) : (
                     <>
-                      <Clock3 className="h-3.5 w-3.5" /> 다음 수업
+                      <Clock3 className="h-3.5 w-3.5" /> Next class
                     </>
                   )}
                   <Doodle kind="sparkle" className="h-4 w-4 text-[#c5b6e3]" />
@@ -286,7 +286,7 @@ export default async function DashboardPage() {
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-3">
                       <CardTitle className="flex items-center gap-2">
-                        <ListTodo className="h-4 w-4 text-[#3e7d6b]" /> 지금 할 일
+                        <ListTodo className="h-4 w-4 text-[#3e7d6b]" /> To do list
                         <span className="text-sm font-normal text-[#8a7b77]">· {focusGroup.name}</span>
                       </CardTitle>
                       {prepItems.length > 0 ? (
@@ -413,7 +413,7 @@ export default async function DashboardPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between gap-3">
-                    <CardTitle>오늘 수업</CardTitle>
+                    <CardTitle>Today class</CardTitle>
                     {overview.todayLogs.length > 0 ? (
                       <span className="text-xs tabular-nums text-[#8a7b77]">{overview.todayLogs.length}개</span>
                     ) : null}
