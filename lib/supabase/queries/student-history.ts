@@ -71,6 +71,50 @@ export function summarizeAttendance(history: StudentLessonHistoryItem[]) {
   return summary;
 }
 
+// 학생 목록용: 최근 N일의 모든 학생 수업 기록을 한 번에 가져온다 (N+1 방지).
+export type RecentLessonRecord = {
+  student_id: string;
+  attendance: "present" | "late" | "absent";
+  progress: string | null;
+  memo: string | null;
+  strengths: string | null;
+  improvements: string | null;
+  class_date: string;
+};
+
+export async function getRecentLessonRecords(sinceDate: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as RecentLessonRecord[];
+  }
+
+  const { data, error } = await supabase
+    .from("student_lesson_logs")
+    .select("student_id, attendance, progress, memo, strengths, improvements, daily_logs!inner(class_date)")
+    .eq("user_id", user.id)
+    .gte("daily_logs.class_date", sinceDate);
+
+  if (error) {
+    console.error("getRecentLessonRecords error", error);
+    return [] as RecentLessonRecord[];
+  }
+
+  return (data ?? []).map((row) => {
+    const dailyLog = pickOne<{ class_date: string }>(row.daily_logs);
+    return {
+      student_id: row.student_id,
+      attendance: row.attendance,
+      progress: row.progress,
+      memo: row.memo,
+      strengths: row.strengths,
+      improvements: row.improvements,
+      class_date: dailyLog?.class_date ?? "",
+    } as RecentLessonRecord;
+  });
+}
+
 export async function getStudentMakeups(studentId: string) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();

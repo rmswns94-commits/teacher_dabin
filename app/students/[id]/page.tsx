@@ -8,6 +8,7 @@ import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { GuardedForm } from "@/components/unsaved-guard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate, formatKoreanDateFull, todayDateString } from "@/lib/dates";
 import { gradeDisplay, gradeOptions } from "@/lib/grades";
 import { genderLabels } from "@/lib/validation/student";
@@ -39,7 +40,11 @@ export default async function StudentDetailPage({
     notFound();
   }
 
-  const attendanceSummary = summarizeAttendance(history);
+  // 출결 요약은 최근 30일 기준 (오래된 결석이 계속 표시되지 않게)
+  const since = addDaysStr(todayDateString(), -30);
+  const attendanceSummary = summarizeAttendance(
+    history.filter((item) => (item.dailyLog?.class_date ?? "") >= since),
+  );
   const recentLessons = history.slice(0, 5);
   const recentComments = history
     .filter((item) => item.strengths || item.improvements)
@@ -188,7 +193,7 @@ export default async function StudentDetailPage({
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle>최근 수업</CardTitle>
                   {attendanceSummary.total > 0 ? (
-                    <div className="flex items-center gap-1.5 text-xs">
+                    <div className="flex items-center gap-1.5 text-xs" title="최근 30일 출결">
                       <span className="rounded-full bg-[#edf9f3] px-2 py-1 text-[#3d7f64]">
                         출석 {attendanceSummary.present}
                       </span>
@@ -234,6 +239,9 @@ export default async function StudentDetailPage({
                         ) : null}
                         {lesson.improvements ? (
                           <div className="mt-1 text-xs text-[#8a5d52]">보완 · {lesson.improvements}</div>
+                        ) : null}
+                        {lesson.memo ? (
+                          <div className="mt-1 text-xs text-[#7c6d69]">메모 · {lesson.memo}</div>
                         ) : null}
                       </div>
                     </Link>
