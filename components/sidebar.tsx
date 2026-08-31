@@ -59,10 +59,10 @@ function NavLink({
     <Link
       href={href}
       className={cn(
-        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all",
         isActive
           ? "bg-[#f0f0f3] text-[#232327] shadow-sm ring-1 ring-[#e2e2e8]"
-          : "text-[#4c4c55] hover:bg-[#f4f4f6] hover:text-[#232327]",
+          : "text-[#3c3c45] hover:bg-[#f4f4f6] hover:text-[#232327]",
       )}
     >
       <span
@@ -218,8 +218,8 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
                 <Link
                   href="/groups"
                   className={cn(
-                    "flex flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium",
-                    pathname === "/groups" ? "text-[#232327]" : "text-[#4c4c55]",
+                    "flex flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold",
+                    pathname === "/groups" ? "text-[#232327]" : "text-[#3c3c45]",
                   )}
                 >
                   <span
@@ -256,10 +256,10 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
                           href={`/groups/${group.id}`}
                           aria-current={groupActive ? "page" : undefined}
                           className={cn(
-                            "flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] transition-all",
+                            "flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all",
                             groupActive
                               ? "bg-[#f0f0f3] font-semibold text-[#232327] ring-1 ring-[#e2e2e8]"
-                              : "text-[#5c5c66] hover:bg-[#f4f4f6] hover:text-[#232327]",
+                              : "text-[#4c4c55] hover:bg-[#f4f4f6] hover:text-[#232327]",
                           )}
                         >
                           <span
