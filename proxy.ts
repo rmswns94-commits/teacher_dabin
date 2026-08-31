@@ -9,6 +9,7 @@ const protectedRoutes = [
   "/passages",
   "/question-sets",
   "/groups",
+  "/pretty-words",
   "/settings",
 ];
 
@@ -68,6 +69,7 @@ export const config = {
     "/passages/:path*",
     "/question-sets/:path*",
     "/groups/:path*",
+    "/pretty-words/:path*",
     "/settings/:path*",
   ],
 };

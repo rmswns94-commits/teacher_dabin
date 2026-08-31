@@ -8,6 +8,7 @@ import {
   ChevronRight,
   FileText,
   FolderKanban,
+  Heart,
   Home,
   LogOut,
   Menu,
@@ -293,6 +294,19 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
                 <NavLink {...item} isActive={isActive(item.href)} />
               </li>
             ))}
+          </ul>
+        </div>
+
+        <div>
+          <ul className="space-y-1.5">
+            <li>
+              <NavLink
+                label="이쁜 말♥"
+                href="/pretty-words"
+                icon={Heart}
+                isActive={isActive("/pretty-words")}
+              />
+            </li>
           </ul>
         </div>
       </nav>

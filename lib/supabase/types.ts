@@ -62,6 +62,17 @@ export type ClassGroupScheduleRecord = {
   updated_at: string;
 };
 
+export type PrettyWordRecord = {
+  id: string;
+  user_id: string;
+  content: string;
+  author: string | null;
+  category: string | null;
+  is_favorite: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AttendanceStatus = "present" | "late" | "absent";
 export type DailyLogStatus = "draft" | "completed";
 export type MakeupStatus = "required" | "scheduled" | "completed" | "cancelled";
