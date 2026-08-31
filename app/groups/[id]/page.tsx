@@ -23,6 +23,7 @@ import { AppShell } from "@/components/app-shell";
 import { HighlightCard } from "@/components/highlight-card";
 import { PageHeader } from "@/components/page-header";
 import { ScheduleSetEditor } from "@/components/schedule-set-editor";
+import { GuardedForm } from "@/components/unsaved-guard";
 import { TextbookFieldsEditor } from "@/components/textbook-fields-editor";
 import { PendingButton } from "@/components/pending-button";
 import { DailyLogStatusBadge } from "@/components/status-badge";
@@ -152,7 +153,7 @@ export default async function GroupDetailPage({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <form action={updateGroupAction.bind(null, id)} className="space-y-4">
+              <GuardedForm action={updateGroupAction.bind(null, id)} className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="block">
                     <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">그룹명</span>
@@ -211,7 +212,7 @@ export default async function GroupDetailPage({
                   </Button>
                   <PendingButton>저장</PendingButton>
                 </div>
-              </form>
+              </GuardedForm>
 
               <div className="mt-5 border-t border-[#f0e7e2] pt-4">
                 <div className="mb-1 flex items-center gap-2 text-sm font-medium text-[#4d3a3a]">

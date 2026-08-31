@@ -5,6 +5,7 @@ import { Check, UserRoundPlus } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { createStudentAction } from "@/app/students/actions";
+import { ConfirmDiscardDialog, useBeforeUnloadWarning } from "@/components/unsaved-guard";
 import { Button } from "@/components/ui/button";
 import { todayDateString } from "@/lib/dates";
 import { gradeOptions } from "@/lib/grades";
@@ -44,6 +45,33 @@ function StudentFormDialog({
   const [gender, setGender] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [groupIds, setGroupIds] = useState<string[]>([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // 초기 상태와 달라진 값이 하나라도 있으면 작성 중으로 본다.
+  const isDirty = Boolean(
+    name.trim() ||
+      school.trim() ||
+      memo.trim() ||
+      gender ||
+      birthDate ||
+      groupIds.length > 0 ||
+      grade !== "middle_2",
+  );
+
+  useBeforeUnloadWarning(isDirty);
+
+  // 취소/ESC: 작성 중이면 확인을 거친다.
+  const requestClose = () => {
+    if (isPending) {
+      return;
+    }
+
+    if (isDirty) {
+      setConfirmOpen(true);
+    } else {
+      onCancel();
+    }
+  };
 
   const toggleGroup = (groupId: string) => {
     setGroupIds((prev) =>
@@ -58,7 +86,13 @@ function StudentFormDialog({
       aria-modal="true"
       aria-label="학생 등록"
       onKeyDown={(event) => {
-        if (event.key === "Escape" && !isPending) {
+        if (event.key === "Escape" && !confirmOpen) {
+          requestClose();
+        }
+      }}
+      onClick={(event) => {
+        // 바깥(backdrop) 클릭: 작성 중이면 아무 일도 일어나지 않는다.
+        if (event.target === event.currentTarget && !isDirty && !isPending) {
           onCancel();
         }
       }}
@@ -185,7 +219,7 @@ function StudentFormDialog({
         ) : null}
 
         <div className="mt-4 flex justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={onCancel}>
+          <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={requestClose}>
             취소
           </Button>
           <Button
@@ -198,6 +232,12 @@ function StudentFormDialog({
           </Button>
         </div>
       </div>
+
+      <ConfirmDiscardDialog
+        open={confirmOpen}
+        onKeepEditing={() => setConfirmOpen(false)}
+        onDiscard={onCancel}
+      />
     </div>
   );
 }

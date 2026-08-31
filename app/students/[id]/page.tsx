@@ -5,6 +5,7 @@ import { Archive, BookOpen, PencilLine, Sparkles, Target } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
+import { GuardedForm } from "@/components/unsaved-guard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatKoreanDate, formatKoreanDateFull, todayDateString } from "@/lib/dates";
@@ -73,7 +74,7 @@ export default async function StudentDetailPage({
                 <CardTitle>기본 정보</CardTitle>
               </CardHeader>
               <CardContent>
-                <form action={async (formData: FormData) => {
+                <GuardedForm action={async (formData: FormData) => {
                   "use server";
                   await updateStudentAction(id, formData);
                 }} className="space-y-4">
@@ -168,7 +169,7 @@ export default async function StudentDetailPage({
                       수정하기
                     </Button>
                   </div>
-                </form>
+                </GuardedForm>
 
                 <form action={async () => {
                   "use server";

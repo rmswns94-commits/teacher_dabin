@@ -8,15 +8,24 @@ import { PendingButton } from "@/components/pending-button";
 import { Button } from "@/components/ui/button";
 import { ScheduleFieldsEditor } from "@/components/schedule-fields-editor";
 import { TextbookFieldsEditor } from "@/components/textbook-fields-editor";
+import { useNativeFormDirty } from "@/components/unsaved-guard";
 import { gradeOptions } from "@/lib/grades";
 
-export function GroupCreateForm({ onCancel }: { onCancel?: () => void }) {
+export function GroupCreateForm({
+  onCancel,
+  onDirtyChange,
+}: {
+  onCancel?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const [state, formAction] = useActionState<GroupCreateState, FormData>(createGroupAction, undefined);
   // 취소 시 key를 바꿔 동적 행 편집기(수업 시간/교재)를 초기 상태로 되돌린다.
   const [resetKey, setResetKey] = useState(0);
+  // 수업 시간 블록의 hidden input까지 포함해 form 전체 변경을 감지한다.
+  const { formProps } = useNativeFormDirty(onDirtyChange);
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form action={formAction} className="space-y-6" {...formProps}>
       <div>
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#4d3a3a]">
           <Layers3 className="h-4 w-4 text-[#3e7d6b]" aria-hidden /> 기본 정보

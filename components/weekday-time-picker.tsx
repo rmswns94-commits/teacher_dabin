@@ -112,6 +112,7 @@ export function WeekdayTimePicker({
         <div className="flex flex-wrap items-center gap-2">
           <input
             type="time"
+            name="pickerStart"
             value={value.startTime}
             onChange={(event) => onChange({ ...value, startTime: event.target.value })}
             aria-label="시작 시간"
@@ -120,6 +121,7 @@ export function WeekdayTimePicker({
           <span className="text-sm text-[#8a7b77]">~</span>
           <input
             type="time"
+            name="pickerEnd"
             value={value.endTime}
             onChange={(event) => onChange({ ...value, endTime: event.target.value })}
             aria-label="종료 시간"
@@ -127,6 +129,13 @@ export function WeekdayTimePicker({
           />
         </div>
       </div>
+
+      {/* dirty 감지용: 요일 토글 상태를 form 값으로 노출 (서버에서는 무시됨) */}
+      <input type="hidden" name="pickerDays" value={sortDaysForValue(value.days)} readOnly />
     </div>
   );
+}
+
+function sortDaysForValue(days: number[]) {
+  return [...days].sort((a, b) => a - b).join(",");
 }
