@@ -62,6 +62,19 @@ export type ClassGroupScheduleRecord = {
   updated_at: string;
 };
 
+export type CalendarEventRecord = {
+  id: string;
+  user_id: string;
+  title: string;
+  event_type: string;
+  start_date: string;
+  end_date: string;
+  group_id: string | null;
+  memo: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type PrettyWordRecord = {
   id: string;
   user_id: string;

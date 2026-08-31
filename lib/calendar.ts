@@ -30,6 +30,12 @@ export function monthRange(month: string) {
   };
 }
 
+export function addDaysStr(dateStr: string, days: number) {
+  const date = new Date(`${dateStr}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 export function dayOfWeekOf(dateStr: string) {
   return new Date(`${dateStr}T12:00:00Z`).getUTCDay();
 }

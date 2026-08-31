@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BookOpen, ChevronLeft, ChevronRight, NotebookPen, Plus } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { CalendarEventItem, EventCreateButton } from "@/components/calendar-events";
 import { DailyLogsFilter } from "@/components/daily-logs-filter";
 import { Doodle } from "@/components/doodle";
 import { LessonLogDetail } from "@/components/lesson-log-detail";
@@ -9,9 +10,21 @@ import { PageHeader } from "@/components/page-header";
 import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { addMonths, buildMonthGrid, dayOfWeekOf, monthLabel, monthRange, parseMonthParam } from "@/lib/calendar";
+import {
+  addDaysStr,
+  addMonths,
+  buildMonthGrid,
+  dayOfWeekOf,
+  monthLabel,
+  monthRange,
+  parseMonthParam,
+} from "@/lib/calendar";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { formatTimeRange } from "@/lib/schedule";
+import {
+  getMonthlyEvents,
+  type CalendarEventWithGroup,
+} from "@/lib/supabase/queries/calendar-events";
 import {
   getDailyLogDetailForCurrentUser,
   getMonthlyLogMarkers,
@@ -19,6 +32,7 @@ import {
 } from "@/lib/supabase/queries/daily-logs";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
+import { eventMetaOf } from "@/lib/validation/calendar-event";
 import { cn } from "@/lib/utils";
 import type { DailyLogStatus } from "@/lib/supabase/types";
 
@@ -55,11 +69,12 @@ export default async function DailyLogsPage({
     params.status === "draft" || params.status === "completed" ? (params.status as DailyLogStatus) : "";
   const range = monthRange(month);
 
-  const [markers, groups, schedules] = await Promise.all([
+  const [markers, events, groups, schedules] = await Promise.all([
     getMonthlyLogMarkers(range.start, range.end, {
       groupId: groupId || undefined,
       status: status || undefined,
     }),
+    getMonthlyEvents(range.start, range.end, { groupId: groupId || undefined }),
     getCurrentUserGroups(),
     getCurrentUserSchedulesWithGroup(),
   ]);
@@ -82,6 +97,18 @@ export default async function DailyLogsPage({
   for (const marker of markers) {
     byDate.set(marker.class_date, [...(byDate.get(marker.class_date) ?? []), marker]);
   }
+
+  // 기간 일정을 날짜별로 펼친다 (월 범위 내로 clamp).
+  const eventsByDate = new Map<string, CalendarEventWithGroup[]>();
+  for (const event of events) {
+    const from = event.start_date > range.start ? event.start_date : range.start;
+    const to = event.end_date < range.end ? event.end_date : range.end;
+    for (let date = from; date <= to; date = addDaysStr(date, 1)) {
+      eventsByDate.set(date, [...(eventsByDate.get(date) ?? []), event]);
+    }
+  }
+
+  const groupOptions = groups.map((group) => ({ id: group.id, name: group.name }));
 
   const dateParamValid = params.date && params.date.slice(0, 7) === month ? params.date : null;
   const selectedDate = dateParamValid ?? (month === currentMonth ? today : null);
@@ -110,14 +137,15 @@ export default async function DailyLogsPage({
             }
           />
 
-          <div className="mb-4">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <DailyLogsFilter
-              groups={groups.map((group) => ({ id: group.id, name: group.name }))}
+              groups={groupOptions}
               month={month}
               date={selectedDate}
               groupId={groupId}
               status={status}
             />
+            <EventCreateButton groups={groupOptions} defaultDate={selectedDate ?? today} />
           </div>
 
           <Card className="mx-auto max-w-xl">
@@ -164,6 +192,7 @@ export default async function DailyLogsPage({
                   }
 
                   const logs = byDate.get(date) ?? [];
+                  const dayEvents = eventsByDate.get(date) ?? [];
                   const completedCount = logs.filter((log) => log.status === "completed").length;
                   const draftCount = logs.length - completedCount;
                   const isSelected = date === selectedDate;
@@ -172,9 +201,13 @@ export default async function DailyLogsPage({
 
                   const labelParts = [
                     formatKoreanDate(date),
-                    logs.length > 0 ? `수업 기록 ${logs.length}개` : "기록 없음",
+                    logs.length > 0 ? `수업 기록 ${logs.length}개` : "",
                     completedCount > 0 ? `작성 완료 ${completedCount}건` : "",
                     draftCount > 0 ? `작성 중 ${draftCount}건` : "",
+                    dayEvents.length > 0
+                      ? `일정 ${dayEvents.length}개 (${dayEvents.map((event) => event.title).join(", ")})`
+                      : "",
+                    logs.length === 0 && dayEvents.length === 0 ? "기록 없음" : "",
                   ].filter(Boolean);
 
                   return (
@@ -185,7 +218,7 @@ export default async function DailyLogsPage({
                       aria-current={isSelected ? "date" : undefined}
                       title={labelParts.slice(1).join(" · ")}
                       className={cn(
-                        "mx-auto flex h-12 w-12 flex-col items-center justify-center rounded-2xl text-sm tabular-nums transition",
+                        "mx-auto flex h-14 w-12 flex-col items-center justify-center rounded-2xl text-sm tabular-nums transition",
                         isSelected
                           ? "bg-[#fbe9f0] font-semibold text-[#6d4a5c] ring-1 ring-[#f4d8e2]"
                           : "text-[#4a423f] hover:bg-[#faf0f2]",
@@ -208,9 +241,33 @@ export default async function DailyLogsPage({
                       ) : (
                         <span aria-hidden className="mt-0.5 h-1.5" />
                       )}
+                      {dayEvents.length > 0 ? (
+                        <span aria-hidden className="mt-0.5 flex items-center gap-0.5">
+                          <span
+                            className={cn("h-1 w-5 rounded-full", eventMetaOf(dayEvents[0].event_type).bar)}
+                          />
+                          {dayEvents.length > 1 ? (
+                            <span className="text-[9px] leading-none text-[#a08d97]">+{dayEvents.length - 1}</span>
+                          ) : null}
+                        </span>
+                      ) : (
+                        <span aria-hidden className="mt-0.5 h-1" />
+                      )}
                     </Link>
                   );
                 })}
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] text-[#a08d97]">
+                <span className="flex items-center gap-1">
+                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#8fc7ab]" /> 작성 완료
+                </span>
+                <span className="flex items-center gap-1">
+                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#eebfa0]" /> 작성 중
+                </span>
+                <span className="flex items-center gap-1">
+                  <span aria-hidden className="h-1 w-4 rounded-full bg-[#b3a5ec]" /> 일정
+                </span>
               </div>
 
               {markers.length === 0 ? (
@@ -233,8 +290,31 @@ export default async function DailyLogsPage({
                 </span>
               </div>
 
+              <div className="mt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-[#8f5470]">오늘의 일정</h3>
+                  <EventCreateButton
+                    groups={groupOptions}
+                    defaultDate={selectedDate}
+                    label="일정 추가"
+                    variant="ghost"
+                  />
+                </div>
+                {(eventsByDate.get(selectedDate) ?? []).length === 0 ? (
+                  <p className="mt-1.5 text-xs text-[#a08d97]">이날은 따로 등록된 일정이 없어요.</p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {(eventsByDate.get(selectedDate) ?? []).map((event) => (
+                      <CalendarEventItem key={event.id} event={event} groups={groupOptions} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <h3 className="mt-5 text-sm font-semibold text-[#8f5470]">수업 기록</h3>
+
               {dateLogs.length === 0 ? (
-                <Card className="mt-3">
+                <Card className="mt-2">
                   <CardContent className="flex flex-col items-start gap-3 p-5 text-sm text-[#655d5d]">
                     이 날짜에는 작성된 수업 기록이 없어요.
                     <Button variant="secondary" size="sm" className="gap-1.5" asChild>
