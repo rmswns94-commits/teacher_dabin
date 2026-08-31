@@ -352,7 +352,7 @@ export default async function GroupDetailPage({
                     수업 전에 챙길 것을 적어보세요.
                   </div>
                 ) : (
-                  <ul className="space-y-1">
+                  <ul className="divide-y divide-dashed divide-[#f4e2e8]">
                     {preparationItems.map((item) => (
                       <li key={item.id} className="flex items-center gap-1">
                         <form action={togglePreparationItemAction.bind(null, id, item.id)} className="flex-1">

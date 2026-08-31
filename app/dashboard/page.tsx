@@ -316,7 +316,7 @@ export default async function DashboardPage() {
                         지금 준비할 항목이 없어요 🍃
                       </div>
                     ) : (
-                      <ul className="space-y-0.5">
+                      <ul className="divide-y divide-dashed divide-[#f4e2e8]">
                         {prepItems.map((item) => (
                           <li key={item.id}>
                             <form action={togglePreparationItemAction.bind(null, focusGroup.id, item.id)}>
