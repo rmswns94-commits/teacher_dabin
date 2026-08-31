@@ -77,6 +77,60 @@ export async function getCurrentUserDailyLogs(filters?: {
   });
 }
 
+// 캘린더 한 달치 마커/반 목록용 경량 데이터. 학생별 기록은 포함하지 않는다.
+export type MonthlyLogMarker = {
+  id: string;
+  class_date: string;
+  group_id: string;
+  status: DailyLogStatus;
+  title: string | null;
+  default_progress: string | null;
+  created_at: string;
+  group: Pick<ClassGroupRecord, "id" | "name"> | null;
+};
+
+export async function getMonthlyLogMarkers(
+  monthStart: string,
+  monthEnd: string,
+  filters?: { groupId?: string; status?: DailyLogStatus },
+) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as MonthlyLogMarker[];
+  }
+
+  let query = supabase
+    .from("daily_logs")
+    .select("id, class_date, group_id, status, title, default_progress, created_at, class_groups(id, name)")
+    .eq("user_id", user.id)
+    .gte("class_date", monthStart)
+    .lte("class_date", monthEnd)
+    .order("class_date", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (filters?.groupId) {
+    query = query.eq("group_id", filters.groupId);
+  }
+
+  if (filters?.status) {
+    query = query.eq("status", filters.status);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("getMonthlyLogMarkers error", error);
+    return [] as MonthlyLogMarker[];
+  }
+
+  return (data ?? []).map((row) => ({
+    ...(row as unknown as Omit<MonthlyLogMarker, "group">),
+    group: pickOne<Pick<ClassGroupRecord, "id" | "name">>(row.class_groups),
+  }));
+}
+
 export type StudentLessonLogWithStudent = StudentLessonLogRecord & {
   student: Pick<StudentRecord, "id" | "name" | "grade"> | null;
 };
