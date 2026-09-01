@@ -469,6 +469,132 @@ export async function updateGroupPreparationItems(
   return true;
 }
 
+export type GroupLatestLogSummary = {
+  id: string;
+  class_date: string;
+  status: "draft" | "completed";
+  default_progress: string | null;
+  title: string | null;
+};
+
+function pickLatestLog(value: unknown): GroupLatestLogSummary | null {
+  const rows = Array.isArray(value) ? value : value ? [value] : [];
+  return (rows[0] ?? null) as GroupLatestLogSummary | null;
+}
+
+// 그룹별 "가장 최근 수업일지 1건"을 쿼리 1번으로 가져온다.
+// PostgREST embedded limit은 부모 행마다 적용되므로 그룹당 쿼리(N+1)가 없다.
+export async function getLatestLogPerGroup(onlyCompleted = false) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+  const result = new Map<string, GroupLatestLogSummary>();
+
+  if (!supabase || !user) {
+    return result;
+  }
+
+  let query = supabase
+    .from("class_groups")
+    .select("id, daily_logs(id, class_date, status, default_progress, title)")
+    .eq("user_id", user.id)
+    .eq("archived", false)
+    .order("class_date", { referencedTable: "daily_logs", ascending: false })
+    .order("created_at", { referencedTable: "daily_logs", ascending: false })
+    .limit(1, { referencedTable: "daily_logs" });
+
+  if (onlyCompleted) {
+    query = query.eq("daily_logs.status", "completed");
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("getLatestLogPerGroup error", error);
+    return result;
+  }
+
+  for (const row of data ?? []) {
+    const log = pickLatestLog(row.daily_logs);
+
+    if (log) {
+      result.set(row.id as string, log);
+    }
+  }
+
+  return result;
+}
+
+export type AttendanceSummary = { present: number; late: number; absent: number };
+
+// 주어진 일지들의 출결 집계를 쿼리 1번으로 계산한다 (일지당 쿼리 금지).
+export async function getAttendanceSummaryForLogs(logIds: string[]) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+  const result = new Map<string, AttendanceSummary>();
+
+  if (!supabase || !user || logIds.length === 0) {
+    return result;
+  }
+
+  const { data, error } = await supabase
+    .from("student_lesson_logs")
+    .select("daily_log_id, attendance")
+    .eq("user_id", user.id)
+    .in("daily_log_id", logIds);
+
+  if (error) {
+    console.error("getAttendanceSummaryForLogs error", error);
+    return result;
+  }
+
+  for (const row of data ?? []) {
+    const summary = result.get(row.daily_log_id) ?? { present: 0, late: 0, absent: 0 };
+
+    if (row.attendance === "present") summary.present += 1;
+    else if (row.attendance === "late") summary.late += 1;
+    else if (row.attendance === "absent") summary.absent += 1;
+
+    result.set(row.daily_log_id, summary);
+  }
+
+  return result;
+}
+
+export type GroupExamSummary = {
+  group_id: string;
+  title: string;
+  start_date: string;
+  end_date: string;
+};
+
+// 오늘~toDate와 겹치는, 그룹에 연결된 시험 일정만 조회한다.
+// (group_id 없는 전체 일정은 특정 반의 시험으로 보지 않는다 — 전체 history 조회 금지)
+export async function getUpcomingGroupExams(fromDate: string, toDate: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as GroupExamSummary[];
+  }
+
+  const { data, error } = await supabase
+    .from("calendar_events")
+    .select("group_id, title, start_date, end_date")
+    .eq("user_id", user.id)
+    .eq("event_type", "exam")
+    .not("group_id", "is", null)
+    .lte("start_date", toDate)
+    .gte("end_date", fromDate)
+    .order("start_date", { ascending: true });
+
+  if (error) {
+    console.error("getUpcomingGroupExams error", error);
+    return [] as GroupExamSummary[];
+  }
+
+  return (data ?? []) as GroupExamSummary[];
+}
+
 export async function getGroupOrThrow(groupId: string) {
   const group = await getGroupByIdForCurrentUser(groupId);
 

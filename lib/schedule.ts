@@ -176,6 +176,69 @@ export function getScheduleOverview<G>(
   };
 }
 
+export type GroupNextOccurrence = {
+  isNow: boolean; // 지금 수업 중
+  date: string; // YYYY-MM-DD (APP_TIMEZONE)
+  daysFromNow: number;
+  startTime: string; // "HH:MM"
+  endTime: string;
+  startEpoch: number;
+  endEpoch: number;
+};
+
+// 그룹별 "지금 수업 중 또는 가장 가까운 다음 수업" 1건을 계산한다.
+// schedule 전체를 한 번 받아 순수 계산만 하므로 그룹당 쿼리가 필요 없다.
+export function getGroupNextOccurrences(
+  slots: Pick<ScheduleSlot, "group_id" | "day_of_week" | "start_time" | "end_time">[],
+  now = new Date(),
+  horizonDays = 7,
+): Map<string, GroupNextOccurrence> {
+  const nowEpoch = now.getTime();
+  const today = getAppTimezoneToday(now);
+  const result = new Map<string, GroupNextOccurrence>();
+
+  for (let offset = 0; offset <= horizonDays; offset += 1) {
+    const date = addDays(today, offset);
+    const dow = dayOfWeekOf(date);
+
+    for (const slot of slots) {
+      if (slot.day_of_week !== dow) {
+        continue;
+      }
+
+      const startEpoch = toEpoch(date, slot.start_time);
+      const endEpoch = toEpoch(date, slot.end_time);
+
+      if (endEpoch <= nowEpoch) {
+        continue; // 이미 끝난 수업
+      }
+
+      const occurrence: GroupNextOccurrence = {
+        isNow: startEpoch <= nowEpoch && nowEpoch < endEpoch,
+        date,
+        daysFromNow: offset,
+        startTime: formatTimeHM(slot.start_time),
+        endTime: formatTimeHM(slot.end_time),
+        startEpoch,
+        endEpoch,
+      };
+
+      const existing = result.get(slot.group_id);
+
+      // 수업 중 > 더 이른 시작 시각 순으로 그룹당 1건만 유지.
+      if (
+        !existing ||
+        (occurrence.isNow && !existing.isNow) ||
+        (occurrence.isNow === existing.isNow && occurrence.startEpoch < existing.startEpoch)
+      ) {
+        result.set(slot.group_id, occurrence);
+      }
+    }
+  }
+
+  return result;
+}
+
 // True when two time ranges on the same weekday overlap.
 export function slotsOverlap(
   a: Pick<ScheduleSlot, "day_of_week" | "start_time" | "end_time">,

@@ -1,170 +1,231 @@
-﻿import Link from "next/link";
-import { Search } from "lucide-react";
-
 import { AppShell } from "@/components/app-shell";
 import { GroupCreateDialog } from "@/components/group-create-dialog";
+import { GroupsOverview, type GroupCardData } from "@/components/groups-overview";
 import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PendingButton } from "@/components/pending-button";
+import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
+import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { formatGrade } from "@/lib/grades";
-import { formatScheduleBlock, groupSchedulesByTime } from "@/lib/schedule";
-import { getAllGroupStudentCounts, getCurrentUserGroups } from "@/lib/supabase/queries/groups";
+import {
+  DAY_LABELS,
+  formatDayList,
+  formatTimeHM,
+  getGroupNextOccurrences,
+  groupSchedulesByTime,
+  type GroupNextOccurrence,
+} from "@/lib/schedule";
+import {
+  getAllGroupStudentCounts,
+  getAttendanceSummaryForLogs,
+  getCurrentUserGroups,
+  getLatestLogPerGroup,
+  getUpcomingGroupExams,
+} from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import { restoreGroupAction } from "./actions";
 
-export default async function GroupsPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ q?: string }>;
-}) {
-  const params = (await searchParams) ?? {};
-  const q = (params.q ?? "").trim();
-  const [allGroups, counts, schedules] = await Promise.all([
+// "9월 4일 (금) 18:00" 같은 짧은 다음 수업 표기.
+function formatNextLabel(occ: GroupNextOccurrence) {
+  if (occ.daysFromNow === 0) {
+    return `오늘 ${occ.startTime}`;
+  }
+
+  if (occ.daysFromNow === 1) {
+    return `내일 ${occ.startTime}`;
+  }
+
+  return `${formatKoreanDate(occ.date)} (${DAY_LABELS[dayOfWeekOf(occ.date)]}) ${occ.startTime}`;
+}
+
+// "1시간 40분 후" — 오늘 남은 수업에만 붙이는 compact 카운트다운 (실시간 갱신 없음).
+function formatRelative(minutes: number) {
+  if (minutes < 1) {
+    return "곧 시작";
+  }
+
+  if (minutes < 60) {
+    return `${minutes}분 후`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest > 0 ? `${hours}시간 ${rest}분 후` : `${hours}시간 후`;
+}
+
+function daysBetween(fromYmd: string, toYmd: string) {
+  return Math.round(
+    (Date.parse(`${toYmd}T12:00:00Z`) - Date.parse(`${fromYmd}T12:00:00Z`)) / 86_400_000,
+  );
+}
+
+export default async function GroupsPage() {
+  const now = new Date();
+  const today = todayDateString();
+  const todayDow = dayOfWeekOf(today);
+
+  // 첫 화면 요약에 필요한 데이터만 병렬 batch 조회 (그룹당 개별 쿼리 금지).
+  const [allGroups, counts, schedules, latestLogs, latestCompletedLogs, exams] = await Promise.all([
     getCurrentUserGroups(true),
     getAllGroupStudentCounts(),
     getCurrentUserSchedulesWithGroup(),
+    getLatestLogPerGroup(false),
+    getLatestLogPerGroup(true),
+    getUpcomingGroupExams(today, addDaysStr(today, 14)),
   ]);
+
+  // 최근 일지들의 출결 집계 (일지 id가 필요해서 위 결과 이후 1쿼리).
+  const attendanceByLog = await getAttendanceSummaryForLogs(
+    [...latestLogs.values()].map((log) => log.id),
+  );
+
+  const groups = allGroups.filter((group) => !group.archived);
+  const archivedGroups = allGroups.filter((group) => group.archived);
 
   const schedulesByGroup = new Map<string, typeof schedules>();
   for (const slot of schedules) {
     schedulesByGroup.set(slot.group_id, [...(schedulesByGroup.get(slot.group_id) ?? []), slot]);
   }
-  const groups = allGroups.filter((group) => !group.archived);
-  const archivedGroups = allGroups.filter((group) => group.archived);
-  const visibleGroups = groups.filter((group) =>
-    !q || group.name.toLowerCase().includes(q.toLowerCase()),
-  );
+
+  const nextByGroup = getGroupNextOccurrences(schedules, now);
+
+  // 그룹별 가장 가까운 시험 1건 (start_date 오름차순이라 첫 항목이 가장 가깝다).
+  const examByGroup = new Map<string, (typeof exams)[number]>();
+  for (const exam of exams) {
+    if (!examByGroup.has(exam.group_id)) {
+      examByGroup.set(exam.group_id, exam);
+    }
+  }
+
+  const weekEnd = addDaysStr(today, 7);
+
+  const cards: GroupCardData[] = groups.map((group) => {
+    const groupSlots = schedulesByGroup.get(group.id) ?? [];
+    const scheduleLines = groupSchedulesByTime(groupSlots).map(
+      (block) => `${formatDayList(block.days)} · ${block.startTime} ~ ${block.endTime}`,
+    );
+
+    const todaySlots = groupSlots.filter((slot) => slot.day_of_week === todayDow);
+    const todayStart =
+      todaySlots.length > 0
+        ? todaySlots.map((slot) => formatTimeHM(slot.start_time)).sort()[0]
+        : null;
+
+    const occ = nextByGroup.get(group.id) ?? null;
+    let nextLabel: string | null = null;
+    let nextSub: string | null = null;
+
+    if (occ) {
+      nextLabel = formatNextLabel(occ);
+
+      if (occ.isNow) {
+        nextSub = `${occ.endTime}까지`;
+      } else if (occ.daysFromNow === 0) {
+        nextSub = formatRelative(Math.floor((occ.startEpoch - now.getTime()) / 60_000));
+      }
+    }
+
+    const latest = latestLogs.get(group.id) ?? null;
+    const completed = latestCompletedLogs.get(group.id) ?? null;
+    const attendance = latest ? (attendanceByLog.get(latest.id) ?? null) : null;
+    const attendanceParts = attendance
+      ? [
+          `출석 ${attendance.present}`,
+          attendance.late > 0 ? `지각 ${attendance.late}` : null,
+          attendance.absent > 0 ? `결석 ${attendance.absent}` : null,
+        ].filter(Boolean)
+      : [];
+
+    const exam = examByGroup.get(group.id) ?? null;
+    let examLabel: string | null = null;
+    let examThisWeek = false;
+
+    if (exam) {
+      const inPeriod = exam.start_date <= today && today <= exam.end_date;
+      const dday = daysBetween(today, exam.start_date);
+      examLabel = inPeriod ? `${exam.title} · 시험 기간 중` : `${exam.title} D-${dday}`;
+      examThisWeek = inPeriod || exam.start_date <= weekEnd;
+    }
+
+    const prepCount = (group.preparation_items ?? []).filter((item) => !item.completed).length;
+
+    return {
+      id: group.id,
+      name: group.name,
+      gradeLabel: formatGrade(group.grade),
+      studentCount: counts.get(group.id) ?? 0,
+      scheduleLines,
+      hasToday: todaySlots.length > 0,
+      todayStart,
+      isNow: occ?.isNow ?? false,
+      nextLabel,
+      nextSub,
+      progressMain: completed?.default_progress?.trim() || completed?.title?.trim() || null,
+      progressSub:
+        completed?.default_progress?.trim() && completed?.title?.trim() ? completed.title.trim() : null,
+      latestDateLabel: latest ? formatKoreanDate(latest.class_date) : null,
+      latestStatus: latest?.status ?? null,
+      attendanceLabel: attendanceParts.length > 0 ? attendanceParts.join(" · ") : null,
+      prepCount,
+      examLabel,
+      examThisWeek,
+      sortKey: occ ? occ.startEpoch : Number.MAX_SAFE_INTEGER,
+    };
+  });
 
   return (
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
-        <PageHeader title="수업 그룹" description="수업 중인 반을 한눈에 확인해요." />
+        <div className="mx-auto max-w-[1000px]">
+          <PageHeader title="수업 그룹" description="반별 수업 흐름과 준비 상태를 한눈에 확인해요." />
 
-        <Card className="mb-5">
-          <CardContent className="py-4">
-            <form action="/groups" className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f6f0fb] text-[#5e4eb5]">
-                <Search className="h-4 w-4" />
+          {groups.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-start gap-3 p-6 text-sm text-[#4c4c55]">
+                <div>
+                  아직 등록된 수업 그룹이 없어요.
+                  <br />첫 반을 등록하고 수업 준비를 시작해볼까요?
+                </div>
+                <GroupCreateDialog label="첫 수업 그룹 등록하기" />
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <GroupsOverview groups={cards} />
+              <div className="mt-6 flex justify-end">
+                <GroupCreateDialog />
               </div>
-              <input
-                defaultValue={q}
-                name="q"
-                className="flex-1 border-none bg-transparent text-sm text-[#433d3d] outline-none placeholder:text-[#9b8e8a]"
-                placeholder="그룹 이름 검색"
-              />
-              <Button type="submit" variant="secondary" size="sm">
-                검색
-              </Button>
-              {q ? (
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/groups">전체 보기</Link>
-                </Button>
-              ) : null}
-            </form>
-          </CardContent>
-        </Card>
+            </>
+          )}
 
-        {visibleGroups.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-start gap-3 p-6 text-sm text-[#655d5d]">
-              {q ? (
-                "검색 결과가 없어요."
-              ) : (
-                <>
-                  아직 등록된 수업 그룹이 없어요. 먼저 수업 그룹을 만들어볼까요? 🌱
-                  <GroupCreateDialog label="첫 수업 그룹 등록하기" />
-                </>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {visibleGroups.map((group) => {
-              const groupTimes = groupSchedulesByTime(schedulesByGroup.get(group.id) ?? []).map(
-                formatScheduleBlock,
-              );
-              const textbooks = (group.textbook ?? "")
-                .split("\n")
-                .map((line) => line.trim())
-                .filter(Boolean);
-
-              return (
-                <Link key={group.id} href={`/groups/${group.id}`}>
-                  <Card className="h-full p-4 transition hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(120,109,164,0.12)]">
+          {archivedGroups.length > 0 ? (
+            <details className="mt-8 pb-8">
+              <summary className="cursor-pointer text-sm font-medium text-[#6b6b74]">
+                보관된 그룹 {archivedGroups.length}개 보기
+              </summary>
+              <div className="mt-4 grid gap-3">
+                {archivedGroups.map((group) => (
+                  <Card key={group.id} className="p-4 opacity-80">
                     <div className="flex items-center justify-between gap-3">
-                      <div className="text-lg font-semibold text-[#2b2323]">{group.name}</div>
-                      <span className="rounded-full bg-[#f2effc] px-2 py-1 text-[10px] text-[#5f54b8]">
-                        {formatGrade(group.grade)}
-                      </span>
-                    </div>
-
-                    {groupTimes.length > 0 ? (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {groupTimes.slice(0, 3).map((time) => (
-                          <span
-                            key={time}
-                            className="rounded-full bg-[#f5f1fb] px-2 py-0.5 text-[11px] tabular-nums text-[#5f54b8]"
-                          >
-                            {time}
-                          </span>
-                        ))}
-                        {groupTimes.length > 3 ? (
-                          <span className="text-[11px] text-[#a08d97]">외 {groupTimes.length - 3}</span>
-                        ) : null}
+                      <div>
+                        <div className="font-medium text-[#232327]">{group.name}</div>
+                        <div className="mt-0.5 text-xs text-[#8a8a93]">
+                          {formatGrade(group.grade)}
+                          {group.memo ? ` · ${group.memo}` : ""}
+                        </div>
                       </div>
-                    ) : (
-                      <div className="mt-2 text-xs text-[#a89a95]">수업 시간 미등록</div>
-                    )}
-
-                    <div className="mt-3 flex items-center justify-between text-sm text-[#655d5d]">
-                      <span>학생 {counts.get(group.id) ?? 0}명</span>
-                      <span className="max-w-[55%] truncate text-xs text-[#8a7b77]">
-                        {textbooks.length > 0
-                          ? `${textbooks[0]}${textbooks.length > 1 ? ` 외 ${textbooks.length - 1}권` : ""}`
-                          : "교재 미등록"}
-                      </span>
+                      <form action={restoreGroupAction.bind(null, group.id)}>
+                        <PendingButton variant="secondary" size="sm" pendingText="복원 중...">
+                          복원
+                        </PendingButton>
+                      </form>
                     </div>
                   </Card>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-
-        {visibleGroups.length > 0 ? (
-          <div className="mt-6 flex justify-end">
-            <GroupCreateDialog />
-          </div>
-        ) : null}
-
-        {archivedGroups.length > 0 ? (
-          <details className="mt-8 pb-8">
-            <summary className="cursor-pointer text-sm font-medium text-[#756a67]">
-              보관된 그룹 {archivedGroups.length}개 보기
-            </summary>
-            <div className="mt-4 grid gap-3">
-              {archivedGroups.map((group) => (
-                <Card key={group.id} className="p-4 opacity-80">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="font-medium text-[#2b2323]">{group.name}</div>
-                      <div className="mt-0.5 text-xs text-[#8a7b77]">
-                        {formatGrade(group.grade)}
-                        {group.memo ? ` · ${group.memo}` : ""}
-                      </div>
-                    </div>
-                    <form action={restoreGroupAction.bind(null, group.id)}>
-                      <PendingButton variant="secondary" size="sm" pendingText="복원 중...">
-                        복원
-                      </PendingButton>
-                    </form>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </details>
-        ) : null}
+                ))}
+              </div>
+            </details>
+          ) : null}
+        </div>
       </main>
     </AppShell>
   );
