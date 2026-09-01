@@ -5,45 +5,75 @@ import { revalidatePath } from "next/cache";
 import { cancelMakeup, completeMakeup, scheduleMakeup } from "@/lib/supabase/queries/makeups";
 import { makeupCompleteSchema, makeupScheduleSchema } from "@/lib/validation/daily-log";
 
+type ActionResult = { error: string } | { success: true };
+
 function revalidateMakeupPages() {
   revalidatePath("/makeups");
   revalidatePath("/dashboard");
   revalidatePath("/daily-logs");
+  revalidatePath("/students");
 }
 
-export async function scheduleMakeupAction(makeupId: string, formData: FormData) {
-  const parsed = makeupScheduleSchema.safeParse({
-    scheduledDate: String(formData.get("scheduledDate") ?? ""),
-  });
+function messageOf(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+export async function scheduleMakeupAction(
+  makeupId: string,
+  values: { scheduledDate: string; startTime: string; endTime: string; memo: string },
+): Promise<ActionResult> {
+  const parsed = makeupScheduleSchema.safeParse(values);
 
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "보충 예정일을 확인해주세요.");
+    return { error: parsed.error.issues[0]?.message ?? "보충 일정을 확인해주세요." };
   }
 
-  await scheduleMakeup(makeupId, parsed.data.scheduledDate);
+  try {
+    await scheduleMakeup(makeupId, {
+      scheduledDate: parsed.data.scheduledDate,
+      startTime: parsed.data.startTime || null,
+      endTime: parsed.data.endTime || null,
+      memo: parsed.data.memo || null,
+    });
+  } catch (error) {
+    return { error: messageOf(error, "보충 일정을 저장하지 못했어요.") };
+  }
+
   revalidateMakeupPages();
+  return { success: true };
 }
 
-export async function completeMakeupAction(makeupId: string, formData: FormData) {
-  const parsed = makeupCompleteSchema.safeParse({
-    completedDate: String(formData.get("completedDate") ?? ""),
-    completedProgress: String(formData.get("completedProgress") ?? ""),
-    comment: String(formData.get("comment") ?? ""),
-  });
+export async function completeMakeupAction(
+  makeupId: string,
+  values: { completedDate: string; completedProgress: string; comment: string },
+): Promise<ActionResult> {
+  const parsed = makeupCompleteSchema.safeParse(values);
 
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "보충 완료 정보를 확인해주세요.");
+    return { error: parsed.error.issues[0]?.message ?? "보충 완료 정보를 확인해주세요." };
   }
 
-  await completeMakeup(makeupId, {
-    completedDate: parsed.data.completedDate,
-    completedProgress: parsed.data.completedProgress,
-    comment: parsed.data.comment,
-  });
+  try {
+    await completeMakeup(makeupId, {
+      completedDate: parsed.data.completedDate,
+      completedProgress: parsed.data.completedProgress,
+      comment: parsed.data.comment,
+    });
+  } catch (error) {
+    return { error: messageOf(error, "보충수업을 완료 처리하지 못했어요.") };
+  }
+
   revalidateMakeupPages();
+  return { success: true };
 }
 
-export async function cancelMakeupAction(makeupId: string) {
-  await cancelMakeup(makeupId);
+export async function cancelMakeupAction(makeupId: string): Promise<ActionResult> {
+  try {
+    await cancelMakeup(makeupId);
+  } catch (error) {
+    return { error: messageOf(error, "보충수업을 취소하지 못했어요.") };
+  }
+
   revalidateMakeupPages();
+  return { success: true };
 }

@@ -31,6 +31,10 @@ import {
   type MonthlyLogMarker,
 } from "@/lib/supabase/queries/daily-logs";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
+import {
+  getMonthlyScheduledMakeups,
+  type MonthlyMakeupMarker,
+} from "@/lib/supabase/queries/makeups";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import { eventMetaOf } from "@/lib/validation/calendar-event";
 import { cn } from "@/lib/utils";
@@ -69,7 +73,7 @@ export default async function DailyLogsPage({
     params.status === "draft" || params.status === "completed" ? (params.status as DailyLogStatus) : "";
   const range = monthRange(month);
 
-  const [markers, events, groups, schedules] = await Promise.all([
+  const [markers, events, groups, schedules, monthlyMakeups] = await Promise.all([
     getMonthlyLogMarkers(range.start, range.end, {
       groupId: groupId || undefined,
       status: status || undefined,
@@ -77,6 +81,7 @@ export default async function DailyLogsPage({
     getMonthlyEvents(range.start, range.end, { groupId: groupId || undefined }),
     getCurrentUserGroups(),
     getCurrentUserSchedulesWithGroup(),
+    getMonthlyScheduledMakeups(range.start, range.end),
   ]);
 
   // 그룹+요일 → 수업 시간 (정확히 하나일 때만 표시, 추측 금지)
@@ -106,6 +111,15 @@ export default async function DailyLogsPage({
     for (let date = from; date <= to; date = addDaysStr(date, 1)) {
       eventsByDate.set(date, [...(eventsByDate.get(date) ?? []), event]);
     }
+  }
+
+  // 예정된 보충을 날짜별로 (makeup record가 source of truth — calendar_events 복제 없음)
+  const makeupsByDate = new Map<string, MonthlyMakeupMarker[]>();
+  for (const makeup of monthlyMakeups) {
+    makeupsByDate.set(makeup.scheduled_date, [
+      ...(makeupsByDate.get(makeup.scheduled_date) ?? []),
+      makeup,
+    ]);
   }
 
   const groupOptions = groups.map((group) => ({ id: group.id, name: group.name }));
@@ -216,6 +230,7 @@ export default async function DailyLogsPage({
 
                   const logs = byDate.get(date) ?? [];
                   const dayEvents = eventsByDate.get(date) ?? [];
+                  const dayMakeups = makeupsByDate.get(date) ?? [];
                   const completedCount = logs.filter((log) => log.status === "completed").length;
                   const draftCount = logs.length - completedCount;
                   const isSelected = date === selectedDate;
@@ -241,7 +256,14 @@ export default async function DailyLogsPage({
                     dayEvents.length > 0
                       ? `일정 ${dayEvents.length}개 (${dayEvents.map((event) => event.title).join(", ")})`
                       : "",
-                    logs.length === 0 && dayEvents.length === 0 ? "기록 없음" : "",
+                    dayMakeups.length > 0
+                      ? `보충 ${dayMakeups.length}건 (${dayMakeups
+                          .map((makeup) => makeup.student?.name ?? "학생")
+                          .join(", ")})`
+                      : "",
+                    logs.length === 0 && dayEvents.length === 0 && dayMakeups.length === 0
+                      ? "기록 없음"
+                      : "",
                   ].filter(Boolean);
 
                   return (
@@ -270,13 +292,16 @@ export default async function DailyLogsPage({
                         )}
                       >
                         <span>{dayNumber}</span>
-                        {logs.length > 0 ? (
+                        {logs.length > 0 || dayMakeups.length > 0 ? (
                           <span aria-hidden className="mt-0.5 flex items-center gap-0.5">
                             {completedCount > 0 ? (
                               <span className="h-1.5 w-1.5 rounded-full bg-[#8fc7ab]" />
                             ) : null}
                             {draftCount > 0 ? (
                               <span className="h-1.5 w-1.5 rounded-full bg-[#eebfa0]" />
+                            ) : null}
+                            {dayMakeups.length > 0 ? (
+                              <span className="h-1.5 w-1.5 rounded-full bg-white ring-1 ring-[#3d7f64]" />
                             ) : null}
                             {logs.length > 1 ? (
                               <span className="text-[9px] leading-none text-[#a08d97]">{logs.length}</span>
@@ -320,6 +345,9 @@ export default async function DailyLogsPage({
                 <span className="flex items-center gap-1">
                   <span aria-hidden className="h-1 w-4 rounded-full bg-[#b3a5ec]" /> 일정
                 </span>
+                <span className="flex items-center gap-1">
+                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-white ring-1 ring-[#3d7f64]" /> 보충 예정
+                </span>
               </div>
 
               {markers.length === 0 ? (
@@ -362,6 +390,41 @@ export default async function DailyLogsPage({
                   </div>
                 )}
               </div>
+
+              {(makeupsByDate.get(selectedDate) ?? []).length > 0 ? (
+                <div className="mt-5">
+                  <h3 className="text-sm font-semibold text-[#8f5470]">보충 수업</h3>
+                  <div className="mt-2 space-y-2">
+                    {(makeupsByDate.get(selectedDate) ?? []).map((makeup) => (
+                      <Link
+                        key={makeup.id}
+                        href="/makeups"
+                        className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#e6e6ea] bg-white px-3.5 py-2.5 text-sm transition hover:bg-[#f4faf7]"
+                      >
+                        <span className="rounded-full bg-[#e4f4ec] px-2 py-0.5 text-[11px] font-medium text-[#3d7f64]">
+                          보충
+                        </span>
+                        {makeup.start_time ? (
+                          <span className="tabular-nums text-[#33333b]">
+                            {makeup.start_time.slice(0, 5)}
+                          </span>
+                        ) : null}
+                        <span className="font-medium text-[#232327]">
+                          {makeup.student?.name ?? "학생"}
+                        </span>
+                        {makeup.group?.name ? (
+                          <span className="text-xs text-[#6b6b74]">{makeup.group.name}</span>
+                        ) : null}
+                        {makeup.missed_progress ? (
+                          <span className="truncate text-xs text-[#8a8a93]">
+                            {makeup.missed_progress}
+                          </span>
+                        ) : null}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <h3 className="mt-5 text-sm font-semibold text-[#8f5470]">수업 기록</h3>
 

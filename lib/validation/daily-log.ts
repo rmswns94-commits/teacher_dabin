@@ -44,9 +44,26 @@ export const preparationItemSchema = z.object({
 
 export const preparationItemsSchema = z.array(preparationItemSchema).max(30, "준비 항목은 30개까지 만들 수 있어요.");
 
-export const makeupScheduleSchema = z.object({
-  scheduledDate: dateString,
-});
+const timeString = z
+  .string()
+  .regex(/^\d{2}:\d{2}$/, "시간 형식을 확인해주세요.")
+  .or(z.literal(""));
+
+export const makeupScheduleSchema = z
+  .object({
+    scheduledDate: dateString,
+    startTime: timeString.optional(),
+    endTime: timeString.optional(),
+    memo: z.string().trim().max(1000, "메모는 1000자 이내로 입력해주세요.").optional(),
+  })
+  .refine((value) => !value.startTime === !value.endTime, {
+    message: "시작과 종료 시간을 함께 입력해주세요.",
+    path: ["endTime"],
+  })
+  .refine(
+    (value) => !value.startTime || !value.endTime || value.startTime < value.endTime,
+    { message: "종료 시간은 시작 시간보다 늦어야 해요.", path: ["endTime"] },
+  );
 
 export const makeupCompleteSchema = z.object({
   completedDate: dateString,

@@ -50,11 +50,13 @@ function NavLink({
   href,
   icon: Icon,
   isActive,
+  badgeCount,
 }: {
   label: string;
   href: string;
   icon: typeof Home;
   isActive: boolean;
+  badgeCount?: number;
 }) {
   return (
     <Link
@@ -75,11 +77,25 @@ function NavLink({
         <Icon className="h-4 w-4" />
       </span>
       {label}
+      {badgeCount && badgeCount > 0 ? (
+        <span
+          aria-label={`일정을 잡아야 할 보충 ${badgeCount}건`}
+          className="ml-auto rounded-full bg-[#fdeee3] px-2 py-0.5 text-[11px] font-semibold tabular-nums text-[#a2643c]"
+        >
+          {badgeCount}
+        </span>
+      ) : null}
     </Link>
   );
 }
 
-export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
+export function Sidebar({
+  groups,
+  pendingMakeupCount = 0,
+}: {
+  groups: SidebarGroup[];
+  pendingMakeupCount?: number;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [userName, setUserName] = useState("선생님");
@@ -280,7 +296,11 @@ export function Sidebar({ groups }: { groups: SidebarGroup[] }) {
 
             {afterGroupItems.map((item) => (
               <li key={item.href}>
-                <NavLink {...item} isActive={isActive(item.href)} />
+                <NavLink
+                  {...item}
+                  isActive={isActive(item.href)}
+                  badgeCount={item.href === "/makeups" ? pendingMakeupCount : undefined}
+                />
               </li>
             ))}
           </ul>

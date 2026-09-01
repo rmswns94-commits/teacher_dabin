@@ -335,9 +335,13 @@ export default async function StudentDetailPage({
                       <div key={makeup.id} className="rounded-2xl border border-[#f0ddd8] bg-[#fff9f7] p-3 text-xs">
                         <div className="flex items-center gap-2">
                           <MakeupStatusBadge status={makeup.status} />
-                          <span className="text-[#655d5d]">
+                          <span className="tabular-nums text-[#655d5d]">
                             결석 {formatKoreanDate(makeup.original_class_date)} ·{" "}
-                            {makeup.scheduled_date ? `보충 ${formatKoreanDate(makeup.scheduled_date)}` : "날짜 미정"}
+                            {makeup.scheduled_date
+                              ? `보충 ${formatKoreanDate(makeup.scheduled_date)}${
+                                  makeup.start_time ? ` ${makeup.start_time.slice(0, 5)}` : ""
+                                }`
+                              : "일정 미정"}
                           </span>
                         </div>
                         {makeup.missed_progress ? (

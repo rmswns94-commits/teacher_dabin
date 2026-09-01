@@ -131,6 +131,8 @@ export type MakeupLessonRecord = {
   missed_progress: string | null;
   status: MakeupStatus;
   scheduled_date: string | null;
+  start_time: string | null; // "HH:MM:SS"
+  end_time: string | null;
   completed_date: string | null;
   completed_progress: string | null;
   comment: string | null;
