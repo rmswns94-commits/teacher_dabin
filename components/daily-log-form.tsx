@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MakeupStatusBadge } from "@/components/status-badge";
 import { saveDailyLogAction } from "@/app/daily-logs/actions";
 import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comments";
+import { formatKoreanDate } from "@/lib/dates";
 import { gradeDisplay } from "@/lib/grades";
 import type { AttendanceStatus, StudentGrade } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
@@ -362,6 +363,9 @@ export function DailyLogForm({
 
               {isAbsent ? (
                 <div className="mt-3 space-y-3 rounded-2xl bg-[#fff7f5] p-3">
+                  <div className="text-xs text-[#96837e]">
+                    놓친 수업 · {formatKoreanDate(classDate)} · {group.name}
+                  </div>
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-semibold text-[#8a5d52]">놓친 진도</span>
                     <input
@@ -370,6 +374,15 @@ export function DailyLogForm({
                       className="w-full rounded-xl border border-[#f0ddd8] bg-white px-3 py-2 text-sm outline-none focus:border-[#e3bcb4] placeholder:text-[#b5a29e]"
                       placeholder={defaultProgress.trim() ? `공통 진도: ${defaultProgress.trim()}` : "놓친 진도를 입력해주세요"}
                     />
+                    <span className="mt-1 block text-[11px] text-[#a68e88]">
+                      {entry.missedProgress && entry.missedProgress === defaultProgress.trim()
+                        ? "수업일지의 진도를 자동으로 가져왔어요. 필요하면 수정할 수 있어요."
+                        : !entry.missedProgress
+                          ? defaultProgress.trim()
+                            ? "비워두면 저장할 때 공통 진도가 자동으로 들어가요."
+                            : "수업 진도가 아직 입력되지 않았어요. 직접 입력할 수 있어요."
+                          : null}
+                    </span>
                   </label>
 
                   {entry.makeupCompleted ? (
@@ -384,7 +397,14 @@ export function DailyLogForm({
                         <div className="flex gap-1.5">
                           <button
                             type="button"
-                            onClick={() => updateEntry(student.studentId, { needsMakeup: true })}
+                            onClick={() =>
+                              // 보충 필요 체크 시 수업일지의 공통 진도를 놓친 진도로 자동 입력.
+                              // 사용자가 이미 적어둔 값은 덮어쓰지 않는다.
+                              updateEntry(student.studentId, {
+                                needsMakeup: true,
+                                missedProgress: entry.missedProgress || defaultProgress.trim(),
+                              })
+                            }
                             className={cn(
                               "flex items-center gap-1 rounded-xl border px-2.5 py-1 text-xs font-medium transition",
                               entry.needsMakeup
