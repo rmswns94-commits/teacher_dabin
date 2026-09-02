@@ -142,6 +142,34 @@ export function ExcelImportButton() {
     setRows((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
   };
 
+  // 업로드 가능한 row = 그룹이 정해져 있고 진도가 있는 row.
+  // (사용자가 수동으로 그룹을 지정하거나 진도를 입력해 valid가 된 row 포함)
+  const isSelectable = (row: RowState | undefined) =>
+    Boolean(row?.groupId && row.progress.trim());
+
+  // 전체 선택: valid row만 한 번의 state update로 checked (invalid는 그대로 unchecked)
+  const selectAll = () => {
+    setDirty(true);
+    setRows((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).map(([key, row]) => [
+          key,
+          { ...row, included: isSelectable(row) },
+        ]),
+      ),
+    );
+  };
+
+  // 전체 해제: validation 상태는 그대로 두고 선택만 모두 해제
+  const deselectAll = () => {
+    setDirty(true);
+    setRows((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).map(([key, row]) => [key, { ...row, included: false }]),
+      ),
+    );
+  };
+
   // 반영 대상: 체크됨 + 그룹 선택됨 + 진도 있음
   const importable = preview
     ? preview.items.filter((item) => {
@@ -314,6 +342,28 @@ export function ExcelImportButton() {
                 </div>
               ) : (
                 <div className="space-y-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={selectAll}
+                      className="min-h-[38px] rounded-xl border border-[#cfc4f0] bg-[#efe8fb] px-3 py-1.5 text-xs font-medium text-[#4a3c8f] transition hover:bg-[#e2d8f5]"
+                    >
+                      전체 선택
+                    </button>
+                    <button
+                      type="button"
+                      onClick={deselectAll}
+                      className="min-h-[38px] rounded-xl border border-[#e2e2e8] bg-white px-3 py-1.5 text-xs font-medium text-[#4c4c55] transition hover:bg-[#f4f4f6]"
+                    >
+                      전체 해제
+                    </button>
+                    <span className="ml-auto text-xs tabular-nums text-[#6b6b74]">
+                      업로드 가능{" "}
+                      {preview.items.filter((item) => isSelectable(rows[item.key])).length} · 선택{" "}
+                      {importable.length}
+                    </span>
+                  </div>
+
                   {byDate.map(([date, items]) => (
                     <section key={date}>
                       <h3 className="mb-2 border-b border-[#ececf0] pb-1.5 text-sm font-bold text-[#232327]">
@@ -479,7 +529,11 @@ export function ExcelImportButton() {
                       disabled={applying || importable.length === 0}
                       onClick={apply}
                     >
-                      {applying ? "반영 중..." : `${importable.length}개 수업 반영하기`}
+                      {applying
+                        ? "반영 중..."
+                        : importable.length === 0
+                          ? "반영할 수업을 선택해주세요"
+                          : `선택한 ${importable.length}개 수업 반영하기`}
                     </Button>
                   ) : null}
                 </>
