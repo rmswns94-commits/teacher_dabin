@@ -4,6 +4,7 @@ import { BookOpen, ChevronLeft, ChevronRight, NotebookPen, Plus } from "lucide-r
 import { AppShell } from "@/components/app-shell";
 import { CalendarEventItem, EventCreateButton } from "@/components/calendar-events";
 import { DailyLogsFilter } from "@/components/daily-logs-filter";
+import { ExcelImportButton } from "@/components/excel-import";
 import { Doodle } from "@/components/doodle";
 import { LessonLogDetail } from "@/components/lesson-log-detail";
 import { PageHeader } from "@/components/page-header";
@@ -160,12 +161,15 @@ export default async function DailyLogsPage({
             title="수업 일지"
             description="매일의 수업 기록을 날짜별로 꺼내볼 수 있어요."
             action={
-              <Button className="gap-2" asChild>
-                <Link href="/daily-logs/new">
-                  <Plus className="h-4 w-4" />
-                  오늘 수업 기록하기
-                </Link>
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <ExcelImportButton />
+                <Button className="gap-2" asChild>
+                  <Link href="/daily-logs/new">
+                    <Plus className="h-4 w-4" />
+                    오늘 수업 기록하기
+                  </Link>
+                </Button>
+              </div>
             }
           />
 
