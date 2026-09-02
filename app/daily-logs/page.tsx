@@ -29,6 +29,7 @@ import {
 import {
   getDailyLogDetailForCurrentUser,
   getMonthlyLogMarkers,
+  getPraisesForDailyLog,
   type MonthlyLogMarker,
 } from "@/lib/supabase/queries/daily-logs";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
@@ -147,9 +148,15 @@ export default async function DailyLogsPage({
   const selectedDate = dateParamValid ?? (month === currentMonth ? today : null);
   const dateLogs = selectedDate ? byDate.get(selectedDate) ?? [] : [];
 
+  // 날짜를 선택하면 첫 수업을 자동 선택 (filter로 제외된 log는 selection 해제)
   const logParamValid = params.log && dateLogs.some((log) => log.id === params.log) ? params.log : null;
-  const selectedLogId = logParamValid ?? (dateLogs.length === 1 ? dateLogs[0].id : null);
-  const detail = selectedLogId ? await getDailyLogDetailForCurrentUser(selectedLogId) : null;
+  const selectedLogId = logParamValid ?? dateLogs[0]?.id ?? null;
+  const [detail, detailPraises] = selectedLogId
+    ? await Promise.all([
+        getDailyLogDetailForCurrentUser(selectedLogId),
+        getPraisesForDailyLog(selectedLogId),
+      ])
+    : [null, []];
 
   const weeks = buildMonthGrid(month);
 
@@ -469,7 +476,10 @@ export default async function DailyLogsPage({
                               ) : null}
                               {log.group?.name ?? "수업 그룹"}
                             </span>
-                            <DailyLogStatusBadge status={log.status} />
+                            <span className="flex items-center gap-1.5">
+                              <DailyLogStatusBadge status={log.status} />
+                              <ChevronRight className="h-3.5 w-3.5 text-[#c9b6bd]" aria-hidden />
+                            </span>
                           </div>
                           {time ? (
                             <div className="mt-1 text-xs tabular-nums text-[#8a7b77]">{time}</div>
@@ -489,6 +499,7 @@ export default async function DailyLogsPage({
                       <LessonLogDetail
                         detail={detail}
                         timeRange={timeFor(detail.group_id, detail.class_date)}
+                        praises={detailPraises}
                       />
                     ) : (
                       <Card>
