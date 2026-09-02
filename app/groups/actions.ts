@@ -172,12 +172,9 @@ export async function updateGroupAction(groupId: string, formData: FormData) {
   }
 
   // 시간 선택기에 골라두고 [추가]를 누르지 않은 수업 시간도 저장 버튼으로 함께 저장.
-  // (addGroupSchedules가 완전 중복은 건너뛰고, 겹치는 시간은 에러로 알려준다)
+  // 스케줄 쪽 문제(미완성 선택·겹침)는 에러 화면 대신, 그룹 정보는 저장한 뒤
+  // 수정 화면의 배너로 알려준다 (native form이라 throw하면 크래시 화면이 뜬다).
   const scheduleResult = parseScheduleRows(formData);
-
-  if ("error" in scheduleResult) {
-    throw new Error(scheduleResult.error);
-  }
 
   await updateGroup(groupId, {
     name: parsed.data.name,
@@ -187,14 +184,28 @@ export async function updateGroupAction(groupId: string, formData: FormData) {
     highlightMemo: parsed.data.highlightMemo || null,
   });
 
-  if (scheduleResult.rows.length > 0) {
-    await addGroupSchedules(groupId, scheduleResult.rows);
+  let scheduleError: string | null = null;
+
+  if ("error" in scheduleResult) {
+    scheduleError = scheduleResult.error ?? "수업 시간을 다시 확인해주세요.";
+  } else if (scheduleResult.rows.length > 0) {
+    try {
+      await addGroupSchedules(groupId, scheduleResult.rows);
+    } catch (error) {
+      scheduleError =
+        error instanceof Error && error.message ? error.message : "수업 시간을 저장하지 못했어요.";
+    }
   }
 
   revalidatePath("/groups");
   revalidatePath(`/groups/${groupId}`);
   revalidatePath("/dashboard");
   revalidatePath("/daily-logs");
+
+  if (scheduleError) {
+    redirect(`/groups/${groupId}?edit=1&scheduleError=${encodeURIComponent(scheduleError)}`);
+  }
+
   redirect(`/groups/${groupId}?saved=1`);
 }
 

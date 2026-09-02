@@ -65,10 +65,10 @@ export default async function GroupDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ edit?: string; saved?: string }>;
+  searchParams?: Promise<{ edit?: string; saved?: string; scheduleError?: string }>;
 }) {
   const { id } = await params;
-  const { edit, saved } = (await searchParams) ?? {};
+  const { edit, saved, scheduleError } = (await searchParams) ?? {};
   const [group, allMembers, latestProgress, recentLogs, availableStudents, allMakeups, schedules] =
     await Promise.all([
       getGroupByIdForCurrentUser(id),
@@ -132,6 +132,12 @@ export default async function GroupDetailPage({
         {saved ? (
           <div className="mb-5 rounded-2xl border border-[#d8ebe0] bg-[#f0faf5] px-4 py-3 text-sm text-[#2f6d54]">
             수업 그룹 정보를 수정했어요.
+          </div>
+        ) : null}
+
+        {scheduleError ? (
+          <div className="mb-5 rounded-2xl border border-[#f0e0c8] bg-[#fdf6ec] px-4 py-3 text-sm text-[#8a6828]">
+            그룹 정보는 저장했어요. 다만 수업 시간은 저장되지 않았어요 — {scheduleError}
           </div>
         ) : null}
 
