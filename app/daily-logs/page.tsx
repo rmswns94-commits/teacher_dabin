@@ -457,11 +457,16 @@ export default async function DailyLogsPage({
                   </CardContent>
                 </Card>
               ) : (
-                <div className="mt-3 grid items-start gap-4 lg:grid-cols-[0.42fr_0.58fr]">
-                  <div className="space-y-2">
+                <>
+                  {/* 반 목록: content 전체 폭을 쓰는 가로 Card. 선택 전에는 빈 상세 panel 없음 */}
+                  <div className="mt-3 space-y-3">
                     {dateLogs.map((log) => {
                       const isActive = log.id === selectedLogId;
                       const time = timeFor(log.group_id, selectedDate);
+                      const meta = [
+                        time,
+                        log.studentCount > 0 ? `학생 ${log.studentCount}명` : null,
+                      ].filter(Boolean);
 
                       return (
                         <Link
@@ -469,57 +474,55 @@ export default async function DailyLogsPage({
                           href={buildQuery({ month, date: selectedDate, groupId, status, log: log.id })}
                           aria-current={isActive ? "true" : undefined}
                           className={cn(
-                            "block rounded-2xl border-2 border-dashed p-3.5 transition",
+                            "flex items-center gap-3.5 rounded-2xl border-2 border-dashed px-4 py-4 transition",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d9c1e8]",
                             isActive
-                              ? "border-[#f0c9d8] bg-[#fbe9f0] shadow-sm"
-                              : "border-[#f0dae2] bg-white/90 hover:-translate-y-0.5 hover:bg-[#fdf6f8]",
+                              ? "border-[#d9c9ef] bg-[#f5f1fb] shadow-sm"
+                              : "border-[#f0dae2] bg-white/90 hover:border-[#e8cfda] hover:bg-[#fdf6f8]",
                           )}
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="flex items-center gap-1.5 font-medium text-[#2d2928]">
-                              {isActive ? (
-                                <BookOpen className="h-3.5 w-3.5 text-[#c06a8f]" aria-hidden />
-                              ) : null}
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl",
+                              isActive ? "bg-white text-[#6d5aa8]" : "bg-[#f5f1fb] text-[#8b7ae6]",
+                            )}
+                          >
+                            <BookOpen className="h-[18px] w-[18px]" />
+                          </span>
+
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-semibold text-[#2d2928]">
                               {log.group?.name ?? "수업 그룹"}
                             </span>
-                            <span className="flex items-center gap-1.5">
-                              <DailyLogStatusBadge status={log.status} />
-                              <ChevronRight className="h-3.5 w-3.5 text-[#c9b6bd]" aria-hidden />
-                            </span>
-                          </div>
-                          {time ? (
-                            <div className="mt-1 text-xs tabular-nums text-[#8a7b77]">{time}</div>
-                          ) : null}
-                          {log.title || log.default_progress ? (
-                            <div className="mt-1 truncate text-xs text-[#7b746f]">
-                              {[log.title, log.default_progress].filter(Boolean).join(" · ")}
-                            </div>
-                          ) : null}
+                            {meta.length > 0 ? (
+                              <span className="mt-0.5 block text-xs tabular-nums text-[#8a7b77]">
+                                {meta.join(" · ")}
+                              </span>
+                            ) : null}
+                          </span>
+
+                          <span className="flex shrink-0 items-center gap-1.5">
+                            <DailyLogStatusBadge status={log.status} />
+                            <ChevronRight className="h-4 w-4 text-[#c9b6bd]" aria-hidden />
+                          </span>
                         </Link>
                       );
                     })}
                   </div>
 
-                  <div>
-                    {detail ? (
+                  {/* 상세: 반을 클릭했을 때만 목록 아래 full-width로 */}
+                  {detail ? (
+                    <div className="mt-5">
+                      <h3 className="mb-2 text-sm font-semibold text-[#8f5470]">선택한 수업</h3>
                       <LessonLogDetail
                         detail={detail}
                         timeRange={timeFor(detail.group_id, detail.class_date)}
                         praises={detailPraises}
                       />
-                    ) : (
-                      <Card>
-                        <CardContent className="p-6 text-sm text-[#8a7b77]">
-                          확인할 수업을 선택해주세요.
-                          <br />
-                          <span className="text-xs text-[#a08d97]">
-                            반을 클릭하면 작성한 수업일지를 볼 수 있어요 📖
-                          </span>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
-                </div>
+                    </div>
+                  ) : null}
+                </>
               )}
             </div>
           ) : (
