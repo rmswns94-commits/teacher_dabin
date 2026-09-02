@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 
 import {
   addGroupScheduleSetAction,
@@ -95,6 +95,22 @@ export function ScheduleSetEditor({
     });
   };
 
+  // 그룹 정보 폼 안에서 렌더될 때: [추가]를 누르지 않은 유효한 선택도
+  // 폼의 [저장] 버튼으로 함께 저장되도록 hidden input으로 노출한다.
+  // (기존 블록과 겹치는 요일은 제외, 블록 수정 중에는 미포함)
+  const pendingValid = editingIds === null && validatePickerValue(picker) === null;
+  const pendingDays = pendingValid
+    ? picker.days.filter(
+        (day) =>
+          !blocks.some(
+            (block) =>
+              block.days.includes(day) &&
+              picker.startTime < block.endTime &&
+              block.startTime < picker.endTime,
+          ),
+      )
+    : [];
+
   return (
     <div className="space-y-3">
       {blocks.length === 0 ? (
@@ -148,6 +164,13 @@ export function ScheduleSetEditor({
 
         {error ? <p className="mt-2 text-xs text-[#a2665f]">{error}</p> : null}
 
+        {pendingDays.length > 0 ? (
+          <p className="mt-2 text-xs text-[#3d7f64]">
+            선택한 {formatDayList(pendingDays)} {picker.startTime}~{picker.endTime} 시간은 아래
+            저장 버튼으로도 함께 저장돼요.
+          </p>
+        ) : null}
+
         <div className="mt-2.5 flex gap-2">
           <Button type="button" variant="secondary" size="sm" disabled={isPending} onClick={save} className="gap-1.5">
             <Plus className="h-3.5 w-3.5" aria-hidden />
@@ -160,6 +183,17 @@ export function ScheduleSetEditor({
           ) : null}
         </div>
       </div>
+
+      {/* 폼 제출용 pending 선택 (요일별 행으로 펼침 — 서버 파싱 형식 동일) */}
+      {pendingDays.map((day) => (
+        <Fragment key={`pending-${day}`}>
+          <input type="hidden" name="scheduleDay" value={day} />
+          <input type="hidden" name="scheduleStart" value={picker.startTime} />
+          <input type="hidden" name="scheduleEnd" value={picker.endTime} />
+        </Fragment>
+      ))}
+      {/* 블록 수정 중에는 picker 값이 미완성 입력으로 오인되지 않게 표시 */}
+      {editingIds ? <input type="hidden" name="scheduleEditingBlock" value="1" /> : null}
     </div>
   );
 }

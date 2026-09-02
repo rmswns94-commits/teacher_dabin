@@ -256,6 +256,18 @@ export default async function GroupDetailPage({
                   />
                 </label>
 
+                <div className="border-t border-[#f0e7e2] pt-4">
+                  <div className="mb-1 flex items-center gap-2 text-sm font-medium text-[#4d3a3a]">
+                    <CalendarClock className="h-4 w-4 text-[#6652b9]" /> 수업 시간
+                  </div>
+                  <p className="mb-3 text-xs text-[#8a7b77]">
+                    추가/삭제 버튼은 바로 저장되고, 선택만 해둔 시간은 아래 저장 버튼으로도 함께
+                    저장돼요.
+                  </p>
+
+                  <ScheduleSetEditor groupId={id} slots={schedules} />
+                </div>
+
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" asChild>
                     <Link href={`/groups/${id}`}>취소</Link>
@@ -263,15 +275,6 @@ export default async function GroupDetailPage({
                   <PendingButton>저장</PendingButton>
                 </div>
               </GuardedForm>
-
-              <div className="mt-5 border-t border-[#f0e7e2] pt-4">
-                <div className="mb-1 flex items-center gap-2 text-sm font-medium text-[#4d3a3a]">
-                  <CalendarClock className="h-4 w-4 text-[#6652b9]" /> 수업 시간
-                </div>
-                <p className="mb-3 text-xs text-[#8a7b77]">수업 시간 변경은 바로 저장돼요.</p>
-
-                <ScheduleSetEditor groupId={id} slots={schedules} />
-              </div>
 
               <form action={archiveGroupAction.bind(null, id)} className="mt-4 border-t border-[#f0e7e2] pt-4">
                 <Button type="submit" variant="ghost" size="sm" className="gap-2 text-[#8f625f]">

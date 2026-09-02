@@ -68,8 +68,9 @@ function parseScheduleRows(formData: FormData):
   }
 
   // 안전장치: 시간 선택기에 값을 채워놓고 (요일만·시간만 등 불완전하게)
-  // 확정하지 않은 채 제출하면, 조용히 시간 없는 그룹을 만들지 않고 알려준다.
-  if (rows.length === 0) {
+  // 확정하지 않은 채 제출하면, 조용히 시간을 유실하지 않고 알려준다.
+  // (블록 수정 중에는 picker에 기존 블록 값이 들어있으므로 예외)
+  if (rows.length === 0 && !formData.get("scheduleEditingBlock")) {
     const pickerTouched =
       formData.getAll("pickerDays").map(String).some(Boolean) ||
       formData.getAll("pickerStart").map(String).some(Boolean) ||
@@ -170,6 +171,14 @@ export async function updateGroupAction(groupId: string, formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "수업 그룹 정보를 다시 확인해주세요.");
   }
 
+  // 시간 선택기에 골라두고 [추가]를 누르지 않은 수업 시간도 저장 버튼으로 함께 저장.
+  // (addGroupSchedules가 완전 중복은 건너뛰고, 겹치는 시간은 에러로 알려준다)
+  const scheduleResult = parseScheduleRows(formData);
+
+  if ("error" in scheduleResult) {
+    throw new Error(scheduleResult.error);
+  }
+
   await updateGroup(groupId, {
     name: parsed.data.name,
     grade: parsed.data.grade,
@@ -178,8 +187,14 @@ export async function updateGroupAction(groupId: string, formData: FormData) {
     highlightMemo: parsed.data.highlightMemo || null,
   });
 
+  if (scheduleResult.rows.length > 0) {
+    await addGroupSchedules(groupId, scheduleResult.rows);
+  }
+
   revalidatePath("/groups");
   revalidatePath(`/groups/${groupId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/daily-logs");
   redirect(`/groups/${groupId}?saved=1`);
 }
 
