@@ -139,7 +139,7 @@ export default async function NewDailyLogPage({
 
             <DailyLogForm
               classDate={date}
-              group={{ id: selectedGroup.id, name: selectedGroup.name }}
+              group={{ id: selectedGroup.id, name: selectedGroup.name, grade: selectedGroup.grade }}
               students={groupStudents.map((student) => ({
                 studentId: student.id,
                 name: student.name,

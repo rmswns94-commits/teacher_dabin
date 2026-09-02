@@ -595,6 +595,36 @@ export async function getUpcomingGroupExams(fromDate: string, toDate: string) {
   return (data ?? []) as GroupExamSummary[];
 }
 
+// 그룹 대시보드 "최근 체크"용: 특정 일지의 학생 기록을 쿼리 1번으로 집계.
+export async function getLessonQuickCheckCounts(dailyLogId: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+  const counts = { homeworkMissing: 0, retest: 0, parentPending: 0 };
+
+  if (!supabase || !user) {
+    return counts;
+  }
+
+  const { data, error } = await supabase
+    .from("student_lesson_logs")
+    .select("homework_status, vocab_retest, parent_note_status")
+    .eq("user_id", user.id)
+    .eq("daily_log_id", dailyLogId);
+
+  if (error) {
+    console.error("getLessonQuickCheckCounts error", error);
+    return counts;
+  }
+
+  for (const row of data ?? []) {
+    if (row.homework_status === "missing") counts.homeworkMissing += 1;
+    if (row.vocab_retest) counts.retest += 1;
+    if (row.parent_note_status === "pending") counts.parentPending += 1;
+  }
+
+  return counts;
+}
+
 export async function getGroupOrThrow(groupId: string) {
   const group = await getGroupByIdForCurrentUser(groupId);
 

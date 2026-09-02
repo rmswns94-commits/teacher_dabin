@@ -16,7 +16,7 @@ function pickOne<T>(value: unknown): T | null {
 
 export type StudentLessonHistoryItem = StudentLessonLogRecord & {
   dailyLog:
-    | (Pick<DailyLogRecord, "id" | "class_date" | "title" | "default_progress"> & {
+    | (Pick<DailyLogRecord, "id" | "class_date" | "title" | "default_progress" | "vocab_total"> & {
         group: Pick<ClassGroupRecord, "id" | "name"> | null;
       })
     | null;
@@ -32,7 +32,7 @@ export async function getStudentLessonHistory(studentId: string) {
 
   const { data, error } = await supabase
     .from("student_lesson_logs")
-    .select("*, daily_logs(id, class_date, title, default_progress, class_groups(id, name))")
+    .select("*, daily_logs(id, class_date, title, default_progress, vocab_total, class_groups(id, name))")
     .eq("user_id", user.id)
     .eq("student_id", studentId);
 
@@ -51,7 +51,7 @@ export async function getStudentLessonHistory(studentId: string) {
           ? {
               ...(dailyLogRaw as unknown as Pick<
                 DailyLogRecord,
-                "id" | "class_date" | "title" | "default_progress"
+                "id" | "class_date" | "title" | "default_progress" | "vocab_total"
               >),
               group: pickOne<Pick<ClassGroupRecord, "id" | "name">>(dailyLogRaw.class_groups),
             }
@@ -79,6 +79,10 @@ export type RecentLessonRecord = {
   memo: string | null;
   strengths: string | null;
   improvements: string | null;
+  homework_status: "completed" | "partial" | "missing" | null;
+  vocab_correct: number | null;
+  vocab_retest: boolean;
+  parent_note_status: "pending" | "completed" | null;
   class_date: string;
 };
 
@@ -92,7 +96,9 @@ export async function getRecentLessonRecords(sinceDate: string) {
 
   const { data, error } = await supabase
     .from("student_lesson_logs")
-    .select("student_id, attendance, progress, memo, strengths, improvements, daily_logs!inner(class_date)")
+    .select(
+      "student_id, attendance, progress, memo, strengths, improvements, homework_status, vocab_correct, vocab_retest, parent_note_status, daily_logs!inner(class_date)",
+    )
     .eq("user_id", user.id)
     .gte("daily_logs.class_date", sinceDate);
 
@@ -110,9 +116,38 @@ export async function getRecentLessonRecords(sinceDate: string) {
       memo: row.memo,
       strengths: row.strengths,
       improvements: row.improvements,
+      homework_status: row.homework_status ?? null,
+      vocab_correct: row.vocab_correct ?? null,
+      vocab_retest: Boolean(row.vocab_retest),
+      parent_note_status: row.parent_note_status ?? null,
       class_date: dailyLog?.class_date ?? "",
     } as RecentLessonRecord;
   });
+}
+
+// 학생 상세용: 최근 칭찬 기록 (기간 제한 조회 — 전체 history 금지)
+export async function getStudentPraises(studentId: string, sinceDate: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as { id: string; category: string; daily_log_id: string | null; created_at: string }[];
+  }
+
+  const { data, error } = await supabase
+    .from("student_praises")
+    .select("id, category, daily_log_id, created_at")
+    .eq("user_id", user.id)
+    .eq("student_id", studentId)
+    .gte("created_at", `${sinceDate}T00:00:00+09:00`)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("getStudentPraises error", error);
+    return [] as { id: string; category: string; daily_log_id: string | null; created_at: string }[];
+  }
+
+  return (data ?? []) as { id: string; category: string; daily_log_id: string | null; created_at: string }[];
 }
 
 export async function getStudentMakeups(studentId: string) {

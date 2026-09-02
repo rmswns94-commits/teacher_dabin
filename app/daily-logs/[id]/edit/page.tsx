@@ -6,15 +6,30 @@ import { DailyLogForm, type DailyLogFormStudent } from "@/components/daily-log-f
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { formatKoreanDate } from "@/lib/dates";
-import { getDailyLogDetailForCurrentUser } from "@/lib/supabase/queries/daily-logs";
+import {
+  getDailyLogDetailForCurrentUser,
+  getPraisesForDailyLog,
+} from "@/lib/supabase/queries/daily-logs";
 import { getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
+import type { PraiseCategory } from "@/lib/supabase/types";
 
 export default async function EditDailyLogPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const log = await getDailyLogDetailForCurrentUser(id);
+  const [log, praiseRows] = await Promise.all([
+    getDailyLogDetailForCurrentUser(id),
+    getPraisesForDailyLog(id),
+  ]);
 
   if (!log) {
     notFound();
+  }
+
+  const praisesByStudent = new Map<string, PraiseCategory[]>();
+  for (const praise of praiseRows) {
+    praisesByStudent.set(praise.student_id, [
+      ...(praisesByStudent.get(praise.student_id) ?? []),
+      praise.category as PraiseCategory,
+    ]);
   }
 
   const makeupByLessonLog = new Map(
@@ -36,7 +51,14 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           strengths: lessonLog.strengths ?? "",
           improvements: lessonLog.improvements ?? "",
           memo: lessonLog.memo ?? "",
+          homeworkStatus: lessonLog.homework_status ?? "",
+          vocabCorrect: lessonLog.vocab_correct === null ? "" : String(lessonLog.vocab_correct),
+          vocabRetest: lessonLog.vocab_retest,
+          focusLevel: lessonLog.focus_level ?? "",
+          participationLevel: lessonLog.participation_level ?? "",
+          parentNote: lessonLog.parent_note ?? "",
         },
+        praises: praisesByStudent.get(lessonLog.student!.id) ?? [],
         makeup: makeup
           ? {
               status: makeup.status,
@@ -73,7 +95,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
         <DailyLogForm
           dailyLogId={log.id}
           classDate={log.class_date}
-          group={{ id: log.group_id, name: log.group?.name ?? "수업 그룹" }}
+          group={{ id: log.group_id, name: log.group?.name ?? "수업 그룹", grade: log.group?.grade }}
           students={students}
           initial={{
             title: log.title ?? "",
@@ -82,6 +104,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
             memo: log.memo ?? "",
             homework: log.homework ?? "",
             nextLessonPlan: log.next_lesson_plan ?? "",
+            vocabTotal: log.vocab_total === null ? "" : String(log.vocab_total),
           }}
         />
       </main>

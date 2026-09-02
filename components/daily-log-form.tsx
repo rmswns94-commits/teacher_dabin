@@ -22,8 +22,19 @@ import { MakeupStatusBadge } from "@/components/status-badge";
 import { saveDailyLogAction } from "@/app/daily-logs/actions";
 import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comments";
 import { formatKoreanDate } from "@/lib/dates";
-import { gradeDisplay } from "@/lib/grades";
-import type { AttendanceStatus, StudentGrade } from "@/lib/supabase/types";
+import {
+  focusLevelLabels,
+  focusLevelValues,
+  homeworkStatusLabels,
+  homeworkStatusValues,
+  participationLevelLabels,
+  participationLevelValues,
+  praiseCategoryLabels,
+  praiseCategoryValues,
+  vocabPercent,
+} from "@/lib/elementary";
+import { gradeDisplay, isElementaryGrade } from "@/lib/grades";
+import type { AttendanceStatus, PraiseCategory, StudentGrade } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
 export type DailyLogFormStudent = {
@@ -36,7 +47,14 @@ export type DailyLogFormStudent = {
     strengths: string;
     improvements: string;
     memo: string;
+    homeworkStatus?: string;
+    vocabCorrect?: string;
+    vocabRetest?: boolean;
+    focusLevel?: string;
+    participationLevel?: string;
+    parentNote?: string;
   };
+  praises?: PraiseCategory[];
   makeup?: {
     status: "required" | "scheduled" | "completed" | "cancelled";
     scheduledDate: string;
@@ -54,6 +72,14 @@ type EntryState = {
   needsMakeup: boolean;
   makeupScheduledDate: string;
   makeupCompleted: boolean;
+  homeworkStatus: string;
+  vocabCorrect: string;
+  vocabRetest: boolean;
+  focusLevel: string;
+  participationLevel: string;
+  parentNoteNeeded: boolean;
+  parentNote: string;
+  praises: PraiseCategory[];
 };
 
 function initEntry(student: DailyLogFormStudent): EntryState {
@@ -70,7 +96,54 @@ function initEntry(student: DailyLogFormStudent): EntryState {
     needsMakeup: makeupOpen || makeup?.status === "completed",
     makeupScheduledDate: makeupOpen ? makeup?.scheduledDate ?? "" : "",
     makeupCompleted: makeup?.status === "completed",
+    homeworkStatus: student.entry?.homeworkStatus ?? "",
+    vocabCorrect: student.entry?.vocabCorrect ?? "",
+    vocabRetest: student.entry?.vocabRetest ?? false,
+    focusLevel: student.entry?.focusLevel ?? "",
+    participationLevel: student.entry?.participationLevel ?? "",
+    parentNoteNeeded: Boolean(student.entry?.parentNote),
+    parentNote: student.entry?.parentNote ?? "",
+    praises: student.praises ?? [],
   };
+}
+
+// 초등 quick check용 세그먼트 (같은 값을 다시 누르면 해제 — 미입력과 구분)
+function SegmentedToggle({
+  label,
+  value,
+  options,
+  onChange,
+  activeClass,
+}: {
+  label: string;
+  value: string;
+  options: readonly { value: string; label: string }[];
+  onChange: (next: string) => void;
+  activeClass: string;
+}) {
+  return (
+    <div className="flex items-center gap-2" role="group" aria-label={label}>
+      <span className="w-8 shrink-0 text-xs font-semibold text-[#7c6d69]">{label}</span>
+      <div className="flex gap-1">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={value === option.value}
+            onClick={() => onChange(value === option.value ? "" : option.value)}
+            className={cn(
+              "min-h-[38px] rounded-xl border px-2.5 py-1.5 text-xs font-medium transition",
+              value === option.value
+                ? activeClass
+                : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function DailyLogForm({
@@ -82,7 +155,7 @@ export function DailyLogForm({
 }: {
   dailyLogId?: string;
   classDate: string;
-  group: { id: string; name: string };
+  group: { id: string; name: string; grade?: string };
   students: DailyLogFormStudent[];
   initial?: {
     title: string;
@@ -91,6 +164,7 @@ export function DailyLogForm({
     memo: string;
     homework: string;
     nextLessonPlan: string;
+    vocabTotal?: string;
   };
 }) {
   const [classDate, setClassDate] = useState(initialClassDate);
@@ -115,8 +189,25 @@ export function DailyLogForm({
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  // 초등 그룹에서만 quick check UI를 보여준다 (중·고등 일지는 기존 그대로)
+  const isElementary = isElementaryGrade(group.grade ?? "");
+  const [vocabTotal, setVocabTotal] = useState(initial?.vocabTotal ?? "");
+  const [praiseOpenFor, setPraiseOpenFor] = useState<string | null>(null);
+
   const updateEntry = (studentId: string, patch: Partial<EntryState>) => {
     setEntries((prev) => ({ ...prev, [studentId]: { ...prev[studentId], ...patch } }));
+  };
+
+  // 숙제 전원 완료: 결석 학생 제외, 저장 전이라 개별 수정 가능
+  const markAllHomeworkCompleted = () => {
+    setEntries((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).map(([studentId, entry]) => [
+          studentId,
+          entry.attendance === "absent" ? entry : { ...entry, homeworkStatus: "completed" },
+        ]),
+      ),
+    );
   };
 
   const applyDefaultProgress = () => {
@@ -160,6 +251,7 @@ export function DailyLogForm({
         memo,
         homework,
         nextLessonPlan,
+        vocabTotal,
         status,
         students: students.map((student) => {
           const entry = entries[student.studentId];
@@ -173,6 +265,14 @@ export function DailyLogForm({
             missedProgress: entry.missedProgress,
             needsMakeup: entry.needsMakeup,
             makeupScheduledDate: entry.makeupScheduledDate,
+            homeworkStatus: entry.homeworkStatus as "" | "completed" | "partial" | "missing",
+            vocabCorrect: entry.vocabCorrect,
+            vocabRetest: entry.vocabRetest,
+            focusLevel: entry.focusLevel as "" | "good" | "normal" | "distracted",
+            participationLevel: entry.participationLevel as "" | "active" | "normal" | "passive",
+            parentNoteNeeded: entry.parentNoteNeeded,
+            parentNote: entry.parentNote,
+            praises: entry.praises,
           };
         }),
       });
@@ -298,6 +398,32 @@ export function DailyLogForm({
           </label>
         </CardContent>
       </Card>
+
+      {isElementary ? (
+        <Card className="p-4">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+            <span className="text-sm font-semibold text-[#2b2323]">빠른 체크</span>
+            <label className="flex items-center gap-2 text-sm text-[#564d4d]">
+              오늘 단어시험 총 문항
+              <input
+                inputMode="numeric"
+                value={vocabTotal}
+                onChange={(event) => setVocabTotal(event.target.value.replace(/\D/g, "").slice(0, 3))}
+                className="w-16 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-center text-sm tabular-nums outline-none focus:border-[#c9b9e8]"
+                placeholder="20"
+                aria-label="오늘 단어시험 총 문항 수"
+              />
+              문제
+            </label>
+            <Button type="button" variant="secondary" size="sm" onClick={markAllHomeworkCompleted}>
+              숙제 전원 완료로 표시
+            </Button>
+            <span className="text-xs text-[#8a7b77]">
+              시험이 없는 날은 비워두면 돼요. 저장 전까지 학생별로 수정할 수 있어요.
+            </span>
+          </div>
+        </Card>
+      ) : null}
 
       <div className="space-y-3">
         {students.map((student) => {
@@ -458,6 +584,176 @@ export function DailyLogForm({
                 </div>
               ) : (
                 <div className="mt-3 space-y-3">
+                  {isElementary ? (
+                    <div className="space-y-2.5 rounded-2xl bg-[#f8f6fc] p-3">
+                      <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
+                        <SegmentedToggle
+                          label="숙제"
+                          value={entry.homeworkStatus}
+                          options={homeworkStatusValues.map((value) => ({
+                            value,
+                            label: homeworkStatusLabels[value],
+                          }))}
+                          onChange={(next) => updateEntry(student.studentId, { homeworkStatus: next })}
+                          activeClass={
+                            entry.homeworkStatus === "missing"
+                              ? "border-[#f0ccc7] bg-[#fff0ef] text-[#96534c]"
+                              : entry.homeworkStatus === "partial"
+                                ? "border-[#ecd9b4] bg-[#fdf3e4] text-[#8a6828]"
+                                : "border-[#bfe3d2] bg-[#edf9f3] text-[#2f6d54]"
+                          }
+                        />
+
+                        <div className="flex items-center gap-2" role="group" aria-label={`${student.name} 단어시험`}>
+                          <span className="shrink-0 text-xs font-semibold text-[#7c6d69]">단어</span>
+                          <input
+                            inputMode="numeric"
+                            value={entry.vocabCorrect}
+                            onChange={(event) =>
+                              updateEntry(student.studentId, {
+                                vocabCorrect: event.target.value.replace(/\D/g, "").slice(0, 3),
+                              })
+                            }
+                            className="w-14 rounded-xl border border-[#ece0db] bg-white px-2 py-1.5 text-center text-sm tabular-nums outline-none focus:border-[#c9b9e8]"
+                            placeholder="-"
+                            aria-label={`${student.name} 단어시험 맞은 개수`}
+                          />
+                          <span className="text-xs tabular-nums text-[#8a7b77]">
+                            / {vocabTotal.trim() || "?"}
+                            {entry.vocabCorrect && vocabTotal.trim() &&
+                            Number(entry.vocabCorrect) <= Number(vocabTotal)
+                              ? ` · ${vocabPercent(Number(entry.vocabCorrect), Number(vocabTotal))}%`
+                              : ""}
+                          </span>
+                          <button
+                            type="button"
+                            aria-pressed={entry.vocabRetest}
+                            onClick={() => updateEntry(student.studentId, { vocabRetest: !entry.vocabRetest })}
+                            className={cn(
+                              "min-h-[38px] rounded-xl border px-2.5 py-1.5 text-xs font-medium transition",
+                              entry.vocabRetest
+                                ? "border-[#d8cdf0] bg-[#f3eefc] text-[#5d4ba5]"
+                                : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
+                            )}
+                          >
+                            재시험 필요
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
+                        <SegmentedToggle
+                          label="집중"
+                          value={entry.focusLevel}
+                          options={focusLevelValues.map((value) => ({
+                            value,
+                            label: focusLevelLabels[value],
+                          }))}
+                          onChange={(next) => updateEntry(student.studentId, { focusLevel: next })}
+                          activeClass="border-[#c9dcec] bg-[#eef6fb] text-[#3c6478]"
+                        />
+                        <SegmentedToggle
+                          label="참여"
+                          value={entry.participationLevel}
+                          options={participationLevelValues.map((value) => ({
+                            value,
+                            label: participationLevelLabels[value],
+                          }))}
+                          onChange={(next) => updateEntry(student.studentId, { participationLevel: next })}
+                          activeClass="border-[#d3cbee] bg-[#f0ecfb] text-[#54479c]"
+                        />
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPraiseOpenFor((prev) => (prev === student.studentId ? null : student.studentId))
+                          }
+                          aria-expanded={praiseOpenFor === student.studentId}
+                          className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#ecd9b4] bg-[#fdf8ec] px-3 py-1.5 text-xs font-medium text-[#8a6828] transition hover:bg-[#fbf1da]"
+                        >
+                          ⭐ 칭찬 +1
+                          {entry.praises.length > 0 ? (
+                            <span className="tabular-nums">({entry.praises.length})</span>
+                          ) : null}
+                        </button>
+
+                        {entry.praises.map((category, praiseIndex) => (
+                          <span
+                            key={`${category}-${praiseIndex}`}
+                            className="flex items-center gap-1 rounded-full bg-[#fdf3e4] px-2 py-0.5 text-[11px] text-[#8a6828]"
+                          >
+                            ⭐ {praiseCategoryLabels[category]}
+                            <button
+                              type="button"
+                              aria-label={`${praiseCategoryLabels[category]} 칭찬 취소`}
+                              onClick={() =>
+                                updateEntry(student.studentId, {
+                                  praises: entry.praises.filter((_, index) => index !== praiseIndex),
+                                })
+                              }
+                              className="text-[#b09256] hover:text-[#8a6828]"
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))}
+
+                        <button
+                          type="button"
+                          aria-pressed={entry.parentNoteNeeded}
+                          onClick={() =>
+                            updateEntry(student.studentId, { parentNoteNeeded: !entry.parentNoteNeeded })
+                          }
+                          className={cn(
+                            "ml-auto min-h-[38px] rounded-xl border px-3 py-1.5 text-xs font-medium transition",
+                            entry.parentNoteNeeded
+                              ? "border-[#f0ccc7] bg-[#fff0ef] text-[#96534c]"
+                              : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
+                          )}
+                        >
+                          학부모 전달 필요
+                        </button>
+                      </div>
+
+                      {praiseOpenFor === student.studentId ? (
+                        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[#f0e6cf] bg-white p-2">
+                          <span className="text-[11px] text-[#8a7b77]">무엇을 칭찬했나요?</span>
+                          {praiseCategoryValues.map((category) => (
+                            <button
+                              key={category}
+                              type="button"
+                              onClick={() => {
+                                updateEntry(student.studentId, {
+                                  praises: [...entry.praises, category],
+                                });
+                                setPraiseOpenFor(null);
+                              }}
+                              className="min-h-[36px] rounded-full border border-[#ecd9b4] bg-[#fdf8ec] px-2.5 py-1 text-xs text-[#8a6828] transition hover:bg-[#fbf1da]"
+                            >
+                              {praiseCategoryLabels[category]}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {entry.parentNoteNeeded ? (
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-semibold text-[#96534c]">전달 내용</span>
+                          <input
+                            value={entry.parentNote}
+                            onChange={(event) =>
+                              updateEntry(student.studentId, { parentNote: event.target.value })
+                            }
+                            className="w-full rounded-xl border border-[#f0ddd8] bg-white px-3 py-2 text-sm outline-none focus:border-[#e3bcb4]"
+                            placeholder="최근 숙제 미제출이 두 번 있었습니다."
+                          />
+                        </label>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <label className="flex flex-1 items-center gap-2 rounded-xl border border-[#efe4dd] bg-[#fdfaf8] px-3 py-2">
                       <BookOpen className="h-3.5 w-3.5 shrink-0 text-[#7c6d69]" />
@@ -604,14 +900,33 @@ function CompletionSummary({
   onComplete: () => void;
 }) {
   const counts = { present: 0, late: 0, absent: 0 };
-  const makeupNames: string[] = [];
+
+  // 오늘 체크할 학생: 실제 attention 항목이 있는 학생만 (정상 학생은 나열하지 않음)
+  const checkStudents: { name: string; items: string[] }[] = [];
 
   for (const student of students) {
     const entry = entries[student.studentId];
     counts[entry.attendance] += 1;
 
-    if (entry.attendance === "absent" && entry.needsMakeup) {
-      makeupNames.push(student.name);
+    const items: string[] = [];
+
+    if (entry.attendance === "absent") {
+      items.push(entry.needsMakeup ? "결석 · 보충 필요" : "결석");
+    }
+    if (entry.homeworkStatus === "missing") {
+      items.push("숙제 미제출");
+    } else if (entry.homeworkStatus === "partial") {
+      items.push("숙제 일부 완료");
+    }
+    if (entry.vocabRetest) {
+      items.push("단어 재시험 필요");
+    }
+    if (entry.parentNoteNeeded && entry.parentNote.trim()) {
+      items.push("학부모 전달 필요");
+    }
+
+    if (items.length > 0) {
+      checkStudents.push({ name: student.name, items });
     }
   }
 
@@ -658,10 +973,23 @@ function CompletionSummary({
             </div>
           </div>
 
-          {makeupNames.length > 0 ? (
+          {checkStudents.length > 0 ? (
             <div className="rounded-2xl bg-[#fff7f5] p-3">
-              <div className="text-[11px] uppercase tracking-[0.12em] text-[#a26660]">보충 필요</div>
-              <div className="mt-1 font-medium text-[#8a5d52]">{makeupNames.join(", ")}</div>
+              <div className="text-[11px] uppercase tracking-[0.12em] text-[#a26660]">
+                오늘 체크할 학생 {checkStudents.length}명
+              </div>
+              <div className="mt-2 space-y-2">
+                {checkStudents.map((item) => (
+                  <div key={item.name}>
+                    <div className="font-medium text-[#8a5d52]">{item.name}</div>
+                    <ul className="mt-0.5 text-xs leading-5 text-[#a26660]">
+                      {item.items.map((flag) => (
+                        <li key={flag}>• {flag}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
 

@@ -9,32 +9,64 @@ import { StudentDeleteButton } from "@/components/student-delete-button";
 import { GuardedForm } from "@/components/unsaved-guard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { addDaysStr } from "@/lib/calendar";
+import { PendingButton } from "@/components/pending-button";
+import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
 import { formatKoreanDate, formatKoreanDateFull, todayDateString } from "@/lib/dates";
-import { gradeDisplay, gradeOptions } from "@/lib/grades";
+import {
+  focusLevelLabels,
+  homeworkStatusLabels,
+  participationLevelLabels,
+  praiseCategoryLabels,
+  vocabPercent,
+} from "@/lib/elementary";
+import { gradeDisplay, gradeOptions, isElementaryGrade } from "@/lib/grades";
 import { genderLabels } from "@/lib/validation/student";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import {
   getStudentLessonHistory,
   getStudentMakeups,
+  getStudentPraises,
   summarizeAttendance,
 } from "@/lib/supabase/queries/student-history";
 import { getStudentByIdForCurrentUser, getStudentGroupsForCurrentUser } from "@/lib/supabase/queries/students";
-import { updateStudentAction } from "../actions";
+import type { FocusLevel, HomeworkStatus, ParticipationLevel, PraiseCategory } from "@/lib/supabase/types";
+import { completeParentNoteAction, updateStudentAction } from "../actions";
+
+// 한국 기준 주 시작(월요일). 날짜 문자열만으로 계산해 timezone 밀림이 없다.
+function weekStartOf(ymd: string) {
+  return addDaysStr(ymd, -((dayOfWeekOf(ymd) + 6) % 7));
+}
 
 
 export default async function StudentDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ week?: string }>;
 }) {
   const { id } = await params;
-  const [student, groups, studentGroups, history, makeups] = await Promise.all([
+  const { week } = (await searchParams) ?? {};
+
+  const today = todayDateString();
+  const currentWeekStart = weekStartOf(today);
+  const requestedWeek =
+    week && /^\d{4}-\d{2}-\d{2}$/.test(week) ? weekStartOf(week) : currentWeekStart;
+  // 미래 주는 데이터가 없으므로 이번 주까지만
+  const weekStart = requestedWeek > currentWeekStart ? currentWeekStart : requestedWeek;
+  const weekEnd = addDaysStr(weekStart, 6);
+
+  // 칭찬은 (이번 달 집계 + 선택한 주) 를 덮는 기간만 조회
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const praiseSince = weekStart < monthStart ? weekStart : monthStart;
+
+  const [student, groups, studentGroups, history, makeups, praises] = await Promise.all([
     getStudentByIdForCurrentUser(id),
     getCurrentUserGroups(),
     getStudentGroupsForCurrentUser(id),
     getStudentLessonHistory(id),
     getStudentMakeups(id),
+    getStudentPraises(id, praiseSince),
   ]);
 
   if (!student) {
@@ -42,7 +74,7 @@ export default async function StudentDetailPage({
   }
 
   // 출결 요약은 최근 30일 기준 (오래된 결석이 계속 표시되지 않게)
-  const since = addDaysStr(todayDateString(), -30);
+  const since = addDaysStr(today, -30);
   const attendanceSummary = summarizeAttendance(
     history.filter((item) => (item.dailyLog?.class_date ?? "") >= since),
   );
@@ -52,6 +84,78 @@ export default async function StudentDetailPage({
     .slice(0, 5);
   const openMakeups = makeups.filter((makeup) => makeup.status === "required" || makeup.status === "scheduled");
   const pastMakeups = makeups.filter((makeup) => makeup.status === "completed" || makeup.status === "cancelled");
+
+  const isElementary = isElementaryGrade(student.grade);
+  const logDateById = new Map(
+    history.filter((item) => item.dailyLog).map((item) => [item.dailyLog!.id, item.dailyLog!.class_date]),
+  );
+  const praisesByLog = new Map<string, PraiseCategory[]>();
+  for (const praise of praises) {
+    if (praise.daily_log_id) {
+      praisesByLog.set(praise.daily_log_id, [
+        ...(praisesByLog.get(praise.daily_log_id) ?? []),
+        praise.category as PraiseCategory,
+      ]);
+    }
+  }
+  const monthPraiseCount = praises.filter(
+    (praise) => (praise.daily_log_id ? logDateById.get(praise.daily_log_id) ?? praise.created_at.slice(0, 10) : praise.created_at.slice(0, 10)) >= monthStart,
+  ).length;
+
+  // 단어시험 최근 결과 (데이터가 있는 기록만)
+  const vocabHistory = history
+    .filter((item) => item.vocab_correct !== null && (item.dailyLog?.vocab_total ?? 0) > 0)
+    .slice(0, 6);
+
+  // 학부모 전달
+  const pendingParentNotes = history.filter((item) => item.parent_note_status === "pending");
+  const completedParentNotes = history
+    .filter((item) => item.parent_note_status === "completed")
+    .slice(0, 5);
+
+  // ---- 주간 리포트 집계 (이미 불러온 history/praises에서 deterministic 계산) ----
+  const weekRecords = history
+    .filter((item) => {
+      const date = item.dailyLog?.class_date ?? "";
+      return date >= weekStart && date <= weekEnd;
+    })
+    .sort((a, b) => (a.dailyLog?.class_date ?? "").localeCompare(b.dailyLog?.class_date ?? ""));
+  const weekAttendance = summarizeAttendance(weekRecords);
+  const weekHomework = {
+    completed: weekRecords.filter((item) => item.homework_status === "completed").length,
+    partial: weekRecords.filter((item) => item.homework_status === "partial").length,
+    missing: weekRecords.filter((item) => item.homework_status === "missing").length,
+  };
+  const weekVocab = weekRecords
+    .filter((item) => item.vocab_correct !== null && (item.dailyLog?.vocab_total ?? 0) > 0)
+    .map((item) => vocabPercent(item.vocab_correct!, item.dailyLog!.vocab_total!));
+  const countLevels = (values: (string | null)[]) => {
+    const counts = new Map<string, number>();
+    for (const value of values) {
+      if (value) counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+    return counts;
+  };
+  const weekFocus = countLevels(weekRecords.map((item) => item.focus_level));
+  const weekParticipation = countLevels(weekRecords.map((item) => item.participation_level));
+  const weekPraiseCount = praises.filter((praise) => {
+    const date = praise.daily_log_id
+      ? logDateById.get(praise.daily_log_id) ?? praise.created_at.slice(0, 10)
+      : praise.created_at.slice(0, 10);
+    return date >= weekStart && date <= weekEnd;
+  }).length;
+  const weekStrengths = [
+    ...new Set(weekRecords.map((item) => item.strengths?.trim()).filter(Boolean) as string[]),
+  ].slice(0, 3);
+  const weekChecks = [
+    ...new Set(weekRecords.map((item) => item.improvements?.trim()).filter(Boolean) as string[]),
+  ].slice(0, 3);
+  if (weekRecords.some((item) => item.vocab_retest)) weekChecks.push("단어 재시험 필요");
+  if (weekHomework.missing > 0) weekChecks.push("숙제 확인 필요");
+  if (openMakeups.length > 0) weekChecks.push("보충 일정 확인");
+  if (pendingParentNotes.length > 0) weekChecks.push("학부모 전달 확인");
+  const prevWeek = addDaysStr(weekStart, -7);
+  const nextWeek = addDaysStr(weekStart, 7);
 
   return (
     <AppShell>
@@ -229,6 +333,47 @@ export default async function StudentDetailPage({
                             <BookOpen className="h-3 w-3 text-[#7c6d69]" /> {lesson.progress}
                           </div>
                         ) : null}
+                        {lesson.homework_status ||
+                        lesson.vocab_correct !== null ||
+                        lesson.focus_level ||
+                        lesson.participation_level ? (
+                          <div className="mt-1 text-xs tabular-nums text-[#564d4d]">
+                            {[
+                              lesson.homework_status
+                                ? `숙제 ${homeworkStatusLabels[lesson.homework_status as HomeworkStatus]}`
+                                : null,
+                              lesson.vocab_correct !== null && lesson.dailyLog?.vocab_total
+                                ? `단어 ${lesson.vocab_correct}/${lesson.dailyLog.vocab_total} (${vocabPercent(lesson.vocab_correct, lesson.dailyLog.vocab_total)}%)${lesson.vocab_retest ? " · 재시험 필요" : ""}`
+                                : null,
+                              lesson.focus_level
+                                ? `집중 ${focusLevelLabels[lesson.focus_level as FocusLevel]}`
+                                : null,
+                              lesson.participation_level
+                                ? `참여 ${participationLevelLabels[lesson.participation_level as ParticipationLevel]}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        ) : null}
+                        {lesson.dailyLog && (praisesByLog.get(lesson.dailyLog.id) ?? []).length > 0 ? (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {(praisesByLog.get(lesson.dailyLog.id) ?? []).map((category, praiseIndex) => (
+                              <span
+                                key={`${category}-${praiseIndex}`}
+                                className="rounded-full bg-[#fdf3e4] px-1.5 py-0.5 text-[10px] text-[#8a6828]"
+                              >
+                                ⭐ {praiseCategoryLabels[category]}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                        {lesson.parent_note ? (
+                          <div className="mt-1 text-xs text-[#96534c]">
+                            학부모 전달{lesson.parent_note_status === "completed" ? " (완료)" : ""} ·{" "}
+                            {lesson.parent_note}
+                          </div>
+                        ) : null}
                         {lesson.strengths ? (
                           <div className="mt-1 text-xs text-[#3d6d58]">잘한 점 · {lesson.strengths}</div>
                         ) : null}
@@ -288,9 +433,234 @@ export default async function StudentDetailPage({
                 </CardContent>
               </Card>
             ) : null}
+
+            <Card>
+              <CardHeader>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle>주간 리포트</CardTitle>
+                  <div className="flex items-center gap-1 text-xs">
+                    <Link
+                      href={`/students/${id}?week=${prevWeek}`}
+                      className="rounded-lg px-2 py-1 text-[#6b6b74] transition hover:bg-[#f4f4f6]"
+                    >
+                      ← 이전 주
+                    </Link>
+                    <span className="tabular-nums font-medium text-[#33333b]">
+                      {formatKoreanDate(weekStart)} ~ {formatKoreanDate(weekEnd)}
+                    </span>
+                    {weekStart < currentWeekStart ? (
+                      <Link
+                        href={`/students/${id}?week=${nextWeek}`}
+                        className="rounded-lg px-2 py-1 text-[#6b6b74] transition hover:bg-[#f4f4f6]"
+                      >
+                        다음 주 →
+                      </Link>
+                    ) : null}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {weekRecords.length === 0 ? (
+                  <div className="rounded-2xl bg-[#f8f3ef] p-4 text-sm text-[#655d5d]">
+                    이 주에는 수업 기록이 없어요.
+                  </div>
+                ) : (
+                  <div className="space-y-3 text-sm">
+                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                      <div className="rounded-2xl bg-[#edf9f3] p-3 text-center">
+                        <div className="text-[11px] text-[#3d7f64]">출석</div>
+                        <div className="mt-0.5 font-semibold tabular-nums text-[#2f6d54]">
+                          {weekAttendance.present + weekAttendance.late} / {weekAttendance.total}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-[#fdf3e4] p-3 text-center">
+                        <div className="text-[11px] text-[#94702f]">숙제 완료</div>
+                        <div className="mt-0.5 font-semibold tabular-nums text-[#8a6828]">
+                          {weekHomework.completed} /{" "}
+                          {weekHomework.completed + weekHomework.partial + weekHomework.missing}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-[#f0ecfb] p-3 text-center">
+                        <div className="text-[11px] text-[#54479c]">단어시험</div>
+                        <div className="mt-0.5 font-semibold tabular-nums text-[#54479c]">
+                          {weekVocab.length > 0 ? weekVocab.map((p) => `${p}`).join(" → ") : "-"}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-[#fdf8ec] p-3 text-center">
+                        <div className="text-[11px] text-[#8a6828]">칭찬</div>
+                        <div className="mt-0.5 font-semibold tabular-nums text-[#8a6828]">
+                          ⭐ {weekPraiseCount}
+                        </div>
+                      </div>
+                    </div>
+
+                    {weekFocus.size > 0 || weekParticipation.size > 0 ? (
+                      <div className="text-xs text-[#564d4d]">
+                        {[
+                          ...[...weekFocus.entries()].map(
+                            ([level, count]) =>
+                              `집중 ${focusLevelLabels[level as FocusLevel]} ${count}회`,
+                          ),
+                          ...[...weekParticipation.entries()].map(
+                            ([level, count]) =>
+                              `참여 ${participationLevelLabels[level as ParticipationLevel]} ${count}회`,
+                          ),
+                        ].join(" · ")}
+                      </div>
+                    ) : null}
+
+                    {weekStrengths.length > 0 ? (
+                      <div className="rounded-2xl bg-[#edf8f2] p-3">
+                        <div className="text-xs font-semibold text-[#2f5d4b]">잘한 점</div>
+                        <ul className="mt-1 space-y-0.5 text-xs leading-5 text-[#2f5d4b]">
+                          {weekStrengths.map((text) => (
+                            <li key={text}>• {text}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    {weekChecks.length > 0 ? (
+                      <div className="rounded-2xl bg-[#fff3ef] p-3">
+                        <div className="text-xs font-semibold text-[#8a5d52]">다음 주 체크</div>
+                        <ul className="mt-1 space-y-0.5 text-xs leading-5 text-[#8a5d52]">
+                          {[...new Set(weekChecks)].map((text) => (
+                            <li key={text}>• {text}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           <div className="space-y-5">
+            {pendingParentNotes.length > 0 || completedParentNotes.length > 0 ? (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle>학부모 전달</CardTitle>
+                    {pendingParentNotes.length > 0 ? (
+                      <span className="rounded-full bg-[#fff0ef] px-2.5 py-1 text-[11px] font-medium text-[#a26660]">
+                        전달 필요 {pendingParentNotes.length}
+                      </span>
+                    ) : null}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {pendingParentNotes.length === 0 ? (
+                    <div className="rounded-2xl bg-[#f8f3ef] p-3 text-xs text-[#655d5d]">
+                      전달할 내용이 없어요.
+                    </div>
+                  ) : (
+                    pendingParentNotes.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-2xl border border-[#f0ddd8] bg-[#fff9f7] p-3 text-xs"
+                      >
+                        <div className="font-medium text-[#8a5d52]">
+                          {formatKoreanDate(item.dailyLog?.class_date)}
+                        </div>
+                        <div className="mt-1 leading-5 text-[#564d4d]">{item.parent_note}</div>
+                        <form action={completeParentNoteAction.bind(null, item.id, id)} className="mt-2">
+                          <PendingButton variant="secondary" size="sm" pendingText="처리 중...">
+                            전달 완료
+                          </PendingButton>
+                        </form>
+                      </div>
+                    ))
+                  )}
+                  {completedParentNotes.length > 0 ? (
+                    <details>
+                      <summary className="cursor-pointer text-xs text-[#8a8a93]">
+                        전달 완료 기록 {completedParentNotes.length}건 보기
+                      </summary>
+                      <div className="mt-2 space-y-2">
+                        {completedParentNotes.map((item) => (
+                          <div key={item.id} className="rounded-2xl bg-[#f8f3ef] p-3 text-xs text-[#655d5d]">
+                            {formatKoreanDate(item.dailyLog?.class_date)} · {item.parent_note}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {isElementary || vocabHistory.length > 0 ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>단어시험</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {vocabHistory.length === 0 ? (
+                    <div className="rounded-2xl bg-[#f8f3ef] p-3 text-xs text-[#655d5d]">
+                      아직 단어시험 기록이 없어요.
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {vocabHistory.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between rounded-xl bg-[#f8f6fc] px-3 py-2 text-xs tabular-nums"
+                        >
+                          <span className="text-[#564d4d]">
+                            {formatKoreanDate(item.dailyLog?.class_date)}
+                          </span>
+                          <span className="font-medium text-[#33333b]">
+                            {item.vocab_correct} / {item.dailyLog?.vocab_total}
+                          </span>
+                          <span className="text-[#54479c]">
+                            {vocabPercent(item.vocab_correct!, item.dailyLog!.vocab_total!)}%
+                            {item.vocab_retest ? " · 재시험" : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {isElementary || praises.length > 0 ? (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle>칭찬 기록</CardTitle>
+                    <span className="rounded-full bg-[#fdf8ec] px-2.5 py-1 text-[11px] font-medium text-[#8a6828]">
+                      이번 달 ⭐ {monthPraiseCount}
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {praises.length === 0 ? (
+                    <div className="rounded-2xl bg-[#f8f3ef] p-3 text-xs text-[#655d5d]">
+                      수업일지에서 ⭐ 칭찬을 기록하면 여기에 모여요.
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {praises.slice(0, 6).map((praise) => (
+                        <div key={praise.id} className="flex items-center gap-2 text-xs text-[#564d4d]">
+                          <span>⭐</span>
+                          <span className="tabular-nums text-[#8a8a93]">
+                            {formatKoreanDate(
+                              praise.daily_log_id
+                                ? logDateById.get(praise.daily_log_id) ?? praise.created_at.slice(0, 10)
+                                : praise.created_at.slice(0, 10),
+                            )}
+                          </span>
+                          {praiseCategoryLabels[praise.category as PraiseCategory] ?? praise.category}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
+
             <Card>
               <CardHeader>
                 <CardTitle>소속 수업 그룹</CardTitle>

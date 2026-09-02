@@ -36,8 +36,9 @@ import {
   getGroupLatestProgress,
   getGroupRecentLogs,
   getGroupStudentsForCurrentUser,
+  getLessonQuickCheckCounts,
 } from "@/lib/supabase/queries/groups";
-import { gradeDisplay, gradeOptions } from "@/lib/grades";
+import { gradeDisplay, gradeOptions, isElementaryGrade } from "@/lib/grades";
 import { getCurrentUserMakeups } from "@/lib/supabase/queries/makeups";
 import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
 import { formatScheduleBlock, groupSchedulesByTime } from "@/lib/schedule";
@@ -83,6 +84,12 @@ export default async function GroupDetailPage({
     notFound();
   }
 
+  // 초등 그룹: 가장 최근 일지 기준의 체크 요약 (쿼리 1번 추가)
+  const isElementary = isElementaryGrade(group.grade);
+  const latestLog = recentLogs[0] ?? null;
+  const quickCheck =
+    isElementary && latestLog ? await getLessonQuickCheckCounts(latestLog.id) : null;
+
   const members = allMembers.filter((student) => !student.archived);
   const memberSet = new Set(allMembers.map((student) => student.id));
   const availableToAdd = availableStudents.filter((student) => !memberSet.has(student.id));
@@ -125,6 +132,49 @@ export default async function GroupDetailPage({
         {saved ? (
           <div className="mb-5 rounded-2xl border border-[#d8ebe0] bg-[#f0faf5] px-4 py-3 text-sm text-[#2f6d54]">
             수업 그룹 정보를 수정했어요.
+          </div>
+        ) : null}
+
+        {!isEditMode && quickCheck ? (
+          <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-medium text-[#4d3a3a]">최근 체크</span>
+            {latestLog ? (
+              <span className="text-xs text-[#8a7b77]">
+                ({formatKoreanDate(latestLog.class_date)} 수업 기준)
+              </span>
+            ) : null}
+            <Link
+              href={latestLog ? `/daily-logs/${latestLog.id}` : "/daily-logs"}
+              className="rounded-full bg-[#fdf3e4] px-2.5 py-1 text-xs tabular-nums text-[#94702f] transition hover:bg-[#fbeacb]"
+            >
+              숙제 미제출 {quickCheck.homeworkMissing}
+            </Link>
+            <Link
+              href={latestLog ? `/daily-logs/${latestLog.id}` : "/daily-logs"}
+              className="rounded-full bg-[#f0ecfb] px-2.5 py-1 text-xs tabular-nums text-[#54479c] transition hover:bg-[#e5dff5]"
+            >
+              재시험 {quickCheck.retest}
+            </Link>
+            <Link
+              href="/makeups"
+              className="rounded-full bg-[#efe8fb] px-2.5 py-1 text-xs tabular-nums text-[#5d4ba5] transition hover:bg-[#e2d8f5]"
+            >
+              보충 필요{" "}
+              {
+                allMakeups.filter(
+                  (makeup) =>
+                    (makeup.status === "required" || makeup.status === "scheduled") &&
+                    makeup.student &&
+                    memberIds.has(makeup.student.id),
+                ).length
+              }
+            </Link>
+            <Link
+              href={latestLog ? `/daily-logs/${latestLog.id}` : "/daily-logs"}
+              className="rounded-full bg-[#fff0ef] px-2.5 py-1 text-xs tabular-nums text-[#a26660] transition hover:bg-[#fbe2df]"
+            >
+              학부모 전달 {quickCheck.parentPending}
+            </Link>
           </div>
         ) : null}
 

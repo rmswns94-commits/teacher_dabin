@@ -91,6 +91,17 @@ export type PrettyWordRecord = {
 export type AttendanceStatus = "present" | "late" | "absent";
 export type DailyLogStatus = "draft" | "completed";
 export type MakeupStatus = "required" | "scheduled" | "completed" | "cancelled";
+export type HomeworkStatus = "completed" | "partial" | "missing";
+export type FocusLevel = "good" | "normal" | "distracted";
+export type ParticipationLevel = "active" | "normal" | "passive";
+export type ParentNoteStatus = "pending" | "completed";
+export type PraiseCategory =
+  | "homework"
+  | "focus"
+  | "participation"
+  | "vocabulary"
+  | "kindness"
+  | "other";
 
 export type DailyLogRecord = {
   id: string;
@@ -103,6 +114,7 @@ export type DailyLogRecord = {
   memo: string | null;
   homework: string | null;
   next_lesson_plan: string | null;
+  vocab_total: number | null;
   status: DailyLogStatus;
   created_at: string;
   updated_at: string;
@@ -118,8 +130,25 @@ export type StudentLessonLogRecord = {
   strengths: string | null;
   improvements: string | null;
   memo: string | null;
+  homework_status: HomeworkStatus | null;
+  vocab_correct: number | null;
+  vocab_retest: boolean;
+  focus_level: FocusLevel | null;
+  participation_level: ParticipationLevel | null;
+  parent_note: string | null;
+  parent_note_status: ParentNoteStatus | null;
+  parent_note_completed_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type StudentPraiseRecord = {
+  id: string;
+  user_id: string;
+  student_id: string;
+  daily_log_id: string | null;
+  category: PraiseCategory;
+  created_at: string;
 };
 
 export type MakeupLessonRecord = {

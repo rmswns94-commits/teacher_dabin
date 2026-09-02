@@ -230,6 +230,8 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     throw new Error("학생 정보를 확인하지 못했어요. 다시 시도해주세요.");
   }
 
+  const vocabTotal = input.vocabTotal ? Number(input.vocabTotal) : null;
+
   const headerPayload = {
     user_id: user.id,
     group_id: input.groupId,
@@ -240,6 +242,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     memo: input.memo?.trim() || null,
     homework: input.homework?.trim() || null,
     next_lesson_plan: input.nextLessonPlan?.trim() || null,
+    vocab_total: vocabTotal,
     status: input.status,
   };
 
@@ -282,16 +285,49 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     dailyLogId = created.id;
   }
 
-  const lessonPayload = input.students.map((entry) => ({
-    user_id: user.id,
-    daily_log_id: dailyLogId,
-    student_id: entry.studentId,
-    attendance: entry.attendance,
-    progress: entry.progress?.trim() || null,
-    strengths: entry.attendance === "absent" ? null : entry.strengths?.trim() || null,
-    improvements: entry.attendance === "absent" ? null : entry.improvements?.trim() || null,
-    memo: entry.memo?.trim() || null,
-  }));
+  // 학부모 전달 상태 보존: 이미 "전달 완료"한 기록을 일지 재저장이 pending으로
+  // 되돌리지 않도록, 내용이 그대로면 completed 상태를 유지한다.
+  const { data: existingLessonRows } = input.dailyLogId
+    ? await supabase
+        .from("student_lesson_logs")
+        .select("student_id, parent_note, parent_note_status, parent_note_completed_at")
+        .eq("user_id", user.id)
+        .eq("daily_log_id", dailyLogId)
+    : { data: [] };
+
+  const existingByStudent = new Map(
+    (existingLessonRows ?? []).map((row) => [row.student_id as string, row]),
+  );
+
+  const lessonPayload = input.students.map((entry) => {
+    const isAbsent = entry.attendance === "absent";
+    const parentNote = entry.parentNoteNeeded ? entry.parentNote?.trim() || null : null;
+    const existing = existingByStudent.get(entry.studentId);
+    const keepCompleted =
+      parentNote !== null &&
+      existing?.parent_note_status === "completed" &&
+      (existing.parent_note ?? "") === parentNote;
+
+    return {
+      user_id: user.id,
+      daily_log_id: dailyLogId,
+      student_id: entry.studentId,
+      attendance: entry.attendance,
+      progress: entry.progress?.trim() || null,
+      strengths: isAbsent ? null : entry.strengths?.trim() || null,
+      improvements: isAbsent ? null : entry.improvements?.trim() || null,
+      memo: entry.memo?.trim() || null,
+      // 초등 quick check: 결석 학생은 그날 수업 기반 평가를 남기지 않는다.
+      homework_status: isAbsent ? null : entry.homeworkStatus || null,
+      vocab_correct: isAbsent || !entry.vocabCorrect ? null : Number(entry.vocabCorrect),
+      vocab_retest: isAbsent ? false : Boolean(entry.vocabRetest),
+      focus_level: isAbsent ? null : entry.focusLevel || null,
+      participation_level: isAbsent ? null : entry.participationLevel || null,
+      parent_note: parentNote,
+      parent_note_status: parentNote === null ? null : keepCompleted ? "completed" : "pending",
+      parent_note_completed_at: keepCompleted ? existing?.parent_note_completed_at ?? null : null,
+    };
+  });
 
   const { data: savedLessonLogs, error: lessonError } = await supabase
     .from("student_lesson_logs")
@@ -375,5 +411,60 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     }
   }
 
+  // 칭찬 동기화: 이 일지에 대한 칭찬을 폼 상태 그대로 교체한다 (멱등).
+  // 학생별 개별 쿼리 없이 delete 1번 + insert 1번.
+  const praiseRows = input.students.flatMap((entry) =>
+    (entry.praises ?? []).map((category) => ({
+      user_id: user.id,
+      student_id: entry.studentId,
+      daily_log_id: dailyLogId,
+      category,
+    })),
+  );
+
+  const { error: praiseDeleteError } = await supabase
+    .from("student_praises")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("daily_log_id", dailyLogId);
+
+  if (praiseDeleteError) {
+    console.error("saveDailyLog praise delete error", praiseDeleteError);
+    throw new Error("칭찬 기록을 저장하지 못했어요. 저장 버튼을 다시 눌러주세요.");
+  }
+
+  if (praiseRows.length > 0) {
+    const { error: praiseInsertError } = await supabase.from("student_praises").insert(praiseRows);
+
+    if (praiseInsertError) {
+      console.error("saveDailyLog praise insert error", praiseInsertError);
+      throw new Error("칭찬 기록을 저장하지 못했어요. 저장 버튼을 다시 눌러주세요.");
+    }
+  }
+
   return dailyLogId;
+}
+
+// 일지 수정 화면에서 기존 칭찬을 폼 상태로 복원할 때 사용 (쿼리 1번).
+export async function getPraisesForDailyLog(dailyLogId: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as { student_id: string; category: string }[];
+  }
+
+  const { data, error } = await supabase
+    .from("student_praises")
+    .select("student_id, category")
+    .eq("user_id", user.id)
+    .eq("daily_log_id", dailyLogId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("getPraisesForDailyLog error", error);
+    return [] as { student_id: string; category: string }[];
+  }
+
+  return (data ?? []) as { student_id: string; category: string }[];
 }

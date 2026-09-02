@@ -35,3 +35,8 @@ export const gradeOptions = gradeValues.map((value) => ({
 export function formatGrade(grade: string) {
   return gradeDisplay[grade as StudentGrade] ?? grade;
 }
+
+// 초등 그룹/학생 판단의 단일 소스 (별도 DB field 없이 기존 grade 사용)
+export function isElementaryGrade(grade: string) {
+  return grade.startsWith("elementary");
+}
