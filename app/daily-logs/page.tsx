@@ -471,8 +471,16 @@ export default async function DailyLogsPage({
                       return (
                         <Link
                           key={log.id}
-                          href={buildQuery({ month, date: selectedDate, groupId, status, log: log.id })}
+                          // 선택된 카드를 다시 클릭하면 선택 해제 → 상세가 닫힌다
+                          href={buildQuery({
+                            month,
+                            date: selectedDate,
+                            groupId,
+                            status,
+                            log: isActive ? null : log.id,
+                          })}
                           aria-current={isActive ? "true" : undefined}
+                          aria-expanded={isActive}
                           className={cn(
                             "flex items-center gap-3.5 rounded-2xl border-2 border-dashed px-4 py-4 transition",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d9c1e8]",
