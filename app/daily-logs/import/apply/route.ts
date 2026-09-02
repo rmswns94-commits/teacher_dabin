@@ -153,6 +153,7 @@ export async function POST(request: Request) {
   revalidatePath("/daily-logs");
   revalidatePath("/groups");
   revalidatePath("/dashboard");
+  revalidatePath("/growth-notes", "layout");
 
   console.log(
     `excel import apply: created=${result.created} updated=${result.updated} kept=${result.kept} failed=${result.failed.length}`,

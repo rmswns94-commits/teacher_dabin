@@ -13,6 +13,7 @@ import {
   LogOut,
   Menu,
   NotebookPen,
+  Sprout,
   Users,
   X,
 } from "lucide-react";
@@ -321,6 +322,14 @@ export function Sidebar({
 
         <div className="py-4">
           <ul className="space-y-1.5">
+            <li>
+              <NavLink
+                label="성장노트"
+                href="/growth-notes"
+                icon={Sprout}
+                isActive={isActive("/growth-notes")}
+              />
+            </li>
             <li>
               <NavLink
                 label="이쁜 말♥"

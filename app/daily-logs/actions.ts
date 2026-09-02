@@ -31,5 +31,7 @@ export async function saveDailyLogAction(input: DailyLogFormInput) {
   revalidatePath(`/daily-logs/${dailyLogId}`);
   revalidatePath("/makeups");
   revalidatePath("/dashboard");
+  // 관찰값(질문/배려/노력 등) 변경이 성장노트 주간 판정에 바로 반영되게 한다
+  revalidatePath("/growth-notes", "layout");
   redirect(`/daily-logs/${dailyLogId}?saved=1`);
 }
