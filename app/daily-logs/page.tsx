@@ -146,11 +146,17 @@ export default async function DailyLogsPage({
 
   const dateParamValid = params.date && params.date.slice(0, 7) === month ? params.date : null;
   const selectedDate = dateParamValid ?? (month === currentMonth ? today : null);
-  const dateLogs = selectedDate ? byDate.get(selectedDate) ?? [] : [];
 
-  // 날짜를 선택하면 첫 수업을 자동 선택 (filter로 제외된 log는 selection 해제)
+  // 목록은 시작 시간을 알 수 있으면 시간순으로 (모르면 원래 순서, 가짜 시간 금지)
+  const dateLogs = [...(selectedDate ? (byDate.get(selectedDate) ?? []) : [])].sort((a, b) => {
+    const timeA = selectedDate ? (timeFor(a.group_id, selectedDate) ?? "99:99") : "99:99";
+    const timeB = selectedDate ? (timeFor(b.group_id, selectedDate) ?? "99:99") : "99:99";
+    return timeA.localeCompare(timeB);
+  });
+
+  // 상세는 사용자가 반을 직접 클릭했을 때만 (자동 선택 금지 — 날짜만 바꾸면 항상 초기화)
   const logParamValid = params.log && dateLogs.some((log) => log.id === params.log) ? params.log : null;
-  const selectedLogId = logParamValid ?? dateLogs[0]?.id ?? null;
+  const selectedLogId = logParamValid;
   const [detail, detailPraises] = selectedLogId
     ? await Promise.all([
         getDailyLogDetailForCurrentUser(selectedLogId),
@@ -504,7 +510,11 @@ export default async function DailyLogsPage({
                     ) : (
                       <Card>
                         <CardContent className="p-6 text-sm text-[#8a7b77]">
-                          반을 선택하면 그날의 수업 기록이 여기에 펼쳐져요 📖
+                          확인할 수업을 선택해주세요.
+                          <br />
+                          <span className="text-xs text-[#a08d97]">
+                            반을 클릭하면 작성한 수업일지를 볼 수 있어요 📖
+                          </span>
                         </CardContent>
                       </Card>
                     )}
