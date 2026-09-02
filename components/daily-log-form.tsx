@@ -34,7 +34,13 @@ import {
   vocabPercent,
 } from "@/lib/elementary";
 import { gradeDisplay, isElementaryGrade } from "@/lib/grades";
-import type { AttendanceStatus, PraiseCategory, StudentGrade } from "@/lib/supabase/types";
+import { growthAchievementValues, growthDescriptions, growthLabels } from "@/lib/growth";
+import type {
+  AttendanceStatus,
+  GrowthAchievementType,
+  PraiseCategory,
+  StudentGrade,
+} from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
 export type DailyLogFormStudent = {
@@ -55,6 +61,7 @@ export type DailyLogFormStudent = {
     parentNote?: string;
   };
   praises?: PraiseCategory[];
+  growthChecks?: GrowthAchievementType[];
   makeup?: {
     status: "required" | "scheduled" | "completed" | "cancelled";
     scheduledDate: string;
@@ -80,6 +87,7 @@ type EntryState = {
   parentNoteNeeded: boolean;
   parentNote: string;
   praises: PraiseCategory[];
+  growthChecks: GrowthAchievementType[];
 };
 
 function initEntry(student: DailyLogFormStudent): EntryState {
@@ -104,6 +112,7 @@ function initEntry(student: DailyLogFormStudent): EntryState {
     parentNoteNeeded: Boolean(student.entry?.parentNote),
     parentNote: student.entry?.parentNote ?? "",
     praises: student.praises ?? [],
+    growthChecks: student.growthChecks ?? [],
   };
 }
 
@@ -273,6 +282,7 @@ export function DailyLogForm({
             parentNoteNeeded: entry.parentNoteNeeded,
             parentNote: entry.parentNote,
             praises: entry.praises,
+            growthChecks: entry.growthChecks,
           };
         }),
       });
@@ -662,6 +672,64 @@ export function DailyLogForm({
                           onChange={(next) => updateEntry(student.studentId, { participationLevel: next })}
                           activeClass="border-[#d3cbee] bg-[#f0ecfb] text-[#54479c]"
                         />
+                      </div>
+
+                      <div>
+                        <div className="mb-1.5 text-xs font-semibold text-[#7c6d69]">
+                          오늘의 성장 🌱
+                        </div>
+                        <div
+                          className="flex flex-wrap gap-1.5"
+                          role="group"
+                          aria-label={`${student.name} 오늘의 성장 체크`}
+                        >
+                          {growthAchievementValues.map((type) => {
+                            const selected = entry.growthChecks.includes(type);
+                            // 오늘 기록 기반 가벼운 추천 표시 (자동 저장 아님)
+                            const recommended =
+                              !selected &&
+                              ((type === "focus_master" && entry.focusLevel === "good") ||
+                                (type === "presentation_master" &&
+                                  entry.participationLevel === "active") ||
+                                (type === "vocabulary_master" &&
+                                  Boolean(entry.vocabCorrect) &&
+                                  Boolean(vocabTotal.trim()) &&
+                                  entry.vocabCorrect === vocabTotal.trim()) ||
+                                (type === "consistency_master" &&
+                                  entry.homeworkStatus === "completed"));
+
+                            return (
+                              <button
+                                key={type}
+                                type="button"
+                                aria-pressed={selected}
+                                title={growthDescriptions[type]}
+                                onClick={() =>
+                                  updateEntry(student.studentId, {
+                                    growthChecks: selected
+                                      ? entry.growthChecks.filter((item) => item !== type)
+                                      : [...entry.growthChecks, type],
+                                  })
+                                }
+                                className={cn(
+                                  "relative min-h-[36px] rounded-full border px-2.5 py-1 text-xs font-medium transition",
+                                  selected
+                                    ? "border-[#cbe0d3] bg-[#e9f6ef] text-[#2f6d54]"
+                                    : "border-[#ece0db] bg-white text-[#8a7b77] hover:bg-[#faf6f3]",
+                                )}
+                              >
+                                {selected ? "✓ " : ""}
+                                {growthLabels[type]}
+                                {recommended ? (
+                                  <span
+                                    aria-label="오늘 기록 기반 추천"
+                                    className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[#a8d8bd]"
+                                  />
+                                ) : null}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">

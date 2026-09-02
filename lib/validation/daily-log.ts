@@ -34,6 +34,21 @@ export const studentLessonEntrySchema = z.object({
     .array(z.enum(["homework", "focus", "participation", "vocabulary", "kindness", "other"]))
     .max(20, "칭찬은 수업당 20개까지 기록할 수 있어요.")
     .optional(),
+  growthChecks: z
+    .array(
+      z.enum([
+        "question_master",
+        "attendance_master",
+        "vocabulary_master",
+        "effort_master",
+        "consistency_master",
+        "presentation_master",
+        "kindness_master",
+        "focus_master",
+      ]),
+    )
+    .max(8)
+    .optional(),
 });
 
 export const dailyLogSchema = z

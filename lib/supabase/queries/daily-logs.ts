@@ -450,7 +450,65 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     }
   }
 
+  // 성장 체크 동기화: 칭찬과 동일하게 일지 단위 delete+insert 멱등 처리.
+  // (같은 수업·학생·항목은 unique 제약으로도 중복이 막힌다)
+  const growthRows = input.students.flatMap((entry) =>
+    entry.attendance === "absent"
+      ? []
+      : [...new Set(entry.growthChecks ?? [])].map((achievementType) => ({
+          user_id: user.id,
+          student_id: entry.studentId,
+          daily_log_id: dailyLogId,
+          achievement_type: achievementType,
+        })),
+  );
+
+  const { error: growthDeleteError } = await supabase
+    .from("student_growth_checks")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("daily_log_id", dailyLogId);
+
+  if (growthDeleteError) {
+    console.error("saveDailyLog growth delete error", growthDeleteError);
+    throw new Error("성장 체크를 저장하지 못했어요. 저장 버튼을 다시 눌러주세요.");
+  }
+
+  if (growthRows.length > 0) {
+    const { error: growthInsertError } = await supabase
+      .from("student_growth_checks")
+      .insert(growthRows);
+
+    if (growthInsertError) {
+      console.error("saveDailyLog growth insert error", growthInsertError);
+      throw new Error("성장 체크를 저장하지 못했어요. 저장 버튼을 다시 눌러주세요.");
+    }
+  }
+
   return dailyLogId;
+}
+
+// 일지 수정 화면에서 기존 성장 체크를 폼 상태로 복원할 때 사용 (쿼리 1번).
+export async function getGrowthChecksForDailyLog(dailyLogId: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as { student_id: string; achievement_type: string }[];
+  }
+
+  const { data, error } = await supabase
+    .from("student_growth_checks")
+    .select("student_id, achievement_type")
+    .eq("user_id", user.id)
+    .eq("daily_log_id", dailyLogId);
+
+  if (error) {
+    console.error("getGrowthChecksForDailyLog error", error);
+    return [] as { student_id: string; achievement_type: string }[];
+  }
+
+  return (data ?? []) as { student_id: string; achievement_type: string }[];
 }
 
 // Excel import용: 지정 날짜들의 기존 일지를 쿼리 1번으로 조회 (row별 조회 금지).

@@ -20,16 +20,24 @@ import {
   vocabPercent,
 } from "@/lib/elementary";
 import { gradeDisplay, gradeOptions, isElementaryGrade } from "@/lib/grades";
+import { computeWeeklyGrowth, growthAchievedSentences, growthLabels } from "@/lib/growth";
 import { genderLabels } from "@/lib/validation/student";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import {
+  getStudentGrowthChecks,
   getStudentLessonHistory,
   getStudentMakeups,
   getStudentPraises,
   summarizeAttendance,
 } from "@/lib/supabase/queries/student-history";
 import { getStudentByIdForCurrentUser, getStudentGroupsForCurrentUser } from "@/lib/supabase/queries/students";
-import type { FocusLevel, HomeworkStatus, ParticipationLevel, PraiseCategory } from "@/lib/supabase/types";
+import type {
+  FocusLevel,
+  GrowthAchievementType,
+  HomeworkStatus,
+  ParticipationLevel,
+  PraiseCategory,
+} from "@/lib/supabase/types";
 import { completeParentNoteAction, updateStudentAction } from "../actions";
 
 // 한국 기준 주 시작(월요일). 날짜 문자열만으로 계산해 timezone 밀림이 없다.
@@ -60,14 +68,16 @@ export default async function StudentDetailPage({
   const monthStart = `${today.slice(0, 7)}-01`;
   const praiseSince = weekStart < monthStart ? weekStart : monthStart;
 
-  const [student, groups, studentGroups, history, makeups, praises] = await Promise.all([
-    getStudentByIdForCurrentUser(id),
-    getCurrentUserGroups(),
-    getStudentGroupsForCurrentUser(id),
-    getStudentLessonHistory(id),
-    getStudentMakeups(id),
-    getStudentPraises(id, praiseSince),
-  ]);
+  const [student, groups, studentGroups, history, makeups, praises, growthChecks] =
+    await Promise.all([
+      getStudentByIdForCurrentUser(id),
+      getCurrentUserGroups(),
+      getStudentGroupsForCurrentUser(id),
+      getStudentLessonHistory(id),
+      getStudentMakeups(id),
+      getStudentPraises(id, praiseSince),
+      getStudentGrowthChecks(id, praiseSince),
+    ]);
 
   if (!student) {
     notFound();
@@ -98,6 +108,14 @@ export default async function StudentDetailPage({
       ]);
     }
   }
+  const growthByLog = new Map<string, GrowthAchievementType[]>();
+  for (const growthCheck of growthChecks) {
+    growthByLog.set(growthCheck.daily_log_id, [
+      ...(growthByLog.get(growthCheck.daily_log_id) ?? []),
+      growthCheck.achievement_type as GrowthAchievementType,
+    ]);
+  }
+
   const monthPraiseCount = praises.filter(
     (praise) => (praise.daily_log_id ? logDateById.get(praise.daily_log_id) ?? praise.created_at.slice(0, 10) : praise.created_at.slice(0, 10)) >= monthStart,
   ).length;
@@ -156,6 +174,40 @@ export default async function StudentDetailPage({
   if (pendingParentNotes.length > 0) weekChecks.push("학부모 전달 확인");
   const prevWeek = addDaysStr(weekStart, -7);
   const nextWeek = addDaysStr(weekStart, 7);
+
+  // ---- 이번 주 성장 스탬프/성취 (manual 체크 + 객관 기록을 rule로 판정) ----
+  const inWeek = (dailyLogId: string | null, createdAt: string) => {
+    const date = dailyLogId
+      ? (logDateById.get(dailyLogId) ?? createdAt.slice(0, 10))
+      : createdAt.slice(0, 10);
+    return date >= weekStart && date <= weekEnd;
+  };
+  const weeklyGrowth = computeWeeklyGrowth({
+    weekRecords: weekRecords.map((item) => ({
+      dailyLogId: item.dailyLog?.id ?? null,
+      attendance: item.attendance,
+      homeworkStatus: item.homework_status,
+      focusLevel: item.focus_level,
+      participationLevel: item.participation_level,
+    })),
+    weekChecks: growthChecks
+      .filter((checkItem) => inWeek(checkItem.daily_log_id, checkItem.created_at))
+      .map((checkItem) => ({
+        dailyLogId: checkItem.daily_log_id,
+        achievementType: checkItem.achievement_type as GrowthAchievementType,
+      })),
+    weekPraises: praises
+      .filter((praise) => inWeek(praise.daily_log_id, praise.created_at))
+      .map((praise) => ({ dailyLogId: praise.daily_log_id, category: praise.category })),
+    // 단어시험 추이는 전체 최근 기록 기준 (오래된 → 최신)
+    recentVocabPercents: history
+      .filter((item) => item.vocab_correct !== null && (item.dailyLog?.vocab_total ?? 0) > 0)
+      .sort((a, b) => (a.dailyLog?.class_date ?? "").localeCompare(b.dailyLog?.class_date ?? ""))
+      .map((item) => vocabPercent(item.vocab_correct!, item.dailyLog!.vocab_total!)!),
+    recentHomeworkStatuses: history
+      .filter((item) => item.homework_status !== null)
+      .map((item) => item.homework_status!),
+  });
 
   return (
     <AppShell>
@@ -368,6 +420,14 @@ export default async function StudentDetailPage({
                             ))}
                           </div>
                         ) : null}
+                        {lesson.dailyLog && (growthByLog.get(lesson.dailyLog.id) ?? []).length > 0 ? (
+                          <div className="mt-1 text-xs text-[#2f6d54]">
+                            오늘의 성장 🌱{" "}
+                            {(growthByLog.get(lesson.dailyLog.id) ?? [])
+                              .map((type) => growthLabels[type])
+                              .join(" · ")}
+                          </div>
+                        ) : null}
                         {lesson.parent_note ? (
                           <div className="mt-1 text-xs text-[#96534c]">
                             학부모 전달{lesson.parent_note_status === "completed" ? " (완료)" : ""} ·{" "}
@@ -506,6 +566,32 @@ export default async function StudentDetailPage({
                               `참여 ${participationLevelLabels[level as ParticipationLevel]} ${count}회`,
                           ),
                         ].join(" · ")}
+                      </div>
+                    ) : null}
+
+                    {weeklyGrowth.achieved.length > 0 ? (
+                      <div className="rounded-2xl bg-[#e9f6ef] p-3">
+                        <div className="text-xs font-semibold text-[#2f6d54]">이번 주 성장 스탬프 🌱</div>
+                        <ul className="mt-1 space-y-0.5 text-xs leading-5 text-[#2f6d54]">
+                          {weeklyGrowth.achieved.map((type) => (
+                            <li key={type}>
+                              <span className="font-semibold">{growthLabels[type]}</span> ·{" "}
+                              {growthAchievedSentences[type]}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                    {Object.entries(weeklyGrowth.evidenceCounts).some(([, count]) => (count ?? 0) > 0) ? (
+                      <div className="text-xs text-[#8a7b77]">
+                        이번 주 관찰:{" "}
+                        {Object.entries(weeklyGrowth.evidenceCounts)
+                          .filter(([, count]) => (count ?? 0) > 0)
+                          .map(
+                            ([type, count]) =>
+                              `${growthLabels[type as GrowthAchievementType]} ${count}회`,
+                          )
+                          .join(" · ")}
                       </div>
                     ) : null}
 

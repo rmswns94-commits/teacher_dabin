@@ -142,6 +142,25 @@ export type StudentLessonLogRecord = {
   updated_at: string;
 };
 
+export type GrowthAchievementType =
+  | "question_master"
+  | "attendance_master"
+  | "vocabulary_master"
+  | "effort_master"
+  | "consistency_master"
+  | "presentation_master"
+  | "kindness_master"
+  | "focus_master";
+
+export type StudentGrowthCheckRecord = {
+  id: string;
+  user_id: string;
+  student_id: string;
+  daily_log_id: string;
+  achievement_type: GrowthAchievementType;
+  created_at: string;
+};
+
 export type StudentPraiseRecord = {
   id: string;
   user_id: string;
