@@ -47,6 +47,8 @@ export type GrowthBadge = {
 export type StudentGrowthCardSummary = {
   studentId: string;
   studentName: string;
+  // 반 필터는 이름이 아니라 stable id로 매칭한다 (동명 그룹 안전)
+  groupIds: string[];
   groupNames: string[];
   achievements: GrowthBadge[];
   praiseCount: number;

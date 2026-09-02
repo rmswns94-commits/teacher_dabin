@@ -38,14 +38,13 @@ export default async function GrowthNotesPage() {
   ]);
 
   const groupNameById = new Map(groups.map((group) => [group.id, group.name]));
-  const groupNamesByStudent = new Map<string, string[]>();
+  const groupIdsByStudent = new Map<string, string[]>();
   for (const membership of memberships) {
-    const name = groupNameById.get(membership.group_id);
-    if (!name) continue;
-    const names = groupNamesByStudent.get(membership.student_id) ?? [];
-    if (!names.includes(name)) {
-      names.push(name);
-      groupNamesByStudent.set(membership.student_id, names);
+    if (!groupNameById.has(membership.group_id)) continue;
+    const ids = groupIdsByStudent.get(membership.student_id) ?? [];
+    if (!ids.includes(membership.group_id)) {
+      ids.push(membership.group_id);
+      groupIdsByStudent.set(membership.student_id, ids);
     }
   }
 
@@ -88,10 +87,13 @@ export default async function GrowthNotesPage() {
           .map((row) => vocabPercent(row.vocab_correct!, row.vocab_total!)!),
       });
 
+      const groupIds = groupIdsByStudent.get(student.id) ?? [];
+
       return {
         studentId: student.id,
         studentName: student.name,
-        groupNames: groupNamesByStudent.get(student.id) ?? [],
+        groupIds,
+        groupNames: groupIds.map((groupId) => groupNameById.get(groupId)!),
         achievements: growth.achieved.map(toGrowthBadge),
         praiseCount: praiseCountByStudent.get(student.id) ?? 0,
       };
