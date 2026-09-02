@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronsDown, ChevronsUp } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 // 긴 페이지에서 위/아래로 빠르게 이동하는 floating 버튼.
@@ -94,13 +94,13 @@ export function ScrollJumpButton() {
           onClick={jump}
           aria-label={label}
           title={label}
-          className="fixed right-5 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-[#e6dceb] bg-white/90 text-[#6d5aa8] shadow-[0_4px_14px_rgba(120,109,164,0.18)] backdrop-blur-sm transition hover:bg-[#f5f1fb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d9c1e8] md:right-7"
-          style={{ bottom: "calc(84px + env(safe-area-inset-bottom))" }}
+          className="fixed right-4 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-[#eadfe6] bg-white/90 text-[#8a7ba8] shadow-[0_2px_8px_rgba(120,109,164,0.14)] transition hover:bg-[#f5f1fb] hover:text-[#6d5aa8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d9c1e8] md:h-10 md:w-10"
+          style={{ bottom: "calc(16px + env(safe-area-inset-bottom))" }}
         >
           {state === "up" ? (
-            <ChevronsUp className="h-5 w-5" aria-hidden />
+            <ChevronUp className="h-[18px] w-[18px]" aria-hidden />
           ) : (
-            <ChevronsDown className="h-5 w-5" aria-hidden />
+            <ChevronDown className="h-[18px] w-[18px]" aria-hidden />
           )}
         </button>
       ) : null}
