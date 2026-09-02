@@ -8,6 +8,12 @@ import { AttendanceBadge, DailyLogStatusBadge, MakeupStatusBadge } from "@/compo
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatKoreanDate } from "@/lib/dates";
+import {
+  focusLevelLabels,
+  homeworkStatusLabels,
+  participationLevelLabels,
+  vocabPercent,
+} from "@/lib/elementary";
 import { getDailyLogDetailForCurrentUser } from "@/lib/supabase/queries/daily-logs";
 
 export default async function DailyLogDetailPage({
@@ -168,6 +174,37 @@ export default async function DailyLogDetailPage({
                         <span className="font-medium">진도:</span>
                         {lessonLog.progress || "기록 없음"}
                       </div>
+
+                      {lessonLog.homework_status ||
+                      lessonLog.vocab_correct !== null ||
+                      lessonLog.focus_level ||
+                      lessonLog.participation_level ? (
+                        <div className="text-sm tabular-nums text-[#564d4d]">
+                          {[
+                            lessonLog.homework_status
+                              ? `숙제 ${homeworkStatusLabels[lessonLog.homework_status]}`
+                              : null,
+                            lessonLog.vocab_correct !== null && log.vocab_total
+                              ? `단어 ${lessonLog.vocab_correct}/${log.vocab_total} (${vocabPercent(lessonLog.vocab_correct, log.vocab_total)}%)${lessonLog.vocab_retest ? " · 재시험 필요" : ""}`
+                              : null,
+                            lessonLog.focus_level ? `집중 ${focusLevelLabels[lessonLog.focus_level]}` : null,
+                            lessonLog.participation_level
+                              ? `참여 ${participationLevelLabels[lessonLog.participation_level]}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </div>
+                      ) : null}
+
+                      {lessonLog.parent_note ? (
+                        <div className="rounded-2xl bg-[#fff5f2] p-3 text-sm text-[#96534c]">
+                          <span className="text-xs font-semibold">
+                            학부모 전달{lessonLog.parent_note_status === "completed" ? " (완료)" : " 필요"}
+                          </span>
+                          <div className="mt-0.5">{lessonLog.parent_note}</div>
+                        </div>
+                      ) : null}
 
                       {lessonLog.strengths || lessonLog.improvements ? (
                         <div className="grid gap-3 md:grid-cols-2">
