@@ -92,6 +92,22 @@ export function ScheduleFieldsEditor() {
     }
   };
 
+  // "수업 시간 추가"를 누르지 않고 바로 등록해도 선택이 유실되지 않도록,
+  // 유효하게 채워진 pending picker 값을 제출 hidden input에 함께 포함한다.
+  // (블록 수정 중이거나, 이미 블록과 겹치는 요일은 제외해 중복/충돌을 막는다)
+  const pendingValid = editingKey === null && validatePickerValue(picker) === null;
+  const pendingDays = pendingValid
+    ? picker.days.filter(
+        (day) =>
+          !blocks.some(
+            (block) =>
+              block.days.includes(day) &&
+              picker.startTime < block.endTime &&
+              block.startTime < picker.endTime,
+          ),
+      )
+    : [];
+
   return (
     <div className="space-y-3">
       {blocks.length > 0 ? (
@@ -135,6 +151,13 @@ export function ScheduleFieldsEditor() {
 
         {error ? <p className="mt-2 text-xs text-[#a2665f]">{error}</p> : null}
 
+        {pendingDays.length > 0 ? (
+          <p className="mt-2 text-xs text-[#3d7f64]">
+            선택한 {formatDayList(pendingDays)} {picker.startTime}~{picker.endTime} 시간은 그룹
+            등록 시 함께 저장돼요.
+          </p>
+        ) : null}
+
         <button
           type="button"
           onClick={addBlock}
@@ -155,6 +178,13 @@ export function ScheduleFieldsEditor() {
           </Fragment>
         )),
       )}
+      {pendingDays.map((day) => (
+        <Fragment key={`pending-${day}`}>
+          <input type="hidden" name="scheduleDay" value={day} />
+          <input type="hidden" name="scheduleStart" value={picker.startTime} />
+          <input type="hidden" name="scheduleEnd" value={picker.endTime} />
+        </Fragment>
+      ))}
     </div>
   );
 }

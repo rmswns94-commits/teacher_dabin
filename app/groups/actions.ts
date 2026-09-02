@@ -67,6 +67,22 @@ function parseScheduleRows(formData: FormData):
     }
   }
 
+  // 안전장치: 시간 선택기에 값을 채워놓고 (요일만·시간만 등 불완전하게)
+  // 확정하지 않은 채 제출하면, 조용히 시간 없는 그룹을 만들지 않고 알려준다.
+  if (rows.length === 0) {
+    const pickerTouched =
+      formData.getAll("pickerDays").map(String).some(Boolean) ||
+      formData.getAll("pickerStart").map(String).some(Boolean) ||
+      formData.getAll("pickerEnd").map(String).some(Boolean);
+
+    if (pickerTouched) {
+      return {
+        error:
+          "선택한 수업 시간이 아직 완성되지 않았어요. 요일과 시작/종료 시간을 모두 선택하면 등록 시 함께 저장돼요.",
+      };
+    }
+  }
+
   return { rows };
 }
 
