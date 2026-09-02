@@ -94,6 +94,9 @@ export type MakeupStatus = "required" | "scheduled" | "completed" | "cancelled";
 export type HomeworkStatus = "completed" | "partial" | "missing";
 export type FocusLevel = "good" | "normal" | "distracted";
 export type ParticipationLevel = "active" | "normal" | "passive";
+export type QuestionLevel = "high" | "normal" | "low";
+export type KindnessLevel = "good" | "normal" | "poor";
+export type EffortLevel = "high" | "normal" | "low";
 export type ParentNoteStatus = "pending" | "completed";
 export type PraiseCategory =
   | "homework"
@@ -135,6 +138,9 @@ export type StudentLessonLogRecord = {
   vocab_retest: boolean;
   focus_level: FocusLevel | null;
   participation_level: ParticipationLevel | null;
+  question_level: QuestionLevel | null;
+  kindness_level: KindnessLevel | null;
+  effort_level: EffortLevel | null;
   parent_note: string | null;
   parent_note_status: ParentNoteStatus | null;
   parent_note_completed_at: string | null;

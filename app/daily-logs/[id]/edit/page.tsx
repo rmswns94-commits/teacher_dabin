@@ -8,18 +8,16 @@ import { Button } from "@/components/ui/button";
 import { formatKoreanDate } from "@/lib/dates";
 import {
   getDailyLogDetailForCurrentUser,
-  getGrowthChecksForDailyLog,
   getPraisesForDailyLog,
 } from "@/lib/supabase/queries/daily-logs";
 import { getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
-import type { GrowthAchievementType, PraiseCategory } from "@/lib/supabase/types";
+import type { PraiseCategory } from "@/lib/supabase/types";
 
 export default async function EditDailyLogPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [log, praiseRows, growthRows] = await Promise.all([
+  const [log, praiseRows] = await Promise.all([
     getDailyLogDetailForCurrentUser(id),
     getPraisesForDailyLog(id),
-    getGrowthChecksForDailyLog(id),
   ]);
 
   if (!log) {
@@ -31,14 +29,6 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
     praisesByStudent.set(praise.student_id, [
       ...(praisesByStudent.get(praise.student_id) ?? []),
       praise.category as PraiseCategory,
-    ]);
-  }
-
-  const growthByStudent = new Map<string, GrowthAchievementType[]>();
-  for (const growthCheck of growthRows) {
-    growthByStudent.set(growthCheck.student_id, [
-      ...(growthByStudent.get(growthCheck.student_id) ?? []),
-      growthCheck.achievement_type as GrowthAchievementType,
     ]);
   }
 
@@ -66,10 +56,12 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           vocabRetest: lessonLog.vocab_retest,
           focusLevel: lessonLog.focus_level ?? "",
           participationLevel: lessonLog.participation_level ?? "",
+          questionLevel: lessonLog.question_level ?? "",
+          kindnessLevel: lessonLog.kindness_level ?? "",
+          effortLevel: lessonLog.effort_level ?? "",
           parentNote: lessonLog.parent_note ?? "",
         },
         praises: praisesByStudent.get(lessonLog.student!.id) ?? [],
-        growthChecks: growthByStudent.get(lessonLog.student!.id) ?? [],
         makeup: makeup
           ? {
               status: makeup.status,

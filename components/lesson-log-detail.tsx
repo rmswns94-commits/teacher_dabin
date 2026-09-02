@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate } from "@/lib/dates";
 import {
+  effortLevelLabels,
   focusLevelLabels,
   homeworkStatusLabels,
+  kindnessLevelLabels,
   participationLevelLabels,
   praiseCategoryLabels,
+  questionLevelLabels,
   vocabPercent,
 } from "@/lib/elementary";
 import type { DailyLogDetail } from "@/lib/supabase/queries/daily-logs";
@@ -180,6 +183,15 @@ export function LessonLogDetail({
                           lessonLog.focus_level ? `집중 ${focusLevelLabels[lessonLog.focus_level]}` : null,
                           lessonLog.participation_level
                             ? `참여 ${participationLevelLabels[lessonLog.participation_level]}`
+                            : null,
+                          lessonLog.question_level
+                            ? `질문 ${questionLevelLabels[lessonLog.question_level]}`
+                            : null,
+                          lessonLog.kindness_level
+                            ? `배려 ${kindnessLevelLabels[lessonLog.kindness_level]}`
+                            : null,
+                          lessonLog.effort_level
+                            ? `노력 ${effortLevelLabels[lessonLog.effort_level]}`
                             : null,
                         ]
                           .filter(Boolean)

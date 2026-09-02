@@ -13,18 +13,25 @@ import { PendingButton } from "@/components/pending-button";
 import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
 import { formatKoreanDate, formatKoreanDateFull, todayDateString } from "@/lib/dates";
 import {
+  effortLevelLabels,
   focusLevelLabels,
   homeworkStatusLabels,
+  kindnessLevelLabels,
   participationLevelLabels,
   praiseCategoryLabels,
+  questionLevelLabels,
   vocabPercent,
 } from "@/lib/elementary";
 import { gradeDisplay, gradeOptions, isElementaryGrade } from "@/lib/grades";
-import { computeWeeklyGrowth, growthAchievedSentences, growthLabels } from "@/lib/growth";
+import {
+  computeWeeklyGrowth,
+  growthAchievedSentences,
+  growthEmojis,
+  growthLabels,
+} from "@/lib/growth";
 import { genderLabels } from "@/lib/validation/student";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import {
-  getStudentGrowthChecks,
   getStudentLessonHistory,
   getStudentMakeups,
   getStudentPraises,
@@ -68,16 +75,14 @@ export default async function StudentDetailPage({
   const monthStart = `${today.slice(0, 7)}-01`;
   const praiseSince = weekStart < monthStart ? weekStart : monthStart;
 
-  const [student, groups, studentGroups, history, makeups, praises, growthChecks] =
-    await Promise.all([
-      getStudentByIdForCurrentUser(id),
-      getCurrentUserGroups(),
-      getStudentGroupsForCurrentUser(id),
-      getStudentLessonHistory(id),
-      getStudentMakeups(id),
-      getStudentPraises(id, praiseSince),
-      getStudentGrowthChecks(id, praiseSince),
-    ]);
+  const [student, groups, studentGroups, history, makeups, praises] = await Promise.all([
+    getStudentByIdForCurrentUser(id),
+    getCurrentUserGroups(),
+    getStudentGroupsForCurrentUser(id),
+    getStudentLessonHistory(id),
+    getStudentMakeups(id),
+    getStudentPraises(id, praiseSince),
+  ]);
 
   if (!student) {
     notFound();
@@ -108,14 +113,6 @@ export default async function StudentDetailPage({
       ]);
     }
   }
-  const growthByLog = new Map<string, GrowthAchievementType[]>();
-  for (const growthCheck of growthChecks) {
-    growthByLog.set(growthCheck.daily_log_id, [
-      ...(growthByLog.get(growthCheck.daily_log_id) ?? []),
-      growthCheck.achievement_type as GrowthAchievementType,
-    ]);
-  }
-
   const monthPraiseCount = praises.filter(
     (praise) => (praise.daily_log_id ? logDateById.get(praise.daily_log_id) ?? praise.created_at.slice(0, 10) : praise.created_at.slice(0, 10)) >= monthStart,
   ).length;
@@ -175,38 +172,22 @@ export default async function StudentDetailPage({
   const prevWeek = addDaysStr(weekStart, -7);
   const nextWeek = addDaysStr(weekStart, 7);
 
-  // ---- 이번 주 성장 스탬프/성취 (manual 체크 + 객관 기록을 rule로 판정) ----
-  const inWeek = (dailyLogId: string | null, createdAt: string) => {
-    const date = dailyLogId
-      ? (logDateById.get(dailyLogId) ?? createdAt.slice(0, 10))
-      : createdAt.slice(0, 10);
-    return date >= weekStart && date <= weekEnd;
-  };
+  // ---- 이번 주 성장 성취 자동 판정 (Teacher가 왕을 고르지 않음 — 관찰값 기반 rule) ----
   const weeklyGrowth = computeWeeklyGrowth({
     weekRecords: weekRecords.map((item) => ({
-      dailyLogId: item.dailyLog?.id ?? null,
       attendance: item.attendance,
       homeworkStatus: item.homework_status,
       focusLevel: item.focus_level,
       participationLevel: item.participation_level,
+      questionLevel: item.question_level,
+      kindnessLevel: item.kindness_level,
+      effortLevel: item.effort_level,
     })),
-    weekChecks: growthChecks
-      .filter((checkItem) => inWeek(checkItem.daily_log_id, checkItem.created_at))
-      .map((checkItem) => ({
-        dailyLogId: checkItem.daily_log_id,
-        achievementType: checkItem.achievement_type as GrowthAchievementType,
-      })),
-    weekPraises: praises
-      .filter((praise) => inWeek(praise.daily_log_id, praise.created_at))
-      .map((praise) => ({ dailyLogId: praise.daily_log_id, category: praise.category })),
     // 단어시험 추이는 전체 최근 기록 기준 (오래된 → 최신)
     recentVocabPercents: history
       .filter((item) => item.vocab_correct !== null && (item.dailyLog?.vocab_total ?? 0) > 0)
       .sort((a, b) => (a.dailyLog?.class_date ?? "").localeCompare(b.dailyLog?.class_date ?? ""))
       .map((item) => vocabPercent(item.vocab_correct!, item.dailyLog!.vocab_total!)!),
-    recentHomeworkStatuses: history
-      .filter((item) => item.homework_status !== null)
-      .map((item) => item.homework_status!),
   });
 
   return (
@@ -403,6 +384,15 @@ export default async function StudentDetailPage({
                               lesson.participation_level
                                 ? `참여 ${participationLevelLabels[lesson.participation_level as ParticipationLevel]}`
                                 : null,
+                              lesson.question_level
+                                ? `질문 ${questionLevelLabels[lesson.question_level]}`
+                                : null,
+                              lesson.kindness_level
+                                ? `배려 ${kindnessLevelLabels[lesson.kindness_level]}`
+                                : null,
+                              lesson.effort_level
+                                ? `노력 ${effortLevelLabels[lesson.effort_level]}`
+                                : null,
                             ]
                               .filter(Boolean)
                               .join(" · ")}
@@ -418,14 +408,6 @@ export default async function StudentDetailPage({
                                 ⭐ {praiseCategoryLabels[category]}
                               </span>
                             ))}
-                          </div>
-                        ) : null}
-                        {lesson.dailyLog && (growthByLog.get(lesson.dailyLog.id) ?? []).length > 0 ? (
-                          <div className="mt-1 text-xs text-[#2f6d54]">
-                            오늘의 성장 🌱{" "}
-                            {(growthByLog.get(lesson.dailyLog.id) ?? [])
-                              .map((type) => growthLabels[type])
-                              .join(" · ")}
                           </div>
                         ) : null}
                         {lesson.parent_note ? (
@@ -571,10 +553,11 @@ export default async function StudentDetailPage({
 
                     {weeklyGrowth.achieved.length > 0 ? (
                       <div className="rounded-2xl bg-[#e9f6ef] p-3">
-                        <div className="text-xs font-semibold text-[#2f6d54]">이번 주 성장 스탬프 🌱</div>
+                        <div className="text-xs font-semibold text-[#2f6d54]">이번 주 성장 🌱</div>
                         <ul className="mt-1 space-y-0.5 text-xs leading-5 text-[#2f6d54]">
                           {weeklyGrowth.achieved.map((type) => (
                             <li key={type}>
+                              {growthEmojis[type]}{" "}
                               <span className="font-semibold">{growthLabels[type]}</span> ·{" "}
                               {growthAchievedSentences[type]}
                             </li>
@@ -582,14 +565,22 @@ export default async function StudentDetailPage({
                         </ul>
                       </div>
                     ) : null}
-                    {Object.entries(weeklyGrowth.evidenceCounts).some(([, count]) => (count ?? 0) > 0) ? (
+                    {weeklyGrowth.vocabTrend ? (
+                      <div className="rounded-2xl bg-[#f0ecfb] p-3 text-xs text-[#54479c]">
+                        📝 단어 성장 · {weeklyGrowth.vocabTrend.from}점 →{" "}
+                        {weeklyGrowth.vocabTrend.to}점 ({weeklyGrowth.vocabTrend.rise}점 성장했어요!)
+                      </div>
+                    ) : null}
+                    {Object.entries(weeklyGrowth.stats).some(
+                      ([, stat]) => (stat?.evaluated ?? 0) > 0,
+                    ) ? (
                       <div className="text-xs text-[#8a7b77]">
                         이번 주 관찰:{" "}
-                        {Object.entries(weeklyGrowth.evidenceCounts)
-                          .filter(([, count]) => (count ?? 0) > 0)
+                        {Object.entries(weeklyGrowth.stats)
+                          .filter(([, stat]) => (stat?.evaluated ?? 0) > 0)
                           .map(
-                            ([type, count]) =>
-                              `${growthLabels[type as GrowthAchievementType]} ${count}회`,
+                            ([type, stat]) =>
+                              `${growthLabels[type as GrowthAchievementType]} ${stat!.positive}/${stat!.evaluated}`,
                           )
                           .join(" · ")}
                       </div>

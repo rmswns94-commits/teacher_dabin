@@ -1,24 +1,26 @@
 import type { GrowthAchievementType } from "@/lib/supabase/types";
 
-// "오늘의 성장" 체크와 주간 성취 판정의 단일 소스.
+// 8개 성장 Achievement 자동 판정 엔진 (단일 소스).
 //
-// 역할 분리 (매우 중요):
-//  - Daily Log의 성장 체크 = 선생님이 그날 발견한 긍정 행동의 "근거 기록"
-//  - 주간 리포트의 최종 성취 = 아래 rule이 누적 데이터로 판정
-//    · 객관 데이터가 있는 항목(개근/단어왕/노력왕/꾸준함왕)은 DB 기록 rule이 우선,
-//      manual 체크만으로 획득되지 않는다.
-//    · 관찰 중심 항목(질문왕/발표왕/배려왕/집중왕)은 체크+기존 기록을 합산하되
-//      같은 수업(daily_log)의 동일 행동은 1회로 dedup한다.
+// Teacher는 왕을 직접 고르지 않는다 — Daily Log에 실제 관찰값만 기록하고,
+// 이 rule engine이 주간 누적 데이터로 자동 계산한다.
+//
+// Mapping:
+//   출결 → 개근 / 숙제 → 꾸준함왕 / 단어시험 → 단어왕 / 집중 → 집중왕
+//   참여 → 발표왕 / 질문 → 질문왕 / 배려 → 배려왕 / 노력 → 노력왕
+//
+// Null 원칙: 미입력(null)은 "보통/나쁨"이 아니라 평가 제외 — denominator에서 뺀다.
+// legacy manual growth check(student_growth_checks)는 보존하되 판정에 사용하지 않는다.
 
 export const growthAchievementValues = [
-  "question_master",
   "attendance_master",
-  "vocabulary_master",
-  "effort_master",
   "consistency_master",
-  "presentation_master",
-  "kindness_master",
+  "vocabulary_master",
   "focus_master",
+  "presentation_master",
+  "question_master",
+  "kindness_master",
+  "effort_master",
 ] as const;
 
 export const growthLabels: Record<GrowthAchievementType, string> = {
@@ -32,137 +34,147 @@ export const growthLabels: Record<GrowthAchievementType, string> = {
   focus_master: "집중왕",
 };
 
-// chip hover/aria용 짧은 설명 (그날의 관찰 의미)
-export const growthDescriptions: Record<GrowthAchievementType, string> = {
-  question_master: "궁금한 것을 적극적으로 질문했어요.",
-  attendance_master: "오늘 성실하게 참여했어요.",
-  vocabulary_master: "단어 학습에서 특히 좋은 모습을 보였어요.",
-  effort_master: "결과와 무관하게 노력하는 모습이 눈에 띄었어요.",
-  consistency_master: "학습 습관을 꾸준히 유지했어요.",
-  presentation_master: "발표에 자신 있게 참여했어요.",
-  kindness_master: "친구를 배려하는 멋진 모습을 보여줬어요.",
-  focus_master: "수업 집중이 특히 좋았어요.",
+export const growthEmojis: Record<GrowthAchievementType, string> = {
+  attendance_master: "🏫",
+  consistency_master: "📚",
+  vocabulary_master: "🏆",
+  focus_master: "🎯",
+  presentation_master: "🙋",
+  question_master: "💬",
+  kindness_master: "💗",
+  effort_master: "🌱",
 };
 
-// 주간 성취 문장 (학생/리포트용)
 export const growthAchievedSentences: Record<GrowthAchievementType, string> = {
-  question_master: "이번 주 적극적으로 질문했어요.",
-  attendance_master: "이번 주 수업에 모두 출석했어요.",
-  vocabulary_master: "최근 단어시험을 연속 만점으로 통과했어요.",
-  effort_master: "단어시험 점수가 꾸준히 크게 올랐어요.",
-  consistency_master: "숙제를 연속으로 모두 해왔어요.",
-  presentation_master: "발표에 자신 있게 참여했어요.",
-  kindness_master: "친구를 배려하는 모습을 보여줬어요.",
-  focus_master: "수업 집중이 꾸준히 좋았어요.",
+  attendance_master: "이번 주 수업에 빠짐없이 참여했어요!",
+  consistency_master: "이번 주 숙제를 빠짐없이 완료했어요!",
+  vocabulary_master: "최근 단어시험에서 100점을 3번 연속 달성했어요!",
+  focus_master: "이번 주 수업에 집중하는 모습이 정말 좋았어요!",
+  presentation_master: "수업과 발표에 적극적으로 참여했어요!",
+  question_master: "궁금한 것을 적극적으로 질문했어요!",
+  kindness_master: "친구를 배려하는 멋진 모습을 자주 보여줬어요!",
+  effort_master: "어려운 것도 포기하지 않고 꾸준히 노력했어요!",
 };
 
-// 노력왕: 최근 3회 상승 + 총 상승폭 기준 (%p)
-export const EFFORT_RISE_THRESHOLD = 15;
+// ---- threshold config (component에서 숫자 hard-code 금지) ----
+export const GROWTH_CONFIG = {
+  question: { minSamples: 2, positiveRatio: 0.6 },
+  kindness: { minSamples: 2, positiveRatio: 0.6 },
+  effort: { minSamples: 2, positiveRatio: 0.6 },
+  focus: { minSamples: 2, positiveRatio: 0.7 },
+  participation: { minSamples: 2, positiveRatio: 0.6 },
+  homework: { minSamples: 2, positiveRatio: 1.0 },
+  vocabPerfectStreak: 3,
+} as const;
+
+export type GrowthStat = { evaluated: number; positive: number; ratio: number };
+
+// 공통 ratio helper: null/undefined는 denominator 제외
+export function calculatePositiveRatio<T>(
+  records: T[],
+  getValue: (record: T) => string | null | undefined,
+  positiveValue: string,
+): GrowthStat {
+  let evaluated = 0;
+  let positive = 0;
+
+  for (const record of records) {
+    const value = getValue(record);
+
+    if (value === null || value === undefined || value === "") {
+      continue;
+    }
+
+    evaluated += 1;
+    if (value === positiveValue) positive += 1;
+  }
+
+  return { evaluated, positive, ratio: evaluated > 0 ? positive / evaluated : 0 };
+}
 
 export type WeeklyGrowthInput = {
-  // 이번 주 수업 기록 (수업 1회 = 1항목)
+  // 이번 주 학생별 수업 기록 (미입력 field는 null)
   weekRecords: {
-    dailyLogId: string | null;
     attendance: "present" | "late" | "absent";
     homeworkStatus: "completed" | "partial" | "missing" | null;
     focusLevel: "good" | "normal" | "distracted" | null;
     participationLevel: "active" | "normal" | "passive" | null;
+    questionLevel: "high" | "normal" | "low" | null;
+    kindnessLevel: "good" | "normal" | "poor" | null;
+    effortLevel: "high" | "normal" | "low" | null;
   }[];
-  // 이번 주 성장 체크 (수업당 항목별 1개 — DB unique 보장)
-  weekChecks: { dailyLogId: string; achievementType: GrowthAchievementType }[];
-  // 이번 주 칭찬 (kindness dedup용)
-  weekPraises: { dailyLogId: string | null; category: string }[];
-  // 최근 단어시험 % 목록 (오래된 → 최신), 유효 시험만
+  // 최근 유효 단어시험 % (오래된 → 최신)
   recentVocabPercents: number[];
-  // 최근 숙제 체크가 있는 기록의 상태 (최신 → 과거)
-  recentHomeworkStatuses: ("completed" | "partial" | "missing")[];
 };
 
 export type WeeklyGrowthResult = {
   achieved: GrowthAchievementType[];
-  // 관찰 evidence 횟수 (dedup 후, 수업 단위)
-  evidenceCounts: Partial<Record<GrowthAchievementType, number>>;
+  stats: Partial<Record<GrowthAchievementType, GrowthStat>>;
+  // 단어 점수 상승은 노력왕 판정과 분리된 "성장 사실"로만 제공
+  vocabTrend: { from: number; to: number; rise: number } | null;
 };
 
-function checkedLogs(
-  checks: WeeklyGrowthInput["weekChecks"],
-  type: GrowthAchievementType,
-) {
-  return new Set(checks.filter((c) => c.achievementType === type).map((c) => c.dailyLogId));
+function meets(stat: GrowthStat, config: { minSamples: number; positiveRatio: number }) {
+  return stat.evaluated >= config.minSamples && stat.ratio >= config.positiveRatio;
 }
 
 export function computeWeeklyGrowth(input: WeeklyGrowthInput): WeeklyGrowthResult {
   const achieved: GrowthAchievementType[] = [];
-  const evidenceCounts: WeeklyGrowthResult["evidenceCounts"] = {};
+  const stats: WeeklyGrowthResult["stats"] = {};
+  const records = input.weekRecords;
 
-  // ---- 관찰 중심 (수업 단위 dedup: 같은 수업의 체크+기록은 1회) ----
-
-  // 질문왕: question 체크 수업 3회 이상
-  const questionLogs = checkedLogs(input.weekChecks, "question_master");
-  evidenceCounts.question_master = questionLogs.size;
-  if (questionLogs.size >= 3) achieved.push("question_master");
-
-  // 발표왕: presentation 체크 ∪ 참여=적극 수업 3회 이상
-  const presentationLogs = checkedLogs(input.weekChecks, "presentation_master");
-  for (const record of input.weekRecords) {
-    if (record.participationLevel === "active" && record.dailyLogId) {
-      presentationLogs.add(record.dailyLogId);
-    }
-  }
-  evidenceCounts.presentation_master = presentationLogs.size;
-  if (presentationLogs.size >= 3) achieved.push("presentation_master");
-
-  // 배려왕: kindness 체크 ∪ kindness 칭찬 수업 2회 이상
-  const kindnessLogs = checkedLogs(input.weekChecks, "kindness_master");
-  for (const praise of input.weekPraises) {
-    if (praise.category === "kindness" && praise.dailyLogId) {
-      kindnessLogs.add(praise.dailyLogId);
-    }
-  }
-  evidenceCounts.kindness_master = kindnessLogs.size;
-  if (kindnessLogs.size >= 2) achieved.push("kindness_master");
-
-  // 집중왕: focus 체크 ∪ 집중=좋음 수업 3회 이상
-  const focusLogs = checkedLogs(input.weekChecks, "focus_master");
-  for (const record of input.weekRecords) {
-    if (record.focusLevel === "good" && record.dailyLogId) {
-      focusLogs.add(record.dailyLogId);
-    }
-  }
-  evidenceCounts.focus_master = focusLogs.size;
-  if (focusLogs.size >= 3) achieved.push("focus_master");
-
-  // ---- 객관 데이터 rule (manual 체크는 획득에 영향 없음) ----
-
-  // 개근: 이번 주 수업이 있고 전부 출석 (지각/결석 없음)
-  if (
-    input.weekRecords.length > 0 &&
-    input.weekRecords.every((record) => record.attendance === "present")
-  ) {
+  // 개근: 이번 주 수업이 있고 전부 present (지각/결석 없음)
+  if (records.length > 0 && records.every((record) => record.attendance === "present")) {
     achieved.push("attendance_master");
   }
 
+  // 꾸준함왕: 숙제 평가 >= 2 + 전부 완료 (100%)
+  const homework = calculatePositiveRatio(records, (r) => r.homeworkStatus, "completed");
+  stats.consistency_master = homework;
+  if (meets(homework, GROWTH_CONFIG.homework)) achieved.push("consistency_master");
+
   // 단어왕: 최근 유효 시험 3회 모두 100%
-  const lastThree = input.recentVocabPercents.slice(-3);
-  if (lastThree.length === 3 && lastThree.every((percent) => percent === 100)) {
+  const lastThree = input.recentVocabPercents.slice(-GROWTH_CONFIG.vocabPerfectStreak);
+  if (
+    lastThree.length === GROWTH_CONFIG.vocabPerfectStreak &&
+    lastThree.every((percent) => percent === 100)
+  ) {
     achieved.push("vocabulary_master");
   }
 
-  // 노력왕: 최근 3회 연속 상승 + 총 상승폭 기준 이상
-  if (
-    lastThree.length === 3 &&
-    lastThree[0] < lastThree[1] &&
-    lastThree[1] < lastThree[2] &&
-    lastThree[2] - lastThree[0] >= EFFORT_RISE_THRESHOLD
-  ) {
-    achieved.push("effort_master");
+  // 집중왕 / 발표왕 / 질문왕 / 배려왕 / 노력왕: 평가된 값 기준 ratio rule
+  const focus = calculatePositiveRatio(records, (r) => r.focusLevel, "good");
+  stats.focus_master = focus;
+  if (meets(focus, GROWTH_CONFIG.focus)) achieved.push("focus_master");
+
+  const participation = calculatePositiveRatio(records, (r) => r.participationLevel, "active");
+  stats.presentation_master = participation;
+  if (meets(participation, GROWTH_CONFIG.participation)) achieved.push("presentation_master");
+
+  const question = calculatePositiveRatio(records, (r) => r.questionLevel, "high");
+  stats.question_master = question;
+  if (meets(question, GROWTH_CONFIG.question)) achieved.push("question_master");
+
+  const kindness = calculatePositiveRatio(records, (r) => r.kindnessLevel, "good");
+  stats.kindness_master = kindness;
+  if (meets(kindness, GROWTH_CONFIG.kindness)) achieved.push("kindness_master");
+
+  const effort = calculatePositiveRatio(records, (r) => r.effortLevel, "high");
+  stats.effort_master = effort;
+  if (meets(effort, GROWTH_CONFIG.effort)) achieved.push("effort_master");
+
+  // 단어 성장 사실: 최근 3회가 하락 없이 상승했을 때 (노력왕과 무관한 정보)
+  let vocabTrend: WeeklyGrowthResult["vocabTrend"] = null;
+  if (lastThree.length >= 2) {
+    const nonDecreasing = lastThree.every(
+      (percent, index) => index === 0 || percent >= lastThree[index - 1],
+    );
+    const rise = lastThree[lastThree.length - 1] - lastThree[0];
+
+    if (nonDecreasing && rise > 0) {
+      vocabTrend = { from: lastThree[0], to: lastThree[lastThree.length - 1], rise };
+    }
   }
 
-  // 꾸준함왕: 숙제 체크가 있는 최근 5회 모두 완료
-  const lastFiveHomework = input.recentHomeworkStatuses.slice(0, 5);
-  if (lastFiveHomework.length === 5 && lastFiveHomework.every((s) => s === "completed")) {
-    achieved.push("consistency_master");
-  }
-
-  return { achieved, evidenceCounts };
+  return { achieved, stats, vocabTrend };
 }

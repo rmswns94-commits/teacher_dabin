@@ -150,36 +150,6 @@ export async function getStudentPraises(studentId: string, sinceDate: string) {
   return (data ?? []) as { id: string; category: string; daily_log_id: string | null; created_at: string }[];
 }
 
-// 학생 상세용: 최근 성장 체크 (기간 제한 조회)
-export async function getStudentGrowthChecks(studentId: string, sinceDate: string) {
-  const supabase = await createServerSupabaseClient();
-  const user = await getServerUser();
-
-  if (!supabase || !user) {
-    return [] as { id: string; achievement_type: string; daily_log_id: string; created_at: string }[];
-  }
-
-  const { data, error } = await supabase
-    .from("student_growth_checks")
-    .select("id, achievement_type, daily_log_id, created_at")
-    .eq("user_id", user.id)
-    .eq("student_id", studentId)
-    .gte("created_at", `${sinceDate}T00:00:00+09:00`)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("getStudentGrowthChecks error", error);
-    return [] as { id: string; achievement_type: string; daily_log_id: string; created_at: string }[];
-  }
-
-  return (data ?? []) as {
-    id: string;
-    achievement_type: string;
-    daily_log_id: string;
-    created_at: string;
-  }[];
-}
-
 export async function getStudentMakeups(studentId: string) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();

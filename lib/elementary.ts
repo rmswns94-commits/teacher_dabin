@@ -1,8 +1,11 @@
 import type {
+  EffortLevel,
   FocusLevel,
   HomeworkStatus,
+  KindnessLevel,
   ParticipationLevel,
   PraiseCategory,
+  QuestionLevel,
 } from "@/lib/supabase/types";
 
 // 초등 학생 기록 라벨/톤의 단일 소스 (폼·상세·리포트 공용)
@@ -26,6 +29,27 @@ export const participationLevelLabels: Record<ParticipationLevel, string> = {
   active: "적극",
   normal: "보통",
   passive: "소극",
+};
+
+export const questionLevelValues = ["high", "normal", "low"] as const;
+export const questionLevelLabels: Record<QuestionLevel, string> = {
+  high: "많음",
+  normal: "보통",
+  low: "적음",
+};
+
+export const kindnessLevelValues = ["good", "normal", "poor"] as const;
+export const kindnessLevelLabels: Record<KindnessLevel, string> = {
+  good: "좋음",
+  normal: "보통",
+  poor: "나쁨",
+};
+
+export const effortLevelValues = ["high", "normal", "low"] as const;
+export const effortLevelLabels: Record<EffortLevel, string> = {
+  high: "많음",
+  normal: "보통",
+  low: "적음",
 };
 
 export const praiseCategoryValues = [
