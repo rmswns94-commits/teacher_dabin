@@ -35,7 +35,7 @@ export function LessonLogDetail({
 }: {
   detail: DailyLogDetail;
   timeRange: string | null;
-  praises?: { student_id: string; category: string }[];
+  praises?: { student_id: string; category: string; comment?: string | null }[];
 }) {
   const counts = { present: 0, late: 0, absent: 0 };
   for (const log of detail.lessonLogs) {
@@ -48,11 +48,15 @@ export function LessonLogDetail({
       .map((makeup) => [makeup.student_lesson_log_id, makeup]),
   );
 
-  const praisesByStudent = new Map<string, PraiseCategory[]>();
+  // 칭찬 한표(comment)는 문장으로, legacy category 칭찬은 기존 라벨 chip으로 표시
+  const praisesByStudent = new Map<string, string[]>();
   for (const praise of praises) {
+    const label = praise.comment
+      ? `💜 ${praise.comment}`
+      : `⭐ ${praiseCategoryLabels[praise.category as PraiseCategory] ?? praise.category}`;
     praisesByStudent.set(praise.student_id, [
       ...(praisesByStudent.get(praise.student_id) ?? []),
-      praise.category as PraiseCategory,
+      label,
     ]);
   }
 
@@ -132,12 +136,12 @@ export function LessonLogDetail({
                     {lessonLog.student?.name ?? "학생"}
                   </span>
                   <AttendanceBadge status={lessonLog.attendance} />
-                  {studentPraises.map((category, praiseIndex) => (
+                  {studentPraises.map((label, praiseIndex) => (
                     <span
-                      key={`${category}-${praiseIndex}`}
+                      key={`${label}-${praiseIndex}`}
                       className="rounded-full bg-[#fdf3e4] px-1.5 py-0.5 text-[10px] text-[#8a6828]"
                     >
-                      ⭐ {praiseCategoryLabels[category]}
+                      {label}
                     </span>
                   ))}
                 </div>

@@ -13,7 +13,6 @@ import type {
   HomeworkStatus,
   KindnessLevel,
   ParticipationLevel,
-  PraiseCategory,
   QuestionLevel,
 } from "@/lib/supabase/types";
 
@@ -62,6 +61,8 @@ export type StudentGrowthNoteViewModel = {
   hasWeekRecords: boolean;
   badges: GrowthBadge[];
   encouragement: string;
+  // Teacher가 [칭찬 한표]로 직접 남긴 주간 코멘트 (원문, 최대 3개) — 관찰값과 별개 source
+  teacherPraises: string[];
   goodThings: string[];
   homework: { completed: number; evaluated: number; sentence: string } | null;
   vocab: { percents: number[]; rise: number | null; sentence: string | null } | null;
@@ -87,15 +88,6 @@ const observationPhrases: Partial<Record<GrowthAchievementType, string>> = {
   effort_master: "어려운 문제도 끝까지 해보려고 노력했어요.",
   presentation_master: "수업에 자신 있게 참여했어요.",
   focus_master: "수업에 집중하는 모습을 보여줬어요.",
-};
-
-const praisePhrases: Record<PraiseCategory, string> = {
-  homework: "숙제를 성실하게 잘 챙겨왔어요.",
-  focus: "수업에 집중하는 모습을 보여줬어요.",
-  participation: "수업에 자신 있게 참여했어요.",
-  vocabulary: "단어시험을 열심히 준비했어요.",
-  kindness: "친구를 배려하는 모습을 보여줬어요.",
-  other: "선생님에게 특별한 칭찬을 받았어요.",
 };
 
 // ---- 이번 주의 한마디 (deterministic — AI provider가 없는 환경에서도 항상 동작) ----
@@ -174,8 +166,8 @@ export type BuildGrowthNoteInput = {
   weekRecords: GrowthNoteLessonRecord[];
   // 선택한 주 이전까지의 최근 유효 단어시험 % (오래된 → 최신, bounded)
   recentVocabPercents: number[];
-  // 이번 주 칭찬 category 목록 (내용은 category 라벨 기반 문장만 사용)
-  weekPraiseCategories: PraiseCategory[];
+  // 이번 주 Teacher manual 칭찬 코멘트 원문 (오래된 → 최신)
+  weekPraiseComments: string[];
 };
 
 export function buildGrowthNoteViewModel(input: BuildGrowthNoteInput): StudentGrowthNoteViewModel {
@@ -194,7 +186,8 @@ export function buildGrowthNoteViewModel(input: BuildGrowthNoteInput): StudentGr
     recentVocabPercents: input.recentVocabPercents,
   });
 
-  // 잘한 일: 관찰값에서 positive가 1회라도 있으면 대표 문장 1개 + 칭찬 category 문장 (중복 제거)
+  // 잘한 일: structured 관찰값에서 positive가 1회라도 있으면 대표 문장 1개 (중복/반복 금지).
+  // Teacher manual 칭찬은 여기 섞지 않는다 — "이번 주 선생님의 칭찬"이 별도 섹션.
   const goodThings: string[] = [];
   for (const [type, phrase] of Object.entries(observationPhrases) as [
     GrowthAchievementType,
@@ -205,12 +198,12 @@ export function buildGrowthNoteViewModel(input: BuildGrowthNoteInput): StudentGr
       goodThings.push(phrase);
     }
   }
-  for (const category of input.weekPraiseCategories) {
-    const phrase = praisePhrases[category];
-    if (phrase && !goodThings.includes(phrase)) {
-      goodThings.push(phrase);
-    }
-  }
+
+  // 이번 주 선생님의 칭찬: Teacher가 [칭찬 한표]로 직접 남긴 코멘트 원문만 사용.
+  // 원문에 없는 사실을 새로 만들지 않도록 요약 생성 없이 원문을 그대로 보여준다 (dedupe, 최대 3개).
+  const teacherPraises = [
+    ...new Set(input.weekPraiseComments.map((comment) => comment.trim()).filter(Boolean)),
+  ].slice(0, 3);
 
   // 숙제: 평가된 기록이 있을 때만 (사실 기반, 부정 표현 없이)
   const homeworkEvaluated = input.weekRecords.filter((r) => r.homeworkStatus !== null).length;
@@ -281,6 +274,7 @@ export function buildGrowthNoteViewModel(input: BuildGrowthNoteInput): StudentGr
     hasWeekRecords: input.weekRecords.length > 0,
     badges: growth.achieved.map(toGrowthBadge),
     encouragement: buildEncouragement(growth.achieved, growth.vocabTrend),
+    teacherPraises,
     goodThings: goodThings.slice(0, 5),
     homework,
     vocab,

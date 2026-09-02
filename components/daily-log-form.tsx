@@ -33,14 +33,12 @@ import {
   kindnessLevelValues,
   participationLevelLabels,
   participationLevelValues,
-  praiseCategoryLabels,
-  praiseCategoryValues,
   questionLevelLabels,
   questionLevelValues,
   vocabPercent,
 } from "@/lib/elementary";
-import { gradeDisplay, isElementaryGrade } from "@/lib/grades";
-import type { AttendanceStatus, PraiseCategory, StudentGrade } from "@/lib/supabase/types";
+import { gradeDisplay } from "@/lib/grades";
+import type { AttendanceStatus, StudentGrade } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
 export type DailyLogFormStudent = {
@@ -63,7 +61,7 @@ export type DailyLogFormStudent = {
     effortLevel?: string;
     parentNote?: string;
   };
-  praises?: PraiseCategory[];
+  praiseComment?: string;
   makeup?: {
     status: "required" | "scheduled" | "completed" | "cancelled";
     scheduledDate: string;
@@ -91,7 +89,7 @@ type EntryState = {
   effortLevel: string;
   parentNoteNeeded: boolean;
   parentNote: string;
-  praises: PraiseCategory[];
+  praiseComment: string;
 };
 
 function initEntry(student: DailyLogFormStudent): EntryState {
@@ -118,7 +116,7 @@ function initEntry(student: DailyLogFormStudent): EntryState {
     effortLevel: student.entry?.effortLevel ?? "",
     parentNoteNeeded: Boolean(student.entry?.parentNote),
     parentNote: student.entry?.parentNote ?? "",
-    praises: student.praises ?? [],
+    praiseComment: student.praiseComment ?? "",
   };
 }
 
@@ -204,10 +202,11 @@ export function DailyLogForm({
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  // 초등 그룹에서만 quick check UI를 보여준다 (중·고등 일지는 기존 그대로)
-  const isElementary = isElementaryGrade(group.grade ?? "");
+  // 학생 평가 UI는 초등/중등/고등 모든 학년 공통으로 사용한다.
   const [vocabTotal, setVocabTotal] = useState(initial?.vocabTotal ?? "");
+  // 칭찬 한표 인라인 에디터: 열려 있는 학생 id + 작성 중인 draft
   const [praiseOpenFor, setPraiseOpenFor] = useState<string | null>(null);
+  const [praiseDraft, setPraiseDraft] = useState("");
 
   const updateEntry = (studentId: string, patch: Partial<EntryState>) => {
     setEntries((prev) => ({ ...prev, [studentId]: { ...prev[studentId], ...patch } }));
@@ -290,7 +289,7 @@ export function DailyLogForm({
             effortLevel: entry.effortLevel as "" | "high" | "normal" | "low",
             parentNoteNeeded: entry.parentNoteNeeded,
             parentNote: entry.parentNote,
-            praises: entry.praises,
+            praiseComment: entry.praiseComment,
           };
         }),
       });
@@ -417,8 +416,7 @@ export function DailyLogForm({
         </CardContent>
       </Card>
 
-      {isElementary ? (
-        <Card className="p-4">
+      <Card className="p-4">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
             <span className="text-sm font-semibold text-[#2b2323]">빠른 체크</span>
             <label className="flex items-center gap-2 text-sm text-[#564d4d]">
@@ -440,8 +438,7 @@ export function DailyLogForm({
               시험이 없는 날은 비워두면 돼요. 저장 전까지 학생별로 수정할 수 있어요.
             </span>
           </div>
-        </Card>
-      ) : null}
+      </Card>
 
       <div className="space-y-3">
         {students.map((student) => {
@@ -602,8 +599,7 @@ export function DailyLogForm({
                 </div>
               ) : (
                 <div className="mt-3 space-y-3">
-                  {isElementary ? (
-                    <div className="space-y-2.5 rounded-2xl bg-[#f8f6fc] p-3">
+                  <div className="space-y-2.5 rounded-2xl bg-[#f8f6fc] p-3">
                       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
                         <SegmentedToggle
                           label="숙제"
@@ -713,40 +709,46 @@ export function DailyLogForm({
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPraiseOpenFor((prev) => (prev === student.studentId ? null : student.studentId))
-                          }
-                          aria-expanded={praiseOpenFor === student.studentId}
-                          className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#ecd9b4] bg-[#fdf8ec] px-3 py-1.5 text-xs font-medium text-[#8a6828] transition hover:bg-[#fbf1da]"
-                        >
-                          ⭐ 칭찬 +1
-                          {entry.praises.length > 0 ? (
-                            <span className="tabular-nums">({entry.praises.length})</span>
-                          ) : null}
-                        </button>
-
-                        {entry.praises.map((category, praiseIndex) => (
-                          <span
-                            key={`${category}-${praiseIndex}`}
-                            className="flex items-center gap-1 rounded-full bg-[#fdf3e4] px-2 py-0.5 text-[11px] text-[#8a6828]"
-                          >
-                            ⭐ {praiseCategoryLabels[category]}
+                        {entry.praiseComment && praiseOpenFor !== student.studentId ? (
+                          <span className="flex min-w-0 items-center gap-1.5 rounded-xl bg-[#f6effa] px-3 py-1.5 text-xs text-[#7a5a92]">
+                            <span className="shrink-0 font-semibold">💜 칭찬 한표</span>
+                            <span className="min-w-0 truncate">{entry.praiseComment}</span>
                             <button
                               type="button"
-                              aria-label={`${praiseCategoryLabels[category]} 칭찬 취소`}
-                              onClick={() =>
-                                updateEntry(student.studentId, {
-                                  praises: entry.praises.filter((_, index) => index !== praiseIndex),
-                                })
-                              }
-                              className="text-[#b09256] hover:text-[#8a6828]"
+                              onClick={() => {
+                                setPraiseDraft(entry.praiseComment);
+                                setPraiseOpenFor(student.studentId);
+                              }}
+                              className="shrink-0 font-medium text-[#5c4ca8] hover:underline"
+                            >
+                              수정
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`${student.name} 칭찬 한표 취소`}
+                              onClick={() => updateEntry(student.studentId, { praiseComment: "" })}
+                              className="shrink-0 text-[#a68cbf] hover:text-[#7a5a92]"
                             >
                               ✕
                             </button>
                           </span>
-                        ))}
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (praiseOpenFor === student.studentId) {
+                                setPraiseOpenFor(null);
+                              } else {
+                                setPraiseDraft(entry.praiseComment);
+                                setPraiseOpenFor(student.studentId);
+                              }
+                            }}
+                            aria-expanded={praiseOpenFor === student.studentId}
+                            className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#ddd0ec] bg-[#f9f5fd] px-3 py-1.5 text-xs font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
+                          >
+                            💜 칭찬 한표 +
+                          </button>
+                        )}
 
                         <button
                           type="button"
@@ -766,23 +768,46 @@ export function DailyLogForm({
                       </div>
 
                       {praiseOpenFor === student.studentId ? (
-                        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[#f0e6cf] bg-white p-2">
-                          <span className="text-[11px] text-[#8a7b77]">무엇을 칭찬했나요?</span>
-                          {praiseCategoryValues.map((category) => (
-                            <button
-                              key={category}
-                              type="button"
-                              onClick={() => {
-                                updateEntry(student.studentId, {
-                                  praises: [...entry.praises, category],
-                                });
-                                setPraiseOpenFor(null);
-                              }}
-                              className="min-h-[36px] rounded-full border border-[#ecd9b4] bg-[#fdf8ec] px-2.5 py-1 text-xs text-[#8a6828] transition hover:bg-[#fbf1da]"
-                            >
-                              {praiseCategoryLabels[category]}
-                            </button>
-                          ))}
+                        <div className="space-y-2 rounded-xl border border-[#e5d9f0] bg-white p-3">
+                          <div className="text-xs font-semibold text-[#6d5aa8]">칭찬 한표 💜</div>
+                          <div className="text-[11px] text-[#8a7b77]">
+                            성장노트에 보여줄 짧은 칭찬이에요. 오늘 잘한 모습을 짧게 적어주세요.
+                          </div>
+                          <textarea
+                            value={praiseDraft}
+                            onChange={(event) => setPraiseDraft(event.target.value.slice(0, 120))}
+                            rows={2}
+                            maxLength={120}
+                            autoFocus
+                            className="w-full resize-none rounded-xl border border-[#e5d9f0] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8] sm:text-sm"
+                            placeholder="어려운 문제도 끝까지 다시 풀어보는 모습이 좋았어요."
+                            aria-label={`${student.name} 칭찬 코멘트`}
+                          />
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] tabular-nums text-[#a79996]">
+                              {praiseDraft.length} / 120
+                            </span>
+                            <div className="flex gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setPraiseOpenFor(null)}
+                                className="rounded-xl border border-[#ece0db] bg-white px-3 py-1.5 text-xs font-medium text-[#7c6d69] transition hover:bg-[#faf6f3]"
+                              >
+                                취소
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!praiseDraft.trim()}
+                                onClick={() => {
+                                  updateEntry(student.studentId, { praiseComment: praiseDraft.trim() });
+                                  setPraiseOpenFor(null);
+                                }}
+                                className="rounded-xl bg-[#6d5aa8] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#5d4ba5] disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                칭찬 저장
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       ) : null}
 
@@ -799,8 +824,7 @@ export function DailyLogForm({
                           />
                         </label>
                       ) : null}
-                    </div>
-                  ) : null}
+                  </div>
 
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <label className="flex flex-1 items-center gap-2 rounded-xl border border-[#efe4dd] bg-[#fdfaf8] px-3 py-2">

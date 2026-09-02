@@ -104,12 +104,18 @@ export default async function StudentDetailPage({
   const logDateById = new Map(
     history.filter((item) => item.dailyLog).map((item) => [item.dailyLog!.id, item.dailyLog!.class_date]),
   );
-  const praisesByLog = new Map<string, PraiseCategory[]>();
+  // 칭찬 한표(comment)는 문장으로, legacy category 칭찬은 기존 라벨로 표시
+  const praiseLabel = (praise: { category: string; comment: string | null }) =>
+    praise.comment
+      ? `💜 ${praise.comment}`
+      : `⭐ ${praiseCategoryLabels[praise.category as PraiseCategory] ?? praise.category}`;
+
+  const praisesByLog = new Map<string, string[]>();
   for (const praise of praises) {
     if (praise.daily_log_id) {
       praisesByLog.set(praise.daily_log_id, [
         ...(praisesByLog.get(praise.daily_log_id) ?? []),
-        praise.category as PraiseCategory,
+        praiseLabel(praise),
       ]);
     }
   }
@@ -400,12 +406,12 @@ export default async function StudentDetailPage({
                         ) : null}
                         {lesson.dailyLog && (praisesByLog.get(lesson.dailyLog.id) ?? []).length > 0 ? (
                           <div className="mt-1 flex flex-wrap gap-1">
-                            {(praisesByLog.get(lesson.dailyLog.id) ?? []).map((category, praiseIndex) => (
+                            {(praisesByLog.get(lesson.dailyLog.id) ?? []).map((label, praiseIndex) => (
                               <span
-                                key={`${category}-${praiseIndex}`}
+                                key={`${label}-${praiseIndex}`}
                                 className="rounded-full bg-[#fdf3e4] px-1.5 py-0.5 text-[10px] text-[#8a6828]"
                               >
-                                ⭐ {praiseCategoryLabels[category]}
+                                {label}
                               </span>
                             ))}
                           </div>
@@ -720,8 +726,7 @@ export default async function StudentDetailPage({
                   ) : (
                     <div className="space-y-1.5">
                       {praises.slice(0, 6).map((praise) => (
-                        <div key={praise.id} className="flex items-center gap-2 text-xs text-[#564d4d]">
-                          <span>⭐</span>
+                        <div key={praise.id} className="flex items-start gap-2 text-xs text-[#564d4d]">
                           <span className="tabular-nums text-[#8a8a93]">
                             {formatKoreanDate(
                               praise.daily_log_id
@@ -729,7 +734,7 @@ export default async function StudentDetailPage({
                                 : praise.created_at.slice(0, 10),
                             )}
                           </span>
-                          {praiseCategoryLabels[praise.category as PraiseCategory] ?? praise.category}
+                          <span className="min-w-0">{praiseLabel(praise)}</span>
                         </div>
                       ))}
                     </div>

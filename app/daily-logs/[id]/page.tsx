@@ -17,7 +17,10 @@ import {
   questionLevelLabels,
   vocabPercent,
 } from "@/lib/elementary";
-import { getDailyLogDetailForCurrentUser } from "@/lib/supabase/queries/daily-logs";
+import {
+  getDailyLogDetailForCurrentUser,
+  getPraisesForDailyLog,
+} from "@/lib/supabase/queries/daily-logs";
 
 export default async function DailyLogDetailPage({
   params,
@@ -28,10 +31,20 @@ export default async function DailyLogDetailPage({
 }) {
   const { id } = await params;
   const { saved } = (await searchParams) ?? {};
-  const log = await getDailyLogDetailForCurrentUser(id);
+  const [log, praiseRows] = await Promise.all([
+    getDailyLogDetailForCurrentUser(id),
+    getPraisesForDailyLog(id),
+  ]);
 
   if (!log) {
     notFound();
+  }
+
+  const praiseCommentByStudent = new Map<string, string>();
+  for (const praise of praiseRows) {
+    if (praise.comment && !praiseCommentByStudent.has(praise.student_id)) {
+      praiseCommentByStudent.set(praise.student_id, praise.comment);
+    }
   }
 
   const makeupByLessonLog = new Map(
@@ -206,6 +219,13 @@ export default async function DailyLogDetailPage({
                           ]
                             .filter(Boolean)
                             .join(" · ")}
+                        </div>
+                      ) : null}
+
+                      {lessonLog.student && praiseCommentByStudent.has(lessonLog.student.id) ? (
+                        <div className="rounded-2xl bg-[#f6effa] p-3 text-sm text-[#7a5a92]">
+                          <span className="text-xs font-semibold">💜 오늘의 칭찬</span>
+                          <div className="mt-0.5">{praiseCommentByStudent.get(lessonLog.student.id)}</div>
                         </div>
                       ) : null}
 

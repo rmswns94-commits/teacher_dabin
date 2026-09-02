@@ -422,22 +422,35 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     }
   }
 
-  // 칭찬 동기화: 이 일지에 대한 칭찬을 폼 상태 그대로 교체한다 (멱등).
-  // 학생별 개별 쿼리 없이 delete 1번 + insert 1번.
-  const praiseRows = input.students.flatMap((entry) =>
-    (entry.praises ?? []).map((category) => ({
-      user_id: user.id,
-      student_id: entry.studentId,
-      daily_log_id: dailyLogId,
-      category,
-    })),
-  );
+  // 칭찬 한표 동기화: 이 일지의 "코멘트 칭찬"만 폼 상태 그대로 교체한다 (멱등).
+  // - 자동 생성 없음: 집중/참여/질문/배려/노력 등 관찰값은 Praise를 만들지 않는다.
+  //   Praise는 Teacher가 [칭찬 한표]로 직접 남긴 comment가 있을 때만 저장된다.
+  // - 예전 category chip 방식의 legacy 칭찬(comment null)은 건드리지 않고 보존한다.
+  const praiseRows = input.students.flatMap((entry) => {
+    const comment = entry.attendance === "absent" ? "" : entry.praiseComment?.trim() ?? "";
+
+    if (!comment) {
+      return [];
+    }
+
+    return [
+      {
+        user_id: user.id,
+        student_id: entry.studentId,
+        daily_log_id: dailyLogId,
+        category: "other" as const,
+        comment,
+        source: "manual_daily_log" as const,
+      },
+    ];
+  });
 
   const { error: praiseDeleteError } = await supabase
     .from("student_praises")
     .delete()
     .eq("user_id", user.id)
-    .eq("daily_log_id", dailyLogId);
+    .eq("daily_log_id", dailyLogId)
+    .not("comment", "is", null);
 
   if (praiseDeleteError) {
     console.error("saveDailyLog praise delete error", praiseDeleteError);
@@ -490,26 +503,28 @@ export async function getDailyLogsForDates(dates: string[]) {
   return (data ?? []) as DailyLogForImport[];
 }
 
-// 일지 수정 화면에서 기존 칭찬을 폼 상태로 복원할 때 사용 (쿼리 1번).
+// 일지 수정/상세 화면에서 기존 칭찬을 복원할 때 사용 (쿼리 1번).
+export type DailyLogPraiseRow = { student_id: string; category: string; comment: string | null };
+
 export async function getPraisesForDailyLog(dailyLogId: string) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
   if (!supabase || !user) {
-    return [] as { student_id: string; category: string }[];
+    return [] as DailyLogPraiseRow[];
   }
 
   const { data, error } = await supabase
     .from("student_praises")
-    .select("student_id, category")
+    .select("student_id, category, comment")
     .eq("user_id", user.id)
     .eq("daily_log_id", dailyLogId)
     .order("created_at", { ascending: true });
 
   if (error) {
     console.error("getPraisesForDailyLog error", error);
-    return [] as { student_id: string; category: string }[];
+    return [] as DailyLogPraiseRow[];
   }
 
-  return (data ?? []) as { student_id: string; category: string }[];
+  return (data ?? []) as DailyLogPraiseRow[];
 }

@@ -126,17 +126,25 @@ export async function getRecentLessonRecords(sinceDate: string) {
 }
 
 // 학생 상세용: 최근 칭찬 기록 (기간 제한 조회 — 전체 history 금지)
+export type StudentPraiseItem = {
+  id: string;
+  category: string;
+  comment: string | null;
+  daily_log_id: string | null;
+  created_at: string;
+};
+
 export async function getStudentPraises(studentId: string, sinceDate: string) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
   if (!supabase || !user) {
-    return [] as { id: string; category: string; daily_log_id: string | null; created_at: string }[];
+    return [] as StudentPraiseItem[];
   }
 
   const { data, error } = await supabase
     .from("student_praises")
-    .select("id, category, daily_log_id, created_at")
+    .select("id, category, comment, daily_log_id, created_at")
     .eq("user_id", user.id)
     .eq("student_id", studentId)
     .gte("created_at", `${sinceDate}T00:00:00+09:00`)
@@ -144,10 +152,10 @@ export async function getStudentPraises(studentId: string, sinceDate: string) {
 
   if (error) {
     console.error("getStudentPraises error", error);
-    return [] as { id: string; category: string; daily_log_id: string | null; created_at: string }[];
+    return [] as StudentPraiseItem[];
   }
 
-  return (data ?? []) as { id: string; category: string; daily_log_id: string | null; created_at: string }[];
+  return (data ?? []) as StudentPraiseItem[];
 }
 
 export async function getStudentMakeups(studentId: string) {

@@ -22,7 +22,7 @@ export const studentLessonEntrySchema = z.object({
   missedProgress: shortText(300, "놓친 진도"),
   needsMakeup: z.boolean(),
   makeupScheduledDate: dateString.optional().or(z.literal("")),
-  // 초등 quick check (전부 optional — 입력 안 한 값은 null로 저장)
+  // 학생 평가 quick check — 모든 학년 공통 (전부 optional — 입력 안 한 값은 null로 저장)
   homeworkStatus: z.enum(["completed", "partial", "missing"]).optional().or(z.literal("")),
   vocabCorrect: numberString.optional().or(z.literal("")),
   vocabRetest: z.boolean().optional(),
@@ -30,10 +30,8 @@ export const studentLessonEntrySchema = z.object({
   participationLevel: z.enum(["active", "normal", "passive"]).optional().or(z.literal("")),
   parentNoteNeeded: z.boolean().optional(),
   parentNote: shortText(1000, "학부모 전달 내용"),
-  praises: z
-    .array(z.enum(["homework", "focus", "participation", "vocabulary", "kindness", "other"]))
-    .max(20, "칭찬은 수업당 20개까지 기록할 수 있어요.")
-    .optional(),
+  // 칭찬 한표: 비어 있으면 칭찬 없음. 내용이 있어야만 Praise가 저장된다.
+  praiseComment: shortText(120, "칭찬"),
   questionLevel: z.enum(["high", "normal", "low"]).optional().or(z.literal("")),
   kindnessLevel: z.enum(["good", "normal", "poor"]).optional().or(z.literal("")),
   effortLevel: z.enum(["high", "normal", "low"]).optional().or(z.literal("")),

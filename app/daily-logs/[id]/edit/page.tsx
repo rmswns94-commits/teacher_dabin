@@ -11,7 +11,6 @@ import {
   getPraisesForDailyLog,
 } from "@/lib/supabase/queries/daily-logs";
 import { getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
-import type { PraiseCategory } from "@/lib/supabase/types";
 
 export default async function EditDailyLogPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,12 +23,13 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
     notFound();
   }
 
-  const praisesByStudent = new Map<string, PraiseCategory[]>();
+  // 칭찬 한표 복원: comment가 있는 manual praise만 폼에서 편집한다.
+  // legacy category 칭찬(comment null)은 폼에 싣지 않고 그대로 보존된다.
+  const praiseCommentByStudent = new Map<string, string>();
   for (const praise of praiseRows) {
-    praisesByStudent.set(praise.student_id, [
-      ...(praisesByStudent.get(praise.student_id) ?? []),
-      praise.category as PraiseCategory,
-    ]);
+    if (praise.comment && !praiseCommentByStudent.has(praise.student_id)) {
+      praiseCommentByStudent.set(praise.student_id, praise.comment);
+    }
   }
 
   const makeupByLessonLog = new Map(
@@ -61,7 +61,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           effortLevel: lessonLog.effort_level ?? "",
           parentNote: lessonLog.parent_note ?? "",
         },
-        praises: praisesByStudent.get(lessonLog.student!.id) ?? [],
+        praiseComment: praiseCommentByStudent.get(lessonLog.student!.id) ?? "",
         makeup: makeup
           ? {
               status: makeup.status,

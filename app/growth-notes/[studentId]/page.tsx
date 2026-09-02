@@ -56,14 +56,16 @@ export default async function GrowthNoteDetailPage({
 
   const weekRows = lessonRows.filter((row) => row.class_date >= weekStart);
   const logDateById = new Map(lessonRows.map((row) => [row.daily_log_id, row.class_date]));
-  const weekPraiseCategories = praiseRows
+  // Teacher가 [칭찬 한표]로 직접 남긴 이번 주 코멘트만 (오래된 → 최신)
+  const weekPraiseComments = praiseRows
     .filter((praise) => {
       const date =
         (praise.daily_log_id ? logDateById.get(praise.daily_log_id) : null) ??
         toDateString(new Date(praise.created_at));
-      return date >= weekStart && date <= weekEnd;
+      return date >= weekStart && date <= weekEnd && Boolean(praise.comment);
     })
-    .map((praise) => praise.category);
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map((praise) => praise.comment!);
 
   const note = buildGrowthNoteViewModel({
     studentName: student.name,
@@ -84,7 +86,7 @@ export default async function GrowthNoteDetailPage({
     recentVocabPercents: lessonRows
       .filter((row) => row.vocab_correct !== null && (row.vocab_total ?? 0) > 0)
       .map((row) => vocabPercent(row.vocab_correct!, row.vocab_total!)!),
-    weekPraiseCategories,
+    weekPraiseComments,
   });
 
   const prevWeek = addDaysStr(weekStart, -7);
@@ -171,6 +173,24 @@ export default async function GrowthNoteDetailPage({
                 &ldquo;{note.encouragement}&rdquo;
               </p>
             </section>
+
+            {/* 2.5. 이번 주 선생님의 칭찬 — Teacher가 [칭찬 한표]로 직접 남긴 코멘트 원문만 */}
+            {note.teacherPraises.length > 0 ? (
+              <section className="rounded-3xl border border-[#f0e3ea] bg-[#fffafc] p-5">
+                <h2 className="text-sm font-bold text-[#9c5577]">💌 이번 주 선생님의 칭찬</h2>
+                {note.teacherPraises.length === 1 ? (
+                  <p className="mt-2 text-[16px] font-medium leading-8 text-[#7a4a62]">
+                    &ldquo;{note.teacherPraises[0]}&rdquo;
+                  </p>
+                ) : (
+                  <ul className="mt-3 space-y-2 text-[15px] leading-7 text-[#7a4a62]">
+                    {note.teacherPraises.map((text) => (
+                      <li key={text}>💜 {text}</li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            ) : null}
 
             {/* 3. 이번 주 잘한 일 */}
             {note.goodThings.length > 0 ? (

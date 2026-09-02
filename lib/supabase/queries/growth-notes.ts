@@ -95,6 +95,7 @@ export type GrowthPraiseRow = {
   student_id: string;
   daily_log_id: string | null;
   category: PraiseCategory;
+  comment: string | null;
   created_at: string;
 };
 
@@ -109,7 +110,7 @@ export async function getGrowthPraiseRows(sinceDate: string, studentId?: string)
 
   let query = supabase
     .from("student_praises")
-    .select("student_id, daily_log_id, category, created_at")
+    .select("student_id, daily_log_id, category, comment, created_at")
     .eq("user_id", user.id)
     .gte("created_at", `${sinceDate}T00:00:00+09:00`);
 

@@ -167,12 +167,18 @@ export type StudentGrowthCheckRecord = {
   created_at: string;
 };
 
+// manual_daily_log: 일지의 [칭찬 한표]로 Teacher가 직접 남긴 코멘트 칭찬.
+// comment가 null인 row는 예전 category chip 방식의 legacy 데이터 (보존).
+export type PraiseSource = "manual_daily_log";
+
 export type StudentPraiseRecord = {
   id: string;
   user_id: string;
   student_id: string;
   daily_log_id: string | null;
   category: PraiseCategory;
+  comment: string | null;
+  source: PraiseSource;
   created_at: string;
 };
 
