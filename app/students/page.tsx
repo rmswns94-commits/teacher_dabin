@@ -103,20 +103,17 @@ export default async function StudentsPage({
     unassigned: activeStudents.filter(isUnassigned).length,
   };
 
+  // 텍스트 검색 대상은 학생 이름 + 학교 이름 두 가지뿐 (OR, 부분 일치).
+  // 학년/그룹명/성별/생일/메모는 검색하지 않는다 — quick filter가 별도로 담당.
   const matchesSearch = (student: StudentRecord) => {
     if (!q) {
       return true;
     }
 
-    const haystack = [
-      student.name,
-      formatGrade(student.grade),
-      ...(groupsByStudent.get(student.id) ?? []),
-    ]
-      .join(" ")
-      .toLowerCase();
+    const matchesName = student.name.trim().toLowerCase().includes(q);
+    const matchesSchool = (student.school ?? "").trim().toLowerCase().includes(q);
 
-    return haystack.includes(q);
+    return matchesName || matchesSchool;
   };
 
   let visibleStudents = activeStudents.filter((student) => {
@@ -149,7 +146,7 @@ export default async function StudentsPage({
         : activeFilter === "unassigned"
           ? "모든 학생이 수업 그룹에 배정되어 있어요."
           : q
-            ? "검색한 학생을 찾지 못했어요."
+            ? "검색 결과가 없어요. 학생 이름이나 학교 이름을 확인해 주세요."
             : "";
 
   return (
@@ -180,7 +177,7 @@ export default async function StudentsPage({
                   defaultValue={params.q ?? ""}
                   name="q"
                   className="flex-1 border-none bg-transparent text-sm text-[#433d3d] outline-none placeholder:text-[#9b8e8a]"
-                  placeholder="학생 이름 · 학년 · 반 이름으로 검색"
+                  placeholder="학생 이름 또는 학교 이름 검색"
                 />
                 <Button type="submit" variant="secondary" size="sm">
                   검색
