@@ -5,7 +5,6 @@ import { AppShell } from "@/components/app-shell";
 import { CalendarEventItem, EventCreateButton } from "@/components/calendar-events";
 import { DailyLogsFilter } from "@/components/daily-logs-filter";
 import { ExcelExportButton } from "@/components/excel-export";
-import { Doodle } from "@/components/doodle";
 import { LessonLogDetail } from "@/components/lesson-log-detail";
 import { PageHeader } from "@/components/page-header";
 import { DailyLogStatusBadge } from "@/components/status-badge";
@@ -21,6 +20,7 @@ import {
   parseMonthParam,
 } from "@/lib/calendar";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
+import { groupIconOf } from "@/lib/group-icons";
 import { formatTimeRange } from "@/lib/schedule";
 import {
   getMonthlyEvents,
@@ -43,6 +43,70 @@ import { cn } from "@/lib/utils";
 import type { DailyLogStatus } from "@/lib/supabase/types";
 
 const WEEKDAY_HEADERS = ["일", "월", "화", "수", "목", "금", "토"];
+const WEEKDAY_HEADERS_FULL = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
+const MONTH_NAMES_EN = [
+  "JANUARY",
+  "FEBRUARY",
+  "MARCH",
+  "APRIL",
+  "MAY",
+  "JUNE",
+  "JULY",
+  "AUGUST",
+  "SEPTEMBER",
+  "OCTOBER",
+  "NOVEMBER",
+  "DECEMBER",
+];
+
+// 참고용 미니 달력 (인접 달) — 클릭하면 그 달로 이동
+function MiniCalendar({ month, href }: { month: string; href: string }) {
+  const weeks = buildMonthGrid(month);
+  const monthNum = Number(month.slice(5));
+
+  return (
+    <Link
+      href={href}
+      aria-label={`${monthLabel(month)}로 이동`}
+      className="block rounded-2xl border border-[#e9e3f5] bg-white px-2.5 py-2 transition hover:border-[#cfc4f0] hover:bg-[#faf8ff]"
+    >
+      <span className="flex items-baseline gap-1.5">
+        <span className="text-xs font-bold tabular-nums text-[#6d5aa8]">
+          {String(monthNum).padStart(2, "0")}
+        </span>
+        <span className="text-[9px] font-medium tracking-[0.08em] text-[#a49bc4]">
+          {MONTH_NAMES_EN[monthNum - 1].slice(0, 3)}
+        </span>
+      </span>
+      <span className="mt-1 grid w-[112px] grid-cols-7 text-center text-[8px] leading-[13px] tabular-nums text-[#8a8a93]">
+        {WEEKDAY_HEADERS.map((day, i) => (
+          <span
+            key={day}
+            className={cn(
+              "font-semibold text-[#b0a8c9]",
+              i === 0 && "text-[#d0908f]",
+              i === 6 && "text-[#8fa0cf]",
+            )}
+          >
+            {day}
+          </span>
+        ))}
+        {weeks.flat().map((date, i) =>
+          date ? (
+            <span
+              key={date}
+              className={cn(i % 7 === 0 && "text-[#c98a89]", i % 7 === 6 && "text-[#8698c7]")}
+            >
+              {Number(date.slice(8))}
+            </span>
+          ) : (
+            <span key={`e-${i}`} />
+          ),
+        )}
+      </span>
+    </Link>
+  );
+}
 
 function buildQuery(params: {
   month: string;
@@ -104,6 +168,23 @@ export default async function DailyLogsPage({
   for (const marker of markers) {
     byDate.set(marker.class_date, [...(byDate.get(marker.class_date) ?? []), marker]);
   }
+
+  // 날짜별 대표 아이콘: 수업 시간 순(모르면 기록 순), 같은 반은 한 번만 (추가 쿼리 없음)
+  const iconsFor = (date: string) => {
+    const sorted = [...(byDate.get(date) ?? [])].sort((a, b) => {
+      const timeA = timeFor(a.group_id, date) ?? "99:99";
+      const timeB = timeFor(b.group_id, date) ?? "99:99";
+      return timeA.localeCompare(timeB) || a.created_at.localeCompare(b.created_at);
+    });
+    const seenGroups = new Set<string>();
+    const icons: string[] = [];
+    for (const log of sorted) {
+      if (seenGroups.has(log.group_id)) continue;
+      seenGroups.add(log.group_id);
+      icons.push(groupIconOf(log.group?.icon));
+    }
+    return icons;
+  };
 
   // 기간 일정을 날짜별로 펼친다 (월 범위 내로 clamp).
   const eventsByDate = new Map<string, CalendarEventWithGroup[]>();
@@ -202,52 +283,93 @@ export default async function DailyLogsPage({
             <EventCreateButton groups={groupOptions} defaultDate={selectedDate ?? today} />
           </div>
 
-          <Card className="mx-auto max-w-xl">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-2">
-                <Link
-                  href={buildQuery({ month: addMonths(month, -1), groupId, status })}
-                  aria-label="이전 달"
-                  className="flex h-9 w-9 items-center justify-center rounded-xl text-[#8a7b77] transition hover:bg-[#faf0f2]"
-                >
-                  <ChevronLeft className="h-4 w-4" aria-hidden />
-                </Link>
-                <div className="flex items-center gap-2 font-display text-xl font-semibold text-[#2d2928]">
-                  {monthLabel(month)}
-                  <Doodle kind="sparkle" className="h-4 w-4 text-[#dcc4d3]" />
+          <Card>
+            <CardContent className="p-4 md:p-6">
+              {/* 플래너 스타일 헤더: 큰 월 표시 + 우측 인접 달 미니 캘린더 */}
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-end gap-3">
+                    <span className="font-display text-5xl font-bold leading-none tracking-tight text-[#6d5aa8] md:text-6xl">
+                      {month.slice(5)}
+                    </span>
+                    <div className="pb-0.5 leading-snug">
+                      <div className="text-sm font-bold tracking-[0.14em] text-[#2d2928] md:text-base">
+                        / {MONTH_NAMES_EN[Number(month.slice(5)) - 1]}
+                      </div>
+                      <div className="text-xs font-semibold tracking-[0.1em] text-[#a08d97] md:text-sm">
+                        / {month.slice(0, 4)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-2.5 flex items-center gap-1">
+                    <Link
+                      href={buildQuery({ month: addMonths(month, -1), groupId, status })}
+                      aria-label="이전 달"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#eee9f6] text-[#8a7b77] transition hover:bg-[#faf8ff]"
+                    >
+                      <ChevronLeft className="h-4 w-4" aria-hidden />
+                    </Link>
+                    <Link
+                      href={buildQuery({ month: addMonths(month, 1), groupId, status })}
+                      aria-label="다음 달"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#eee9f6] text-[#8a7b77] transition hover:bg-[#faf8ff]"
+                    >
+                      <ChevronRight className="h-4 w-4" aria-hidden />
+                    </Link>
+                    <Link
+                      href={buildQuery({ month: currentMonth, date: today, groupId, status })}
+                      className="rounded-xl border border-[#eee9f6] px-2.5 py-1.5 text-xs text-[#8a7b77] transition hover:bg-[#faf8ff] hover:text-[#564d4d]"
+                    >
+                      오늘
+                    </Link>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Link
+
+                <div className="hidden gap-2.5 md:flex">
+                  <MiniCalendar
+                    month={addMonths(month, -1)}
+                    href={buildQuery({ month: addMonths(month, -1), groupId, status })}
+                  />
+                  <MiniCalendar
+                    month={addMonths(month, 1)}
                     href={buildQuery({ month: addMonths(month, 1), groupId, status })}
-                    aria-label="다음 달"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl text-[#8a7b77] transition hover:bg-[#faf0f2]"
-                  >
-                    <ChevronRight className="h-4 w-4" aria-hidden />
-                  </Link>
-                  <Link
-                    href={buildQuery({ month: currentMonth, date: today, groupId, status })}
-                    className="rounded-xl px-2.5 py-1.5 text-xs text-[#8a7b77] transition hover:bg-[#faf0f2] hover:text-[#564d4d]"
-                  >
-                    오늘
-                  </Link>
+                  />
                 </div>
               </div>
 
-              <div className="mt-3 grid grid-cols-7 text-center text-[11px] font-medium text-[#b9a2a8]">
+              {/* 요일 헤더 */}
+              <div className="mt-4 grid grid-cols-7 overflow-hidden rounded-t-2xl border border-b-0 border-[#e3ddf1] bg-[#f7f4fd] text-center text-[11px] font-semibold md:text-xs">
                 {WEEKDAY_HEADERS.map((day, headerIndex) => (
                   <div
                     key={day}
-                    className={cn("py-1", (headerIndex === 0 || headerIndex === 6) && "text-[#c97a7a]")}
+                    className={cn(
+                      "border-l border-[#eee9f6] py-2 first:border-l-0",
+                      headerIndex === 0
+                        ? "text-[#c97a7a]"
+                        : headerIndex === 6
+                          ? "text-[#7a8fc9]"
+                          : "text-[#6b6b74]",
+                    )}
                   >
-                    {day}
+                    <span className="md:hidden">{day}</span>
+                    <span className="max-md:hidden">{WEEKDAY_HEADERS_FULL[headerIndex]}</span>
                   </div>
                 ))}
               </div>
 
-              <div className="grid grid-cols-7 gap-y-1">
+              <div className="grid grid-cols-7 overflow-hidden rounded-b-2xl border border-[#e3ddf1] bg-white">
                 {weeks.flat().map((date, index) => {
                   if (!date) {
-                    return <div key={`empty-${index}`} />;
+                    return (
+                      <div
+                        key={`empty-${index}`}
+                        className={cn(
+                          "min-h-[68px] border-l border-t border-[#eee9f6] bg-[#fbfafd] md:min-h-[96px]",
+                          index % 7 === 0 && "border-l-0",
+                          index < 7 && "border-t-0",
+                        )}
+                      />
+                    );
                   }
 
                   const logs = byDate.get(date) ?? [];
@@ -255,10 +377,15 @@ export default async function DailyLogsPage({
                   const dayMakeups = makeupsByDate.get(date) ?? [];
                   const completedCount = logs.filter((log) => log.status === "completed").length;
                   const draftCount = logs.length - completedCount;
+                  const icons = iconsFor(date);
+                  const shownIcons = icons.slice(0, 3);
+                  const extraCount = icons.length - shownIcons.length;
                   const isSelected = date === selectedDate;
                   const isToday = date === today;
                   const dayNumber = Number(date.slice(8));
-                  const isWeekend = index % 7 === 0 || index % 7 === 6;
+                  const columnIndex = index % 7;
+                  const isSunday = columnIndex === 0;
+                  const isSaturday = columnIndex === 6;
                   const hasHoliday = dayEvents.some((event) => event.event_type === "holiday");
 
                   // 레인별 첫 일정만 바로 표시 (연속 표시용)
@@ -270,9 +397,14 @@ export default async function DailyLogsPage({
                     }
                   }
 
+                  const groupNames = logs
+                    .map((log) => log.group?.name)
+                    .filter((name): name is string => Boolean(name));
                   const labelParts = [
                     formatKoreanDate(date),
-                    logs.length > 0 ? `수업 기록 ${logs.length}개` : "",
+                    logs.length > 0
+                      ? `수업 기록 ${logs.length}개${groupNames.length > 0 ? ` (${groupNames.join(", ")})` : ""}`
+                      : "",
                     completedCount > 0 ? `작성 완료 ${completedCount}건` : "",
                     draftCount > 0 ? `작성 중 ${draftCount}건` : "",
                     dayEvents.length > 0
@@ -295,47 +427,62 @@ export default async function DailyLogsPage({
                       aria-label={labelParts.join(", ")}
                       aria-current={isSelected ? "date" : undefined}
                       title={labelParts.slice(1).join(" · ")}
-                      className="group flex flex-col items-center"
+                      className={cn(
+                        "flex min-h-[68px] flex-col border-l border-t border-[#eee9f6] p-1 pb-1.5 transition md:min-h-[96px] md:p-1.5",
+                        columnIndex === 0 && "border-l-0",
+                        index < 7 && "border-t-0",
+                        isSunday && !isSelected && "bg-[#faf7f4]",
+                        isSelected
+                          ? "bg-[#f5f1fb] shadow-[inset_0_0_0_2px_#cfc4f0]"
+                          : "hover:bg-[#faf8ff]",
+                      )}
                     >
-                      <span
-                        className={cn(
-                          "flex h-11 w-11 flex-col items-center justify-center rounded-2xl text-sm tabular-nums transition",
-                          isSelected
-                            ? "bg-[#fbe9f0] font-semibold ring-1 ring-[#f4d8e2]"
-                            : "group-hover:bg-[#faf0f2]",
-                          isToday && !isSelected && "ring-1 ring-[#d9c1e8]",
-                          hasHoliday
-                            ? "text-[#cf4f4f]"
-                            : isWeekend
-                              ? "text-[#c97a7a]"
-                              : isSelected
-                                ? "text-[#6d4a5c]"
-                                : "text-[#4a423f]",
-                        )}
-                      >
-                        <span>{dayNumber}</span>
-                        {logs.length > 0 || dayMakeups.length > 0 ? (
-                          <span aria-hidden className="mt-0.5 flex items-center gap-0.5">
-                            {completedCount > 0 ? (
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#8fc7ab]" />
-                            ) : null}
-                            {draftCount > 0 ? (
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#eebfa0]" />
-                            ) : null}
-                            {dayMakeups.length > 0 ? (
-                              <span className="h-1.5 w-1.5 rounded-full bg-white ring-1 ring-[#3d7f64]" />
-                            ) : null}
-                            {logs.length > 1 ? (
-                              <span className="text-[9px] leading-none text-[#a08d97]">{logs.length}</span>
-                            ) : null}
-                          </span>
-                        ) : (
-                          <span aria-hidden className="mt-0.5 h-1.5" />
-                        )}
+                      <span className="flex items-center gap-1">
+                        <span
+                          className={cn(
+                            "flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums md:h-6 md:w-6 md:text-xs",
+                            hasHoliday
+                              ? "text-[#cf4f4f]"
+                              : isSunday
+                                ? "text-[#c97a7a]"
+                                : isSaturday
+                                  ? "text-[#7a8fc9]"
+                                  : "text-[#4a423f]",
+                            isToday && "bg-[#8b7ae6] font-bold text-white",
+                          )}
+                        >
+                          {dayNumber}
+                        </span>
+                        {dayMakeups.length > 0 ? (
+                          <span
+                            aria-hidden
+                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-white ring-1 ring-[#3d7f64]"
+                          />
+                        ) : null}
                       </span>
 
+                      {/* 수업일지가 있는 반은 대표 아이콘만 (이름/상세는 아래 목록에서) */}
+                      {shownIcons.length > 0 ? (
+                        <span
+                          aria-hidden
+                          className="mt-0.5 flex flex-wrap items-center gap-x-0.5 px-0.5 text-[13px] leading-[18px] md:mt-1 md:text-[15px] md:leading-5"
+                        >
+                          {shownIcons.map((icon, iconIndex) => (
+                            <span key={`${icon}-${iconIndex}`}>{icon}</span>
+                          ))}
+                          {extraCount > 0 ? (
+                            <span className="ml-0.5 text-[10px] font-semibold text-[#8a7fb8]">
+                              +{extraCount}
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : null}
+
                       {/* 일정 바: 같은 일정은 옆 날짜와 이어져 보이도록 셀 전체 폭 사용 */}
-                      <span aria-hidden className="mt-0.5 flex h-[13px] w-full flex-col gap-[3px]">
+                      <span
+                        aria-hidden
+                        className="-mx-1 mt-auto flex flex-col gap-[3px] pt-1 md:-mx-1.5"
+                      >
                         {laneEvents.map((event, laneIndex) =>
                           event ? (
                             <span
@@ -359,10 +506,7 @@ export default async function DailyLogsPage({
 
               <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] text-[#a08d97]">
                 <span className="flex items-center gap-1">
-                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#8fc7ab]" /> 작성 완료
-                </span>
-                <span className="flex items-center gap-1">
-                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#eebfa0]" /> 작성 중
+                  <span aria-hidden className="text-[11px] leading-none">📘</span> 반 대표 아이콘 = 수업일지
                 </span>
                 <span className="flex items-center gap-1">
                   <span aria-hidden className="h-1 w-4 rounded-full bg-[#b3a5ec]" /> 일정

@@ -87,7 +87,7 @@ export type MonthlyLogMarker = {
   default_progress: string | null;
   created_at: string;
   studentCount: number; // 그날 명단에 오른 학생 수 (embed count — 추가 쿼리 없음)
-  group: Pick<ClassGroupRecord, "id" | "name"> | null;
+  group: Pick<ClassGroupRecord, "id" | "name" | "icon"> | null;
 };
 
 export async function getMonthlyLogMarkers(
@@ -105,7 +105,7 @@ export async function getMonthlyLogMarkers(
   let query = supabase
     .from("daily_logs")
     .select(
-      "id, class_date, group_id, status, title, default_progress, created_at, student_lesson_logs(count), class_groups(id, name)",
+      "id, class_date, group_id, status, title, default_progress, created_at, student_lesson_logs(count), class_groups(id, name, icon)",
     )
     .eq("user_id", user.id)
     .gte("class_date", monthStart)
@@ -134,7 +134,7 @@ export async function getMonthlyLogMarkers(
     return {
       ...(row as unknown as Omit<MonthlyLogMarker, "group" | "studentCount">),
       studentCount: countRow?.count ?? 0,
-      group: pickOne<Pick<ClassGroupRecord, "id" | "name">>(row.class_groups),
+      group: pickOne<Pick<ClassGroupRecord, "id" | "name" | "icon">>(row.class_groups),
     };
   });
 }
