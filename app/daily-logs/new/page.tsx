@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { CircleArrowRight, NotebookTabs, Users } from "lucide-react";
+import { CircleArrowRight, NotebookTabs } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { DailyLogForm } from "@/components/daily-log-form";
+import { DailyLogPicker } from "@/components/daily-log-picker";
 import { LessonHistoryWorkspace } from "@/components/lesson-history-panel";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -62,38 +63,12 @@ export default async function NewDailyLogPage({
 
         <Card className="mb-5">
           <CardContent className="py-4">
-            <form action="/daily-logs/new" className="flex flex-wrap items-end gap-3">
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-medium text-[#7c6d69]">날짜</span>
-                <input
-                  type="date"
-                  name="date"
-                  defaultValue={date}
-                  className="rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-sm outline-none"
-                  required
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-medium text-[#7c6d69]">수업 그룹</span>
-                <select
-                  name="groupId"
-                  defaultValue={selectedGroup?.id ?? ""}
-                  className="min-w-[180px] rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-sm outline-none"
-                  required
-                >
-                  <option value="">그룹 선택</option>
-                  {groups.map((group) => (
-                    <option key={group.id} value={group.id}>{group.name}</option>
-                  ))}
-                </select>
-              </label>
-
-              <Button type="submit" variant="secondary" size="sm" className="gap-1.5">
-                <Users className="h-3.5 w-3.5" />
-                학생 불러오기
-              </Button>
-            </form>
+            <DailyLogPicker
+              key={`${selectedGroup?.id ?? ""}:${date}`}
+              groups={groups.map((group) => ({ id: group.id, name: group.name }))}
+              date={date}
+              groupId={selectedGroup?.id ?? ""}
+            />
           </CardContent>
         </Card>
 
