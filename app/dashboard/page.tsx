@@ -345,7 +345,7 @@ export default async function DashboardPage() {
                               <button
                                 type="submit"
                                 aria-pressed={item.completed}
-                                className="flex min-h-11 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm transition hover:bg-[#f2edf9]"
+                                className="flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 py-1.5 text-left text-[13px] transition hover:bg-[#f2edf9]"
                               >
                                 {item.completed ? (
                                   <span
