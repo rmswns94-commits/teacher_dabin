@@ -198,6 +198,8 @@ export function DailyLogForm({
     ),
   );
   const [error, setError] = useState("");
+  // 같은 날짜+같은 반 일지가 이미 있을 때 전용 경고 dialog (form 내용은 보존)
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   // 학생 평가 UI는 초등/중등/고등 모든 학년 공통으로 사용한다.
@@ -292,6 +294,12 @@ export function DailyLogForm({
           };
         }),
       });
+
+      if (result && "duplicate" in result && result.duplicate) {
+        setShowSummary(false);
+        setDuplicateOpen(true);
+        return;
+      }
 
       if (result?.error) {
         setError(result.error);
@@ -951,6 +959,32 @@ export function DailyLogForm({
           임시 저장한 일지는 목록에서 &quot;작성 중&quot;으로 표시돼요.
         </span>
       </div>
+
+      {duplicateOpen ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-[#2b2323]/30 px-4"
+          role="alertdialog"
+          aria-modal="true"
+          aria-label="수업일지 중복 안내"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setDuplicateOpen(false);
+            }
+          }}
+        >
+          <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+            <div className="text-lg font-semibold text-[#2a2323]">수업일지가 이미 있어요</div>
+            <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[#564d4d]">
+              {"이미 오늘 등록된 수업 일지가 있어요.\n중복 등록은 불가합니다.\n기존 수업 일지를 삭제 후 재등록 해주세요."}
+            </p>
+            <div className="mt-4 flex justify-end">
+              <Button type="button" size="sm" onClick={() => setDuplicateOpen(false)}>
+                확인
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showSummary ? (
         <CompletionSummary

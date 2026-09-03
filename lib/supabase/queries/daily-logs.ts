@@ -205,6 +205,20 @@ export async function getDailyLogDetailForCurrentUser(dailyLogId: string) {
   } as DailyLogDetail;
 }
 
+// 같은 Teacher + 같은 날짜 + 같은 그룹의 수업일지는 최대 1개.
+// typed error로 구분해 UI가 전용 경고 dialog를 띄울 수 있게 한다.
+export class DuplicateDailyLogError extends Error {
+  constructor() {
+    super(
+      "이미 오늘 등록된 수업 일지가 있어요.\n중복 등록은 불가합니다.\n기존 수업 일지를 삭제 후 재등록 해주세요.",
+    );
+    this.name = "DuplicateDailyLogError";
+  }
+}
+
+// Postgres unique violation (DB-level race 방지용 unique index가 있을 때)
+const UNIQUE_VIOLATION = "23505";
+
 // Saves the daily log header, all per-student records, and keeps makeup
 // lessons consistent with the attendance data. Upserts are idempotent, so
 // retrying after a partial failure never duplicates rows.
@@ -225,6 +239,31 @@ export async function saveDailyLog(input: DailyLogFormInput) {
 
   if (!group) {
     throw new Error("수업 그룹을 찾을 수 없어요.");
+  }
+
+  // 중복 방지: 같은 user + 그룹 + 날짜의 일지는 draft/completed 무관 1개만.
+  // 수정 저장은 자기 자신(dailyLogId)을 제외하고 검사한다 (날짜 변경 케이스 포함).
+  let duplicateQuery = supabase
+    .from("daily_logs")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("group_id", input.groupId)
+    .eq("class_date", input.classDate)
+    .limit(1);
+
+  if (input.dailyLogId) {
+    duplicateQuery = duplicateQuery.neq("id", input.dailyLogId);
+  }
+
+  const { data: duplicateRows, error: duplicateError } = await duplicateQuery;
+
+  if (duplicateError) {
+    console.error("saveDailyLog duplicate check error", duplicateError);
+    throw new Error("수업 기록을 저장하지 못했어요. 다시 시도해주세요.");
+  }
+
+  if ((duplicateRows ?? []).length > 0) {
+    throw new DuplicateDailyLogError();
   }
 
   const studentIds = input.students.map((entry) => entry.studentId);
@@ -276,6 +315,9 @@ export async function saveDailyLog(input: DailyLogFormInput) {
       .eq("user_id", user.id);
 
     if (updateError) {
+      if (updateError.code === UNIQUE_VIOLATION) {
+        throw new DuplicateDailyLogError();
+      }
       console.error("saveDailyLog update error", updateError);
       throw new Error("수업 기록을 저장하지 못했어요. 다시 시도해주세요.");
     }
@@ -287,6 +329,10 @@ export async function saveDailyLog(input: DailyLogFormInput) {
       .single();
 
     if (insertError || !created) {
+      // pre-check를 동시에 통과한 race는 DB unique index가 막는다 → 같은 사용자 문구로
+      if (insertError?.code === UNIQUE_VIOLATION) {
+        throw new DuplicateDailyLogError();
+      }
       console.error("saveDailyLog insert error", insertError);
       throw new Error("수업 기록을 저장하지 못했어요. 다시 시도해주세요.");
     }

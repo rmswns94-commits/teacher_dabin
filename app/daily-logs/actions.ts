@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { deleteDailyLog, saveDailyLog } from "@/lib/supabase/queries/daily-logs";
+import {
+  deleteDailyLog,
+  DuplicateDailyLogError,
+  saveDailyLog,
+} from "@/lib/supabase/queries/daily-logs";
 import { dailyLogSchema, type DailyLogFormInput } from "@/lib/validation/daily-log";
 
 export async function saveDailyLogAction(input: DailyLogFormInput) {
@@ -18,6 +22,11 @@ export async function saveDailyLogAction(input: DailyLogFormInput) {
   try {
     dailyLogId = await saveDailyLog(parsed.data);
   } catch (error) {
+    // 중복은 일반 오류가 아니라 전용 경고 dialog로 안내한다 (form 내용은 보존)
+    if (error instanceof DuplicateDailyLogError) {
+      return { error: error.message, duplicate: true as const };
+    }
+
     console.error("saveDailyLogAction error", error);
     return {
       error:
