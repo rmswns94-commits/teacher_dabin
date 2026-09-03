@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 
+import { Sparkles } from "lucide-react";
+
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
@@ -27,11 +29,85 @@ import {
   type GrowthMakeupRow,
 } from "@/lib/supabase/queries/growth-notes";
 import { getCurrentUserMemberships } from "@/lib/supabase/queries/students";
+import type { GrowthAchievementType } from "@/lib/supabase/types";
+import { cn } from "@/lib/utils";
 
 // 한국 기준 주 시작(월요일). 날짜 문자열만으로 계산해 timezone 밀림이 없다.
 function weekStartOf(ymd: string) {
   return addDaysStr(ymd, -((dayOfWeekOf(ymd) + 6) % 7));
 }
+
+
+// 9개 성장왕 카드 테마 — 왕의 성격에 맞는 파스텔 그라데이션 + 반짝 포인트색.
+// 장식은 정적(sparkle 아이콘 + 빛번짐)이라 iPad 성능 부담이 없다.
+const growthKingThemes: Record<
+  GrowthAchievementType,
+  { card: string; title: string; desc: string; sparkle: string }
+> = {
+  // 꾸준함왕 — 성실함: 연베이지+크림, 골드 포인트
+  consistency_master: {
+    card: "border-[#ecdfc8] bg-gradient-to-br from-[#fdf9ef] via-[#f9f1e0] to-[#f4e9d3]",
+    title: "text-[#6f5a30]",
+    desc: "text-[#8b7550]",
+    sparkle: "text-[#cfae67]",
+  },
+  // 단어왕 — 똑똑함: 라벤더+연보라, 보랏빛 sparkle
+  vocabulary_master: {
+    card: "border-[#ded2f0] bg-gradient-to-br from-[#faf7ff] via-[#f2ecfc] to-[#e9e0f8]",
+    title: "text-[#5c4a9c]",
+    desc: "text-[#7c6fa8]",
+    sparkle: "text-[#a88fd8]",
+  },
+  // 집중왕 — 차분한 몰입: 민트+세이지, 청록 포인트
+  focus_master: {
+    card: "border-[#cfe6d8] bg-gradient-to-br from-[#f4fbf7] via-[#e8f5ec] to-[#dcefe4]",
+    title: "text-[#2f6d54]",
+    desc: "text-[#5c8272]",
+    sparkle: "text-[#7fbfa4]",
+  },
+  // 발표왕 — 밝은 자신감: 피치+코랄, 별빛 포인트
+  presentation_master: {
+    card: "border-[#f4d5c4] bg-gradient-to-br from-[#fff6f0] via-[#ffe9dd] to-[#ffdfcf]",
+    title: "text-[#b05f3e]",
+    desc: "text-[#b3785f]",
+    sparkle: "text-[#f0a583]",
+  },
+  // 배려왕 — 따뜻함: 블러시 핑크+연살구
+  kindness_master: {
+    card: "border-[#f3cfdb] bg-gradient-to-br from-[#fff6f8] via-[#ffe9ef] to-[#fcdde7]",
+    title: "text-[#a94f6e]",
+    desc: "text-[#b1798d]",
+    sparkle: "text-[#ef9db8]",
+  },
+  // 질문왕 — 호기심: 하늘색+연노랑, 반짝 별 포인트
+  question_master: {
+    card: "border-[#d4e6f4] bg-gradient-to-br from-[#f3faff] via-[#e9f4fe] to-[#fdf6dd]",
+    title: "text-[#3d6d99]",
+    desc: "text-[#6d88a0]",
+    sparkle: "text-[#7fb1dc]",
+  },
+  // 노력왕 — 성장 응원: 연하늘+민트 오로라
+  effort_master: {
+    card: "border-[#cfe7e2] bg-gradient-to-br from-[#f2fafc] via-[#e7f5f4] to-[#e2f2e9]",
+    title: "text-[#2e7d72]",
+    desc: "text-[#5f8d85]",
+    sparkle: "text-[#7cc4b8]",
+  },
+  // 개근왕 — 건강한 성실: 연초록+크림
+  attendance_master: {
+    card: "border-[#d8e8c6] bg-gradient-to-br from-[#f7fbf0] via-[#eef7e2] to-[#e4f1d6]",
+    title: "text-[#58762e]",
+    desc: "text-[#7c9159]",
+    sparkle: "text-[#a8c878]",
+  },
+  // 틈새왕 — 빈틈없는 완수: 레몬크림+피치베이지
+  makeup_master: {
+    card: "border-[#eeddb9] bg-gradient-to-br from-[#fffbee] via-[#fdf3d9] to-[#f9e9d2]",
+    title: "text-[#8a6a25]",
+    desc: "text-[#99804f]",
+    sparkle: "text-[#dcb85f]",
+  },
+};
 
 // 단어왕 판정용 최근 시험 조회는 90일로 bounded (전체 history 조회 금지)
 const VOCAB_WINDOW_DAYS = 90;
@@ -74,24 +150,48 @@ export default async function GrowthNotesPage({
           <section>
             <h2 className="text-base font-bold text-[#3a2f2c]">9개의 성장왕</h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {growthAchievementValues.map((type) => (
-                <div
-                  key={type}
-                  className="rounded-3xl border border-[#efe4de] bg-[#fffdfb] p-4 shadow-sm"
-                >
-                  <div className="flex items-center gap-2">
-                    <span aria-hidden className="text-2xl">
-                      {growthEmojis[type]}
-                    </span>
-                    <span className="text-[15px] font-bold text-[#3a2f2c]">
-                      {growthLabels[type]}
-                    </span>
+              {growthAchievementValues.map((type) => {
+                const theme = growthKingThemes[type];
+
+                return (
+                  <div
+                    key={type}
+                    className={cn(
+                      "relative overflow-hidden rounded-3xl border p-4 shadow-sm transition",
+                      "hover:-translate-y-0.5 hover:shadow-[0_8px_22px_rgba(120,100,90,0.12)]",
+                      theme.card,
+                    )}
+                  >
+                    {/* 은은한 빛번짐 + 정적 sparkle 1~2개 (애니메이션/깜빡임 없음) */}
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute -right-7 -top-9 h-24 w-24 rounded-full bg-white/50 blur-2xl"
+                    />
+                    <Sparkles
+                      aria-hidden
+                      className={cn("pointer-events-none absolute right-3 top-3 h-4 w-4", theme.sparkle)}
+                    />
+                    <Sparkles
+                      aria-hidden
+                      className={cn(
+                        "pointer-events-none absolute right-8 top-7 h-2.5 w-2.5 opacity-60",
+                        theme.sparkle,
+                      )}
+                    />
+                    <div className="flex items-center gap-2">
+                      <span aria-hidden className="text-2xl drop-shadow-sm">
+                        {growthEmojis[type]}
+                      </span>
+                      <span className={cn("text-[15px] font-bold", theme.title)}>
+                        {growthLabels[type]}
+                      </span>
+                    </div>
+                    <p className={cn("mt-2 text-sm leading-6", theme.desc)}>
+                      {growthGuideDescriptions[type]}
+                    </p>
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-[#6b5d58]">
-                    {growthGuideDescriptions[type]}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
 
