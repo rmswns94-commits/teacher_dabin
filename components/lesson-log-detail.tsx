@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BookOpen, CircleArrowRight, NotebookTabs, PencilLine } from "lucide-react";
 
+import { DailyLogDeleteButton } from "@/components/daily-log-delete-button";
 import { AttendanceBadge, DailyLogStatusBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -89,11 +90,19 @@ export function LessonLogDetail({
               </div>
             ) : null}
           </div>
-          <Button variant="secondary" size="sm" className="gap-1.5" asChild>
-            <Link href={`/daily-logs/${detail.id}/edit`}>
-              <PencilLine className="h-3.5 w-3.5" /> 수정하기
-            </Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" size="sm" className="gap-1.5" asChild>
+              <Link href={`/daily-logs/${detail.id}/edit`}>
+                <PencilLine className="h-3.5 w-3.5" /> 수정하기
+              </Link>
+            </Button>
+            <DailyLogDeleteButton
+              dailyLogId={detail.id}
+              groupName={detail.group?.name ?? "수업 그룹"}
+              dateLabel={formatKoreanDate(detail.class_date, true)}
+              timeRange={timeRange}
+            />
+          </div>
         </div>
 
         {/* 수업 요약 — 상태 · 수업 제목 · 공통 진도 (수업 내용은 공통 진도로 통합됨) */}

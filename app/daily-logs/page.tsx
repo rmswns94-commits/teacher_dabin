@@ -63,7 +63,7 @@ function buildQuery(params: {
 export default async function DailyLogsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ month?: string; date?: string; groupId?: string; status?: string; log?: string }>;
+  searchParams?: Promise<{ month?: string; date?: string; groupId?: string; status?: string; log?: string; deleted?: string }>;
 }) {
   const params = (await searchParams) ?? {};
   const today = todayDateString();
@@ -170,6 +170,11 @@ export default async function DailyLogsPage({
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
         <div className="mx-auto w-full max-w-[1150px]">
+          {params.deleted ? (
+            <div className="mb-4 rounded-2xl border border-[#d8ebe0] bg-[#f0faf5] px-4 py-3 text-sm text-[#2f6d54]">
+              수업일지를 삭제했어요.
+            </div>
+          ) : null}
           <PageHeader
             title="수업 일지"
             description="매일의 수업 기록을 날짜별로 꺼내볼 수 있어요."

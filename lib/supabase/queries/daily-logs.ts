@@ -478,6 +478,88 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   return dailyLogId;
 }
 
+// 수업일지 안전 삭제. 실제 FK 정책 기준으로 처리한다:
+// - student_lesson_logs.daily_log_id = ON DELETE CASCADE → 출결/평가는 DB가 함께 삭제
+// - student_growth_checks.daily_log_id = ON DELETE CASCADE → legacy 체크도 자동 삭제
+// - student_praises.daily_log_id = ON DELETE SET NULL → orphan 칭찬이 남지 않게 먼저 명시 삭제
+// - makeup_lessons.student_lesson_log_id = ON DELETE SET NULL → 미처리(required/scheduled)
+//   보충만 함께 삭제하고, 완료/취소된 보충 이력은 링크만 해제된 채 보존한다
+// 학생/그룹/스케줄/교재/캘린더 일정은 건드리지 않는다.
+export async function deleteDailyLog(dailyLogId: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  // ownership 검증 — 다른 Teacher의 일지 id로는 삭제 불가 (RLS + 명시 확인)
+  const { data: existing } = await supabase
+    .from("daily_logs")
+    .select("id, class_date")
+    .eq("id", dailyLogId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!existing) {
+    throw new Error("수업일지를 찾을 수 없어요.");
+  }
+
+  // 이 일지에 종속된 lesson log id를 batch 1쿼리로 수집 (학생별 반복 쿼리 금지)
+  const { data: lessonRows, error: lessonReadError } = await supabase
+    .from("student_lesson_logs")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("daily_log_id", dailyLogId);
+
+  if (lessonReadError) {
+    console.error("deleteDailyLog lesson read error", lessonReadError);
+    throw new Error("수업일지를 삭제하지 못했어요. 다시 시도해주세요.");
+  }
+
+  const lessonLogIds = (lessonRows ?? []).map((row) => row.id as string);
+
+  // 이 일지의 결석에서 생성된 "미처리" 보충만 함께 삭제 (완료/취소 이력은 보존)
+  if (lessonLogIds.length > 0) {
+    const { error: makeupError } = await supabase
+      .from("makeup_lessons")
+      .delete()
+      .eq("user_id", user.id)
+      .in("student_lesson_log_id", lessonLogIds)
+      .in("status", ["required", "scheduled"]);
+
+    if (makeupError) {
+      console.error("deleteDailyLog makeup error", makeupError);
+      throw new Error("보충 기록을 정리하지 못했어요. 다시 시도해주세요.");
+    }
+  }
+
+  // 이 일지의 칭찬 한표 삭제 (FK가 SET NULL이라 명시적으로 지워 orphan 방지)
+  const { error: praiseError } = await supabase
+    .from("student_praises")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("daily_log_id", dailyLogId);
+
+  if (praiseError) {
+    console.error("deleteDailyLog praise error", praiseError);
+    throw new Error("칭찬 기록을 정리하지 못했어요. 다시 시도해주세요.");
+  }
+
+  const { error: deleteError } = await supabase
+    .from("daily_logs")
+    .delete()
+    .eq("id", dailyLogId)
+    .eq("user_id", user.id);
+
+  if (deleteError) {
+    console.error("deleteDailyLog error", deleteError);
+    throw new Error("수업일지를 삭제하지 못했어요. 다시 시도해주세요.");
+  }
+
+  return existing.class_date as string;
+}
+
 // 일지 수정/상세 화면에서 기존 칭찬을 복원할 때 사용 (쿼리 1번).
 export type DailyLogPraiseRow = { student_id: string; category: string; comment: string | null };
 
