@@ -334,24 +334,29 @@ export function DailyLogForm({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* iPad Safari date input은 intrinsic min-width가 커서, grid 자식과 input에
+              min-w-0/max-w-full이 없으면 옆 칸(수업 그룹)을 침범한다 — 학생 폼과 동일 패턴 */}
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="block">
+            <label className="block min-w-0">
               <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">날짜</span>
               <input
                 type="date"
                 value={classDate}
                 onChange={(event) => setClassDate(event.target.value)}
-                className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8]"
+                className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8]"
                 required
               />
             </label>
 
-            <div className="block">
+            <div className="block min-w-0">
               <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">수업 그룹</span>
-              <div className="flex items-center justify-between rounded-2xl border border-[#ece0db] bg-[#f8f3ef] px-3 py-2.5 text-sm text-[#2b2323]">
-                <span className="font-medium">{group.name}</span>
+              <div className="flex min-w-0 items-center justify-between gap-2 rounded-2xl border border-[#ece0db] bg-[#f8f3ef] px-3 py-2.5 text-sm text-[#2b2323]">
+                <span className="min-w-0 truncate font-medium">{group.name}</span>
                 {!dailyLogId ? (
-                  <Link href="/daily-logs/new" className="text-xs text-[#5c4ca8] hover:underline">
+                  <Link
+                    href="/daily-logs/new"
+                    className="shrink-0 text-xs text-[#5c4ca8] hover:underline"
+                  >
                     변경
                   </Link>
                 ) : null}
