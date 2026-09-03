@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { GroupStudentList } from "@/components/group-student-list";
 import { HighlightCard } from "@/components/highlight-card";
 import { PageHeader } from "@/components/page-header";
 import { ScheduleSetEditor } from "@/components/schedule-set-editor";
@@ -515,27 +516,15 @@ export default async function GroupDetailPage({
                       아직 이 반에 등록된 학생이 없어요.
                     </div>
                   ) : (
-                    <div className="space-y-1.5">
-                      {members.map((student) => (
-                        <Link key={student.id} href={`/students/${student.id}`} className="block">
-                          <div className="flex min-h-11 items-center justify-between gap-2 rounded-xl border border-[#f0e7e2] bg-[#fffdfb] px-3 py-2 transition hover:bg-[#f7f2fb]">
-                            <span className="flex items-center gap-2 text-sm font-medium text-[#2b2323]">
-                              <span
-                                aria-hidden
-                                className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-[#e8e1ff] to-[#f6dfe9] text-[10px] font-semibold text-[#4a3c52]"
-                              >
-                                {student.name.charAt(0)}
-                              </span>
-                              {student.name}
-                            </span>
-                            <span className="text-xs text-[#8a7b77]">
-                              {gradeDisplay[student.grade]}
-                              {student.school ? ` · ${student.school}` : ""}
-                            </span>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
+                    <GroupStudentList
+                      students={members.map((student) => ({
+                        id: student.id,
+                        name: student.name,
+                        grade: student.grade,
+                        school: student.school,
+                        gender: student.gender,
+                      }))}
+                    />
                   )}
 
                   <details className="rounded-2xl border border-[#ece0db] bg-[#fdfaf8]">
