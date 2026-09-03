@@ -245,16 +245,23 @@ export default async function StudentDetailPage({
 
                 {/* 2. 성별 · 생일 — compact info grid (wide에서 벌어지지 않게 max-w 제한) */}
                 <div className="mt-5 grid max-w-md grid-cols-2 gap-3">
-                  <div className="rounded-2xl bg-[#faf7f3] px-3.5 py-2.5">
+                  <div className="rounded-2xl bg-[#faf7f3] px-3.5 py-2.5 text-center">
                     <div className="text-xs text-[#8a7b77]">성별</div>
                     <div className="mt-0.5 text-[15px] font-medium text-[#2b2323]">
-                      {student.gender ? genderLabels[student.gender] : "미등록"}
+                      {student.gender ? (
+                        <>
+                          <span aria-hidden>{student.gender === "male" ? "👦 " : "👧 "}</span>
+                          {genderLabels[student.gender]}
+                        </>
+                      ) : (
+                        "미등록"
+                      )}
                     </div>
                   </div>
-                  <div className="rounded-2xl bg-[#faf7f3] px-3.5 py-2.5">
+                  <div className="rounded-2xl bg-[#faf7f3] px-3.5 py-2.5 text-center">
                     <div className="text-xs text-[#8a7b77]">생일</div>
                     <div className="mt-0.5 text-[15px] font-medium tabular-nums text-[#2b2323]">
-                      {student.birth_date ? student.birth_date.replaceAll("-", ".") : "미등록"}
+                      {student.birth_date ? `🎂 ${student.birth_date.replaceAll("-", ".")}` : "미등록"}
                     </div>
                   </div>
                 </div>
