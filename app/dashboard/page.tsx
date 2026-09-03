@@ -7,23 +7,21 @@ import {
   ListTodo,
   NotebookPen,
   NotebookTabs,
-  Plus,
 } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { Doodle, Tape } from "@/components/doodle";
 import { EncouragementCard } from "@/components/encouragement-card";
 import { NextClassCountdown } from "@/components/next-class-countdown";
-import { PendingButton } from "@/components/pending-button";
 import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { addPreparationItemAction, togglePreparationItemAction } from "@/app/groups/actions";
+import { togglePreparationItemAction } from "@/app/groups/actions";
 import { formatKoreanDate } from "@/lib/dates";
 import { formatTimeRange, getScheduleOverview, type ClassOccurrence } from "@/lib/schedule";
 import { getDisplayName } from "@/lib/supabase/auth";
 import { getDashboardOverview, getDashboardStats } from "@/lib/supabase/queries/dashboard";
-import { getGroupLatestProgress, getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
+import { getGroupLatestProgress } from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup, type ScheduleGroupInfo } from "@/lib/supabase/queries/schedules";
 import { getServerUser } from "@/lib/supabase/server";
 
@@ -61,31 +59,13 @@ export default async function DashboardPage() {
     (!scheduleOverview.next || scheduleOverview.next.daysFromNow > 0);
 
   const focusGroup = hero?.group ?? null;
-  const [latestProgress, focusMembers] = focusGroup
-    ? await Promise.all([
-        getGroupLatestProgress(focusGroup.id),
-        getGroupStudentsForCurrentUser(focusGroup.id),
-      ])
-    : [null, []];
+  const latestProgress = focusGroup ? await getGroupLatestProgress(focusGroup.id) : null;
 
+  // To do list는 read-only summary: 수업 그룹 상세에서 Teacher가 실제 등록한
+  // preparation_items만 보여준다 (Dashboard 직접 입력/추천 생성 없음).
   const prepItems = focusGroup?.preparation_items ?? [];
   const prepDone = prepItems.filter((item) => item.completed).length;
   const prepProgress = prepItems.length > 0 ? Math.round((prepDone / prepItems.length) * 100) : 0;
-
-  const focusMemberIds = new Set(focusMembers.filter((s) => !s.archived).map((s) => s.id));
-  const hasOpenMakeupInFocusGroup = overview.openMakeups.some(
-    (makeup) => makeup.student && focusMemberIds.has(makeup.student.id),
-  );
-  const suggestions = focusGroup
-    ? [
-        latestProgress?.homework ? "지난 숙제 확인" : null,
-        latestProgress?.next_lesson_plan ? "다음 수업 계획 확인" : null,
-        hasOpenMakeupInFocusGroup ? "보충학생 확인" : null,
-      ].filter(
-        (text): text is string =>
-          Boolean(text) && !prepItems.some((item) => item.text === text),
-      )
-    : [];
 
   const heroTodayLog = hero
     ? overview.todayLogs.find((log) => log.group_id === hero.group.id)
@@ -307,7 +287,7 @@ export default async function DashboardPage() {
                   <CardContent className="space-y-3">
                     {prepItems.length === 0 ? (
                       <div className="rounded-2xl bg-[#faf5f0] p-3 text-sm text-[#655d5d]">
-                        지금 준비할 항목이 없어요 🍃
+                        등록된 준비 항목이 없어요 🍃
                       </div>
                     ) : (
                       <ul className="divide-y divide-dashed divide-[#f4e2e8]">
@@ -348,35 +328,12 @@ export default async function DashboardPage() {
                       </ul>
                     )}
 
-                    {suggestions.length > 0 ? (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-xs text-[#8a7b77]">추천:</span>
-                        {suggestions.map((text) => (
-                          <form key={text} action={addPreparationItemAction.bind(null, focusGroup.id)}>
-                            <input type="hidden" name="text" value={text} />
-                            <button
-                              type="submit"
-                              className="rounded-full border border-[#d8ebe0] bg-white px-2.5 py-1 text-xs text-[#3d6d58] transition hover:bg-[#f0faf5]"
-                            >
-                              + {text}
-                            </button>
-                          </form>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    <form action={addPreparationItemAction.bind(null, focusGroup.id)} className="flex gap-2">
-                      <input
-                        name="text"
-                        maxLength={100}
-                        placeholder="수업 전에 챙길 일을 적어보세요"
-                        className="flex-1 rounded-xl border border-[#ece0db] bg-[#fdfaf6] px-3 py-2 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
-                        required
-                      />
-                      <PendingButton variant="secondary" size="sm" pendingText="추가 중..." className="gap-1">
-                        <Plus className="h-3.5 w-3.5" /> 추가
-                      </PendingButton>
-                    </form>
+                    <Link
+                      href={`/groups/${focusGroup.id}`}
+                      className="block text-right text-xs text-[#5c4ca8] hover:underline"
+                    >
+                      준비 항목 관리 →
+                    </Link>
                   </CardContent>
                 </Card>
               ) : null}
