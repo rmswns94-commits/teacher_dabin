@@ -12,6 +12,7 @@ import {
   CircleArrowRight,
   CircleCheck,
   CircleX,
+  Cloud,
   Clock3,
   NotebookPen,
   NotebookTabs,
@@ -22,7 +23,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MakeupStatusBadge } from "@/components/status-badge";
 import { useHistoryImport } from "@/components/lesson-history-panel";
 import { registerDirtyCheck } from "@/components/unsaved-guard";
-import { saveDailyLogAction } from "@/app/daily-logs/actions";
+import {
+  autosaveDailyLogDraftAction,
+  discardDailyLogDraftAction,
+  saveDailyLogAction,
+} from "@/app/daily-logs/actions";
 import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comments";
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate } from "@/lib/dates";
@@ -134,6 +139,14 @@ function isComposingEvent(event: { nativeEvent: object }) {
   return Boolean((event.nativeEvent as { isComposing?: boolean }).isComposing);
 }
 
+// 자동 임시저장 주기 (final 저장과 별개 — background 보호용)
+const DAILY_LOG_AUTOSAVE_INTERVAL_MS = 60_000;
+
+function kstTimeLabel(iso: string) {
+  const kst = new Date(Date.parse(iso) + 9 * 3_600_000);
+  return `${String(kst.getUTCHours()).padStart(2, "0")}:${String(kst.getUTCMinutes()).padStart(2, "0")}`;
+}
+
 // 초등 quick check용 세그먼트 (같은 값을 다시 누르면 해제 — 미입력과 구분)
 function SegmentedToggle({
   label,
@@ -179,6 +192,7 @@ export function DailyLogForm({
   group,
   students,
   scheduleDays = [],
+  draft = null,
   initial,
 }: {
   dailyLogId?: string;
@@ -187,6 +201,8 @@ export function DailyLogForm({
   students: DailyLogFormStudent[];
   // 그룹 시간표 요일 (다음 수업 계획 기본 날짜 계산용 — 없으면 날짜 직접 선택)
   scheduleDays?: number[];
+  // 서버에서 발견한 자동 임시저장 draft (있으면 복구 배너 표시 — 자동 덮어쓰기 없음)
+  draft?: { id: string; updatedAt: string; payload: unknown } | null;
   initial?: {
     title: string;
     defaultProgress: string;
@@ -209,6 +225,8 @@ export function DailyLogForm({
     () => initial?.nextPlanDate || nextClassDateAfter(scheduleDays, initialClassDate) || "",
   );
   const [planDateTouched, setPlanDateTouched] = useState(Boolean(initial?.nextPlanDate));
+  // 학생 평가 UI는 초등/중등/고등 모든 학년 공통으로 사용한다.
+  const [vocabTotal, setVocabTotal] = useState(initial?.vocabTotal ?? "");
   const [showSummary, setShowSummary] = useState(false);
   const [entries, setEntries] = useState<Record<string, EntryState>>(() =>
     Object.fromEntries(students.map((student) => [student.studentId, initEntry(student)])),
@@ -256,12 +274,13 @@ export function DailyLogForm({
       homework,
       nextLessonPlan,
       nextPlanDate,
+      vocabTotal,
       entries,
     };
     if (initialSnapshotRef.current === null) {
       initialSnapshotRef.current = JSON.stringify(formStateRef.current);
     }
-  }, [classDate, title, defaultProgress, memo, homework, nextLessonPlan, nextPlanDate, entries]);
+  }, [classDate, title, defaultProgress, memo, homework, nextLessonPlan, nextPlanDate, vocabTotal, entries]);
   useEffect(
     () =>
       registerDirtyCheck(
@@ -270,8 +289,129 @@ export function DailyLogForm({
     [],
   );
 
-  // 학생 평가 UI는 초등/중등/고등 모든 학년 공통으로 사용한다.
-  const [vocabTotal, setVocabTotal] = useState(initial?.vocabTotal ?? "");
+  // ── 자동 임시저장 (1분) ────────────────────────────────────────────
+  // 조건: 변경 존재 + 이전 요청 미진행 + IME 조합 중 아님 + final 저장 중 아님.
+  // 성공해도 router.refresh/revalidate/side effect 없음 — draft snapshot만 갱신.
+  const [autosave, setAutosave] = useState<{
+    status: "idle" | "saving" | "saved" | "error";
+    savedAtLabel?: string;
+  }>({ status: "idle" });
+  const [draftPrompt, setDraftPrompt] = useState(Boolean(draft));
+  const draftIdRef = useRef<string | null>(draft?.id ?? null);
+  const lastSavedSnapshotRef = useRef<string | null>(null);
+  const autosaveInFlightRef = useRef(false);
+  const composingRef = useRef(false);
+  const finalSavingRef = useRef(false);
+
+  useEffect(() => {
+    const tick = async () => {
+      if (autosaveInFlightRef.current || composingRef.current || finalSavingRef.current) {
+        return;
+      }
+      const state = formStateRef.current as { classDate?: unknown };
+      const classDateNow = typeof state.classDate === "string" ? state.classDate : "";
+      if (!classDateNow) {
+        return;
+      }
+      const snapshot = JSON.stringify(formStateRef.current);
+      if (snapshot === lastSavedSnapshotRef.current) {
+        return; // 마지막 임시저장 이후 변경 없음 → DB write 금지
+      }
+      if (lastSavedSnapshotRef.current === null && snapshot === initialSnapshotRef.current) {
+        return; // 아무것도 바꾸지 않은 초기 상태
+      }
+      autosaveInFlightRef.current = true; // in-flight guard (요청 직렬화)
+      setAutosave({ status: "saving" });
+      const result = await autosaveDailyLogDraftAction({
+        draftId: draftIdRef.current,
+        dailyLogId: dailyLogId ?? null,
+        groupId: group.id,
+        classDate: classDateNow,
+        payload: formStateRef.current,
+      });
+      autosaveInFlightRef.current = false;
+      if ("error" in result) {
+        setAutosave({ status: "error" });
+        return; // 입력값은 그대로 — 다음 interval에서 재시도
+      }
+      draftIdRef.current = result.draftId;
+      lastSavedSnapshotRef.current = snapshot;
+      setDraftPrompt(false); // 새 임시저장이 생겼으니 예전 복구 배너는 내린다
+      setAutosave({ status: "saved", savedAtLabel: kstTimeLabel(result.updatedAt) });
+    };
+
+    const interval = setInterval(tick, DAILY_LOG_AUTOSAVE_INTERVAL_MS);
+    // 앱이 background로 갈 때 dirty면 한 번 더 저장 시도 (보조)
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") {
+        void tick();
+      }
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onHidden);
+    };
+    // group/dailyLogId는 이 폼 인스턴스에서 불변 (key remount)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 임시저장 복구/버리기 (자동 덮어쓰기 없음 — Teacher가 선택)
+  const restoreDraft = () => {
+    if (!draft) {
+      return;
+    }
+    const data = (draft.payload ?? {}) as Partial<{
+      classDate: string;
+      title: string;
+      defaultProgress: string;
+      memo: string;
+      homework: string;
+      nextLessonPlan: string;
+      nextPlanDate: string;
+      vocabTotal: string;
+      entries: Record<string, EntryState>;
+    }>;
+    if (typeof data.classDate === "string" && data.classDate) setClassDate(data.classDate);
+    if (typeof data.title === "string") setTitle(data.title);
+    if (typeof data.defaultProgress === "string") setDefaultProgress(data.defaultProgress);
+    if (typeof data.memo === "string") setMemo(data.memo);
+    if (typeof data.homework === "string") setHomework(data.homework);
+    if (typeof data.nextLessonPlan === "string") setNextLessonPlan(data.nextLessonPlan);
+    if (typeof data.nextPlanDate === "string") {
+      setNextPlanDate(data.nextPlanDate);
+      if (data.nextPlanDate) setPlanDateTouched(true);
+    }
+    if (typeof data.vocabTotal === "string") setVocabTotal(data.vocabTotal);
+    if (data.entries && typeof data.entries === "object") {
+      setEntries((prev) => {
+        const next = { ...prev };
+        for (const studentId of Object.keys(next)) {
+          const saved = data.entries?.[studentId];
+          if (saved) {
+            next[studentId] = { ...next[studentId], ...saved };
+          }
+        }
+        return next;
+      });
+    }
+    draftIdRef.current = draft.id;
+    lastSavedSnapshotRef.current = null;
+    setDraftPrompt(false);
+    setAutosave({ status: "saved", savedAtLabel: kstTimeLabel(draft.updatedAt) });
+  };
+
+  const discardDraft = () => {
+    if (!draft) {
+      return;
+    }
+    setDraftPrompt(false);
+    if (draftIdRef.current === draft.id) {
+      draftIdRef.current = null;
+    }
+    void discardDailyLogDraftAction(draft.id);
+  };
+
   // 칭찬 한표 인라인 에디터: 열려 있는 학생 id + 작성 중인 draft
   // editIndex가 null이면 새 칭찬 추가, 숫자면 해당 index 칭찬 수정
   const [praiseOpenFor, setPraiseOpenFor] = useState<string | null>(null);
@@ -333,9 +473,11 @@ export function DailyLogForm({
       setError("다음 수업 계획 날짜는 수업일 이후로 선택해주세요.");
       return;
     }
+    finalSavingRef.current = true; // final 저장 중 autosave tick 중단
     startTransition(async () => {
       const result = await saveDailyLogAction({
         dailyLogId,
+        draftId: draftIdRef.current,
         classDate,
         groupId: group.id,
         title,
@@ -373,6 +515,8 @@ export function DailyLogForm({
         }),
       });
 
+      finalSavingRef.current = false;
+
       if (result && "duplicate" in result && result.duplicate) {
         setShowSummary(false);
         setDuplicateOpen(true);
@@ -386,7 +530,49 @@ export function DailyLogForm({
   };
 
   return (
-    <div className="space-y-5">
+    <div
+      className="space-y-5"
+      onCompositionStart={() => {
+        composingRef.current = true;
+      }}
+      onCompositionEnd={() => {
+        composingRef.current = false;
+      }}
+    >
+      {/* 자동 임시저장 상태 — final 저장과 별개인 background 보호 표시 */}
+      {autosave.status !== "idle" ? (
+        <div className="-mb-3 flex justify-end text-[11px]">
+          {autosave.status === "saving" ? (
+            <span className="flex items-center gap-1 text-[#a79996]">
+              <Cloud className="h-3 w-3" aria-hidden /> 저장 중...
+            </span>
+          ) : autosave.status === "saved" ? (
+            <span className="flex items-center gap-1 text-[#7ba58f]">
+              <Cloud className="h-3 w-3" aria-hidden /> 임시저장됨 · {autosave.savedAtLabel}
+            </span>
+          ) : (
+            <span className="text-[#b0766f]">임시저장 실패 · 입력 내용은 화면에 남아 있어요</span>
+          )}
+        </div>
+      ) : null}
+
+      {draftPrompt && draft ? (
+        <div className="rounded-2xl border border-[#e8ddf3] bg-[#fbf8ff] px-4 py-3 text-sm text-[#4d3a3a]">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              임시저장된 내용이 있어요 · 마지막 저장 {kstTimeLabel(draft.updatedAt)}
+            </span>
+            <span className="flex gap-2">
+              <Button type="button" size="sm" onClick={restoreDraft}>
+                불러오기
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={discardDraft}>
+                버리기
+              </Button>
+            </span>
+          </div>
+        </div>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

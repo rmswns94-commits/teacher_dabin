@@ -13,13 +13,18 @@ import {
   updateDailyLogFields,
 } from "@/lib/supabase/queries/daily-logs";
 import {
+  deleteDailyLogDraftById,
+  deleteDailyLogDraftsForIdentity,
+  upsertDailyLogDraft,
+} from "@/lib/supabase/queries/daily-log-drafts";
+import {
   dailyLogSchema,
   historyLogUpdateSchema,
   type DailyLogFormInput,
   type HistoryLogUpdateInput,
 } from "@/lib/validation/daily-log";
 
-export async function saveDailyLogAction(input: DailyLogFormInput) {
+export async function saveDailyLogAction(input: DailyLogFormInput & { draftId?: string | null }) {
   const parsed = dailyLogSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -44,6 +49,15 @@ export async function saveDailyLogAction(input: DailyLogFormInput) {
           : "수업 기록을 저장하지 못했어요. 다시 시도해주세요.",
     };
   }
+
+  // final 저장 성공 → 임시저장 draft 정리 (autosave copy가 중복으로 남지 않게)
+  await deleteDailyLogDraftsForIdentity(
+    parsed.data.dailyLogId ? { dailyLogId: parsed.data.dailyLogId } : {},
+  );
+  await deleteDailyLogDraftsForIdentity({
+    groupId: parsed.data.groupId,
+    classDate: parsed.data.classDate,
+  });
 
   revalidatePath("/daily-logs");
   revalidatePath(`/daily-logs/${dailyLogId}`);
@@ -163,5 +177,42 @@ export async function updateHistoryLogAction(input: HistoryLogUpdateInput) {
           ? error.message
           : "이전 수업 기록을 저장하지 못했어요. 다시 시도해주세요.",
     };
+  }
+}
+
+// ── 수업일지 자동 임시저장 ──────────────────────────────────────────────
+// background persistence 전용: revalidate/redirect/side effect 전혀 없음.
+// (학생 기록·칭찬·보충·연동 Todo·캘린더·성장노트는 final 저장에서만 변한다)
+export async function autosaveDailyLogDraftAction(input: {
+  draftId: string | null;
+  dailyLogId: string | null;
+  groupId: string;
+  classDate: string;
+  payload: unknown;
+}) {
+  if (!input.groupId || !/^\d{4}-\d{2}-\d{2}$/.test(input.classDate)) {
+    return { error: "임시저장하지 못했어요." };
+  }
+
+  try {
+    if (JSON.stringify(input.payload ?? {}).length > 200_000) {
+      return { error: "임시저장 내용이 너무 커요." };
+    }
+
+    const result = await upsertDailyLogDraft(input);
+    return { success: true as const, draftId: result.draftId, updatedAt: result.updatedAt };
+  } catch (error) {
+    console.error("autosaveDailyLogDraftAction error", error);
+    return { error: "임시저장하지 못했어요." };
+  }
+}
+
+export async function discardDailyLogDraftAction(draftId: string) {
+  try {
+    await deleteDailyLogDraftById(draftId);
+    return { success: true as const };
+  } catch (error) {
+    console.error("discardDailyLogDraftAction error", error);
+    return { error: "임시저장을 삭제하지 못했어요." };
   }
 }

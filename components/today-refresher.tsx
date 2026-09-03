@@ -13,18 +13,26 @@ function kstToday() {
 export function TodayRefresher() {
   const router = useRouter();
   const dayRef = useRef(kstToday());
+  const lastRefreshRef = useRef(0);
 
   useEffect(() => {
+    lastRefreshRef.current = Date.now(); // 페이지 로드 시각 (초기 fresh)
     const refreshIfStale = () => {
       if (kstToday() !== dayRef.current) {
         dayRef.current = kstToday();
+        lastRefreshRef.current = Date.now();
         router.refresh();
       }
     };
     const onWake = () => {
       refreshIfStale();
-      // foreground 복귀 시 완료/삭제 반영도 최신화
-      if (document.visibilityState === "visible") {
+      // foreground 복귀: 매번 전체 refresh하지 않고, 마지막 갱신 후 5분 이상
+      // 지났을 때만 한 번 최신화한다 (불필요한 반복 refresh 방지)
+      if (
+        document.visibilityState === "visible" &&
+        Date.now() - lastRefreshRef.current > 5 * 60_000
+      ) {
+        lastRefreshRef.current = Date.now();
         router.refresh();
       }
     };

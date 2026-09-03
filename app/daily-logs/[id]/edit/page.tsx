@@ -5,6 +5,7 @@ import { DailyLogForm, type DailyLogFormStudent } from "@/components/daily-log-f
 import { PageHeader } from "@/components/page-header";
 import { formatKoreanDate } from "@/lib/dates";
 import { mergeLegacyLessonContent } from "@/lib/progress";
+import { getDailyLogDraft } from "@/lib/supabase/queries/daily-log-drafts";
 import {
   getDailyLogDetailForCurrentUser,
   getPraisesForDailyLog,
@@ -14,9 +15,11 @@ import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
 
 export default async function EditDailyLogPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [log, praiseRows] = await Promise.all([
+  const [log, praiseRows, draftRow] = await Promise.all([
     getDailyLogDetailForCurrentUser(id),
     getPraisesForDailyLog(id),
+    // 이 일지의 수정 draft (있으면 폼에서 복구 배너 — 원본은 final 저장 전까지 불변)
+    getDailyLogDraft({ dailyLogId: id }),
   ]);
 
   if (!log) {
@@ -104,6 +107,11 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           group={{ id: log.group_id, name: log.group?.name ?? "수업 그룹", grade: log.group?.grade }}
           students={students}
           scheduleDays={groupSchedules.map((slot) => slot.day_of_week)}
+          draft={
+            draftRow
+              ? { id: draftRow.id, updatedAt: draftRow.updated_at, payload: draftRow.payload }
+              : null
+          }
           initial={{
             title: log.title ?? "",
             // migration 미적용 legacy row도 수업 내용을 잃지 않게 병합해 편집한다
