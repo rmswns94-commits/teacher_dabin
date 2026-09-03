@@ -279,13 +279,14 @@ export function StudentEditDialog({
       <Button
         type="button"
         variant="secondary"
-        className="gap-2"
+        size="sm"
+        className="gap-1.5 text-xs"
         onClick={() => {
           setError("");
           setOpen(true);
         }}
       >
-        <SquarePen className="h-4 w-4" /> 학생 정보 수정하기
+        <SquarePen className="h-3.5 w-3.5" /> 학생 정보 수정하기
       </Button>
       {savedMessage ? <span className="text-xs text-[#3d7f64]">{savedMessage}</span> : null}
 
