@@ -11,7 +11,7 @@ import { togglePreparationItemAction } from "@/app/groups/actions";
 import { dayOfWeekOf } from "@/lib/calendar";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { groupIconOf } from "@/lib/group-icons";
-import { activePreparationItems } from "@/lib/preparation";
+import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
 import { formatTimeRange } from "@/lib/schedule";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
@@ -54,7 +54,8 @@ export default async function TodayTodosPage() {
   const sections = groups
     .filter((group) => !group.archived)
     .map((group) => {
-      const items: TodayTodoItem[] = activePreparationItems(group.preparation_items)
+      const visible = activePreparationItems(group.preparation_items);
+      const items: TodayTodoItem[] = visible
         .filter(
           (item) => !item.completed && (!item.dueDate || item.dueDate <= today),
         )
@@ -68,10 +69,13 @@ export default async function TodayTodosPage() {
           const keyB = b.item.dueDate ?? "9999-12-31";
           return keyA.localeCompare(keyB);
         });
+      // 오늘(KST) 완료한 항목은 당일 동안 취소선으로 유지 — 다시 눌러 즉시 원복 가능.
+      // legacy(completed=true, completedAt 없음)는 완료 이력으로 취급해 표시하지 않는다.
+      const doneToday = visible.filter((item) => isCompletedToday(item, today));
 
-      return { group, items, time: todayTimeByGroup.get(group.id) ?? null };
+      return { group, items, doneToday, time: todayTimeByGroup.get(group.id) ?? null };
     })
-    .filter((section) => section.items.length > 0)
+    .filter((section) => section.items.length > 0 || section.doneToday.length > 0)
     .sort((a, b) => {
       // 오늘 수업 있는 그룹(시작 시간순) → 나머지(가나다순)
       const timeA = a.time?.start ?? "99:99";
@@ -84,6 +88,7 @@ export default async function TodayTodosPage() {
     (sum, section) => sum + section.items.filter((entry) => entry.isPastDue).length,
     0,
   );
+  const doneTodayCount = sections.reduce((sum, section) => sum + section.doneToday.length, 0);
 
   return (
     <AppShell>
@@ -103,7 +108,7 @@ export default async function TodayTodosPage() {
             }
           />
 
-          {totalCount > 0 ? (
+          {totalCount > 0 || doneTodayCount > 0 ? (
             <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-[#655d5d]">
               <span className="rounded-full bg-[#efe8fb] px-2.5 py-1 text-xs font-medium tabular-nums text-[#5d4ba5]">
                 남은 할 일 {totalCount}개
@@ -111,6 +116,11 @@ export default async function TodayTodosPage() {
               {pastDueCount > 0 ? (
                 <span className="rounded-full bg-[#fdf3e4] px-2.5 py-1 text-xs font-medium tabular-nums text-[#94702f]">
                   지난 할 일 {pastDueCount}개
+                </span>
+              ) : null}
+              {doneTodayCount > 0 ? (
+                <span className="rounded-full bg-[#e4f4ec] px-2.5 py-1 text-xs font-medium tabular-nums text-[#3d7f64]">
+                  오늘 완료 {doneTodayCount}개
                 </span>
               ) : null}
             </div>
@@ -124,7 +134,7 @@ export default async function TodayTodosPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {sections.map(({ group, items, time }) => (
+              {sections.map(({ group, items, doneToday, time }) => (
                 <Card key={group.id}>
                   <CardContent className="p-4">
                     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-dashed border-[#f0e3dc] pb-2.5">
@@ -181,6 +191,42 @@ export default async function TodayTodosPage() {
                                       ? ` · ${formatKoreanDate(item.dueDate)} · 미완료`
                                       : " · 오늘"
                                     : ""}
+                                </span>
+                              </span>
+                            </button>
+                          </form>
+                          <TodoDeleteButton groupId={group.id} itemId={item.id} text={item.text} />
+                        </li>
+                      ))}
+
+                      {/* 오늘 완료한 항목 — 당일에는 취소선으로 유지, 다시 누르면 즉시 원복.
+                          완료는 삭제가 아니며 내일부터는 이 목록에서 사라진다 (row 보존). */}
+                      {doneToday.map((item) => (
+                        <li key={item.id} className="flex items-center gap-1">
+                          <form
+                            action={togglePreparationItemAction.bind(null, group.id, item.id)}
+                            className="min-w-0 flex-1"
+                          >
+                            <button
+                              type="submit"
+                              aria-pressed={true}
+                              className="flex min-h-11 w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition hover:bg-[#f4f9f6]"
+                            >
+                              <span
+                                aria-hidden
+                                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#8fc7ab]"
+                              >
+                                <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                              </span>
+                              <span className="min-w-0 flex-1 opacity-75">
+                                <span className="block break-words text-sm text-[#8a7b77] [text-decoration:line-through]">
+                                  {item.text}
+                                </span>
+                                <span className="mt-0.5 block text-[11px] text-[#b0a39f]">
+                                  {item.source === "daily_log_next_plan"
+                                    ? "다음 수업 계획"
+                                    : "직접 등록"}
+                                  {" · 완료"}
                                 </span>
                               </span>
                             </button>

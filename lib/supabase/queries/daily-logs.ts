@@ -246,6 +246,7 @@ async function syncNextPlanPreparation(
         id: existing ? existing.id : `nlp-${dailyLogId}`,
         text: planText,
         completed: existing && !existing.dismissed ? existing.completed : false,
+        completedAt: existing && !existing.dismissed ? existing.completedAt ?? null : null,
         dueDate: planDate,
         source: "daily_log_next_plan",
         sourceDailyLogId: dailyLogId,

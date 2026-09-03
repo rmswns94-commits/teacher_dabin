@@ -419,8 +419,16 @@ export async function addPreparationItemAction(groupId: string, formData: FormDa
 
 export async function togglePreparationItemAction(groupId: string, itemId: string) {
   const items = await getOwnedPreparationItems(groupId);
+  // 완료 toggle: 완료 시 completedAt 기록(당일 취소선 유지/다음날 숨김 기준),
+  // 다시 누르면 즉시 원복 — 확인 dialog 없음 (빠른 undo UX)
   const next = items.map((item) =>
-    item.id === itemId ? { ...item, completed: !item.completed } : item,
+    item.id === itemId
+      ? {
+          ...item,
+          completed: !item.completed,
+          completedAt: !item.completed ? new Date().toISOString() : null,
+        }
+      : item,
   );
 
   await updateGroupPreparationItems(groupId, next);

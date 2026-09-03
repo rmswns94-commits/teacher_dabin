@@ -6,3 +6,14 @@ import type { PreparationItem } from "@/lib/supabase/types";
 export function activePreparationItems(items: PreparationItem[] | null | undefined) {
   return (items ?? []).filter((item) => !item.dismissed);
 }
+
+// timestamptz(UTC ISO) → KST 달력 날짜. 완료일 판정은 반드시 Asia/Seoul 기준.
+export function kstDateOfTimestamp(iso: string) {
+  return new Date(Date.parse(iso) + 9 * 3_600_000).toISOString().slice(0, 10);
+}
+
+// 오늘(KST) 완료한 항목인지 — legacy(completed=true, completedAt 없음)는 과거 완료 이력으로
+// 취급해 false (임의 backfill 금지, 오늘 화면에 재노출하지 않는다).
+export function isCompletedToday(item: PreparationItem, today: string) {
+  return Boolean(item.completed && item.completedAt && kstDateOfTimestamp(item.completedAt) === today);
+}

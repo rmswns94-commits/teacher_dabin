@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { DashboardTodoCard } from "@/components/dashboard-todo-card";
-import { activePreparationItems } from "@/lib/preparation";
+import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
 import { currentEpochMs } from "@/lib/todo-window";
 import { getUpcomingExamEvents } from "@/lib/supabase/queries/calendar-events";
 import { formatTimeRange, getScheduleOverview, type ClassOccurrence } from "@/lib/schedule";
@@ -144,7 +144,13 @@ export default async function DashboardPage() {
   const duePlanItems = allGroups
     .flatMap((planGroup) =>
       (activePreparationItems(planGroup.preparation_items) as PreparationItem[])
-        .filter((item) => Boolean(item.dueDate) && item.dueDate === today)
+        .filter(
+          (item) =>
+            Boolean(item.dueDate) &&
+            item.dueDate === today &&
+            // 완료된 항목은 오늘(KST) 완료한 것만 취소선으로 유지 (legacy 완료 이력 제외)
+            (!item.completed || isCompletedToday(item, today)),
+        )
         .map((item) => ({ planGroup, item })),
     )
     .sort((a, b) => {

@@ -28,6 +28,7 @@ export type PreparationItem = {
   id: string;
   text: string;
   completed: boolean;
+  completedAt?: string | null; // 완료 시각(UTC ISO) — 완료 당일(KST) 표시/다음날 숨김 판정용
   // 날짜 있는 항목(다음 수업 계획 연동)용 optional 필드 — 기존 수동 항목은 필드 없음.
   // source가 daily_log_next_plan인 항목은 해당 일지 저장 시에만 생성/갱신/제거된다.
   dueDate?: string | null; // "YYYY-MM-DD"
