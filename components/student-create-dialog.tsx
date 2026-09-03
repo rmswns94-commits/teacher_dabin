@@ -112,13 +112,15 @@ function StudentFormDialog({
           />
         </label>
 
+        {/* grid item(label)과 input 모두 min-w-0 — iPad Safari date input의
+            intrinsic min-width가 트랙을 넘어 옆 칸(학교)을 침범하지 않게 한다 */}
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <label className="block">
+          <label className="block min-w-0">
             <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">학년</span>
             <select
               value={grade}
               onChange={(event) => setGrade(event.target.value)}
-              className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
             >
               {gradeOptions.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -126,12 +128,12 @@ function StudentFormDialog({
             </select>
           </label>
 
-          <label className="block">
+          <label className="block min-w-0">
             <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">성별 (선택)</span>
             <select
               value={gender}
               onChange={(event) => setGender(event.target.value)}
-              className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
             >
               <option value="">성별 선택</option>
               <option value="male">{genderLabels.male}</option>
@@ -139,25 +141,25 @@ function StudentFormDialog({
             </select>
           </label>
 
-          <label className="block">
+          <label className="block min-w-0">
             <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">생일 (선택)</span>
             <input
               type="date"
               value={birthDate}
               max={todayDateString()}
               onChange={(event) => setBirthDate(event.target.value)}
-              className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
             />
           </label>
 
-          <label className="block">
+          <label className="block min-w-0">
             <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">학교 (선택)</span>
             <input
               value={school}
               onChange={(event) => setSchool(event.target.value)}
               maxLength={80}
               placeholder="OO중학교"
-              className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#e3b9c9] placeholder:text-[#a79996]"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#e3b9c9] placeholder:text-[#a79996]"
             />
           </label>
         </div>

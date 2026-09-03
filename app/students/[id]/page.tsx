@@ -240,13 +240,14 @@ export default async function StudentDetailPage({
                     />
                   </label>
 
+                  {/* min-w-0: iPad Safari date input intrinsic width가 옆 칸을 침범하지 않게 */}
                   <div className="grid gap-4 md:grid-cols-2">
-                    <label className="block">
+                    <label className="block min-w-0">
                       <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">학년</span>
                       <select
                         name="grade"
                         defaultValue={student.grade}
-                        className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
+                        className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
                       >
                         {gradeOptions.map((option) => (
                           <option key={option.value} value={option.value}>{option.label}</option>
@@ -254,22 +255,22 @@ export default async function StudentDetailPage({
                       </select>
                     </label>
 
-                    <label className="block">
+                    <label className="block min-w-0">
                       <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">학교</span>
                       <input
                         name="school"
                         defaultValue={student.school ?? ""}
-                        className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
+                        className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
                         placeholder="학교명"
                       />
                     </label>
 
-                    <label className="block">
+                    <label className="block min-w-0">
                       <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">성별</span>
                       <select
                         name="gender"
                         defaultValue={student.gender ?? ""}
-                        className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
+                        className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
                       >
                         <option value="">성별 선택</option>
                         <option value="male">{genderLabels.male}</option>
@@ -277,14 +278,14 @@ export default async function StudentDetailPage({
                       </select>
                     </label>
 
-                    <label className="block">
+                    <label className="block min-w-0">
                       <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">생일</span>
                       <input
                         type="date"
                         name="birthDate"
                         defaultValue={student.birth_date ?? ""}
                         max={todayDateString()}
-                        className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
+                        className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
                       />
                     </label>
                   </div>
