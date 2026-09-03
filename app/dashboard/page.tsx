@@ -22,7 +22,7 @@ import { DashboardTodoCard } from "@/components/dashboard-todo-card";
 import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
 import { currentEpochMs } from "@/lib/todo-window";
 import { getUpcomingExamEvents } from "@/lib/supabase/queries/calendar-events";
-import { formatTimeRange, getScheduleOverview, type ClassOccurrence } from "@/lib/schedule";
+import { DAY_LABELS, formatTimeRange, getScheduleOverview, type ClassOccurrence } from "@/lib/schedule";
 import { getDisplayName } from "@/lib/supabase/auth";
 import { getDashboardOverview, getDashboardStats } from "@/lib/supabase/queries/dashboard";
 import { getCurrentUserGroups, getGroupLatestProgress } from "@/lib/supabase/queries/groups";
@@ -272,17 +272,23 @@ export default async function DashboardPage() {
                   </div>
                 ) : null}
 
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8b7ae6]">
-                  {isCurrentClass ? (
-                    <>
-                      <CirclePlay className="h-3.5 w-3.5" /> Current class
-                    </>
-                  ) : (
-                    <>
-                      <Clock3 className="h-3.5 w-3.5" /> Next class
-                    </>
-                  )}
-                  <Doodle kind="sparkle" className="h-4 w-4 text-[#c5b6e3]" />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8b7ae6]">
+                    {isCurrentClass ? (
+                      <>
+                        <CirclePlay className="h-3.5 w-3.5" /> Current class
+                      </>
+                    ) : (
+                      <>
+                        <Clock3 className="h-3.5 w-3.5" /> Next class
+                      </>
+                    )}
+                    <Doodle kind="sparkle" className="h-4 w-4 text-[#c5b6e3]" />
+                  </div>
+                  {/* 오늘 날짜 — 카드 우측 상단 */}
+                  <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium tabular-nums text-[#6d5aa8]">
+                    {formatKoreanDate(today)} ({DAY_LABELS[dayOfWeekOf(today)]})
+                  </span>
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-3">
