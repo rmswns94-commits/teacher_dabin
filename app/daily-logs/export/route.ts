@@ -18,6 +18,23 @@ import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
 
+// YYYY-MM-DD 형식 + 실제 달력에 존재하는 날짜인지 (2026-13-40 같은 값 거부).
+// UTC 정오 고정으로 파싱해 timezone 밀림 없이 검증한다.
+function isValidCalendarDate(date: string) {
+  if (!DATE_PATTERN.test(date)) {
+    return false;
+  }
+
+  const [year, month, day] = date.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day, 12));
+
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+}
+
 function errorResponse(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
@@ -32,7 +49,7 @@ export async function GET(request: Request) {
 
   const date = new URL(request.url).searchParams.get("date") ?? "";
 
-  if (!DATE_PATTERN.test(date)) {
+  if (!isValidCalendarDate(date)) {
     return errorResponse("내보낼 날짜를 확인해주세요.");
   }
 
