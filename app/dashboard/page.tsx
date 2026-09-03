@@ -2,7 +2,6 @@ import Link from "next/link";
 import {
   BookOpenCheck,
   CalendarDays,
-  Check,
   CirclePlay,
   Clock3,
   ListTodo,
@@ -17,14 +16,14 @@ import { NextClassCountdown } from "@/components/next-class-countdown";
 import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { togglePreparationItemAction } from "@/app/groups/actions";
-import { addDaysStr } from "@/lib/calendar";
+import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
+import { DashboardTodoCard } from "@/components/dashboard-todo-card";
+import { currentEpochMs } from "@/lib/todo-window";
 import { getUpcomingExamEvents } from "@/lib/supabase/queries/calendar-events";
 import { formatTimeRange, getScheduleOverview, type ClassOccurrence } from "@/lib/schedule";
 import { getDisplayName } from "@/lib/supabase/auth";
 import { getDashboardOverview, getDashboardStats } from "@/lib/supabase/queries/dashboard";
-import { groupIconOf } from "@/lib/group-icons";
 import { getCurrentUserGroups, getGroupLatestProgress } from "@/lib/supabase/queries/groups";
 import type { PreparationItem } from "@/lib/supabase/types";
 import { getCurrentUserSchedulesWithGroup, type ScheduleGroupInfo } from "@/lib/supabase/queries/schedules";
@@ -121,20 +120,38 @@ export default async function DashboardPage() {
   // 수동 체크리스트만 (날짜 있는 다음 수업 계획 항목은 아래 섹션에서 due 날짜에 노출)
   const prepItems = (focusGroup?.preparation_items ?? []).filter((item) => !item.dueDate);
 
-  // 다음 수업 계획 To Do: 계획 날짜가 된(당일+지남) linked 항목만 — 미래 항목은 미리 노출하지 않는다.
+  // 그룹별 오늘 수업 window — schedules를 이미 갖고 있어 추가 쿼리 없음 (N+1 금지).
+  // 하루 여러 slot이면 [가장 이른 시작, 가장 늦은 종료) 합집합을 쓴다.
+  const todayDow = dayOfWeekOf(today);
+  const todayWindowByGroup = new Map<string, { start: string; end: string }>();
+  for (const row of schedules) {
+    if (row.day_of_week !== todayDow) {
+      continue;
+    }
+    const current = todayWindowByGroup.get(row.group_id);
+    todayWindowByGroup.set(row.group_id, {
+      start: !current || row.start_time < current.start ? row.start_time : current.start,
+      end: !current || row.end_time > current.end ? row.end_time : current.end,
+    });
+  }
+
+  // 다음 수업 계획 To Do: due가 "오늘"인 linked 항목만 후보로 (노출 시각은 client에서
+  // 수업 window 기준 판단 — 수업 종료 후엔 숨기고, DB row는 그대로 둔다).
   // 시험 일정과는 무관 (source = daily_log_next_plan 항목만).
   const duePlanItems = allGroups
     .flatMap((planGroup) =>
       ((planGroup.preparation_items ?? []) as PreparationItem[])
         .filter(
           (item) =>
-            item.source === "daily_log_next_plan" && item.dueDate && item.dueDate <= today,
+            item.source === "daily_log_next_plan" && item.dueDate && item.dueDate === today,
         )
         .map((item) => ({ planGroup, item })),
     )
-    .sort((a, b) => (a.item.dueDate ?? "").localeCompare(b.item.dueDate ?? ""));
-  const prepDone = prepItems.filter((item) => item.completed).length;
-  const prepProgress = prepItems.length > 0 ? Math.round((prepDone / prepItems.length) * 100) : 0;
+    .sort((a, b) => {
+      const windowA = todayWindowByGroup.get(a.planGroup.id)?.start ?? "99:99";
+      const windowB = todayWindowByGroup.get(b.planGroup.id)?.start ?? "99:99";
+      return windowA.localeCompare(windowB);
+    });
 
   const heroTodayLog = hero
     ? overview.todayLogs.find((log) => log.group_id === hero.group.id)
@@ -330,141 +347,27 @@ export default async function DashboardPage() {
 
           <div className="mt-5 grid gap-5 lg:grid-cols-[1.55fr_1fr]">
             <div className="space-y-4">
-              {focusGroup || duePlanItems.length > 0 ? (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <CardTitle className="flex items-center gap-2">
-                        <ListTodo className="h-4 w-4 text-[#3e7d6b]" /> To do list
-                        {focusGroup ? (
-                          <span className="text-sm font-normal text-[#8a7b77]">
-                            · {focusGroup.name}
-                          </span>
-                        ) : null}
-                      </CardTitle>
-                      {prepItems.length > 0 ? (
-                        <span className="text-xs tabular-nums text-[#8a7b77]">
-                          {prepDone} / {prepItems.length}
-                        </span>
-                      ) : null}
-                    </div>
-                    {prepItems.length > 0 ? (
-                      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#f0eae4]">
-                        <div
-                          className="h-full rounded-full bg-[#b3a5ec] transition-all duration-300"
-                          style={{ width: `${prepProgress}%` }}
-                        />
-                      </div>
-                    ) : null}
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {prepItems.length === 0 ? (
-                      duePlanItems.length === 0 ? (
-                        <div className="rounded-2xl bg-[#faf5f0] p-3 text-sm text-[#655d5d]">
-                          등록된 준비 항목이 없어요 🍃
-                        </div>
-                      ) : null
-                    ) : (
-                      <ul className="divide-y divide-dashed divide-[#f4e2e8]">
-                        {prepItems.map((item) => (
-                          <li key={item.id}>
-                            <form action={togglePreparationItemAction.bind(null, focusGroup!.id, item.id)}>
-                              <button
-                                type="submit"
-                                aria-pressed={item.completed}
-                                className="flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 py-1.5 text-left text-[13px] transition hover:bg-[#f2edf9]"
-                              >
-                                {item.completed ? (
-                                  <span
-                                    aria-hidden
-                                    className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[#8fc7ab]"
-                                  >
-                                    <Check className="h-3 w-3 text-white" strokeWidth={3} />
-                                  </span>
-                                ) : (
-                                  <span
-                                    aria-hidden
-                                    className="h-[18px] w-[18px] shrink-0 rounded-full border-2 border-[#d9c8f0] bg-white"
-                                  />
-                                )}
-                                <span
-                                  className={
-                                    item.completed
-                                      ? "text-[#8a7b77] [text-decoration:line-through] opacity-70"
-                                      : "text-[#2d2928]"
-                                  }
-                                >
-                                  {item.text}
-                                </span>
-                              </button>
-                            </form>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    {/* 다음 수업 계획 To Do — 계획 날짜가 된 항목만, 그룹 표시 (시험 일정과 무관) */}
-                    {duePlanItems.length > 0 ? (
-                      <div className={prepItems.length > 0 ? "border-t border-dashed border-[#ece4de] pt-2.5" : undefined}>
-                        <div className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8a7fb8]">
-                          다음 수업 계획
-                        </div>
-                        <ul className="divide-y divide-dashed divide-[#f4e2e8]">
-                          {duePlanItems.map(({ planGroup, item }) => (
-                            <li key={item.id}>
-                              <form action={togglePreparationItemAction.bind(null, planGroup.id, item.id)}>
-                                <button
-                                  type="submit"
-                                  aria-pressed={item.completed}
-                                  className="flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 py-1.5 text-left text-[13px] transition hover:bg-[#f2edf9]"
-                                >
-                                  {item.completed ? (
-                                    <span
-                                      aria-hidden
-                                      className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[#8fc7ab]"
-                                    >
-                                      <Check className="h-3 w-3 text-white" strokeWidth={3} />
-                                    </span>
-                                  ) : (
-                                    <span
-                                      aria-hidden
-                                      className="h-[18px] w-[18px] shrink-0 rounded-full border-2 border-[#d9c8f0] bg-white"
-                                    />
-                                  )}
-                                  <span className="min-w-0 flex-1">
-                                    <span className="block text-[11px] text-[#8a7b77]">
-                                      <span aria-hidden>{groupIconOf(planGroup.icon)}</span>{" "}
-                                      {planGroup.name} · {formatKoreanDate(item.dueDate!)}
-                                    </span>
-                                    <span
-                                      className={
-                                        item.completed
-                                          ? "text-[#8a7b77] [text-decoration:line-through] opacity-70"
-                                          : "text-[#2d2928]"
-                                      }
-                                    >
-                                      {item.text}
-                                    </span>
-                                  </span>
-                                </button>
-                              </form>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-
-                    {focusGroup ? (
-                      <Link
-                        href={`/groups/${focusGroup.id}`}
-                        className="block text-right text-xs text-[#5c4ca8] hover:underline"
-                      >
-                        준비 항목 관리 →
-                      </Link>
-                    ) : null}
-                  </CardContent>
-                </Card>
-              ) : null}
+              {/* To do list — 수업 시간 기반 노출 (client에서 시간만 갱신, DB polling 없음) */}
+              <DashboardTodoCard
+                focusGroup={focusGroup ? { id: focusGroup.id, name: focusGroup.name } : null}
+                checklistItems={prepItems.map((item) => ({
+                  id: item.id,
+                  text: item.text,
+                  completed: item.completed,
+                }))}
+                checklistWindow={focusGroup ? (todayWindowByGroup.get(focusGroup.id) ?? null) : null}
+                planItems={duePlanItems.map(({ planGroup, item }) => ({
+                  groupId: planGroup.id,
+                  groupName: planGroup.name,
+                  groupIcon: planGroup.icon ?? null,
+                  id: item.id,
+                  text: item.text,
+                  completed: item.completed,
+                  dueDate: item.dueDate!,
+                  window: todayWindowByGroup.get(planGroup.id) ?? null,
+                }))}
+                initialNow={currentEpochMs()}
+              />
 
               {/* '시험' 일정 D-day 카드 — 30일 전부터, 일정 없으면 카드 숨김 */}
               {upcomingExams.length > 0 ? (
