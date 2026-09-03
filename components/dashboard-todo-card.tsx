@@ -169,7 +169,7 @@ export function DashboardTodoCard({
           </ul>
         ) : null}
 
-        {/* 다음 수업 계획 등 dated To Do — 그 반의 수업 window(또는 all-day fallback) 동안만 */}
+        {/* 날짜 있는 To Do(다음 수업 계획/직접 등록) — 그 반의 수업 window(또는 all-day fallback) 동안만 */}
         {visiblePlans.length > 0 ? (
           <div
             className={
@@ -179,7 +179,7 @@ export function DashboardTodoCard({
             }
           >
             <div className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8a7fb8]">
-              다음 수업 계획
+              오늘의 할 일
             </div>
             <ul className="divide-y divide-dashed divide-[#f4e2e8]">
               {visiblePlans.map((item) => (

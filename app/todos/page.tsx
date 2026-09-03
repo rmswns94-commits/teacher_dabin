@@ -4,6 +4,7 @@ import { Check, ListChecks } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { TodayRefresher } from "@/components/today-refresher";
+import { TodoCreateDialog } from "@/components/todo-create-dialog";
 import { TodoDeleteButton } from "@/components/todo-delete-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { togglePreparationItemAction } from "@/app/groups/actions";
@@ -92,6 +93,14 @@ export default async function TodayTodosPage() {
           <PageHeader
             title="오늘 할 일"
             description={`${formatKoreanDate(today, true)} · 오늘 해야 할 일과 아직 완료하지 않은 할 일을 확인해요.`}
+            action={
+              <TodoCreateDialog
+                groups={groups
+                  .filter((group) => !group.archived)
+                  .map((group) => ({ id: group.id, name: group.name, icon: group.icon ?? null }))}
+                defaultDate={today}
+              />
+            }
           />
 
           {totalCount > 0 ? (

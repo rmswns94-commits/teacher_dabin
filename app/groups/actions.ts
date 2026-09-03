@@ -427,6 +427,54 @@ export async function togglePreparationItemAction(groupId: string, itemId: strin
   revalidatePreparation(groupId);
 }
 
+// 오늘 할 일 페이지의 [+ 할 일 추가] — 기존 manual preparation과 같은 모델에
+// dueDate만 더해 저장한다 (source 없음 = 직접 등록). 별도 Todo 시스템/테이블 없음.
+// ownership은 getOwnedPreparationItems(그룹 소유 검증 포함)로 확인 — client user_id 불신.
+export async function createTodoAction(input: {
+  groupId: string;
+  text: string;
+  dueDate: string;
+}) {
+  const text = input.text.trim();
+
+  if (!input.groupId) {
+    return { error: "수업 그룹을 선택해주세요." };
+  }
+  if (!text) {
+    return { error: "할 일 내용을 입력해주세요." };
+  }
+  if (text.length > 100) {
+    return { error: "할 일은 100자 이내로 입력해주세요." };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate)) {
+    return { error: "날짜를 확인해주세요." };
+  }
+
+  try {
+    const items = await getOwnedPreparationItems(input.groupId);
+
+    if (items.length >= 30) {
+      return { error: "준비 항목은 30개까지 만들 수 있어요." };
+    }
+
+    await updateGroupPreparationItems(input.groupId, [
+      ...items,
+      { id: globalThis.crypto.randomUUID(), text, completed: false, dueDate: input.dueDate },
+    ]);
+  } catch (error) {
+    console.error("createTodoAction error", error);
+    return {
+      error:
+        error instanceof Error && error.message
+          ? error.message
+          : "할 일을 추가하지 못했어요. 다시 시도해주세요.",
+    };
+  }
+
+  revalidatePreparation(input.groupId);
+  return { success: true as const };
+}
+
 // 삭제: 수동 항목은 제거, 일지 연동(linked) 항목은 tombstone(dismissed)으로 전환 —
 // 화면에서는 전부 사라지되, 원본 일지를 단순 재저장해도 부활하지 않게 한다.
 // (원본 Daily Log의 next_lesson_plan/next_plan_date는 기록이므로 건드리지 않는다)
