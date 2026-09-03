@@ -1,3 +1,4 @@
+import { formatKoreanDateFull } from "@/lib/dates";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type {
   AttendanceStatus,
@@ -207,10 +208,12 @@ export async function getDailyLogDetailForCurrentUser(dailyLogId: string) {
 
 // 같은 Teacher + 같은 날짜 + 같은 그룹의 수업일지는 최대 1개.
 // typed error로 구분해 UI가 전용 경고 dialog를 띄울 수 있게 한다.
+// 기준은 항상 "선택한 수업 날짜" — 오늘이 아닐 수 있으므로 문구에 날짜를 명시한다.
 export class DuplicateDailyLogError extends Error {
-  constructor() {
+  constructor(classDate?: string) {
+    const dateLabel = classDate ? `${formatKoreanDateFull(classDate)}에` : "선택한 날짜에";
     super(
-      "이미 오늘 등록된 수업 일지가 있어요.\n중복 등록은 불가합니다.\n기존 수업 일지를 삭제 후 재등록 해주세요.",
+      `${dateLabel} 이미 등록된 수업 일지가 있어요.\n같은 반의 수업 일지는 하루에 한 번만 등록할 수 있어요.\n기존 수업 일지를 수정하거나 삭제 후 다시 등록해주세요.`,
     );
     this.name = "DuplicateDailyLogError";
   }
@@ -263,7 +266,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   }
 
   if ((duplicateRows ?? []).length > 0) {
-    throw new DuplicateDailyLogError();
+    throw new DuplicateDailyLogError(input.classDate);
   }
 
   const studentIds = input.students.map((entry) => entry.studentId);
@@ -316,7 +319,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
 
     if (updateError) {
       if (updateError.code === UNIQUE_VIOLATION) {
-        throw new DuplicateDailyLogError();
+        throw new DuplicateDailyLogError(input.classDate);
       }
       console.error("saveDailyLog update error", updateError);
       throw new Error("수업 기록을 저장하지 못했어요. 다시 시도해주세요.");
@@ -331,7 +334,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     if (insertError || !created) {
       // pre-check를 동시에 통과한 race는 DB unique index가 막는다 → 같은 사용자 문구로
       if (insertError?.code === UNIQUE_VIOLATION) {
-        throw new DuplicateDailyLogError();
+        throw new DuplicateDailyLogError(input.classDate);
       }
       console.error("saveDailyLog insert error", insertError);
       throw new Error("수업 기록을 저장하지 못했어요. 다시 시도해주세요.");

@@ -161,6 +161,9 @@ export default async function NewDailyLogPage({
             ) : null}
 
             <DailyLogForm
+              // 상단 피커로 그룹/날짜를 바꾸면 soft navigation이라 client state가 남는다.
+              // key로 remount를 강제해 이전 날짜/학생 목록의 stale state를 제거한다.
+              key={`${selectedGroup.id}:${date}`}
               classDate={date}
               group={{ id: selectedGroup.id, name: selectedGroup.name, grade: selectedGroup.grade }}
               students={groupStudents.map((student) => ({

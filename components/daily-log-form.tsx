@@ -1031,7 +1031,7 @@ export function DailyLogForm({
           <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
             <div className="text-lg font-semibold text-[#2a2323]">수업일지가 이미 있어요</div>
             <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[#564d4d]">
-              {"이미 오늘 등록된 수업 일지가 있어요.\n중복 등록은 불가합니다.\n기존 수업 일지를 삭제 후 재등록 해주세요."}
+              {`${formatKoreanDate(classDate)}에 이미 등록된 수업 일지가 있어요.\n같은 반의 수업 일지는 하루에 한 번만 등록할 수 있어요.\n기존 수업 일지를 수정하거나 삭제 후 다시 등록해주세요.`}
             </p>
             <div className="mt-4 flex justify-end">
               <Button type="button" size="sm" onClick={() => setDuplicateOpen(false)}>
