@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { GroupIconPicker } from "@/components/group-icon-picker";
 import { GroupStudentList } from "@/components/group-student-list";
 import { HighlightCard } from "@/components/highlight-card";
 import { PageHeader } from "@/components/page-header";
@@ -40,6 +41,7 @@ import {
   getLessonQuickCheckCounts,
 } from "@/lib/supabase/queries/groups";
 import { gradeDisplay, gradeOptions, isElementaryGrade } from "@/lib/grades";
+import { groupIconOf } from "@/lib/group-icons";
 import { getCurrentUserMakeups } from "@/lib/supabase/queries/makeups";
 import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
 import { formatScheduleBlock, groupSchedulesByTime } from "@/lib/schedule";
@@ -121,7 +123,7 @@ export default async function GroupDetailPage({
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
         <div className="mx-auto w-full max-w-[1150px]">
         <PageHeader
-          title={group.name}
+          title={`${groupIconOf(group.icon)} ${group.name}`}
           description={`${gradeDisplay[group.grade]} · 학생 ${members.length}명${group.memo ? ` · ${group.memo}` : ""}`}
           action={
             <Button variant="secondary" asChild>
@@ -212,6 +214,9 @@ export default async function GroupDetailPage({
             <CardContent>
               <GuardedForm action={updateGroupAction.bind(null, id)} className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
+                  <div className="md:col-span-2">
+                    <GroupIconPicker initialIcon={group.icon} />
+                  </div>
                   <label className="block">
                     <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">그룹명</span>
                     <input

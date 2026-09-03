@@ -158,6 +158,7 @@ export default async function GroupsPage() {
     return {
       id: group.id,
       name: group.name,
+      icon: group.icon ?? null,
       gradeLabel: formatGrade(group.grade),
       studentCount: counts.get(group.id) ?? 0,
       textbooks,

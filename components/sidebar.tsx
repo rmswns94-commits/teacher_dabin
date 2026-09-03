@@ -23,6 +23,7 @@ import { FeedbackDialog } from "@/components/feedback-dialog";
 import { InstallAppButton } from "@/components/install-app";
 import { createClient } from "@/lib/supabase/client";
 import { getDisplayName } from "@/lib/supabase/auth";
+import { groupIconOf } from "@/lib/group-icons";
 import { cn } from "@/lib/utils";
 
 function BetaBadge() {
@@ -44,7 +45,7 @@ const afterGroupItems = [{ label: "보충수업", href: "/makeups", icon: Calend
 
 const materialItems = [{ label: "영어 지문", href: "/passages", icon: FileText }];
 
-export type SidebarGroup = { id: string; name: string };
+export type SidebarGroup = { id: string; name: string; icon: string | null };
 
 function NavLink({
   label,
@@ -280,12 +281,9 @@ export function Sidebar({
                               : "text-[#4c4c55] hover:bg-[#f4f4f6] hover:text-[#232327]",
                           )}
                         >
-                          <span
-                            className={cn(
-                              "h-1.5 w-1.5 shrink-0 rounded-full",
-                              groupActive ? "bg-[#4c4c55]" : "bg-[#d4d4da]",
-                            )}
-                          />
+                          <span aria-hidden className="shrink-0 text-[13px] leading-none">
+                            {groupIconOf(group.icon)}
+                          </span>
                           <span className="truncate">{group.name}</span>
                         </Link>
                       </li>

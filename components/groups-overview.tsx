@@ -5,11 +5,13 @@ import { BookOpen, CalendarDays, ChevronRight, Clock3, Search } from "lucide-rea
 import { useState } from "react";
 
 import { Card } from "@/components/ui/card";
+import { groupIconOf } from "@/lib/group-icons";
 
 // 서버에서 모두 계산된 직렬화 가능한 카드 데이터.
 export type GroupCardData = {
   id: string;
   name: string;
+  icon: string | null;
   gradeLabel: string;
   studentCount: number;
   textbooks: string[];
@@ -86,6 +88,9 @@ function GroupCard({ group }: { group: GroupCardData }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
+              <span aria-hidden className="shrink-0 text-lg leading-none">
+                {groupIconOf(group.icon)}
+              </span>
               <span className="truncate text-lg font-bold tracking-[-0.01em] text-[#232327]">
                 {group.name}
               </span>

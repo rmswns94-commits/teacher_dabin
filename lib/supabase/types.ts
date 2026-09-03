@@ -36,6 +36,7 @@ export type ClassGroupRecord = {
   name: string;
   grade: StudentGrade;
   memo: string | null;
+  icon: string | null; // 대표 아이콘 (emoji preset, null이면 기본 아이콘 fallback)
   textbook: string | null;
   highlight_memo: string | null;
   preparation_items: PreparationItem[];

@@ -26,7 +26,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen text-[#2d2928]">
       <Sidebar
-        groups={sortedGroups.map((group) => ({ id: group.id, name: group.name }))}
+        groups={sortedGroups.map((group) => ({ id: group.id, name: group.name, icon: group.icon ?? null }))}
         pendingMakeupCount={pendingMakeupCount}
       />
       <div className="app-main flex-1 overflow-hidden max-lg:pt-14">

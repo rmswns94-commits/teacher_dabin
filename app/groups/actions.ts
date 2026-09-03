@@ -22,6 +22,7 @@ import {
 } from "@/lib/supabase/queries/schedules";
 import { formatScheduleSlot, slotsOverlap } from "@/lib/schedule";
 import { preparationItemSchema, preparationItemsSchema } from "@/lib/validation/daily-log";
+import { groupIconPresets } from "@/lib/group-icons";
 import { classGroupSchema, groupScheduleSchema } from "@/lib/validation/group";
 
 // formData에서 scheduleDay/scheduleStart/scheduleEnd 행들을 읽어 검증한다.
@@ -96,6 +97,12 @@ function parseTextbooks(formData: FormData) {
   return books.slice(0, 10).join("\n");
 }
 
+// 대표 아이콘: preset 목록에 있는 값만 허용 (자유 입력 차단)
+function parseGroupIcon(formData: FormData) {
+  const value = String(formData.get("groupIcon") ?? "").trim();
+  return value && (groupIconPresets as readonly string[]).includes(value) ? value : null;
+}
+
 export type GroupCreateState = { error?: string } | undefined;
 
 export async function createGroupAction(_prevState: GroupCreateState, formData: FormData): Promise<GroupCreateState> {
@@ -142,6 +149,7 @@ export async function createGroupAction(_prevState: GroupCreateState, formData: 
       grade: parsed.data.grade,
       memo: parsed.data.memo || null,
       textbook: parsed.data.textbook || null,
+      icon: parseGroupIcon(formData),
       schedules: scheduleResult.rows,
     });
     groupId = group.id;
@@ -182,6 +190,7 @@ export async function updateGroupAction(groupId: string, formData: FormData) {
     memo: parsed.data.memo || null,
     textbook: parsed.data.textbook || null,
     highlightMemo: parsed.data.highlightMemo || null,
+    icon: parseGroupIcon(formData),
   });
 
   let scheduleError: string | null = null;

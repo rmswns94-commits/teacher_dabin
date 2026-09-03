@@ -1,5 +1,6 @@
 "use client";
 
+import { GroupIconPicker } from "@/components/group-icon-picker";
 import { BookMarked, CalendarClock, Layers3, Plus } from "lucide-react";
 import { useActionState, useState } from "react";
 
@@ -54,6 +55,10 @@ export function GroupCreateForm({
               ))}
             </select>
           </label>
+
+          <div className="md:col-span-2">
+            <GroupIconPicker />
+          </div>
 
           <label className="block md:col-span-2">
             <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">메모 (선택)</span>
