@@ -149,11 +149,18 @@ export default async function GroupsPage() {
 
     const prepCount = (group.preparation_items ?? []).filter((item) => !item.completed).length;
 
+    // 교재는 class_groups.textbook에 줄바꿈 구분으로 저장됨 (추가 쿼리 없음)
+    const textbooks = (group.textbook ?? "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
     return {
       id: group.id,
       name: group.name,
       gradeLabel: formatGrade(group.grade),
       studentCount: counts.get(group.id) ?? 0,
+      textbooks,
       scheduleLines,
       hasToday: todaySlots.length > 0,
       todayStart,
@@ -170,8 +177,16 @@ export default async function GroupsPage() {
       examLabel,
       examThisWeek,
       sortKey: occ ? occ.startEpoch : Number.MAX_SAFE_INTEGER,
+      isNearest: false,
     };
   });
+
+  // 가장 가까운 다음 수업을 가진 카드 1개만 살짝 강조
+  const nearestKey = Math.min(...cards.map((card) => card.sortKey));
+  if (Number.isFinite(nearestKey) && nearestKey !== Number.MAX_SAFE_INTEGER) {
+    const nearest = cards.find((card) => card.sortKey === nearestKey);
+    if (nearest) nearest.isNearest = true;
+  }
 
   return (
     <AppShell>
