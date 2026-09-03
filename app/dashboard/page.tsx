@@ -28,6 +28,9 @@ import { getGroupLatestProgress } from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup, type ScheduleGroupInfo } from "@/lib/supabase/queries/schedules";
 import { getServerUser } from "@/lib/supabase/server";
 
+// 시험 D-day 노출 윈도우 (오늘 포함 D-30까지 — 시험 안내 전용, To Do와 무관)
+const EXAM_DISPLAY_DAYS = 30;
+
 // 시험 일정 제목에서 학교 이름 추출 (예: "문경중학교 기말시험" → 문경중학교, "한울중 시험" → 한울중).
 // 확신할 수 없으면 null을 돌려주고 카드에는 일정 제목을 그대로 쓴다 — 이름을 지어내지 않는다.
 function extractSchoolName(title: string) {
@@ -69,8 +72,8 @@ export default async function DashboardPage() {
     getDashboardStats(),
     getDashboardOverview(),
     getCurrentUserSchedulesWithGroup(),
-    // '시험' 일정은 D-day 14일 전부터 카드로 보여준다 (진행 중 포함)
-    getUpcomingExamEvents(today, addDaysStr(today, 14)),
+    // '시험' 일정은 D-day 30일 전부터 카드로 보여준다 (진행 중 포함)
+    getUpcomingExamEvents(today, addDaysStr(today, EXAM_DISPLAY_DAYS)),
   ]);
   const displayName = getDisplayName(user);
 
@@ -386,7 +389,7 @@ export default async function DashboardPage() {
                 </Card>
               ) : null}
 
-              {/* '시험' 일정 D-day 카드 — 14일 전부터, 일정 없으면 카드 숨김 */}
+              {/* '시험' 일정 D-day 카드 — 30일 전부터, 일정 없으면 카드 숨김 */}
               {upcomingExams.length > 0 ? (
                 <Card>
                   <CardHeader className="pb-2">
