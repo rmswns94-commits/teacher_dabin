@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { BookOpen, ChevronLeft, ChevronRight, NotebookPen, Plus } from "lucide-react";
 
@@ -611,8 +612,8 @@ export default async function DailyLogsPage({
                       ].filter(Boolean);
 
                       return (
+                        <Fragment key={log.id}>
                         <Link
-                          key={log.id}
                           // 선택된 카드를 다시 클릭하면 선택 해제 → 상세가 닫힌다
                           href={buildQuery({
                             month,
@@ -657,21 +658,25 @@ export default async function DailyLogsPage({
                             <ChevronRight className="h-4 w-4 text-[#c9b6bd]" aria-hidden />
                           </span>
                         </Link>
+
+                        {/* 상세: 선택한 수업 카드 "바로 아래"에 sibling으로 렌더
+                            (목록 맨 끝이 아니라 — 첫 카드를 눌러도 스크롤 없이 보인다) */}
+                        {isActive && detail ? (
+                          <div className="pb-2 pt-1">
+                            <h3 className="mb-2 text-sm font-semibold text-[#8f5470]">
+                              선택한 수업
+                            </h3>
+                            <LessonLogDetail
+                              detail={detail}
+                              timeRange={timeFor(detail.group_id, detail.class_date)}
+                              praises={detailPraises}
+                            />
+                          </div>
+                        ) : null}
+                        </Fragment>
                       );
                     })}
                   </div>
-
-                  {/* 상세: 반을 클릭했을 때만 목록 아래 full-width로 */}
-                  {detail ? (
-                    <div className="mt-5">
-                      <h3 className="mb-2 text-sm font-semibold text-[#8f5470]">선택한 수업</h3>
-                      <LessonLogDetail
-                        detail={detail}
-                        timeRange={timeFor(detail.group_id, detail.class_date)}
-                        praises={detailPraises}
-                      />
-                    </div>
-                  ) : null}
                 </>
               )}
             </div>
