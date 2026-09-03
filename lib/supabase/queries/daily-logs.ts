@@ -631,3 +631,104 @@ export async function getPraisesForDailyLog(dailyLogId: string) {
 
   return (data ?? []) as DailyLogPraiseRow[];
 }
+
+// ── 이전 수업 기록 패널 ────────────────────────────────────────────────
+
+export type DailyLogHistorySummary = {
+  id: string;
+  class_date: string;
+  group_id: string;
+  status: DailyLogStatus;
+  title: string | null;
+  default_progress: string | null;
+  lesson_content: string | null;
+  homework: string | null;
+  next_lesson_plan: string | null;
+  memo: string | null;
+  updated_at: string;
+  studentCount: number;
+};
+
+// 같은 그룹의 이전(작성 날짜 미만) 일지를 가볍게 조회한다.
+// daily_logs row의 공통 필드만 — 학생 기록/칭찬은 상세를 열 때 lazy 조회 (N+1 금지).
+export async function getGroupHistoryLogs(
+  groupId: string,
+  beforeDate: string,
+  offset = 0,
+  limit = 10,
+) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return { rows: [] as DailyLogHistorySummary[], hasMore: false };
+  }
+
+  const { data, error } = await supabase
+    .from("daily_logs")
+    .select(
+      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, next_lesson_plan, memo, updated_at, student_lesson_logs(count)",
+    )
+    .eq("user_id", user.id)
+    .eq("group_id", groupId)
+    .lt("class_date", beforeDate)
+    .order("class_date", { ascending: false })
+    .range(offset, offset + limit); // limit+1개 조회 — hasMore 판정용
+
+  if (error) {
+    console.error("getGroupHistoryLogs error", error);
+    throw new Error("이전 수업 기록을 불러오지 못했어요.");
+  }
+
+  const rows = (data ?? []).map((row) => {
+    const countRow = pickOne<{ count: number }>(row.student_lesson_logs);
+
+    return {
+      ...(row as unknown as Omit<DailyLogHistorySummary, "studentCount">),
+      studentCount: countRow?.count ?? 0,
+    } as DailyLogHistorySummary;
+  });
+
+  return { rows: rows.slice(0, limit), hasMore: rows.length > limit };
+}
+
+// 이전 일지의 공통 필드만 update (학생 평가/칭찬은 기존 전체 수정 화면 재사용).
+// group/date는 바꾸지 않으므로 중복 일지 가드와 충돌할 일이 없다.
+export async function updateDailyLogFields(input: {
+  dailyLogId: string;
+  title: string;
+  defaultProgress: string;
+  memo: string;
+  homework: string;
+  nextLessonPlan: string;
+}) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요해요.");
+  }
+
+  const { data, error } = await supabase
+    .from("daily_logs")
+    .update({
+      title: input.title.trim() || null,
+      default_progress: input.defaultProgress.trim() || null,
+      memo: input.memo.trim() || null,
+      homework: input.homework.trim() || null,
+      next_lesson_plan: input.nextLessonPlan.trim() || null,
+    })
+    .eq("id", input.dailyLogId)
+    .eq("user_id", user.id)
+    .select(
+      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, next_lesson_plan, memo, updated_at",
+    )
+    .single();
+
+  if (error || !data) {
+    console.error("updateDailyLogFields error", error);
+    throw new Error("이전 수업 기록을 저장하지 못했어요. 다시 시도해주세요.");
+  }
+
+  return data as unknown as Omit<DailyLogHistorySummary, "studentCount">;
+}

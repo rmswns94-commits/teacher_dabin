@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   BookOpen,
   CalendarCheck,
@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MakeupStatusBadge } from "@/components/status-badge";
+import { useHistoryImport } from "@/components/lesson-history-panel";
 import { saveDailyLogAction } from "@/app/daily-logs/actions";
 import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comments";
 import { formatKoreanDate } from "@/lib/dates";
@@ -200,6 +201,22 @@ export function DailyLogForm({
   const [error, setError] = useState("");
   // 같은 날짜+같은 반 일지가 이미 있을 때 전용 경고 dialog (form 내용은 보존)
   const [duplicateOpen, setDuplicateOpen] = useState(false);
+
+  // 이전 수업 기록 패널의 [현재 일지에 참고하기] — provider가 없으면 no-op.
+  // 패널 버튼 클릭(이벤트 핸들러)에서만 handler가 호출된다: 값이 비어 있으면
+  // 바로 반영, 이미 작성한 내용이 있으면 덮어쓰기 확인을 거친다.
+  const historyImport = useHistoryImport();
+  const [importConfirmText, setImportConfirmText] = useState<string | null>(null);
+
+  useEffect(() => {
+    return historyImport.register((text) => {
+      if (!defaultProgress.trim() || defaultProgress === text) {
+        setDefaultProgress(text);
+      } else {
+        setImportConfirmText(text);
+      }
+    });
+  }, [historyImport, defaultProgress]);
   const [isPending, startTransition] = useTransition();
 
   // 학생 평가 UI는 초등/중등/고등 모든 학년 공통으로 사용한다.
@@ -959,6 +976,45 @@ export function DailyLogForm({
           임시 저장한 일지는 목록에서 &quot;작성 중&quot;으로 표시돼요.
         </span>
       </div>
+
+      {importConfirmText !== null ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-[#2b2323]/30 px-4"
+          role="alertdialog"
+          aria-modal="true"
+          aria-label="공통 진도 덮어쓰기 확인"
+        >
+          <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+            <div className="font-display text-lg font-semibold text-[#2a2323]">
+              현재 작성한 공통 진도가 있어요
+            </div>
+            <p className="mt-2 text-sm leading-6 text-[#655d5d]">
+              기존 내용을 이전 기록에서 가져온 내용으로 바꿀까요?
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setImportConfirmText(null)}
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                autoFocus
+                onClick={() => {
+                  setDefaultProgress(importConfirmText);
+                  setImportConfirmText(null);
+                }}
+              >
+                바꾸기
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {duplicateOpen ? (
         <div

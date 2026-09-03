@@ -3,15 +3,18 @@ import { CircleArrowRight, NotebookTabs, Users } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { DailyLogForm } from "@/components/daily-log-form";
+import { LessonHistoryWorkspace } from "@/components/lesson-history-panel";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
+import { getGroupHistoryLogs } from "@/lib/supabase/queries/daily-logs";
 import {
   getCurrentUserGroups,
   getGroupLatestProgress,
   getGroupStudentsForCurrentUser,
 } from "@/lib/supabase/queries/groups";
+import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
 
 export default async function NewDailyLogPage({
   searchParams,
@@ -20,18 +23,26 @@ export default async function NewDailyLogPage({
 }) {
   const params = (await searchParams) ?? {};
   const requestedGroupId = params.groupId || null;
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : todayDateString();
 
-  // 그룹 목록과 (선택된 그룹의) 학생/직전 수업을 한 번에 병렬 조회한다.
-  const [groups, groupStudentsRaw, lastLesson] = await Promise.all([
+  // 그룹 목록과 (선택된 그룹의) 학생/직전 수업/이전 기록을 한 번에 병렬 조회한다.
+  // 이전 기록은 lightweight 첫 페이지만 — 실패해도 작성 화면은 그대로 동작해야 한다.
+  const emptyHistory = { rows: [], hasMore: false, failed: false };
+  const [groups, groupStudentsRaw, lastLesson, history, groupSchedules] = await Promise.all([
     getCurrentUserGroups(),
     requestedGroupId ? getGroupStudentsForCurrentUser(requestedGroupId) : Promise.resolve([]),
     requestedGroupId ? getGroupLatestProgress(requestedGroupId) : Promise.resolve(null),
+    requestedGroupId
+      ? getGroupHistoryLogs(requestedGroupId, date, 0, 10)
+          .then((result) => ({ ...result, failed: false }))
+          .catch(() => ({ rows: [], hasMore: false, failed: true }))
+      : Promise.resolve(emptyHistory),
+    requestedGroupId ? getGroupSchedules(requestedGroupId) : Promise.resolve([]),
   ]);
 
   const selectedGroup = requestedGroupId
     ? groups.find((group) => group.id === requestedGroupId)
     : undefined;
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : todayDateString();
   const groupStudents = selectedGroup
     ? groupStudentsRaw.filter((student) => !student.archived)
     : [];
@@ -86,6 +97,18 @@ export default async function NewDailyLogPage({
           </CardContent>
         </Card>
 
+        <LessonHistoryWorkspace
+          group={selectedGroup ? { id: selectedGroup.id, name: selectedGroup.name } : null}
+          currentDate={date}
+          initialRows={history.rows}
+          initialHasMore={history.hasMore}
+          initialLoadFailed={history.failed}
+          schedules={groupSchedules.map((slot) => ({
+            day_of_week: slot.day_of_week,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
+          }))}
+        >
         {!selectedGroup ? (
           groups.length === 0 ? (
             <Card>
@@ -148,6 +171,7 @@ export default async function NewDailyLogPage({
             />
           </>
         )}
+        </LessonHistoryWorkspace>
       </main>
     </AppShell>
   );

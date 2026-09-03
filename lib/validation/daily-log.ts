@@ -127,3 +127,15 @@ export const makeupCompleteSchema = z.object({
   completedProgress: shortText(300, "보충한 진도"),
   comment: shortText(1000, "코멘트"),
 });
+
+// 이전 수업 기록 패널의 공통 필드 수정 (학생 평가/칭찬은 기존 전체 수정 화면 재사용)
+export const historyLogUpdateSchema = z.object({
+  dailyLogId: z.string().uuid(),
+  title: shortText(120, "수업 제목"),
+  defaultProgress: shortText(4000, "공통 진도"),
+  memo: shortText(1000, "메모"),
+  homework: shortText(1000, "오늘 숙제"),
+  nextLessonPlan: shortText(1000, "다음 수업 계획"),
+});
+
+export type HistoryLogUpdateInput = z.infer<typeof historyLogUpdateSchema>;
