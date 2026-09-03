@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
-import type { ClassGroupRecord, StudentGrade, StudentRecord } from "@/lib/supabase/types";
+import type { ClassGroupRecord, PreparationItem, StudentGrade, StudentRecord } from "@/lib/supabase/types";
 
 // cache(): AppShell(사이드바)과 페이지가 같은 요청 안에서 그룹 목록을
 // 각각 조회해도 실제 쿼리는 인자별로 1회만 나간다.
@@ -451,7 +451,7 @@ export async function getGroupLatestProgress(groupId: string) {
 
 export async function updateGroupPreparationItems(
   groupId: string,
-  items: { id: string; text: string; completed: boolean }[],
+  items: PreparationItem[],
 ) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();

@@ -42,6 +42,7 @@ import {
 } from "@/lib/supabase/queries/groups";
 import { gradeDisplay, gradeOptions, isElementaryGrade } from "@/lib/grades";
 import { groupIconOf } from "@/lib/group-icons";
+import { activePreparationItems } from "@/lib/preparation";
 import { getCurrentUserMakeups } from "@/lib/supabase/queries/makeups";
 import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
 import { formatScheduleBlock, groupSchedulesByTime } from "@/lib/schedule";
@@ -98,7 +99,7 @@ export default async function GroupDetailPage({
   const availableToAdd = availableStudents.filter((student) => !memberSet.has(student.id));
   const isEditMode = edit === "1";
 
-  const preparationItems = (group.preparation_items ?? []) as PreparationItem[];
+  const preparationItems = activePreparationItems(group.preparation_items) as PreparationItem[];
   const textbooks = (group.textbook ?? "")
     .split("\n")
     .map((line) => line.trim())

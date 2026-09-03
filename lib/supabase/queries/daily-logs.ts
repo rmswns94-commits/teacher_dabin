@@ -233,23 +233,36 @@ async function syncNextPlanPreparation(
 
   const items = (groupRow.preparation_items ?? []) as PreparationItem[];
   const index = items.findIndex((item) => item.sourceDailyLogId === dailyLogId);
+  const existing = index >= 0 ? items[index] : null;
   let next: PreparationItem[] | null = null;
 
   if (planText && planDate) {
-    const linked: PreparationItem = {
-      id: index >= 0 ? items[index].id : `nlp-${dailyLogId}`,
-      text: planText,
-      completed: index >= 0 ? items[index].completed : false,
-      dueDate: planDate,
-      source: "daily_log_next_plan",
-      sourceDailyLogId: dailyLogId,
-    };
-    const unchanged =
-      index >= 0 && items[index].text === linked.text && items[index].dueDate === linked.dueDate;
-    if (!unchanged) {
-      next = index >= 0 ? items.map((item, n) => (n === index ? linked : item)) : [...items, linked];
+    if (existing?.dismissed && existing.text === planText && existing.dueDate === planDate) {
+      // Teacher가 삭제한 linked 항목: 계획이 그대로면 단순 재저장으로 부활시키지 않는다
+      next = null;
+    } else {
+      // 신규/변경(삭제된 계획을 실제로 고친 경우 포함) → live 항목으로 생성/갱신
+      const linked: PreparationItem = {
+        id: existing ? existing.id : `nlp-${dailyLogId}`,
+        text: planText,
+        completed: existing && !existing.dismissed ? existing.completed : false,
+        dueDate: planDate,
+        source: "daily_log_next_plan",
+        sourceDailyLogId: dailyLogId,
+      };
+      const unchanged =
+        existing &&
+        !existing.dismissed &&
+        existing.text === linked.text &&
+        existing.dueDate === linked.dueDate;
+      if (!unchanged) {
+        next = existing
+          ? items.map((item, n) => (n === index ? linked : item))
+          : [...items, linked];
+      }
     }
   } else if (index >= 0) {
+    // 계획 자체가 지워짐 → linked 항목(tombstone 포함) 제거
     next = items.filter((_, n) => n !== index);
   }
 

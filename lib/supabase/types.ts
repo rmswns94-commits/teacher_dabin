@@ -33,6 +33,9 @@ export type PreparationItem = {
   dueDate?: string | null; // "YYYY-MM-DD"
   source?: "daily_log_next_plan";
   sourceDailyLogId?: string;
+  // linked 항목을 Teacher가 삭제하면 tombstone(dismissed)으로 남긴다 — 화면에는 안 보이지만
+  // 일지 단순 재저장으로 부활하지 않게 억제하고, 계획 내용/날짜가 실제 바뀌면 되살린다.
+  dismissed?: boolean;
 };
 
 export type ClassGroupRecord = {

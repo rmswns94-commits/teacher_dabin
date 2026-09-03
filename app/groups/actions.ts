@@ -21,7 +21,8 @@ import {
   replaceGroupSchedules,
 } from "@/lib/supabase/queries/schedules";
 import { formatScheduleSlot, slotsOverlap } from "@/lib/schedule";
-import { preparationItemSchema, preparationItemsSchema } from "@/lib/validation/daily-log";
+import { preparationItemSchema } from "@/lib/validation/daily-log";
+import type { PreparationItem } from "@/lib/supabase/types";
 import { groupIconPresets } from "@/lib/group-icons";
 import { classGroupSchema, groupScheduleSchema } from "@/lib/validation/group";
 
@@ -374,7 +375,7 @@ export async function deleteGroupScheduleSetAction(
   return { success: true };
 }
 
-async function getOwnedPreparationItems(groupId: string) {
+async function getOwnedPreparationItems(groupId: string): Promise<PreparationItem[]> {
   const group = await getGroupByIdForCurrentUser(groupId);
 
   if (!group) {
@@ -387,6 +388,7 @@ async function getOwnedPreparationItems(groupId: string) {
 function revalidatePreparation(groupId: string) {
   revalidatePath(`/groups/${groupId}`);
   revalidatePath("/dashboard");
+  revalidatePath("/todos");
 }
 
 export async function addPreparationItemAction(groupId: string, formData: FormData) {
@@ -403,9 +405,13 @@ export async function addPreparationItemAction(groupId: string, formData: FormDa
   const items = await getOwnedPreparationItems(groupId);
 
   // 같은 문구가 이미 있으면 조용히 무시한다 (제안 chip을 두 번 누른 경우 등).
+  // 주의: 배열 전체를 zod로 재파싱하면 기존 항목의 linked 메타데이터(dueDate/source/
+  // sourceDailyLogId/dismissed)가 strip되므로, 새 항목만 검증하고 그대로 append한다.
   if (!items.some((item) => item.text === parsed.data.text)) {
-    const next = preparationItemsSchema.parse([...items, parsed.data]);
-    await updateGroupPreparationItems(groupId, next);
+    if (items.length >= 30) {
+      throw new Error("준비 항목은 30개까지 만들 수 있어요.");
+    }
+    await updateGroupPreparationItems(groupId, [...items, parsed.data]);
   }
 
   revalidatePreparation(groupId);
@@ -421,9 +427,16 @@ export async function togglePreparationItemAction(groupId: string, itemId: strin
   revalidatePreparation(groupId);
 }
 
+// 삭제: 수동 항목은 제거, 일지 연동(linked) 항목은 tombstone(dismissed)으로 전환 —
+// 화면에서는 전부 사라지되, 원본 일지를 단순 재저장해도 부활하지 않게 한다.
+// (원본 Daily Log의 next_lesson_plan/next_plan_date는 기록이므로 건드리지 않는다)
 export async function deletePreparationItemAction(groupId: string, itemId: string) {
   const items = await getOwnedPreparationItems(groupId);
-  const next = items.filter((item) => item.id !== itemId);
+  const target = items.find((item) => item.id === itemId);
+  const next =
+    target?.source === "daily_log_next_plan"
+      ? items.map((item) => (item.id === itemId ? { ...item, dismissed: true } : item))
+      : items.filter((item) => item.id !== itemId);
 
   await updateGroupPreparationItems(groupId, next);
   revalidatePreparation(groupId);

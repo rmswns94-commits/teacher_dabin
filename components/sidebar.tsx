@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  ListTodo,
   CalendarCheck,
   ChevronDown,
   ChevronRight,
@@ -41,7 +42,10 @@ const lessonItems = [
   { label: "학생", href: "/students", icon: Users },
 ];
 
-const afterGroupItems = [{ label: "보충수업", href: "/makeups", icon: CalendarCheck }];
+const afterGroupItems = [
+  { label: "오늘 할 일", href: "/todos", icon: ListTodo },
+  { label: "보충수업", href: "/makeups", icon: CalendarCheck },
+];
 
 const materialItems = [{ label: "영어 지문", href: "/passages", icon: FileText }];
 

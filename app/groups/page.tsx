@@ -7,6 +7,7 @@ import { PendingButton } from "@/components/pending-button";
 import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { formatGrade } from "@/lib/grades";
+import { activePreparationItems } from "@/lib/preparation";
 import {
   DAY_LABELS,
   formatDayList,
@@ -147,7 +148,9 @@ export default async function GroupsPage() {
       examThisWeek = inPeriod || exam.start_date <= weekEnd;
     }
 
-    const prepCount = (group.preparation_items ?? []).filter((item) => !item.completed).length;
+    const prepCount = activePreparationItems(group.preparation_items).filter(
+      (item) => !item.completed,
+    ).length;
 
     // 교재는 class_groups.textbook에 줄바꿈 구분으로 저장됨 (추가 쿼리 없음)
     const textbooks = (group.textbook ?? "")

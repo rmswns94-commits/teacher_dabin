@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { DashboardTodoCard } from "@/components/dashboard-todo-card";
+import { activePreparationItems } from "@/lib/preparation";
 import { currentEpochMs } from "@/lib/todo-window";
 import { getUpcomingExamEvents } from "@/lib/supabase/queries/calendar-events";
 import { formatTimeRange, getScheduleOverview, type ClassOccurrence } from "@/lib/schedule";
@@ -118,7 +119,9 @@ export default async function DashboardPage() {
   // To do list는 read-only summary: 수업 그룹 상세에서 Teacher가 실제 등록한
   // preparation_items만 보여준다 (Dashboard 직접 입력/추천 생성 없음).
   // 수동 체크리스트만 (날짜 있는 다음 수업 계획 항목은 아래 섹션에서 due 날짜에 노출)
-  const prepItems = (focusGroup?.preparation_items ?? []).filter((item) => !item.dueDate);
+  const prepItems = activePreparationItems(focusGroup?.preparation_items).filter(
+    (item) => !item.dueDate,
+  );
 
   // 그룹별 오늘 수업 window — schedules를 이미 갖고 있어 추가 쿼리 없음 (N+1 금지).
   // 하루 여러 slot이면 [가장 이른 시작, 가장 늦은 종료) 합집합을 쓴다.
@@ -140,7 +143,7 @@ export default async function DashboardPage() {
   // 시험 일정과는 무관 (source = daily_log_next_plan 항목만).
   const duePlanItems = allGroups
     .flatMap((planGroup) =>
-      ((planGroup.preparation_items ?? []) as PreparationItem[])
+      (activePreparationItems(planGroup.preparation_items) as PreparationItem[])
         .filter(
           (item) =>
             item.source === "daily_log_next_plan" && item.dueDate && item.dueDate === today,
