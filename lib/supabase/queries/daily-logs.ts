@@ -478,37 +478,6 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   return dailyLogId;
 }
 
-// Excel import용: 지정 날짜들의 기존 일지를 쿼리 1번으로 조회 (row별 조회 금지).
-export type DailyLogForImport = {
-  id: string;
-  group_id: string;
-  class_date: string;
-  status: DailyLogStatus;
-  default_progress: string | null;
-};
-
-export async function getDailyLogsForDates(dates: string[]) {
-  const supabase = await createServerSupabaseClient();
-  const user = await getServerUser();
-
-  if (!supabase || !user || dates.length === 0) {
-    return [] as DailyLogForImport[];
-  }
-
-  const { data, error } = await supabase
-    .from("daily_logs")
-    .select("id, group_id, class_date, status, default_progress")
-    .eq("user_id", user.id)
-    .in("class_date", dates);
-
-  if (error) {
-    console.error("getDailyLogsForDates error", error);
-    return [] as DailyLogForImport[];
-  }
-
-  return (data ?? []) as DailyLogForImport[];
-}
-
 // 일지 수정/상세 화면에서 기존 칭찬을 복원할 때 사용 (쿼리 1번).
 export type DailyLogPraiseRow = { student_id: string; category: string; comment: string | null };
 
