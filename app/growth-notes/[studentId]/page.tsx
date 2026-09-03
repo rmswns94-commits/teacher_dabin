@@ -6,9 +6,11 @@ import { AppShell } from "@/components/app-shell";
 import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
 import { formatKoreanDate, toDateString, todayDateString } from "@/lib/dates";
 import { vocabPercent } from "@/lib/elementary";
+import { scopeMakeupsToWeek } from "@/lib/growth";
 import { buildGrowthNoteViewModel } from "@/lib/growth-note";
 import {
   getGrowthLessonRows,
+  getGrowthMakeupRows,
   getGrowthPraiseRows,
 } from "@/lib/supabase/queries/growth-notes";
 import {
@@ -43,11 +45,12 @@ export default async function GrowthNoteDetailPage({
   const weekEnd = addDaysStr(weekStart, 6);
   const windowStart = addDaysStr(weekStart, -VOCAB_WINDOW_DAYS);
 
-  const [student, studentGroups, lessonRows, praiseRows] = await Promise.all([
+  const [student, studentGroups, lessonRows, praiseRows, makeupRows] = await Promise.all([
     getStudentByIdForCurrentUser(studentId),
     getStudentGroupsForCurrentUser(studentId),
-    getGrowthLessonRows(windowStart, weekEnd, studentId),
-    getGrowthPraiseRows(weekStart, studentId),
+    getGrowthLessonRows(windowStart, weekEnd, [studentId]),
+    getGrowthPraiseRows(weekStart, [studentId]),
+    getGrowthMakeupRows(weekStart, weekEnd, [studentId]),
   ]);
 
   if (!student) {
@@ -87,6 +90,7 @@ export default async function GrowthNoteDetailPage({
       .filter((row) => row.vocab_correct !== null && (row.vocab_total ?? 0) > 0)
       .map((row) => vocabPercent(row.vocab_correct!, row.vocab_total!)!),
     weekPraiseComments,
+    weekMakeups: scopeMakeupsToWeek(makeupRows, weekStart, weekEnd),
   });
 
   const prevWeek = addDaysStr(weekStart, -7);

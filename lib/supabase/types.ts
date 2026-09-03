@@ -156,7 +156,8 @@ export type GrowthAchievementType =
   | "consistency_master"
   | "presentation_master"
   | "kindness_master"
-  | "focus_master";
+  | "focus_master"
+  | "makeup_master";
 
 export type StudentGrowthCheckRecord = {
   id: string;

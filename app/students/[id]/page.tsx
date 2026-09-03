@@ -28,6 +28,7 @@ import {
   growthAchievedSentences,
   growthEmojis,
   growthLabels,
+  scopeMakeupsToWeek,
 } from "@/lib/growth";
 import { genderLabels } from "@/lib/validation/student";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
@@ -194,6 +195,8 @@ export default async function StudentDetailPage({
       .filter((item) => item.vocab_correct !== null && (item.dailyLog?.vocab_total ?? 0) > 0)
       .sort((a, b) => (a.dailyLog?.class_date ?? "").localeCompare(b.dailyLog?.class_date ?? ""))
       .map((item) => vocabPercent(item.vocab_correct!, item.dailyLog!.vocab_total!)!),
+    // 틈새왕: 이미 불러온 보충 기록에서 선택 주에 귀속되는 것만
+    weekMakeups: scopeMakeupsToWeek(makeups, weekStart, weekEnd),
   });
 
   return (

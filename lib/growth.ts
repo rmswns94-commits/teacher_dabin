@@ -1,6 +1,6 @@
-import type { GrowthAchievementType } from "@/lib/supabase/types";
+import type { GrowthAchievementType, MakeupStatus } from "@/lib/supabase/types";
 
-// 8개 성장 Achievement 자동 판정 엔진 (단일 소스).
+// 9개 성장 Achievement 자동 판정 엔진 (단일 소스).
 //
 // Teacher는 왕을 직접 고르지 않는다 — Daily Log에 실제 관찰값만 기록하고,
 // 이 rule engine이 주간 누적 데이터로 자동 계산한다.
@@ -8,6 +8,7 @@ import type { GrowthAchievementType } from "@/lib/supabase/types";
 // Mapping:
 //   출결 → 개근 / 숙제 → 꾸준함왕 / 단어시험 → 단어왕 / 집중 → 집중왕
 //   참여 → 발표왕 / 질문 → 질문왕 / 배려 → 배려왕 / 노력 → 노력왕
+//   보충수업 완료 → 틈새왕
 //
 // Null 원칙: 미입력(null)은 "보통/나쁨"이 아니라 평가 제외 — denominator에서 뺀다.
 // legacy manual growth check(student_growth_checks)는 보존하되 판정에 사용하지 않는다.
@@ -21,6 +22,7 @@ export const growthAchievementValues = [
   "question_master",
   "kindness_master",
   "effort_master",
+  "makeup_master",
 ] as const;
 
 export const growthLabels: Record<GrowthAchievementType, string> = {
@@ -32,6 +34,7 @@ export const growthLabels: Record<GrowthAchievementType, string> = {
   presentation_master: "발표왕",
   kindness_master: "배려왕",
   focus_master: "집중왕",
+  makeup_master: "틈새왕",
 };
 
 export const growthEmojis: Record<GrowthAchievementType, string> = {
@@ -43,6 +46,7 @@ export const growthEmojis: Record<GrowthAchievementType, string> = {
   question_master: "💬",
   kindness_master: "💗",
   effort_master: "🌱",
+  makeup_master: "🧩",
 };
 
 export const growthAchievedSentences: Record<GrowthAchievementType, string> = {
@@ -54,6 +58,20 @@ export const growthAchievedSentences: Record<GrowthAchievementType, string> = {
   question_master: "궁금한 것을 적극적으로 질문했어요!",
   kindness_master: "친구를 배려하는 멋진 모습을 자주 보여줬어요!",
   effort_master: "어려운 것도 포기하지 않고 꾸준히 노력했어요!",
+  makeup_master: "놓친 수업도 꼼꼼하게 보충하며 배운 내용을 빈틈없이 채웠어요!",
+};
+
+// 성장노트 첫 화면용 학생 친화 설명 (내부 rule 숫자는 노출하지 않는다)
+export const growthGuideDescriptions: Record<GrowthAchievementType, string> = {
+  attendance_master: "수업에 빠짐없이 성실하게 참여해요!",
+  consistency_master: "숙제를 꾸준히 잘 챙기는 멋진 습관을 보여줘요!",
+  vocabulary_master: "단어 공부를 꾸준히 하며 멋진 실력을 보여줘요!",
+  focus_master: "수업에 귀 기울이고 집중하는 모습을 보여줘요!",
+  presentation_master: "수업과 발표에 자신 있게 참여해요!",
+  question_master: "궁금한 것을 그냥 지나치지 않고 적극적으로 질문해요!",
+  kindness_master: "친구를 생각하고 배려하는 따뜻한 모습을 보여줘요!",
+  effort_master: "어려운 것도 쉽게 포기하지 않고 끝까지 해보려고 노력해요!",
+  makeup_master: "놓친 수업도 보충하며 배운 내용을 꼼꼼하게 채워요!",
 };
 
 // ---- threshold config (component에서 숫자 hard-code 금지) ----
@@ -65,6 +83,8 @@ export const GROWTH_CONFIG = {
   participation: { minSamples: 2, positiveRatio: 0.6 },
   homework: { minSamples: 2, positiveRatio: 1.0 },
   vocabPerfectStreak: 3,
+  // 틈새왕: 주간 평가 대상 보충이 1개 이상 + 완료율 100% (0개면 미획득 — 0/0 ≠ 100%)
+  makeup: { minSamples: 1, completionRatio: 1.0 },
 } as const;
 
 export type GrowthStat = { evaluated: number; positive: number; ratio: number };
@@ -92,6 +112,47 @@ export function calculatePositiveRatio<T>(
   return { evaluated, positive, ratio: evaluated > 0 ? positive / evaluated : 0 };
 }
 
+// ---- 틈새왕 (보충수업 완료) ----
+export type MakeupLike = {
+  status: MakeupStatus;
+  scheduled_date: string | null;
+  completed_date: string | null;
+};
+
+// "해당 주 평가 대상" 보충: 실제 보충 실시/예정 날짜가 선택 주에 포함되는 record만.
+// 날짜가 전혀 없는 required(미정) record는 특정 주에 귀속시키지 않는다.
+export function scopeMakeupsToWeek<T extends MakeupLike>(
+  makeups: T[],
+  weekStart: string,
+  weekEnd: string,
+): T[] {
+  return makeups.filter((makeup) => {
+    const relevantDate =
+      makeup.status === "completed"
+        ? makeup.completed_date ?? makeup.scheduled_date
+        : makeup.scheduled_date;
+
+    return relevantDate !== null && relevantDate >= weekStart && relevantDate <= weekEnd;
+  });
+}
+
+// cancelled는 denominator에서 제외, completed만 numerator.
+export function calculateMakeupStat(weekMakeups: MakeupLike[]): GrowthStat {
+  let evaluated = 0;
+  let positive = 0;
+
+  for (const makeup of weekMakeups) {
+    if (makeup.status === "cancelled") {
+      continue;
+    }
+
+    evaluated += 1;
+    if (makeup.status === "completed") positive += 1;
+  }
+
+  return { evaluated, positive, ratio: evaluated > 0 ? positive / evaluated : 0 };
+}
+
 export type WeeklyGrowthInput = {
   // 이번 주 학생별 수업 기록 (미입력 field는 null)
   weekRecords: {
@@ -105,6 +166,8 @@ export type WeeklyGrowthInput = {
   }[];
   // 최근 유효 단어시험 % (오래된 → 최신)
   recentVocabPercents: number[];
+  // 이번 주 평가 대상 보충수업 (scopeMakeupsToWeek로 미리 주간 범위에 귀속시켜 전달)
+  weekMakeups?: MakeupLike[];
 };
 
 export type WeeklyGrowthResult = {
@@ -162,6 +225,16 @@ export function computeWeeklyGrowth(input: WeeklyGrowthInput): WeeklyGrowthResul
   const effort = calculatePositiveRatio(records, (r) => r.effortLevel, "high");
   stats.effort_master = effort;
   if (meets(effort, GROWTH_CONFIG.effort)) achieved.push("effort_master");
+
+  // 틈새왕: 주간 평가 대상 보충 >= 1 + 완료율 100% (보충이 필요 없던 학생에겐 주지 않는다)
+  const makeupStat = calculateMakeupStat(input.weekMakeups ?? []);
+  stats.makeup_master = makeupStat;
+  if (
+    makeupStat.evaluated >= GROWTH_CONFIG.makeup.minSamples &&
+    makeupStat.ratio >= GROWTH_CONFIG.makeup.completionRatio
+  ) {
+    achieved.push("makeup_master");
+  }
 
   // 단어 성장 사실: 최근 3회가 하락 없이 상승했을 때 (노력왕과 무관한 정보)
   let vocabTrend: WeeklyGrowthResult["vocabTrend"] = null;

@@ -3,6 +3,7 @@ import {
   growthAchievedSentences,
   growthEmojis,
   growthLabels,
+  type MakeupLike,
   type WeeklyGrowthInput,
 } from "@/lib/growth";
 import type {
@@ -46,9 +47,6 @@ export type GrowthBadge = {
 export type StudentGrowthCardSummary = {
   studentId: string;
   studentName: string;
-  // 반 필터는 이름이 아니라 stable id로 매칭한다 (동명 그룹 안전)
-  groupIds: string[];
-  groupNames: string[];
   achievements: GrowthBadge[];
   praiseCount: number;
 };
@@ -96,6 +94,7 @@ const encouragementPriority: GrowthAchievementType[] = [
   "question_master",
   "kindness_master",
   "effort_master",
+  "makeup_master",
   "vocabulary_master",
   "consistency_master",
   "focus_master",
@@ -112,6 +111,7 @@ const connectiveFragments: Record<GrowthAchievementType, string> = {
   focus_master: "수업에 집중하고",
   presentation_master: "자신 있게 발표하고",
   attendance_master: "수업에 빠짐없이 참여하고",
+  makeup_master: "놓친 부분도 꼼꼼하게 채우고",
 };
 
 const finalFragments: Record<GrowthAchievementType, string> = {
@@ -123,6 +123,7 @@ const finalFragments: Record<GrowthAchievementType, string> = {
   focus_master: "수업에 집중한",
   presentation_master: "자신 있게 발표한",
   attendance_master: "수업에 빠짐없이 참여한",
+  makeup_master: "놓친 부분까지 꼼꼼하게 채운",
 };
 
 const singleAchievementEncouragements: Record<GrowthAchievementType, string> = {
@@ -134,6 +135,7 @@ const singleAchievementEncouragements: Record<GrowthAchievementType, string> = {
   focus_master: "수업에 집중하는 모습이 한 주 내내 반짝반짝 빛났어요!",
   presentation_master: "수업에 자신 있게 참여하는 모습이 정말 멋졌어요!",
   attendance_master: "이번 주 수업에 빠짐없이 참여했어요. 정말 잘했어요!",
+  makeup_master: "놓친 수업도 꼼꼼하게 보충하며 빈틈없이 채웠어요. 정말 멋져요! 🧩",
 };
 
 export function buildEncouragement(
@@ -168,6 +170,8 @@ export type BuildGrowthNoteInput = {
   recentVocabPercents: number[];
   // 이번 주 Teacher manual 칭찬 코멘트 원문 (오래된 → 최신)
   weekPraiseComments: string[];
+  // 이번 주 평가 대상 보충수업 (scopeMakeupsToWeek 적용 후)
+  weekMakeups: MakeupLike[];
 };
 
 export function buildGrowthNoteViewModel(input: BuildGrowthNoteInput): StudentGrowthNoteViewModel {
@@ -184,6 +188,7 @@ export function buildGrowthNoteViewModel(input: BuildGrowthNoteInput): StudentGr
   const growth = computeWeeklyGrowth({
     weekRecords,
     recentVocabPercents: input.recentVocabPercents,
+    weekMakeups: input.weekMakeups,
   });
 
   // 잘한 일: structured 관찰값에서 positive가 1회라도 있으면 대표 문장 1개 (중복/반복 금지).

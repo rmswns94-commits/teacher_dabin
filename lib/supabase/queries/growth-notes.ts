@@ -37,9 +37,13 @@ export type GrowthLessonRow = {
   strengths: string | null;
 };
 
-// 기간 내 수업 기록을 한 번에 가져온다 (전체 학생 batch — N+1 방지).
-// studentId를 주면 해당 학생만 (상세용, bounded 기간).
-export async function getGrowthLessonRows(startDate: string, endDate: string, studentId?: string) {
+// 기간 내 수업 기록을 한 번에 가져온다 (선택된 그룹 학생 batch — N+1 방지).
+// studentIds를 주면 해당 학생들만 (목록: 반 학생 전체 / 상세: 학생 1명, bounded 기간).
+export async function getGrowthLessonRows(
+  startDate: string,
+  endDate: string,
+  studentIds?: string[],
+) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
@@ -56,8 +60,11 @@ export async function getGrowthLessonRows(startDate: string, endDate: string, st
     .gte("daily_logs.class_date", startDate)
     .lte("daily_logs.class_date", endDate);
 
-  if (studentId) {
-    query = query.eq("student_id", studentId);
+  if (studentIds) {
+    if (studentIds.length === 0) {
+      return [] as GrowthLessonRow[];
+    }
+    query = query.in("student_id", studentIds);
   }
 
   const { data, error } = await query;
@@ -99,8 +106,8 @@ export type GrowthPraiseRow = {
   created_at: string;
 };
 
-// 기간 이후 칭찬을 한 번에 가져온다 (전체 학생 batch).
-export async function getGrowthPraiseRows(sinceDate: string, studentId?: string) {
+// 기간 이후 칭찬을 한 번에 가져온다 (선택 학생들 batch).
+export async function getGrowthPraiseRows(sinceDate: string, studentIds?: string[]) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
@@ -114,8 +121,11 @@ export async function getGrowthPraiseRows(sinceDate: string, studentId?: string)
     .eq("user_id", user.id)
     .gte("created_at", `${sinceDate}T00:00:00+09:00`);
 
-  if (studentId) {
-    query = query.eq("student_id", studentId);
+  if (studentIds) {
+    if (studentIds.length === 0) {
+      return [] as GrowthPraiseRow[];
+    }
+    query = query.in("student_id", studentIds);
   }
 
   const { data, error } = await query;
@@ -126,4 +136,50 @@ export async function getGrowthPraiseRows(sinceDate: string, studentId?: string)
   }
 
   return (data ?? []) as GrowthPraiseRow[];
+}
+
+// 틈새왕 판정용: 주간에 걸치는 보충수업을 한 번에 가져온다 (학생별 개별 쿼리 금지).
+// 주간 귀속/취소 제외 규칙은 lib/growth.ts의 scopeMakeupsToWeek/calculateMakeupStat이 처리.
+export type GrowthMakeupRow = {
+  student_id: string;
+  status: "required" | "scheduled" | "completed" | "cancelled";
+  scheduled_date: string | null;
+  completed_date: string | null;
+};
+
+export async function getGrowthMakeupRows(
+  weekStart: string,
+  weekEnd: string,
+  studentIds?: string[],
+) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as GrowthMakeupRow[];
+  }
+
+  let query = supabase
+    .from("makeup_lessons")
+    .select("student_id, status, scheduled_date, completed_date")
+    .eq("user_id", user.id)
+    .or(
+      `and(scheduled_date.gte.${weekStart},scheduled_date.lte.${weekEnd}),and(completed_date.gte.${weekStart},completed_date.lte.${weekEnd})`,
+    );
+
+  if (studentIds) {
+    if (studentIds.length === 0) {
+      return [] as GrowthMakeupRow[];
+    }
+    query = query.in("student_id", studentIds);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("getGrowthMakeupRows error", error);
+    return [] as GrowthMakeupRow[];
+  }
+
+  return (data ?? []) as GrowthMakeupRow[];
 }
