@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BookOpen, Sparkles, Target } from "lucide-react";
+import { BookOpen, School, Sparkles, Target } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
@@ -227,74 +227,75 @@ export default async function StudentDetailPage({
                 <CardTitle>기본 정보</CardTitle>
               </CardHeader>
               <CardContent>
-                <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-                  <div className="min-w-0 sm:col-span-2">
-                    <dt className="text-xs font-semibold text-[#8a7b77]">학생 이름</dt>
-                    <dd className="mt-0.5 text-lg font-bold text-[#2b2323]">{student.name}</dd>
-                  </div>
-
-                  <div className="min-w-0">
-                    <dt className="text-xs font-semibold text-[#8a7b77]">학년</dt>
-                    <dd className="mt-0.5 text-sm text-[#2b2323]">
+                {/* 1. 학생 identity — 이름(크게) + 학년 badge + 학교 */}
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[22px] font-bold leading-tight tracking-[-0.01em] text-[#2b2323]">
+                      {student.name}
+                    </span>
+                    <span className="rounded-full bg-[#f3eefa] px-2.5 py-0.5 text-xs font-medium text-[#6d5aa8]">
                       {gradeDisplay[student.grade as keyof typeof gradeDisplay]}
-                    </dd>
+                    </span>
                   </div>
+                  <div className="mt-1 flex min-w-0 items-start gap-1.5 text-sm text-[#6b5d58]">
+                    <School className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#a89a94]" aria-hidden />
+                    <span className="min-w-0 break-words">{student.school || "학교 미등록"}</span>
+                  </div>
+                </div>
 
-                  <div className="min-w-0">
-                    <dt className="text-xs font-semibold text-[#8a7b77]">성별</dt>
-                    <dd className="mt-0.5 text-sm text-[#2b2323]">
-                      {student.gender ? genderLabels[student.gender] : "미입력"}
-                    </dd>
+                {/* 2. 성별 · 생일 — compact info grid (wide에서 벌어지지 않게 max-w 제한) */}
+                <div className="mt-5 grid max-w-md grid-cols-2 gap-3">
+                  <div className="rounded-2xl bg-[#faf7f3] px-3.5 py-2.5">
+                    <div className="text-xs text-[#8a7b77]">성별</div>
+                    <div className="mt-0.5 text-[15px] font-medium text-[#2b2323]">
+                      {student.gender ? genderLabels[student.gender] : "미등록"}
+                    </div>
                   </div>
+                  <div className="rounded-2xl bg-[#faf7f3] px-3.5 py-2.5">
+                    <div className="text-xs text-[#8a7b77]">생일</div>
+                    <div className="mt-0.5 text-[15px] font-medium tabular-nums text-[#2b2323]">
+                      {student.birth_date ? student.birth_date.replaceAll("-", ".") : "미등록"}
+                    </div>
+                  </div>
+                </div>
 
-                  <div className="min-w-0">
-                    <dt className="text-xs font-semibold text-[#8a7b77]">학교</dt>
-                    <dd className="mt-0.5 break-words text-sm text-[#2b2323]">
-                      {student.school || "미입력"}
-                    </dd>
+                {/* 3. 수업 그룹 */}
+                <div className="mt-5">
+                  <div className="text-xs font-semibold text-[#8a7b77]">수업 그룹</div>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {studentGroups.length === 0 ? (
+                      <span className="text-sm text-[#9a8f8a]">미배정</span>
+                    ) : (
+                      studentGroups.map((group) => (
+                        <span
+                          key={group.id}
+                          className="rounded-full bg-[#f3eefa] px-2.5 py-1 text-xs font-medium text-[#6d5aa8]"
+                        >
+                          {group.name}
+                        </span>
+                      ))
+                    )}
                   </div>
+                </div>
 
-                  <div className="min-w-0">
-                    <dt className="text-xs font-semibold text-[#8a7b77]">생일</dt>
-                    <dd className="mt-0.5 text-sm tabular-nums text-[#2b2323]">
-                      {student.birth_date ? formatKoreanDateFull(student.birth_date) : "미입력"}
-                    </dd>
-                  </div>
-
-                  <div className="min-w-0 sm:col-span-2">
-                    <dt className="text-xs font-semibold text-[#8a7b77]">수업 그룹</dt>
-                    <dd className="mt-1.5 flex flex-wrap gap-1.5">
-                      {studentGroups.length === 0 ? (
-                        <span className="text-sm text-[#9a8f8a]">미배정</span>
-                      ) : (
-                        studentGroups.map((group) => (
-                          <span
-                            key={group.id}
-                            className="rounded-full bg-[#f3eefa] px-2.5 py-1 text-xs font-medium text-[#6d5aa8]"
-                          >
-                            {group.name}
-                          </span>
-                        ))
-                      )}
-                    </dd>
-                  </div>
-                </dl>
+                {/* 4. 수정 (secondary action — 카드 하단 오른쪽) */}
+                <div className="mt-5 flex justify-end border-t border-dashed border-[#f0e7e2] pt-4">
+                  <StudentEditDialog
+                    studentId={id}
+                    groups={groups.map((group) => ({ id: group.id, name: group.name }))}
+                    initial={{
+                      name: student.name,
+                      grade: student.grade,
+                      school: student.school ?? "",
+                      memo: student.memo ?? "",
+                      gender: student.gender ?? "",
+                      birthDate: student.birth_date ?? "",
+                      groupIds: studentGroups.map((group) => group.id),
+                    }}
+                  />
+                </div>
               </CardContent>
             </Card>
-
-            <StudentEditDialog
-              studentId={id}
-              groups={groups.map((group) => ({ id: group.id, name: group.name }))}
-              initial={{
-                name: student.name,
-                grade: student.grade,
-                school: student.school ?? "",
-                memo: student.memo ?? "",
-                gender: student.gender ?? "",
-                birthDate: student.birth_date ?? "",
-                groupIds: studentGroups.map((group) => group.id),
-              }}
-            />
 
             <Card>
               <CardHeader>
