@@ -82,6 +82,7 @@ function DialogShell({
       aria-label={title}
       tabIndex={-1}
       onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing) return;
         if (event.key === "Escape") requestClose();
       }}
       onClick={(event) => {

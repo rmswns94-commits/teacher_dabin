@@ -52,6 +52,9 @@ export function GroupCreateDialog({ label = "수업 그룹 등록" }: { label?: 
           aria-modal="true"
           aria-label="수업 그룹 등록"
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) {
+              return; // 한글 조합 중 Escape/키 확정은 dialog 동작으로 처리하지 않는다
+            }
             if (event.key === "Escape" && !confirmOpen) {
               requestClose();
             }

@@ -125,6 +125,15 @@ function initEntry(student: DailyLogFormStudent): EntryState {
   };
 }
 
+const digitsOnly = (value: string) => value.replace(/\D/g, "").slice(0, 3);
+
+// 숫자 전용 필드의 IME-safe onChange: 한글 조합(composition) 도중 값을 재작성하면
+// iPad Safari에서 자모가 씹힐 수 있어, 조합 중에는 raw를 유지하고
+// 조합이 끝나는 시점(onCompositionEnd)과 일반 입력에서만 정리한다.
+function isComposingEvent(event: { nativeEvent: object }) {
+  return Boolean((event.nativeEvent as { isComposing?: boolean }).isComposing);
+}
+
 // 초등 quick check용 세그먼트 (같은 값을 다시 누르면 해제 — 미입력과 구분)
 function SegmentedToggle({
   label,
@@ -233,27 +242,33 @@ export function DailyLogForm({
   }, [historyImport, defaultProgress]);
   const [isPending, startTransition] = useTransition();
 
-  // 뒤로가기 버튼의 unsaved 확인용 dirty 판정 — 주요 입력 state를 초기 스냅샷과 비교.
-  // (첫 렌더 시점 상태 = 초기값이므로 그 시점 스냅샷을 기준으로 삼는다)
-  const dirtyRef = useRef(false);
+  // 뒤로가기 버튼의 unsaved 확인용 dirty 판정 — 스냅샷 비교는 뒤로가기 클릭 시점에만
+  // 수행한다 (매 keystroke마다 큰 객체를 직렬화하면 iPad에서 입력 렌더가 느려져
+  // 한글 조합이 씹힐 수 있다). state는 ref에 담아 lazy로 읽는다.
+  const formStateRef = useRef<Record<string, unknown>>({});
   const initialSnapshotRef = useRef<string | null>(null);
-  const currentSnapshot = JSON.stringify({
-    classDate,
-    title,
-    defaultProgress,
-    memo,
-    homework,
-    nextLessonPlan,
-    nextPlanDate,
-    entries,
-  });
   useEffect(() => {
+    formStateRef.current = {
+      classDate,
+      title,
+      defaultProgress,
+      memo,
+      homework,
+      nextLessonPlan,
+      nextPlanDate,
+      entries,
+    };
     if (initialSnapshotRef.current === null) {
-      initialSnapshotRef.current = currentSnapshot;
+      initialSnapshotRef.current = JSON.stringify(formStateRef.current);
     }
-    dirtyRef.current = currentSnapshot !== initialSnapshotRef.current;
-  }, [currentSnapshot]);
-  useEffect(() => registerDirtyCheck(() => dirtyRef.current), []);
+  }, [classDate, title, defaultProgress, memo, homework, nextLessonPlan, nextPlanDate, entries]);
+  useEffect(
+    () =>
+      registerDirtyCheck(
+        () => JSON.stringify(formStateRef.current) !== initialSnapshotRef.current,
+      ),
+    [],
+  );
 
   // 학생 평가 UI는 초등/중등/고등 모든 학년 공통으로 사용한다.
   const [vocabTotal, setVocabTotal] = useState(initial?.vocabTotal ?? "");
@@ -513,7 +528,12 @@ export function DailyLogForm({
               <input
                 inputMode="numeric"
                 value={vocabTotal}
-                onChange={(event) => setVocabTotal(event.target.value.replace(/\D/g, "").slice(0, 3))}
+                onChange={(event) =>
+                  setVocabTotal(
+                    isComposingEvent(event) ? event.target.value : digitsOnly(event.target.value),
+                  )
+                }
+                onCompositionEnd={(event) => setVocabTotal(digitsOnly(event.currentTarget.value))}
                 className="w-16 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-center text-sm tabular-nums outline-none focus:border-[#c9b9e8]"
                 placeholder="20"
                 aria-label="오늘 단어시험 총 문항 수"
@@ -714,7 +734,14 @@ export function DailyLogForm({
                             value={entry.vocabCorrect}
                             onChange={(event) =>
                               updateEntry(student.studentId, {
-                                vocabCorrect: event.target.value.replace(/\D/g, "").slice(0, 3),
+                                vocabCorrect: isComposingEvent(event)
+                                  ? event.target.value
+                                  : digitsOnly(event.target.value),
+                              })
+                            }
+                            onCompositionEnd={(event) =>
+                              updateEntry(student.studentId, {
+                                vocabCorrect: digitsOnly(event.currentTarget.value),
                               })
                             }
                             className="w-14 rounded-xl border border-[#ece0db] bg-white px-2 py-1.5 text-center text-sm tabular-nums outline-none focus:border-[#c9b9e8]"
@@ -882,7 +909,8 @@ export function DailyLogForm({
                           </div>
                           <textarea
                             value={praiseDraft}
-                            onChange={(event) => setPraiseDraft(event.target.value.slice(0, 120))}
+                            // IME-safe: 조합 중 값 재작성 금지 — 길이 제한은 native maxLength가 담당
+                            onChange={(event) => setPraiseDraft(event.target.value)}
                             rows={2}
                             maxLength={120}
                             autoFocus

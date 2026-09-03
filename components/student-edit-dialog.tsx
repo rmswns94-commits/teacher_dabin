@@ -88,6 +88,9 @@ function StudentEditFormDialog({
       aria-modal="true"
       aria-label="학생 정보 수정"
       onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing) {
+          return;
+        }
         if (event.key === "Escape" && !confirmOpen) {
           requestClose();
         }

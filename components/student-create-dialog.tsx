@@ -86,6 +86,9 @@ function StudentFormDialog({
       aria-modal="true"
       aria-label="학생 등록"
       onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing) {
+          return;
+        }
         if (event.key === "Escape" && !confirmOpen) {
           requestClose();
         }
