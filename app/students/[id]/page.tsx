@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BookOpen, School, Sparkles, Target } from "lucide-react";
+import { BookOpen, Sparkles, Target } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
@@ -227,24 +227,18 @@ export default async function StudentDetailPage({
                 <CardTitle>기본 정보</CardTitle>
               </CardHeader>
               <CardContent>
-                {/* 1. 학생 identity — 이름(크게) + 학년 badge + 학교 */}
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[22px] font-bold leading-tight tracking-[-0.01em] text-[#2b2323]">
-                      {student.name}
-                    </span>
-                    <span className="rounded-full bg-[#f3eefa] px-2.5 py-0.5 text-xs font-medium text-[#6d5aa8]">
-                      {gradeDisplay[student.grade as keyof typeof gradeDisplay]}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex min-w-0 items-start gap-1.5 text-sm text-[#6b5d58]">
-                    <School className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#a89a94]" aria-hidden />
-                    <span className="min-w-0 break-words">{student.school || "학교 미등록"}</span>
-                  </div>
+                {/* 1. 학생 identity — 이름(크게) + 학년 badge */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[22px] font-bold leading-tight tracking-[-0.01em] text-[#2b2323]">
+                    {student.name}
+                  </span>
+                  <span className="rounded-full bg-[#f3eefa] px-2.5 py-0.5 text-xs font-medium text-[#6d5aa8]">
+                    {gradeDisplay[student.grade as keyof typeof gradeDisplay]}
+                  </span>
                 </div>
 
-                {/* 2. 성별 · 생일 — compact info grid (wide에서 벌어지지 않게 max-w 제한) */}
-                <div className="mt-5 grid max-w-md grid-cols-2 gap-3">
+                {/* 2. 성별 · 생일 · 학교 — compact info grid (wide에서 벌어지지 않게 max-w 제한) */}
+                <div className="mt-5 grid max-w-xl grid-cols-2 gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl bg-[#faf7f3] px-3.5 py-2.5 text-center">
                     <div className="text-xs text-[#8a7b77]">성별</div>
                     <div className="mt-0.5 text-[15px] font-medium text-[#2b2323]">
@@ -262,6 +256,12 @@ export default async function StudentDetailPage({
                     <div className="text-xs text-[#8a7b77]">생일</div>
                     <div className="mt-0.5 text-[15px] font-medium tabular-nums text-[#2b2323]">
                       {student.birth_date ? `🎂 ${student.birth_date.replaceAll("-", ".")}` : "미등록"}
+                    </div>
+                  </div>
+                  <div className="col-span-2 min-w-0 rounded-2xl bg-[#faf7f3] px-3.5 py-2.5 text-center sm:col-span-1">
+                    <div className="text-xs text-[#8a7b77]">학교</div>
+                    <div className="mt-0.5 break-words text-[15px] font-medium text-[#2b2323]">
+                      {student.school ? `🏫 ${student.school}` : "미등록"}
                     </div>
                   </div>
                 </div>
