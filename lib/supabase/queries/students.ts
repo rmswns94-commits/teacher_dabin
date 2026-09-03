@@ -162,14 +162,16 @@ export async function getCurrentUserMemberships() {
   return (data ?? []) as { student_id: string; group_id: string }[];
 }
 
-export async function updateStudent(studentId: string, input: {
+// 학생 정보 수정 + 소속 그룹 다중 동기화 (Edit Dialog용).
+// membership은 선택 집합과 비교해 추가/제거만 수행한다 (전체 delete+insert 아님).
+export async function updateStudentWithGroups(studentId: string, input: {
   name: string;
   grade: StudentGrade;
   school?: string | null;
   memo?: string | null;
   gender?: "male" | "female" | null;
   birthDate?: string | null;
-  groupId?: string | null;
+  groupIds: string[];
 }) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
@@ -203,29 +205,50 @@ export async function updateStudent(studentId: string, input: {
     .eq("user_id", user.id);
 
   if (updateError) {
+    console.error("updateStudentWithGroups update error", updateError);
     throw new Error("학생 정보를 수정하지 못했어요.");
   }
 
-  if (input.groupId) {
-    const { data: existingMembership } = await supabase
-      .from("student_group_memberships")
-      .select("id")
-      .eq("student_id", studentId)
-      .eq("user_id", user.id)
-      .maybeSingle();
+  // membership 동기화 (batch 조회 1번 + 필요한 insert/delete만)
+  const selected = new Set(input.groupIds);
+  const { data: memberships, error: membershipError } = await supabase
+    .from("student_group_memberships")
+    .select("id, group_id")
+    .eq("user_id", user.id)
+    .eq("student_id", studentId);
 
-    if (existingMembership) {
-      await supabase
-        .from("student_group_memberships")
-        .update({ group_id: input.groupId })
-        .eq("id", existingMembership.id)
-        .eq("user_id", user.id);
-    } else {
-      await supabase.from("student_group_memberships").insert({
-        user_id: user.id,
-        student_id: studentId,
-        group_id: input.groupId,
-      });
+  if (membershipError) {
+    console.error("updateStudentWithGroups membership read error", membershipError);
+    throw new Error("학생 정보는 수정했지만 수업 그룹을 확인하지 못했어요.");
+  }
+
+  const current = new Set((memberships ?? []).map((row) => row.group_id as string));
+  const toAdd = [...selected].filter((groupId) => !current.has(groupId));
+  const toRemove = (memberships ?? [])
+    .filter((row) => !selected.has(row.group_id as string))
+    .map((row) => row.id as string);
+
+  if (toRemove.length > 0) {
+    const { error } = await supabase
+      .from("student_group_memberships")
+      .delete()
+      .eq("user_id", user.id)
+      .in("id", toRemove);
+
+    if (error) {
+      console.error("updateStudentWithGroups membership remove error", error);
+      throw new Error("학생 정보는 수정했지만 수업 그룹 변경에 실패했어요.");
+    }
+  }
+
+  if (toAdd.length > 0) {
+    const { error } = await supabase.from("student_group_memberships").insert(
+      toAdd.map((groupId) => ({ user_id: user.id, student_id: studentId, group_id: groupId })),
+    );
+
+    if (error) {
+      console.error("updateStudentWithGroups membership add error", error);
+      throw new Error("학생 정보는 수정했지만 수업 그룹 변경에 실패했어요.");
     }
   }
 

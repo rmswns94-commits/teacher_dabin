@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BookOpen, PencilLine, Sparkles, Target } from "lucide-react";
+import { BookOpen, Sparkles, Target } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { StudentDeleteButton } from "@/components/student-delete-button";
-import { GuardedForm } from "@/components/unsaved-guard";
+import { StudentEditDialog } from "@/components/student-edit-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PendingButton } from "@/components/pending-button";
@@ -22,7 +22,7 @@ import {
   questionLevelLabels,
   vocabPercent,
 } from "@/lib/elementary";
-import { gradeDisplay, gradeOptions, isElementaryGrade } from "@/lib/grades";
+import { gradeDisplay, isElementaryGrade } from "@/lib/grades";
 import {
   computeWeeklyGrowth,
   growthAchievedSentences,
@@ -46,7 +46,7 @@ import type {
   ParticipationLevel,
   PraiseCategory,
 } from "@/lib/supabase/types";
-import { completeParentNoteAction, updateStudentAction } from "../actions";
+import { completeParentNoteAction } from "../actions";
 
 // 한국 기준 주 시작(월요일). 날짜 문자열만으로 계산해 timezone 밀림이 없다.
 function weekStartOf(ymd: string) {
@@ -221,114 +221,80 @@ export default async function StudentDetailPage({
 
         <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-5">
+            {/* 기본 정보는 read-only — 수정은 아래 [학생 정보 수정하기] Dialog에서만 */}
             <Card>
               <CardHeader>
                 <CardTitle>기본 정보</CardTitle>
               </CardHeader>
               <CardContent>
-                <GuardedForm action={async (formData: FormData) => {
-                  "use server";
-                  await updateStudentAction(id, formData);
-                }} className="space-y-4">
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">학생 이름</span>
-                    <input
-                      name="name"
-                      defaultValue={student.name}
-                      className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
-                      required
-                    />
-                  </label>
-
-                  {/* min-w-0: iPad Safari date input intrinsic width가 옆 칸을 침범하지 않게 */}
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="block min-w-0">
-                      <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">학년</span>
-                      <select
-                        name="grade"
-                        defaultValue={student.grade}
-                        className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
-                      >
-                        {gradeOptions.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className="block min-w-0">
-                      <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">학교</span>
-                      <input
-                        name="school"
-                        defaultValue={student.school ?? ""}
-                        className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
-                        placeholder="학교명"
-                      />
-                    </label>
-
-                    <label className="block min-w-0">
-                      <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">성별</span>
-                      <select
-                        name="gender"
-                        defaultValue={student.gender ?? ""}
-                        className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
-                      >
-                        <option value="">성별 선택</option>
-                        <option value="male">{genderLabels.male}</option>
-                        <option value="female">{genderLabels.female}</option>
-                      </select>
-                    </label>
-
-                    <label className="block min-w-0">
-                      <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">생일</span>
-                      <input
-                        type="date"
-                        name="birthDate"
-                        defaultValue={student.birth_date ?? ""}
-                        max={todayDateString()}
-                        className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
-                      />
-                    </label>
+                <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+                  <div className="min-w-0 sm:col-span-2">
+                    <dt className="text-xs font-semibold text-[#8a7b77]">학생 이름</dt>
+                    <dd className="mt-0.5 text-lg font-bold text-[#2b2323]">{student.name}</dd>
                   </div>
 
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">수업 그룹</span>
-                    <select
-                      name="groupId"
-                      defaultValue={studentGroups[0]?.id ?? ""}
-                      className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
-                    >
-                      <option value="">그룹 선택</option>
-                      {groups.map((group) => (
-                        <option key={group.id} value={group.id}>
-                          {group.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">메모</span>
-                    <textarea
-                      name="memo"
-                      rows={4}
-                      defaultValue={student.memo ?? ""}
-                      className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
-                    />
-                  </label>
-
-                  <div className="flex gap-2">
-                    <Button type="submit" className="gap-2">
-                      <PencilLine className="h-4 w-4" />
-                      수정하기
-                    </Button>
+                  <div className="min-w-0">
+                    <dt className="text-xs font-semibold text-[#8a7b77]">학년</dt>
+                    <dd className="mt-0.5 text-sm text-[#2b2323]">
+                      {gradeDisplay[student.grade as keyof typeof gradeDisplay]}
+                    </dd>
                   </div>
-                </GuardedForm>
 
-                <div className="mt-3">
-                  <StudentDeleteButton studentId={id} studentName={student.name} />
-                </div>
+                  <div className="min-w-0">
+                    <dt className="text-xs font-semibold text-[#8a7b77]">성별</dt>
+                    <dd className="mt-0.5 text-sm text-[#2b2323]">
+                      {student.gender ? genderLabels[student.gender] : "미입력"}
+                    </dd>
+                  </div>
+
+                  <div className="min-w-0">
+                    <dt className="text-xs font-semibold text-[#8a7b77]">학교</dt>
+                    <dd className="mt-0.5 break-words text-sm text-[#2b2323]">
+                      {student.school || "미입력"}
+                    </dd>
+                  </div>
+
+                  <div className="min-w-0">
+                    <dt className="text-xs font-semibold text-[#8a7b77]">생일</dt>
+                    <dd className="mt-0.5 text-sm tabular-nums text-[#2b2323]">
+                      {student.birth_date ? formatKoreanDateFull(student.birth_date) : "미입력"}
+                    </dd>
+                  </div>
+
+                  <div className="min-w-0 sm:col-span-2">
+                    <dt className="text-xs font-semibold text-[#8a7b77]">수업 그룹</dt>
+                    <dd className="mt-1.5 flex flex-wrap gap-1.5">
+                      {studentGroups.length === 0 ? (
+                        <span className="text-sm text-[#9a8f8a]">미배정</span>
+                      ) : (
+                        studentGroups.map((group) => (
+                          <span
+                            key={group.id}
+                            className="rounded-full bg-[#f3eefa] px-2.5 py-1 text-xs font-medium text-[#6d5aa8]"
+                          >
+                            {group.name}
+                          </span>
+                        ))
+                      )}
+                    </dd>
+                  </div>
+                </dl>
               </CardContent>
             </Card>
+
+            <StudentEditDialog
+              studentId={id}
+              groups={groups.map((group) => ({ id: group.id, name: group.name }))}
+              initial={{
+                name: student.name,
+                grade: student.grade,
+                school: student.school ?? "",
+                memo: student.memo ?? "",
+                gender: student.gender ?? "",
+                birthDate: student.birth_date ?? "",
+                groupIds: studentGroups.map((group) => group.id),
+              }}
+            />
 
             <Card>
               <CardHeader>
@@ -839,6 +805,17 @@ export default async function StudentDetailPage({
                 </div>
               </CardContent>
             </Card>
+          </div>
+        </div>
+
+        {/* 삭제는 수정과 분리된 destructive 영역 (기능은 기존 그대로) */}
+        <div className="mt-8 border-t border-dashed border-[#f0ddd8] pt-5 pb-8">
+          <div className="text-sm font-semibold text-[#8a5d52]">학생 삭제</div>
+          <p className="mt-1 text-xs leading-5 text-[#a68e88]">
+            학생과 연결된 수업 기록·보충 기록이 함께 삭제되며 되돌릴 수 없어요.
+          </p>
+          <div className="mt-3">
+            <StudentDeleteButton studentId={id} studentName={student.name} />
           </div>
         </div>
       </main>

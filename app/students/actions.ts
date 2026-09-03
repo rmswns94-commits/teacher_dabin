@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { createStudent, deleteStudent, updateStudent, archiveStudent, restoreStudent } from "@/lib/supabase/queries/students";
+import { createStudent, deleteStudent, updateStudentWithGroups, archiveStudent, restoreStudent } from "@/lib/supabase/queries/students";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import { studentSchema } from "@/lib/validation/student";
 
@@ -45,36 +45,48 @@ export async function createStudentAction(values: {
   return { success: true };
 }
 
-export async function updateStudentAction(studentId: string, formData: FormData) {
-  const payload = {
-    name: String(formData.get("name") ?? ""),
-    grade: String(formData.get("grade") ?? ""),
-    school: String(formData.get("school") ?? ""),
-    memo: String(formData.get("memo") ?? ""),
-    gender: String(formData.get("gender") ?? ""),
-    birthDate: String(formData.get("birthDate") ?? ""),
-    groupId: String(formData.get("groupId") ?? ""),
-  };
-
-  const parsed = studentSchema.safeParse(payload);
+// 학생 상세의 Edit Dialog에서 사용. 성공 시 상세에 머물며 즉시 반영된다.
+export async function updateStudentDetailsAction(
+  studentId: string,
+  values: {
+    name: string;
+    grade: string;
+    school: string;
+    memo: string;
+    gender: string;
+    birthDate: string;
+    groupIds: string[];
+  },
+): Promise<{ error: string } | { success: true }> {
+  const parsed = studentSchema.safeParse(values);
 
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "학생 정보를 다시 확인해주세요.");
+    return { error: parsed.error.issues[0]?.message ?? "학생 정보를 다시 확인해주세요." };
   }
 
-  await updateStudent(studentId, {
-    name: parsed.data.name,
-    grade: parsed.data.grade,
-    school: parsed.data.school || null,
-    memo: parsed.data.memo || null,
-    gender: parsed.data.gender || null,
-    birthDate: parsed.data.birthDate || null,
-    groupId: parsed.data.groupId || null,
-  });
+  try {
+    await updateStudentWithGroups(studentId, {
+      name: parsed.data.name,
+      grade: parsed.data.grade,
+      school: parsed.data.school || null,
+      memo: parsed.data.memo || null,
+      gender: parsed.data.gender || null,
+      birthDate: parsed.data.birthDate || null,
+      groupIds: parsed.data.groupIds ?? [],
+    });
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error && error.message ? error.message : "학생 정보를 수정하지 못했어요.",
+    };
+  }
 
   revalidatePath("/students");
   revalidatePath(`/students/${studentId}`);
-  redirect("/students?saved=1");
+  revalidatePath("/groups");
+  revalidatePath("/dashboard");
+  revalidatePath("/growth-notes", "layout");
+  return { success: true };
 }
 
 // 학생 완전 삭제 (수업/보충 기록 포함). 클라이언트에서 확인을 거친 뒤 호출된다.
