@@ -124,13 +124,9 @@ export default async function GroupDetailPage({
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
         <div className="mx-auto w-full max-w-[1150px]">
         <PageHeader
+          backHref="/groups"
           title={`${groupIconOf(group.icon)} ${group.name}`}
           description={`${gradeDisplay[group.grade]} · 학생 ${members.length}명${group.memo ? ` · ${group.memo}` : ""}`}
-          action={
-            <Button variant="secondary" asChild>
-              <Link href="/groups">그룹 목록</Link>
-            </Button>
-          }
         />
 
         {saved ? (

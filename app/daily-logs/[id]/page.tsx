@@ -1,10 +1,8 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { LessonLogDetail } from "@/components/lesson-log-detail";
 import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
 import { formatKoreanDate } from "@/lib/dates";
 import {
   getDailyLogDetailForCurrentUser,
@@ -37,13 +35,9 @@ export default async function DailyLogDetailPage({
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
         <PageHeader
+          backHref="/daily-logs"
           title={`${formatKoreanDate(log.class_date, true)} · ${log.group?.name ?? "그룹 정보 없음"}`}
           description={log.title || "수업 기록 상세"}
-          action={
-            <Button variant="secondary" asChild>
-              <Link href="/daily-logs">목록으로</Link>
-            </Button>
-          }
         />
 
         {saved ? (

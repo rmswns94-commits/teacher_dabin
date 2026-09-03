@@ -52,13 +52,9 @@ export default async function NewDailyLogPage({
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
         <PageHeader
+          backHref="/daily-logs"
           title="오늘 수업 기록하기"
           description="반을 선택하면 소속 학생이 자동으로 표시돼요."
-          action={
-            <Button variant="secondary" asChild>
-              <Link href="/daily-logs">일지 목록</Link>
-            </Button>
-          }
         />
 
         <Card className="mb-5">

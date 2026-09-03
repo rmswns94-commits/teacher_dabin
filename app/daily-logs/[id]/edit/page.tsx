@@ -1,10 +1,8 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { DailyLogForm, type DailyLogFormStudent } from "@/components/daily-log-form";
 import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
 import { formatKoreanDate } from "@/lib/dates";
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import {
@@ -95,13 +93,9 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
         <PageHeader
+          backHref={`/daily-logs/${log.id}`}
           title="수업 일지 수정"
           description={`${formatKoreanDate(log.class_date, true)} · ${log.group?.name ?? "그룹 정보 없음"}`}
-          action={
-            <Button variant="secondary" asChild>
-              <Link href={`/daily-logs/${log.id}`}>상세로 돌아가기</Link>
-            </Button>
-          }
         />
 
         <DailyLogForm

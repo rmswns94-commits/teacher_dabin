@@ -7,7 +7,6 @@ import { PageHeader } from "@/components/page-header";
 import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { StudentDeleteButton } from "@/components/student-delete-button";
 import { StudentEditDialog } from "@/components/student-edit-dialog";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PendingButton } from "@/components/pending-button";
 import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
@@ -203,6 +202,7 @@ export default async function StudentDetailPage({
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
         <PageHeader
+          backHref="/students"
           title={student.name}
           description={[
             gradeDisplay[student.grade as keyof typeof gradeDisplay],
@@ -212,11 +212,6 @@ export default async function StudentDetailPage({
           ]
             .filter(Boolean)
             .join(" · ")}
-          action={
-            <Button variant="secondary" asChild>
-              <Link href="/students">목록으로</Link>
-            </Button>
-          }
         />
 
         <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">

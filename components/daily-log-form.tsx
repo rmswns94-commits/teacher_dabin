@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   BookOpen,
   CalendarCheck,
@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MakeupStatusBadge } from "@/components/status-badge";
 import { useHistoryImport } from "@/components/lesson-history-panel";
+import { registerDirtyCheck } from "@/components/unsaved-guard";
 import { saveDailyLogAction } from "@/app/daily-logs/actions";
 import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comments";
 import { addDaysStr } from "@/lib/calendar";
@@ -231,6 +232,28 @@ export function DailyLogForm({
     });
   }, [historyImport, defaultProgress]);
   const [isPending, startTransition] = useTransition();
+
+  // 뒤로가기 버튼의 unsaved 확인용 dirty 판정 — 주요 입력 state를 초기 스냅샷과 비교.
+  // (첫 렌더 시점 상태 = 초기값이므로 그 시점 스냅샷을 기준으로 삼는다)
+  const dirtyRef = useRef(false);
+  const initialSnapshotRef = useRef<string | null>(null);
+  const currentSnapshot = JSON.stringify({
+    classDate,
+    title,
+    defaultProgress,
+    memo,
+    homework,
+    nextLessonPlan,
+    nextPlanDate,
+    entries,
+  });
+  useEffect(() => {
+    if (initialSnapshotRef.current === null) {
+      initialSnapshotRef.current = currentSnapshot;
+    }
+    dirtyRef.current = currentSnapshot !== initialSnapshotRef.current;
+  }, [currentSnapshot]);
+  useEffect(() => registerDirtyCheck(() => dirtyRef.current), []);
 
   // 학생 평가 UI는 초등/중등/고등 모든 학년 공통으로 사용한다.
   const [vocabTotal, setVocabTotal] = useState(initial?.vocabTotal ?? "");

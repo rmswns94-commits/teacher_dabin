@@ -7,6 +7,27 @@ import { Button } from "@/components/ui/button";
 /* ------------------------------------------------------------------ */
 /* dirty 상태에서 새로고침/탭 닫기 시 브라우저 표준 경고를 띄운다.        */
 /* listener는 active인 동안만 등록되고 해제 시 반드시 제거된다.          */
+// 페이지 이탈 확인용 dirty registry — 뒤로가기 버튼 등 화면 밖 navigation 컨트롤이
+// 현재 열린 폼의 작성 중 여부를 조회할 수 있게 한다 (module 단위, 전역 상태 라이브러리 불필요).
+type DirtyCheck = () => boolean;
+const dirtyChecks = new Set<DirtyCheck>();
+
+export function registerDirtyCheck(check: DirtyCheck) {
+  dirtyChecks.add(check);
+  return () => {
+    dirtyChecks.delete(check);
+  };
+}
+
+export function anyRegisteredFormDirty() {
+  for (const check of dirtyChecks) {
+    if (check()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function useBeforeUnloadWarning(active: boolean) {
   useEffect(() => {
     if (!active) {
@@ -156,6 +177,13 @@ export function GuardedForm({
 }) {
   const { isDirty, formProps } = useNativeFormDirty();
   useBeforeUnloadWarning(isDirty);
+
+  // 뒤로가기 버튼 등에서 dirty 조회 가능하게 등록 (ref로 최신 상태 유지)
+  const dirtyRef = useRef(isDirty);
+  useEffect(() => {
+    dirtyRef.current = isDirty;
+  }, [isDirty]);
+  useEffect(() => registerDirtyCheck(() => dirtyRef.current), []);
 
   return (
     <form action={action} className={className} {...formProps}>
