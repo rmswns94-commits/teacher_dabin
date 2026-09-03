@@ -364,7 +364,7 @@ export default async function DailyLogsPage({
                       <div
                         key={`empty-${index}`}
                         className={cn(
-                          "min-h-[68px] border-l border-t border-[#eee9f6] bg-[#fbfafd] md:min-h-[96px]",
+                          "min-h-[84px] border-l border-t border-[#eee9f6] bg-[#fbfafd] md:min-h-[118px]",
                           index % 7 === 0 && "border-l-0",
                           index < 7 && "border-t-0",
                         )}
@@ -378,8 +378,6 @@ export default async function DailyLogsPage({
                   const completedCount = logs.filter((log) => log.status === "completed").length;
                   const draftCount = logs.length - completedCount;
                   const icons = iconsFor(date);
-                  const shownIcons = icons.slice(0, 3);
-                  const extraCount = icons.length - shownIcons.length;
                   const isSelected = date === selectedDate;
                   const isToday = date === today;
                   const dayNumber = Number(date.slice(8));
@@ -428,7 +426,7 @@ export default async function DailyLogsPage({
                       aria-current={isSelected ? "date" : undefined}
                       title={labelParts.slice(1).join(" · ")}
                       className={cn(
-                        "flex min-h-[68px] flex-col border-l border-t border-[#eee9f6] p-1 pb-1.5 transition md:min-h-[96px] md:p-1.5",
+                        "flex min-h-[84px] flex-col border-l border-t border-[#eee9f6] p-1 pb-1.5 transition md:min-h-[118px] md:p-1.5",
                         columnIndex === 0 && "border-l-0",
                         index < 7 && "border-t-0",
                         isSunday && !isSelected && "bg-[#faf7f4]",
@@ -461,20 +459,15 @@ export default async function DailyLogsPage({
                         ) : null}
                       </span>
 
-                      {/* 수업일지가 있는 반은 대표 아이콘만 (이름/상세는 아래 목록에서) */}
-                      {shownIcons.length > 0 ? (
+                      {/* 수업일지가 있는 반은 대표 아이콘만 — 전부 표시, 넘치면 줄바꿈 (이름/상세는 아래 목록에서) */}
+                      {icons.length > 0 ? (
                         <span
                           aria-hidden
                           className="mt-0.5 flex flex-wrap items-center gap-x-0.5 px-0.5 text-[13px] leading-[18px] md:mt-1 md:text-[15px] md:leading-5"
                         >
-                          {shownIcons.map((icon, iconIndex) => (
+                          {icons.map((icon, iconIndex) => (
                             <span key={`${icon}-${iconIndex}`}>{icon}</span>
                           ))}
-                          {extraCount > 0 ? (
-                            <span className="ml-0.5 text-[10px] font-semibold text-[#8a7fb8]">
-                              +{extraCount}
-                            </span>
-                          ) : null}
                         </span>
                       ) : null}
 
