@@ -13,6 +13,23 @@ export function NavHistoryTracker() {
   const pathname = usePathname();
   const initializedRef = useRef(false);
 
+  // dev 전용 진단: iPad에서 "새로고침된 것 같다"가 실제 document reload인지,
+  // bfcache 복원인지 콘솔에서 구분할 수 있게 한다 (production 미노출).
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") {
+      return;
+    }
+    const nav = performance.getEntriesByType?.("navigation")?.[0] as
+      | PerformanceNavigationTiming
+      | undefined;
+    console.info(`[dabin] document load: ${nav?.type ?? "unknown"}`);
+    const onPageShow = (event: PageTransitionEvent) => {
+      console.info(`[dabin] pageshow (bfcache 복원=${event.persisted})`);
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   useEffect(() => {
     try {
       if (!initializedRef.current) {

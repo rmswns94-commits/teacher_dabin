@@ -32,6 +32,7 @@ import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comm
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate } from "@/lib/dates";
 import { nextClassDateAfter } from "@/lib/schedule";
+import { currentEpochMs } from "@/lib/todo-window";
 import {
   effortLevelLabels,
   effortLevelValues,
@@ -142,6 +143,27 @@ function isComposingEvent(event: { nativeEvent: object }) {
 // 자동 임시저장 주기 (final 저장과 별개 — background 보호용)
 const DAILY_LOG_AUTOSAVE_INTERVAL_MS = 60_000;
 
+// iPad Safari/PWA가 문서를 강제 reload(process eviction)한 직후의 복구용:
+// 이 시간 안에 저장된 draft는 같은 작성 세션으로 보고 자동 복원한다.
+// 더 오래된 draft는 자동 반영하지 않고 복구 배너로 선택하게 한다.
+const AUTO_RESTORE_WINDOW_MS = 10 * 60_000;
+
+type DraftPayload = {
+  classDate: string;
+  title: string;
+  defaultProgress: string;
+  memo: string;
+  homework: string;
+  nextLessonPlan: string;
+  nextPlanDate: string;
+  vocabTotal: string;
+  entries: Record<string, EntryState>;
+};
+
+function restoredText(value: unknown, fallback: string) {
+  return typeof value === "string" ? value : fallback;
+}
+
 function kstTimeLabel(iso: string) {
   const kst = new Date(Date.parse(iso) + 9 * 3_600_000);
   return `${String(kst.getUTCHours()).padStart(2, "0")}:${String(kst.getUTCMinutes()).padStart(2, "0")}`;
@@ -213,24 +235,62 @@ export function DailyLogForm({
     vocabTotal?: string;
   };
 }) {
-  const [classDate, setClassDate] = useState(initialClassDate);
-  const [title, setTitle] = useState(initial?.title ?? "");
-  const [defaultProgress, setDefaultProgress] = useState(initial?.defaultProgress ?? "");
-  const [memo, setMemo] = useState(initial?.memo ?? "");
-  const [homework, setHomework] = useState(initial?.homework ?? "");
-  const [nextLessonPlan, setNextLessonPlan] = useState(initial?.nextLessonPlan ?? "");
-  // 다음 수업 계획 날짜: 저장값 우선, 없으면 수업일 이후 그룹의 실제 다음 수업일.
+  // 최근(10분 내) 임시저장 draft는 mount 시점에 자동 복원 — reload 복구가 목적이라
+  // effect/remount 없이 초기 state로만 반영한다 (IME/입력에 영향 없음).
+  const [autoRestored] = useState(() =>
+    Boolean(draft && currentEpochMs() - Date.parse(draft.updatedAt) < AUTO_RESTORE_WINDOW_MS),
+  );
+  const [restored] = useState<Partial<DraftPayload> | null>(() =>
+    autoRestored && draft && draft.payload && typeof draft.payload === "object"
+      ? (draft.payload as Partial<DraftPayload>)
+      : null,
+  );
+
+  const [classDate, setClassDate] = useState(
+    restoredText(restored?.classDate, "") || initialClassDate,
+  );
+  const [title, setTitle] = useState(restoredText(restored?.title, initial?.title ?? ""));
+  const [defaultProgress, setDefaultProgress] = useState(
+    restoredText(restored?.defaultProgress, initial?.defaultProgress ?? ""),
+  );
+  const [memo, setMemo] = useState(restoredText(restored?.memo, initial?.memo ?? ""));
+  const [homework, setHomework] = useState(
+    restoredText(restored?.homework, initial?.homework ?? ""),
+  );
+  const [nextLessonPlan, setNextLessonPlan] = useState(
+    restoredText(restored?.nextLessonPlan, initial?.nextLessonPlan ?? ""),
+  );
+  // 다음 수업 계획 날짜: 복원값 > 저장값 > 수업일 이후 그룹의 실제 다음 수업일.
   // Teacher가 직접 고르면(touched) 날짜 변경 등 rerender에도 자동 재계산하지 않는다.
   const [nextPlanDate, setNextPlanDate] = useState(
-    () => initial?.nextPlanDate || nextClassDateAfter(scheduleDays, initialClassDate) || "",
+    () =>
+      restoredText(restored?.nextPlanDate, "") ||
+      initial?.nextPlanDate ||
+      nextClassDateAfter(scheduleDays, initialClassDate) ||
+      "",
   );
-  const [planDateTouched, setPlanDateTouched] = useState(Boolean(initial?.nextPlanDate));
+  const [planDateTouched, setPlanDateTouched] = useState(
+    Boolean(restoredText(restored?.nextPlanDate, "") || initial?.nextPlanDate),
+  );
   // 학생 평가 UI는 초등/중등/고등 모든 학년 공통으로 사용한다.
-  const [vocabTotal, setVocabTotal] = useState(initial?.vocabTotal ?? "");
-  const [showSummary, setShowSummary] = useState(false);
-  const [entries, setEntries] = useState<Record<string, EntryState>>(() =>
-    Object.fromEntries(students.map((student) => [student.studentId, initEntry(student)])),
+  const [vocabTotal, setVocabTotal] = useState(
+    restoredText(restored?.vocabTotal, initial?.vocabTotal ?? ""),
   );
+  const [showSummary, setShowSummary] = useState(false);
+  const [entries, setEntries] = useState<Record<string, EntryState>>(() => {
+    const base = Object.fromEntries(
+      students.map((student) => [student.studentId, initEntry(student)]),
+    );
+    if (restored?.entries && typeof restored.entries === "object") {
+      for (const studentId of Object.keys(base)) {
+        const saved = restored.entries[studentId];
+        if (saved) {
+          base[studentId] = { ...base[studentId], ...saved };
+        }
+      }
+    }
+    return base;
+  });
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
       students.map((student) => [
@@ -295,8 +355,12 @@ export function DailyLogForm({
   const [autosave, setAutosave] = useState<{
     status: "idle" | "saving" | "saved" | "error";
     savedAtLabel?: string;
-  }>({ status: "idle" });
-  const [draftPrompt, setDraftPrompt] = useState(Boolean(draft));
+  }>(() =>
+    autoRestored && draft
+      ? { status: "saved", savedAtLabel: kstTimeLabel(draft.updatedAt) }
+      : { status: "idle" },
+  );
+  const [draftPrompt, setDraftPrompt] = useState(Boolean(draft) && !autoRestored);
   const draftIdRef = useRef<string | null>(draft?.id ?? null);
   const lastSavedSnapshotRef = useRef<string | null>(null);
   const autosaveInFlightRef = useRef(false);
@@ -553,6 +617,13 @@ export function DailyLogForm({
           ) : (
             <span className="text-[#b0766f]">임시저장 실패 · 입력 내용은 화면에 남아 있어요</span>
           )}
+        </div>
+      ) : null}
+
+      {autoRestored && draft ? (
+        <div className="rounded-2xl border border-[#d8ebe0] bg-[#f0faf5] px-4 py-2.5 text-sm text-[#2f6d54]">
+          임시저장 내용을 복원했어요 · 마지막 저장 {kstTimeLabel(draft.updatedAt)} — 이어서
+          작성하고 저장해주세요.
         </div>
       ) : null}
 
