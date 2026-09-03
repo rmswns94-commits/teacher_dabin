@@ -49,16 +49,22 @@ export function LessonLogDetail({
       .map((makeup) => [makeup.student_lesson_log_id, makeup]),
   );
 
-  // 칭찬 한표(comment)는 문장으로, legacy category 칭찬은 기존 라벨 chip으로 표시
-  const praisesByStudent = new Map<string, string[]>();
+  // 칭찬 한표(comment)는 학생 아래 "오늘의 칭찬" 목록으로,
+  // legacy category 칭찬은 기존 라벨 chip으로 이름 옆에 표시
+  const commentPraisesByStudent = new Map<string, string[]>();
+  const legacyPraiseChipsByStudent = new Map<string, string[]>();
   for (const praise of praises) {
-    const label = praise.comment
-      ? `💜 ${praise.comment}`
-      : `⭐ ${praiseCategoryLabels[praise.category as PraiseCategory] ?? praise.category}`;
-    praisesByStudent.set(praise.student_id, [
-      ...(praisesByStudent.get(praise.student_id) ?? []),
-      label,
-    ]);
+    if (praise.comment) {
+      commentPraisesByStudent.set(praise.student_id, [
+        ...(commentPraisesByStudent.get(praise.student_id) ?? []),
+        praise.comment,
+      ]);
+    } else {
+      legacyPraiseChipsByStudent.set(praise.student_id, [
+        ...(legacyPraiseChipsByStudent.get(praise.student_id) ?? []),
+        `⭐ ${praiseCategoryLabels[praise.category as PraiseCategory] ?? praise.category}`,
+      ]);
+    }
   }
 
   const vocabRows = detail.lessonLogs.filter((log) => log.vocab_correct !== null);
@@ -122,8 +128,11 @@ export function LessonLogDetail({
         <div className="mt-2 divide-y divide-dashed divide-[#f4e2e8]">
           {detail.lessonLogs.map((lessonLog) => {
             const makeup = makeupByLessonLog.get(lessonLog.id);
-            const studentPraises = lessonLog.student
-              ? (praisesByStudent.get(lessonLog.student.id) ?? [])
+            const commentPraises = lessonLog.student
+              ? (commentPraisesByStudent.get(lessonLog.student.id) ?? [])
+              : [];
+            const legacyChips = lessonLog.student
+              ? (legacyPraiseChipsByStudent.get(lessonLog.student.id) ?? [])
               : [];
 
             return (
@@ -133,7 +142,7 @@ export function LessonLogDetail({
                     {lessonLog.student?.name ?? "학생"}
                   </span>
                   <AttendanceBadge status={lessonLog.attendance} />
-                  {studentPraises.map((label, praiseIndex) => (
+                  {legacyChips.map((label, praiseIndex) => (
                     <span
                       key={`${label}-${praiseIndex}`}
                       className="rounded-full bg-[#fdf3e4] px-1.5 py-0.5 text-[10px] text-[#8a6828]"
@@ -210,6 +219,15 @@ export function LessonLogDetail({
                     ) : null}
                   </div>
                 )}
+
+                {commentPraises.length > 0 ? (
+                  <div className="mt-1.5 rounded-xl bg-[#f6effa] px-3 py-2 text-xs leading-5 text-[#7a5a92]">
+                    <div className="font-semibold">💜 오늘의 칭찬</div>
+                    {commentPraises.map((comment, praiseIndex) => (
+                      <div key={`${praiseIndex}-${comment}`}>• {comment}</div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             );
           })}
