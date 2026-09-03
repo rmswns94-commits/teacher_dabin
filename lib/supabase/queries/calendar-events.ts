@@ -52,6 +52,36 @@ export async function getMonthlyEvents(
   }));
 }
 
+// 대시보드 "다가오는 시험" 카드용: 제목에 "시험"이 들어가거나 시험 유형인 일정을
+// D-day 14일 윈도우(진행 중 포함)로 조회한다 (1쿼리 batch).
+export async function getUpcomingExamEvents(fromDate: string, toDate: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as CalendarEventWithGroup[];
+  }
+
+  const { data, error } = await supabase
+    .from("calendar_events")
+    .select("*, class_groups(id, name)")
+    .eq("user_id", user.id)
+    .or("event_type.eq.exam,title.ilike.%시험%")
+    .lte("start_date", toDate)
+    .gte("end_date", fromDate)
+    .order("start_date", { ascending: true });
+
+  if (error) {
+    console.error("getUpcomingExamEvents error", error);
+    return [] as CalendarEventWithGroup[];
+  }
+
+  return (data ?? []).map((row) => ({
+    ...(row as unknown as CalendarEventRecord),
+    group: pickOne<Pick<ClassGroupRecord, "id" | "name">>(row.class_groups),
+  }));
+}
+
 async function requireContext() {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   BookOpenCheck,
+  CalendarDays,
   Check,
   CirclePlay,
   Clock3,
@@ -17,13 +18,37 @@ import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { togglePreparationItemAction } from "@/app/groups/actions";
-import { formatKoreanDate } from "@/lib/dates";
+import { addDaysStr } from "@/lib/calendar";
+import { formatKoreanDate, todayDateString } from "@/lib/dates";
+import { getUpcomingExamEvents } from "@/lib/supabase/queries/calendar-events";
 import { formatTimeRange, getScheduleOverview, type ClassOccurrence } from "@/lib/schedule";
 import { getDisplayName } from "@/lib/supabase/auth";
 import { getDashboardOverview, getDashboardStats } from "@/lib/supabase/queries/dashboard";
 import { getGroupLatestProgress } from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup, type ScheduleGroupInfo } from "@/lib/supabase/queries/schedules";
 import { getServerUser } from "@/lib/supabase/server";
+
+// 시험 일정 제목에서 학교 이름 추출 (예: "문경중학교 기말시험" → 문경중학교, "한울중 시험" → 한울중).
+// 확신할 수 없으면 null을 돌려주고 카드에는 일정 제목을 그대로 쓴다 — 이름을 지어내지 않는다.
+function extractSchoolName(title: string) {
+  const tokens = title.split(/[\s·,\-()[\]/]+/).filter(Boolean);
+
+  const fullName = tokens.find((token) => /(초등학교|중학교|고등학교|학교)$/.test(token));
+  if (fullName) {
+    return fullName;
+  }
+
+  // "문경중" · "가산고" 같은 축약 표기 (시험/고사 단어 자체는 제외)
+  return (
+    tokens.find(
+      (token) =>
+        token.length >= 2 &&
+        !token.includes("시험") &&
+        !token.includes("고사") &&
+        /^[가-힣]+(초|중|고)$/.test(token),
+    ) ?? null
+  );
+}
 
 function occurrenceDateLabel(occ: ClassOccurrence<ScheduleGroupInfo>) {
   if (occ.daysFromNow === 0) {
@@ -39,12 +64,35 @@ function occurrenceDateLabel(occ: ClassOccurrence<ScheduleGroupInfo>) {
 
 export default async function DashboardPage() {
   const user = await getServerUser();
-  const [stats, overview, schedules] = await Promise.all([
+  const today = todayDateString();
+  const [stats, overview, schedules, examEvents] = await Promise.all([
     getDashboardStats(),
     getDashboardOverview(),
     getCurrentUserSchedulesWithGroup(),
+    // '시험' 일정은 D-day 14일 전부터 카드로 보여준다 (진행 중 포함)
+    getUpcomingExamEvents(today, addDaysStr(today, 14)),
   ]);
   const displayName = getDisplayName(user);
+
+  const upcomingExams = examEvents.map((event) => {
+    const inPeriod = event.start_date <= today && today <= event.end_date;
+    const dday = Math.round(
+      (Date.parse(`${event.start_date}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86_400_000,
+    );
+
+    return {
+      id: event.id,
+      school: extractSchoolName(event.title),
+      title: event.title,
+      groupName: event.group?.name ?? null,
+      dateLabel:
+        event.end_date > event.start_date
+          ? `${formatKoreanDate(event.start_date, true)} ~ ${formatKoreanDate(event.end_date)}`
+          : formatKoreanDate(event.start_date, true),
+      badge: inPeriod ? "시험 기간 중" : dday === 0 ? "D-DAY" : `D-${dday}`,
+      inPeriod,
+    };
+  });
 
   const slots = schedules
     .filter((row) => row.group)
@@ -334,6 +382,52 @@ export default async function DashboardPage() {
                     >
                       준비 항목 관리 →
                     </Link>
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              {/* '시험' 일정 D-day 카드 — 14일 전부터, 일정 없으면 카드 숨김 */}
+              {upcomingExams.length > 0 ? (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2">
+                      <CalendarDays className="h-4 w-4 text-[#a05a7c]" /> 다가오는 시험
+                      <span className="text-sm font-normal text-[#8a7b77]">
+                        · {upcomingExams.length}건
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {upcomingExams.map((exam) => (
+                      <div
+                        key={exam.id}
+                        className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-2xl bg-[#fdfaf8] px-3.5 py-2.5"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-sm font-semibold text-[#2b2323]">
+                              {exam.school ?? exam.title}
+                            </span>
+                            {exam.school ? (
+                              <span className="text-xs text-[#8a7b77]">{exam.title}</span>
+                            ) : null}
+                          </div>
+                          <div className="mt-0.5 text-xs tabular-nums text-[#8a7b77]">
+                            {exam.dateLabel}
+                            {exam.groupName ? ` · ${exam.groupName}` : ""}
+                          </div>
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ${
+                            exam.inPeriod
+                              ? "bg-[#fbeef3] text-[#a05a7c]"
+                              : "bg-[#efe8fb] text-[#5d4ba5]"
+                          }`}
+                        >
+                          {exam.badge}
+                        </span>
+                      </div>
+                    ))}
                   </CardContent>
                 </Card>
               ) : null}
