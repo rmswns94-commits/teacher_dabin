@@ -443,10 +443,7 @@ export function DailyLogForm({
                   <CircleArrowRight className="h-3.5 w-3.5 text-[#3e7d6b]" /> 다음 수업 계획
                 </span>
                 {/* 계획 날짜 — 기본은 수업일 이후 실제 다음 수업일, 눌러서 변경 가능 */}
-                <span
-                  className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#d8ebe0] bg-[#f4faf7] px-2.5 text-xs font-medium text-[#3e7d6b]"
-                  onClick={(event) => event.preventDefault()}
-                >
+                <span className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#d8ebe0] bg-[#f4faf7] px-2.5 text-xs font-medium text-[#3e7d6b]">
                   <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   <input
                     type="date"
