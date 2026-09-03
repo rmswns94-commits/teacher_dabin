@@ -43,3 +43,6 @@ next-env.d.ts
 
 # 수업진도 Excel 파일 (개인 데이터 - 커밋 금지)
 *.xlsx
+
+# Excel export template asset은 예외 (개인 수업 데이터 없음)
+!templates/teacher-log-template.xlsx

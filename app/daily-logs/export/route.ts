@@ -1,160 +1,158 @@
 import { NextResponse } from "next/server";
 
-import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
+import { dayOfWeekOf } from "@/lib/calendar";
 import {
-  buildTeacherLogWorkbook,
+  fillTeacherLogTemplate,
   formatDateLabel,
-  formatPeriodTime,
-  writeWorkbookBuffer,
-  type TeacherLogDay,
-  type TeacherLogPeriod,
-} from "@/lib/excel/build-teacher-log";
+  TEACHER_LOG_CONSTANTS,
+  type TeacherLogExportRow,
+} from "@/lib/excel/teacher-log-export";
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 
-// 앱에 기록된 수업 데이터를 기존 교사일지 Excel 양식으로 내보낸다.
-// - 교시 1~7 고정: 그 요일의 수업 시간표를 시작 시간순으로 1교시부터 채운다
-// - 시간 = 수업 시간표, 교재 = 그룹 교재, 수업내용(진도) = 해당 일지의 공통 진도
-// - 출근 2:00 / 퇴근 9:20 / 교사명 김다빈 고정 (양식 요구사항)
-// 파일은 서버에 저장하지 않고 즉시 다운로드로만 반환한다.
-
+// 선택한 날짜에 앱에서 실제 작성된 Daily Log들을 기존 교사일지 Excel 양식으로 내보낸다.
+// - App Daily Log가 source of truth (예정 수업을 임의 생성하지 않음)
+// - 수업 시작 시간 오름차순 → 1교시부터 매핑, 교시 1~7 layout은 template에 고정
+// - 시간은 그 요일의 group schedule로 확정 (없거나 여러 개면 명확한 오류)
+// - 파일은 서버에 저장하지 않고 즉시 다운로드로만 반환
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const MAX_DAYS = 31;
-const PERIOD_COUNT = 7;
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
+
+function errorResponse(message: string, status = 400) {
+  return NextResponse.json({ error: message }, { status });
+}
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
   if (!supabase || !user) {
-    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+    return errorResponse("로그인이 필요합니다.", 401);
   }
 
-  const url = new URL(request.url);
-  const start = url.searchParams.get("start") ?? "";
-  const end = url.searchParams.get("end") ?? start;
+  const date = new URL(request.url).searchParams.get("date") ?? "";
 
-  if (!DATE_PATTERN.test(start) || !DATE_PATTERN.test(end) || start > end) {
-    return NextResponse.json({ error: "날짜 범위를 확인해주세요." }, { status: 400 });
+  if (!DATE_PATTERN.test(date)) {
+    return errorResponse("내보낼 날짜를 확인해주세요.");
   }
 
-  const dates: string[] = [];
-  for (let date = start; date <= end && dates.length <= MAX_DAYS; date = addDaysStr(date, 1)) {
-    dates.push(date);
+  // 선택 날짜의 Daily Log만 조회 (전체 기간 조회 금지)
+  const { data: logRows, error: logError } = await supabase
+    .from("daily_logs")
+    .select("id, group_id, status, default_progress, lesson_content, class_groups(id, name, textbook)")
+    .eq("user_id", user.id)
+    .eq("class_date", date);
+
+  if (logError) {
+    console.error("teacher log export logs error", logError.code);
+    return errorResponse("수업 기록을 불러오지 못했어요.", 500);
   }
 
-  if (dates.length > MAX_DAYS) {
-    return NextResponse.json({ error: "한 번에 31일까지 내보낼 수 있어요." }, { status: 400 });
-  }
-
-  // 고정 2쿼리 batch: 시간표(그룹 포함) + 기간 내 일지
-  const [{ data: scheduleRows, error: scheduleError }, { data: logRows, error: logError }] =
-    await Promise.all([
-      supabase
-        .from("class_group_schedules")
-        .select("group_id, day_of_week, start_time, end_time, class_groups(id, name, textbook)")
-        .eq("user_id", user.id)
-        .order("start_time", { ascending: true }),
-      supabase
-        .from("daily_logs")
-        .select("group_id, class_date, default_progress, lesson_content, class_groups(textbook)")
-        .eq("user_id", user.id)
-        .gte("class_date", start)
-        .lte("class_date", end),
-    ]);
-
-  if (scheduleError || logError) {
-    console.error("teacher log export query error", scheduleError ?? logError);
-    return NextResponse.json({ error: "내보낼 데이터를 불러오지 못했어요." }, { status: 500 });
-  }
-
-  type ScheduleRow = {
+  type LogRow = {
     group_id: string;
-    day_of_week: number;
-    start_time: string;
-    end_time: string;
-    group: { id: string; name: string; textbook: string | null } | null;
+    status: string;
+    progress: string;
+    groupName: string;
+    textbook: string;
   };
 
-  const schedules: ScheduleRow[] = (scheduleRows ?? []).map((row) => {
+  const logs: LogRow[] = (logRows ?? []).map((row) => {
     const groups = row.class_groups as unknown;
+    const group = (Array.isArray(groups) ? groups[0] : groups) as
+      | { id: string; name: string; textbook: string | null }
+      | null;
+
     return {
       group_id: row.group_id,
-      day_of_week: row.day_of_week,
-      start_time: row.start_time,
-      end_time: row.end_time,
-      group: (Array.isArray(groups) ? groups[0] : groups) as ScheduleRow["group"],
+      status: row.status,
+      progress: mergeLegacyLessonContent(row.default_progress, row.lesson_content),
+      groupName: group?.name ?? "수업 그룹",
+      textbook: group?.textbook?.trim() ?? "",
     };
   });
 
-  // 시간표 없는 그룹(보충 등)의 일지도 교재를 채울 수 있게 일지 embed에서 교재를 수집
-  const textbookByGroup = new Map<string, string>();
-  for (const row of logRows ?? []) {
-    const groups = row.class_groups as unknown;
-    const group = (Array.isArray(groups) ? groups[0] : groups) as { textbook: string | null } | null;
-    textbookByGroup.set(row.group_id, group?.textbook?.trim() ?? "");
+  // 실제 작성된 기록만: completed는 항상, draft는 내용(공통 진도)이 있을 때만 (빈/미작성 draft 제외)
+  const exportLogs = logs.filter((log) => log.status === "completed" || log.progress.trim() !== "");
+
+  if (exportLogs.length === 0) {
+    return errorResponse("이 날짜에는 내보낼 수업 기록이 없어요.");
   }
 
-  const progressByGroupDate = new Map(
-    (logRows ?? []).map((row) => [
-      `${row.group_id}|${row.class_date}`,
-      mergeLegacyLessonContent(row.default_progress, row.lesson_content),
-    ]),
-  );
+  if (exportLogs.length > TEACHER_LOG_CONSTANTS.MAX_PERIODS) {
+    return errorResponse(
+      `교사일지는 하루 최대 ${TEACHER_LOG_CONSTANTS.MAX_PERIODS}교시까지 내보낼 수 있어요. 현재 ${exportLogs.length}개의 수업 기록이 있어요.`,
+    );
+  }
 
-  const days: TeacherLogDay[] = dates.map((date) => {
-    const dow = dayOfWeekOf(date);
-    const slots = schedules
-      .filter((row) => row.day_of_week === dow)
-      .sort((a, b) => a.start_time.localeCompare(b.start_time));
+  // 시간 확정: 해당 요일의 group schedule을 batch 1쿼리로 조회 (log별 반복 쿼리 금지)
+  const dow = dayOfWeekOf(date);
+  const groupIds = [...new Set(exportLogs.map((log) => log.group_id))];
+  const { data: scheduleRows, error: scheduleError } = await supabase
+    .from("class_group_schedules")
+    .select("group_id, start_time, end_time")
+    .eq("user_id", user.id)
+    .eq("day_of_week", dow)
+    .in("group_id", groupIds);
 
-    const periods: TeacherLogPeriod[] = Array.from({ length: PERIOD_COUNT }, () => ({
-      time: "",
-      textbook: "",
-      progress: "",
-    }));
+  if (scheduleError) {
+    console.error("teacher log export schedules error", scheduleError.code);
+    return errorResponse("수업 시간표를 불러오지 못했어요.", 500);
+  }
 
-    const coveredGroups = new Set<string>();
-    slots.slice(0, PERIOD_COUNT).forEach((slot, index) => {
-      coveredGroups.add(slot.group_id);
-      periods[index] = {
-        time: formatPeriodTime(slot.start_time, slot.end_time),
-        textbook: slot.group?.textbook?.trim() ?? "",
-        progress: progressByGroupDate.get(`${slot.group_id}|${date}`) ?? "",
-      };
-    });
+  const timesByGroup = new Map<string, { start_time: string; end_time: string }[]>();
+  for (const row of scheduleRows ?? []) {
+    const key = row.group_id as string;
+    const list = timesByGroup.get(key) ?? [];
+    // 완전 중복 schedule row는 하나로
+    if (!list.some((item) => item.start_time === row.start_time && item.end_time === row.end_time)) {
+      list.push({ start_time: row.start_time, end_time: row.end_time });
+    }
+    timesByGroup.set(key, list);
+  }
 
-    // 시간표에 없는 그룹의 일지(보충 등)도 누락 없이 빈 교시에 채운다 (시간 공란)
-    for (const row of logRows ?? []) {
-      if (row.class_date !== date || coveredGroups.has(row.group_id)) {
-        continue;
-      }
+  const rows: (TeacherLogExportRow & { startSort: string })[] = [];
+  for (const log of exportLogs) {
+    const times = timesByGroup.get(log.group_id) ?? [];
 
-      const emptyIndex = periods.findIndex(
-        (period) => !period.time && !period.progress && !period.textbook,
+    // 시간 임의 추측 금지 — 없거나 애매하면 명확한 오류
+    if (times.length === 0) {
+      return errorResponse(`${log.groupName}의 수업 시간을 확인할 수 없어 엑셀을 만들지 못했어요.`);
+    }
+    if (times.length > 1) {
+      return errorResponse(
+        `${log.groupName}의 수업 시간을 확정할 수 없어요. (이 요일 시간표가 ${times.length}개예요)`,
       );
-      if (emptyIndex === -1) {
-        break;
-      }
-
-      coveredGroups.add(row.group_id);
-      periods[emptyIndex] = {
-        time: "",
-        textbook: textbookByGroup.get(row.group_id) ?? "",
-        progress: mergeLegacyLessonContent(row.default_progress, row.lesson_content),
-      };
     }
 
-    return { dateLabel: formatDateLabel(date, dow), periods };
-  });
+    rows.push({
+      startTime: times[0].start_time,
+      endTime: times[0].end_time,
+      textbook: log.textbook,
+      progress: log.progress,
+      startSort: times[0].start_time,
+    });
+  }
 
-  const buffer = writeWorkbookBuffer(buildTeacherLogWorkbook(days));
+  // 수업 시작 시간 오름차순 → 1교시부터 (저장 순서와 무관)
+  rows.sort((a, b) => a.startSort.localeCompare(b.startSort));
 
-  // 예시 파일과 같은 패턴의 이름: 20260901화~0902수.xlsx (하루면 20260901화.xlsx)
-  const startName = `${start.replaceAll("-", "")}${WEEKDAYS[dayOfWeekOf(start)]}`;
-  const endName = `${end.slice(5, 7)}${end.slice(8, 10)}${WEEKDAYS[dayOfWeekOf(end)]}`;
-  const filename = start === end ? `${startName}.xlsx` : `${startName}~${endName}.xlsx`;
+  let buffer: Buffer;
+  try {
+    buffer = await fillTeacherLogTemplate({
+      dateLabel: formatDateLabel(date, dow),
+      rows: rows.map((row) => ({
+        startTime: row.startTime,
+        endTime: row.endTime,
+        textbook: row.textbook,
+        progress: row.progress,
+      })),
+    });
+  } catch (error) {
+    console.error("teacher log export template error", error);
+    return errorResponse("교사일지 엑셀을 만들지 못했어요. 다시 시도해주세요.", 500);
+  }
+
+  const filename = `${date.replaceAll("-", "")}${WEEKDAYS[dow]}.xlsx`;
 
   return new Response(new Uint8Array(buffer), {
     headers: {
