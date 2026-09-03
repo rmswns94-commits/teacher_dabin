@@ -49,22 +49,17 @@ export function LessonLogDetail({
       .map((makeup) => [makeup.student_lesson_log_id, makeup]),
   );
 
-  // 칭찬 한표(comment)는 학생 아래 "오늘의 칭찬" 목록으로,
-  // legacy category 칭찬은 기존 라벨 chip으로 이름 옆에 표시
-  const commentPraisesByStudent = new Map<string, string[]>();
-  const legacyPraiseChipsByStudent = new Map<string, string[]>();
+  // 칭찬 한표(comment)는 문장 chip으로, legacy category 칭찬은 라벨 chip으로
+  // 학생 이름 옆에 표시 (기존 표기 방식)
+  const praisesByStudent = new Map<string, string[]>();
   for (const praise of praises) {
-    if (praise.comment) {
-      commentPraisesByStudent.set(praise.student_id, [
-        ...(commentPraisesByStudent.get(praise.student_id) ?? []),
-        praise.comment,
-      ]);
-    } else {
-      legacyPraiseChipsByStudent.set(praise.student_id, [
-        ...(legacyPraiseChipsByStudent.get(praise.student_id) ?? []),
-        `⭐ ${praiseCategoryLabels[praise.category as PraiseCategory] ?? praise.category}`,
-      ]);
-    }
+    const label = praise.comment
+      ? `💜 ${praise.comment}`
+      : `⭐ ${praiseCategoryLabels[praise.category as PraiseCategory] ?? praise.category}`;
+    praisesByStudent.set(praise.student_id, [
+      ...(praisesByStudent.get(praise.student_id) ?? []),
+      label,
+    ]);
   }
 
   const vocabRows = detail.lessonLogs.filter((log) => log.vocab_correct !== null);
@@ -101,18 +96,22 @@ export function LessonLogDetail({
           </Button>
         </div>
 
-        {detail.title ? (
-          <div className="mt-4 text-sm font-medium leading-6 text-[#2d2928]">{detail.title}</div>
-        ) : null}
-
-        {/* 수업 요약 — 상태 + 공통 진도 (수업 내용은 공통 진도로 통합됨, legacy row도 병합) */}
-        <div className="mt-4 grid gap-3 md:grid-cols-[auto_1fr]">
-          <div className="rounded-2xl bg-[#f8f3ef] p-3.5 md:min-w-36">
+        {/* 수업 요약 — 상태 · 수업 제목 · 공통 진도 (수업 내용은 공통 진도로 통합됨) */}
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl bg-[#f8f3ef] p-3.5">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8b7b77]">
               상태
             </div>
             <div className="mt-2">
               <DailyLogStatusBadge status={detail.status} />
+            </div>
+          </div>
+          <div className="rounded-2xl bg-[#f5f2ff] p-3.5">
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8b7b77]">
+              수업 제목
+            </div>
+            <div className="mt-1.5 text-sm font-medium leading-6 text-[#2a2323]">
+              {detail.title || "입력된 제목이 없어요."}
             </div>
           </div>
           <div className="rounded-2xl bg-[#edf9f3] p-3.5">
@@ -168,11 +167,8 @@ export function LessonLogDetail({
         <div className="mt-2 divide-y divide-dashed divide-[#f4e2e8]">
           {detail.lessonLogs.map((lessonLog) => {
             const makeup = makeupByLessonLog.get(lessonLog.id);
-            const commentPraises = lessonLog.student
-              ? (commentPraisesByStudent.get(lessonLog.student.id) ?? [])
-              : [];
-            const legacyChips = lessonLog.student
-              ? (legacyPraiseChipsByStudent.get(lessonLog.student.id) ?? [])
+            const studentPraises = lessonLog.student
+              ? (praisesByStudent.get(lessonLog.student.id) ?? [])
               : [];
 
             return (
@@ -182,7 +178,7 @@ export function LessonLogDetail({
                     {lessonLog.student?.name ?? "학생"}
                   </span>
                   <AttendanceBadge status={lessonLog.attendance} />
-                  {legacyChips.map((label, praiseIndex) => (
+                  {studentPraises.map((label, praiseIndex) => (
                     <span
                       key={`${label}-${praiseIndex}`}
                       className="rounded-full bg-[#fdf3e4] px-1.5 py-0.5 text-[10px] text-[#8a6828]"
@@ -259,15 +255,6 @@ export function LessonLogDetail({
                     ) : null}
                   </div>
                 )}
-
-                {commentPraises.length > 0 ? (
-                  <div className="mt-1.5 rounded-xl bg-[#f6effa] px-3 py-2 text-xs leading-5 text-[#7a5a92]">
-                    <div className="font-semibold">💜 오늘의 칭찬</div>
-                    {commentPraises.map((comment, praiseIndex) => (
-                      <div key={`${praiseIndex}-${comment}`}>• {comment}</div>
-                    ))}
-                  </div>
-                ) : null}
               </div>
             );
           })}
