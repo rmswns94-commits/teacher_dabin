@@ -22,7 +22,7 @@ export function WelcomeHero() {
             <NotebookPen className="h-5 w-5" />
           </div>
           <div>
-            <div className="font-display text-xl font-semibold">다빈이의 강사일기</div>
+            <div className="font-display text-xl font-semibold">강사 일지</div>
             <div className="text-xs text-[#7c6f6d]">수업 준비부터 학생 관리까지, 선생님의 하루를 더 가볍게.</div>
           </div>
         </div>

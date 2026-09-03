@@ -90,7 +90,7 @@ export default function SignupPage() {
             <BookOpenText className="h-5 w-5" />
           </div>
           <h1 className="font-display mt-4 text-2xl font-semibold tracking-[-0.01em] text-[#2a2323]">
-            다빈이의 강사일기
+            강사 일지
           </h1>
           <p className="mt-2 text-sm text-[#716968]">선생님의 수업 기록을 더 편하게</p>
         </div>

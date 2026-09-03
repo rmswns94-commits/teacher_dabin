@@ -92,7 +92,7 @@ export function InstallAppButton() {
           <div className="w-full max-w-sm rounded-2xl border border-[#e6e6ea] bg-white p-6 shadow-xl">
             <div className="text-base font-bold text-[#232327]">앱처럼 사용하기</div>
             <p className="mt-1.5 text-xs text-[#6b6b74]">
-              홈 화면에 추가하면 더 빠르게 강사일기를 열 수 있어요.
+              홈 화면에 추가하면 더 빠르게 강사 일지를 열 수 있어요.
             </p>
             <ol className="mt-4 space-y-2.5 text-sm leading-6 text-[#3c3c45]">
               <li>
@@ -106,7 +106,7 @@ export function InstallAppButton() {
               </li>
             </ol>
             <p className="mt-3 text-xs leading-5 text-[#8a8a93]">
-              설치하면 홈 화면에서 다빈이의 강사일기를 바로 열 수 있어요.
+              설치하면 홈 화면에서 강사 일지를 바로 열 수 있어요.
             </p>
             <button
               type="button"

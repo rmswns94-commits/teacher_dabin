@@ -1,5 +1,5 @@
 /*
- * 다빈이의 강사일기 — 보수적인 Service Worker
+ * 강사 일지 — 보수적인 Service Worker
  *
  * 보안 정책 (절대 변경 금지):
  *  - HTML, Supabase 응답, 서버 액션 응답, 개인 데이터는 어떤 것도 캐시하지 않는다.

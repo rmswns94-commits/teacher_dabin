@@ -62,7 +62,7 @@ function LoginForm() {
           <div className="flex items-center gap-2">
             <Doodle kind="flower" className="h-5 w-5 text-[#c9a9c4]" />
             <h1 className="font-display text-2xl font-semibold tracking-[-0.01em] text-[#2a2323]">
-              다빈이의 강사일기
+              강사 일지
             </h1>
             <Doodle kind="leaf" className="h-5 w-5 text-[#9dbfa8]" />
           </div>

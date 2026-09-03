@@ -4,8 +4,8 @@ import type { MetadataRoute } from "next";
 // <link rel="manifest">도 자동으로 추가한다.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "다빈이의 강사일기",
-    short_name: "강사일기",
+    name: "강사 일지",
+    short_name: "강사 일지",
     description: "수업과 학생을 따뜻하게 기록하는 강사용 디지털 플래너",
     lang: "ko-KR",
     start_url: "/",

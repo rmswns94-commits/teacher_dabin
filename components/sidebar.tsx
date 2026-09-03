@@ -161,7 +161,7 @@ export function Sidebar({
         >
           <Menu className="h-5 w-5" aria-hidden />
         </button>
-        <span className="whitespace-nowrap text-lg font-bold tracking-[-0.01em] text-[#232327]">다빈이의 강사일기</span>
+        <span className="whitespace-nowrap text-lg font-bold tracking-[-0.01em] text-[#232327]">강사 일지</span>
         <BetaBadge />
       </div>
 
@@ -187,7 +187,7 @@ export function Sidebar({
         <div className="flex-1">
           <div className="flex items-center gap-1.5">
             <div className="whitespace-nowrap text-lg font-bold tracking-[-0.01em] text-[#232327]">
-              다빈이의 강사일기
+              강사 일지
             </div>
             <BetaBadge />
           </div>
