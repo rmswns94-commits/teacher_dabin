@@ -425,7 +425,8 @@ export function DailyLogForm({
 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="block">
-              <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
+              {/* 옆 칸(다음 수업 계획)의 날짜 배지 header와 높이를 맞춰 textarea 정렬 유지 */}
+              <span className="mb-2 flex min-h-[38px] items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
                 <NotebookTabs className="h-3.5 w-3.5 text-[#6652b9]" /> 오늘 숙제
               </span>
               <textarea
@@ -438,7 +439,7 @@ export function DailyLogForm({
             </label>
 
             <div className="block min-w-0">
-              <span className="mb-2 flex min-h-[30px] flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+              <span className="mb-2 flex min-h-[38px] flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                 <span className="flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
                   <CircleArrowRight className="h-3.5 w-3.5 text-[#3e7d6b]" /> 다음 수업 계획
                 </span>
