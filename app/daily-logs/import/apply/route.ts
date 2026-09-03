@@ -111,12 +111,13 @@ export async function POST(request: Request) {
     }
 
     insertedKeys.add(key);
+    // 교재 정보도 canonical field인 공통 진도에 함께 저장한다 (legacy lesson_content 미사용)
+    const textbookLine = item.textbooks.length > 0 ? `교재: ${item.textbooks.join(", ")}` : "";
     inserts.push({
       user_id: user.id,
       group_id: item.groupId,
       class_date: item.date,
-      default_progress: progress,
-      lesson_content: item.textbooks.length > 0 ? `교재: ${item.textbooks.join(", ")}` : null,
+      default_progress: [textbookLine, progress].filter(Boolean).join("\n\n"),
       status: "draft",
     });
   }

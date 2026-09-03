@@ -8,6 +8,7 @@ import { AttendanceBadge, DailyLogStatusBadge, MakeupStatusBadge } from "@/compo
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatKoreanDate } from "@/lib/dates";
+import { mergeLegacyLessonContent } from "@/lib/progress";
 import {
   effortLevelLabels,
   focusLevelLabels,
@@ -82,23 +83,19 @@ export default async function DailyLogDetailPage({
         ) : null}
 
         <Card className="mb-5">
-          <CardContent className="grid gap-4 py-5 md:grid-cols-3">
-          <div className="rounded-2xl bg-[#f8f3ef] p-3">
+          <CardContent className="grid gap-4 py-5 md:grid-cols-[auto_1fr]">
+            <div className="rounded-2xl bg-[#f8f3ef] p-3 md:min-w-32">
               <div className="text-xs uppercase tracking-[0.12em] text-[#8b7b77]">상태</div>
               <div className="mt-2">
                 <DailyLogStatusBadge status={log.status} />
               </div>
             </div>
+            {/* 수업 내용은 공통 진도로 통합됨 — legacy row도 병합해 하나로 표시 (중복 없음) */}
             <div className="rounded-2xl bg-[#f5f2ff] p-3">
-              <div className="text-xs uppercase tracking-[0.12em] text-[#8b7b77]">수업 내용</div>
-              <div className="mt-2 text-sm font-medium text-[#2a2323]">
-                {log.lesson_content || "입력된 수업 내용이 없어요."}
-              </div>
-            </div>
-            <div className="rounded-2xl bg-[#edf9f3] p-3">
               <div className="text-xs uppercase tracking-[0.12em] text-[#8b7b77]">공통 진도</div>
-              <div className="mt-2 text-sm font-medium text-[#2a2323]">
-                {log.default_progress || "입력된 진도가 없어요."}
+              <div className="mt-2 whitespace-pre-line text-sm font-medium leading-6 text-[#2a2323]">
+                {mergeLegacyLessonContent(log.default_progress, log.lesson_content) ||
+                  "입력된 진도가 없어요."}
               </div>
             </div>
           </CardContent>

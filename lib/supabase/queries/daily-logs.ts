@@ -240,12 +240,13 @@ export async function saveDailyLog(input: DailyLogFormInput) {
 
   const vocabTotal = input.vocabTotal ? Number(input.vocabTotal) : null;
 
+  // lesson_content(legacy 수업 내용)는 payload에서 제외 — 기존 값을 덮어쓰지 않고 보존하며,
+  // 신규 저장의 canonical field는 default_progress(공통 진도) 하나다.
   const headerPayload = {
     user_id: user.id,
     group_id: input.groupId,
     class_date: input.classDate,
     title: input.title?.trim() || null,
-    lesson_content: input.lessonContent?.trim() || null,
     default_progress: input.defaultProgress?.trim() || null,
     memo: input.memo?.trim() || null,
     homework: input.homework?.trim() || null,

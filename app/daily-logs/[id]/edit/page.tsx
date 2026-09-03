@@ -6,6 +6,7 @@ import { DailyLogForm, type DailyLogFormStudent } from "@/components/daily-log-f
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { formatKoreanDate } from "@/lib/dates";
+import { mergeLegacyLessonContent } from "@/lib/progress";
 import {
   getDailyLogDetailForCurrentUser,
   getPraisesForDailyLog,
@@ -105,8 +106,9 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           students={students}
           initial={{
             title: log.title ?? "",
-            lessonContent: log.lesson_content ?? "",
-            defaultProgress: log.default_progress ?? "",
+            // migration 미적용 legacy row도 수업 내용을 잃지 않게 병합해 편집한다
+            // (이미 병합된 row는 그대로 — 중복 없음)
+            defaultProgress: mergeLegacyLessonContent(log.default_progress, log.lesson_content),
             memo: log.memo ?? "",
             homework: log.homework ?? "",
             nextLessonPlan: log.next_lesson_plan ?? "",

@@ -172,7 +172,6 @@ export function DailyLogForm({
   students: DailyLogFormStudent[];
   initial?: {
     title: string;
-    lessonContent: string;
     defaultProgress: string;
     memo: string;
     homework: string;
@@ -182,7 +181,6 @@ export function DailyLogForm({
 }) {
   const [classDate, setClassDate] = useState(initialClassDate);
   const [title, setTitle] = useState(initial?.title ?? "");
-  const [lessonContent, setLessonContent] = useState(initial?.lessonContent ?? "");
   const [defaultProgress, setDefaultProgress] = useState(initial?.defaultProgress ?? "");
   const [memo, setMemo] = useState(initial?.memo ?? "");
   const [homework, setHomework] = useState(initial?.homework ?? "");
@@ -262,7 +260,6 @@ export function DailyLogForm({
         classDate,
         groupId: group.id,
         title,
-        lessonContent,
         defaultProgress,
         memo,
         homework,
@@ -347,29 +344,19 @@ export function DailyLogForm({
             />
           </label>
 
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">수업 내용 (선택)</span>
-            <textarea
-              value={lessonContent}
-              onChange={(event) => setLessonContent(event.target.value)}
-              rows={2}
-              className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
-              placeholder="Unit 3 본문 독해 + 관계대명사 복습"
-            />
-          </label>
-
           <div className="rounded-2xl bg-[#f5f2ff] p-3">
             <label className="block">
               <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
                 <BookOpen className="h-3.5 w-3.5" /> 공통 진도
               </span>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <input
-                  value={defaultProgress}
-                  onChange={(event) => setDefaultProgress(event.target.value)}
-                  className="flex-1 rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
-                  placeholder="교과서 p.48~53"
-                />
+              <textarea
+                value={defaultProgress}
+                onChange={(event) => setDefaultProgress(event.target.value)}
+                rows={6}
+                className="min-h-[150px] w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996] max-md:min-h-[135px]"
+                placeholder={"오늘 진행한 공통 진도를 자유롭게 적어주세요.\n단원 · 페이지 · 본문 · 문법 · 워크북 등을 여러 줄로 쓸 수 있어요."}
+              />
+              <div className="mt-2 flex justify-end">
                 <Button type="button" variant="secondary" onClick={applyDefaultProgress}>
                   전체 학생에게 적용
                 </Button>
@@ -1056,7 +1043,7 @@ function CompletionSummary({
         <div className="mt-4 space-y-3 text-sm">
           <div className="rounded-2xl bg-[#f8f3ef] p-3">
             <div className="text-[11px] uppercase tracking-[0.12em] text-[#8b7b77]">진도</div>
-            <div className="mt-1 font-medium text-[#2b2323]">
+            <div className="mt-1 whitespace-pre-line font-medium text-[#2b2323]">
               {defaultProgress.trim() || "입력된 진도가 없어요."}
             </div>
           </div>

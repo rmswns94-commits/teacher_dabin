@@ -46,8 +46,8 @@ export const dailyLogSchema = z
     classDate: dateString,
     groupId: z.string().uuid({ message: "수업 그룹을 선택해주세요." }),
     title: shortText(120, "수업 제목"),
-    lessonContent: shortText(2000, "수업 내용"),
-    defaultProgress: shortText(300, "공통 진도"),
+    // 공통 진도가 canonical field (수업 내용 통합 후 여러 줄 작성 — 넉넉한 상한)
+    defaultProgress: shortText(4000, "공통 진도"),
     memo: shortText(1000, "메모"),
     homework: shortText(1000, "오늘 숙제"),
     nextLessonPlan: shortText(1000, "다음 수업 계획"),

@@ -299,7 +299,7 @@ export default async function GroupDetailPage({
                 </div>
                 {latestProgress ? (
                   <>
-                    <div className="mt-2 text-base font-semibold text-[#2a2323]">
+                    <div className="mt-2 line-clamp-3 whitespace-pre-line text-base font-semibold leading-6 text-[#2a2323]">
                       {latestProgress.default_progress || latestProgress.title || "진도 미입력"}
                     </div>
                     <div className="mt-1 text-xs text-[#8a7b77]">
@@ -483,14 +483,15 @@ export default async function GroupDetailPage({
                             </span>
                             <DailyLogStatusBadge status={log.status} />
                           </div>
-                          {log.title || log.lesson_content ? (
-                            <div className="mt-1 text-sm text-[#564d4d]">
-                              {log.title || log.lesson_content}
-                            </div>
+                          {log.title ? (
+                            <div className="mt-1 text-sm text-[#564d4d]">{log.title}</div>
                           ) : null}
                           {log.default_progress ? (
-                            <div className="mt-1 flex items-center gap-1.5 text-xs text-[#8a7b77]">
-                              <BookOpen className="h-3 w-3" /> {log.default_progress}
+                            <div className="mt-1 flex items-start gap-1.5 text-xs text-[#8a7b77]">
+                              <BookOpen className="mt-0.5 h-3 w-3 shrink-0" />
+                              <span className="line-clamp-2 whitespace-pre-line">
+                                {log.default_progress}
+                              </span>
                             </div>
                           ) : null}
                         </div>

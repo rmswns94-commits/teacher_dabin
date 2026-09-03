@@ -5,6 +5,7 @@ import { AttendanceBadge, DailyLogStatusBadge, MakeupStatusBadge } from "@/compo
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate } from "@/lib/dates";
+import { mergeLegacyLessonContent } from "@/lib/progress";
 import {
   effortLevelLabels,
   focusLevelLabels,
@@ -95,22 +96,18 @@ export function LessonLogDetail({
           </Button>
         </div>
 
-        {detail.title || detail.lesson_content ? (
-          <div className="mt-4 text-sm leading-6 text-[#564d4d]">
-            {detail.title ? <div className="font-medium text-[#2d2928]">{detail.title}</div> : null}
-            {detail.lesson_content ? (
-              <div className="mt-0.5 whitespace-pre-line">{detail.lesson_content}</div>
-            ) : null}
-          </div>
+        {detail.title ? (
+          <div className="mt-4 text-sm font-medium leading-6 text-[#2d2928]">{detail.title}</div>
         ) : null}
 
-        {/* 오늘의 진도 (Excel import 진도도 동일 field — 줄바꿈 보존) */}
+        {/* 오늘의 진도 — 수업 내용은 공통 진도로 통합됨 (legacy row도 병합, 줄바꿈 보존) */}
         <div className="mt-4 rounded-2xl bg-[#f5f1fb] p-3">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-[#6d5aa8]">
             <BookOpen className="h-3.5 w-3.5" aria-hidden /> 오늘의 진도
           </div>
           <div className="mt-1 whitespace-pre-line text-sm leading-6 text-[#3d3450]">
-            {detail.default_progress || "기록된 진도가 없어요."}
+            {mergeLegacyLessonContent(detail.default_progress, detail.lesson_content) ||
+              "기록된 진도가 없어요."}
           </div>
         </div>
 
