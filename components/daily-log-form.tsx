@@ -61,7 +61,7 @@ export type DailyLogFormStudent = {
     effortLevel?: string;
     parentNote?: string;
   };
-  praiseComment?: string;
+  praiseComments?: string[];
   makeup?: {
     status: "required" | "scheduled" | "completed" | "cancelled";
     scheduledDate: string;
@@ -89,7 +89,7 @@ type EntryState = {
   effortLevel: string;
   parentNoteNeeded: boolean;
   parentNote: string;
-  praiseComment: string;
+  praiseComments: string[];
 };
 
 function initEntry(student: DailyLogFormStudent): EntryState {
@@ -116,7 +116,7 @@ function initEntry(student: DailyLogFormStudent): EntryState {
     effortLevel: student.entry?.effortLevel ?? "",
     parentNoteNeeded: Boolean(student.entry?.parentNote),
     parentNote: student.entry?.parentNote ?? "",
-    praiseComment: student.praiseComment ?? "",
+    praiseComments: student.praiseComments ?? [],
   };
 }
 
@@ -205,8 +205,10 @@ export function DailyLogForm({
   // 학생 평가 UI는 초등/중등/고등 모든 학년 공통으로 사용한다.
   const [vocabTotal, setVocabTotal] = useState(initial?.vocabTotal ?? "");
   // 칭찬 한표 인라인 에디터: 열려 있는 학생 id + 작성 중인 draft
+  // editIndex가 null이면 새 칭찬 추가, 숫자면 해당 index 칭찬 수정
   const [praiseOpenFor, setPraiseOpenFor] = useState<string | null>(null);
   const [praiseDraft, setPraiseDraft] = useState("");
+  const [praiseEditIndex, setPraiseEditIndex] = useState<number | null>(null);
 
   const updateEntry = (studentId: string, patch: Partial<EntryState>) => {
     setEntries((prev) => ({ ...prev, [studentId]: { ...prev[studentId], ...patch } }));
@@ -289,7 +291,7 @@ export function DailyLogForm({
             effortLevel: entry.effortLevel as "" | "high" | "normal" | "low",
             parentNoteNeeded: entry.parentNoteNeeded,
             parentNote: entry.parentNote,
-            praiseComment: entry.praiseComment,
+            praiseComments: entry.praiseComments,
           };
         }),
       });
@@ -708,47 +710,63 @@ export function DailyLogForm({
                         />
                       </div>
 
+                      {entry.praiseComments.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {entry.praiseComments.map((comment, praiseIndex) => (
+                            <div
+                              key={`${praiseIndex}-${comment}`}
+                              className="flex items-start gap-2 rounded-xl bg-[#f6effa] px-3 py-1.5 text-xs text-[#7a5a92]"
+                            >
+                              <span aria-hidden className="shrink-0">💜</span>
+                              <span className="min-w-0 flex-1 break-words leading-5">{comment}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPraiseDraft(comment);
+                                  setPraiseEditIndex(praiseIndex);
+                                  setPraiseOpenFor(student.studentId);
+                                }}
+                                className="shrink-0 font-medium text-[#5c4ca8] hover:underline"
+                              >
+                                수정
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`${student.name} 칭찬 삭제`}
+                                onClick={() =>
+                                  updateEntry(student.studentId, {
+                                    praiseComments: entry.praiseComments.filter(
+                                      (_, index) => index !== praiseIndex,
+                                    ),
+                                  })
+                                }
+                                className="shrink-0 text-[#a68cbf] hover:text-[#7a5a92]"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+
                       <div className="flex flex-wrap items-center gap-2">
-                        {entry.praiseComment && praiseOpenFor !== student.studentId ? (
-                          <span className="flex min-w-0 items-center gap-1.5 rounded-xl bg-[#f6effa] px-3 py-1.5 text-xs text-[#7a5a92]">
-                            <span className="shrink-0 font-semibold">💜 칭찬 한표</span>
-                            <span className="min-w-0 truncate">{entry.praiseComment}</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPraiseDraft(entry.praiseComment);
-                                setPraiseOpenFor(student.studentId);
-                              }}
-                              className="shrink-0 font-medium text-[#5c4ca8] hover:underline"
-                            >
-                              수정
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={`${student.name} 칭찬 한표 취소`}
-                              onClick={() => updateEntry(student.studentId, { praiseComment: "" })}
-                              className="shrink-0 text-[#a68cbf] hover:text-[#7a5a92]"
-                            >
-                              ✕
-                            </button>
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (praiseOpenFor === student.studentId) {
-                                setPraiseOpenFor(null);
-                              } else {
-                                setPraiseDraft(entry.praiseComment);
-                                setPraiseOpenFor(student.studentId);
-                              }
-                            }}
-                            aria-expanded={praiseOpenFor === student.studentId}
-                            className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#ddd0ec] bg-[#f9f5fd] px-3 py-1.5 text-xs font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
-                          >
-                            💜 칭찬 한표 +
-                          </button>
-                        )}
+                        {/* 칭찬이 몇 개 있어도 추가 버튼은 항상 표시 */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (praiseOpenFor === student.studentId && praiseEditIndex === null) {
+                              setPraiseOpenFor(null);
+                            } else {
+                              setPraiseDraft("");
+                              setPraiseEditIndex(null);
+                              setPraiseOpenFor(student.studentId);
+                            }
+                          }}
+                          aria-expanded={praiseOpenFor === student.studentId}
+                          className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#ddd0ec] bg-[#f9f5fd] px-3 py-1.5 text-xs font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
+                        >
+                          💜 칭찬 한표 +
+                        </button>
 
                         <button
                           type="button"
@@ -769,7 +787,9 @@ export function DailyLogForm({
 
                       {praiseOpenFor === student.studentId ? (
                         <div className="space-y-2 rounded-xl border border-[#e5d9f0] bg-white p-3">
-                          <div className="text-xs font-semibold text-[#6d5aa8]">칭찬 한표 💜</div>
+                          <div className="text-xs font-semibold text-[#6d5aa8]">
+                            {praiseEditIndex === null ? "칭찬 한표 💜" : "칭찬 수정 💜"}
+                          </div>
                           <div className="text-[11px] text-[#8a7b77]">
                             성장노트에 보여줄 짧은 칭찬이에요. 오늘 잘한 모습을 짧게 적어주세요.
                           </div>
@@ -790,7 +810,10 @@ export function DailyLogForm({
                             <div className="flex gap-1.5">
                               <button
                                 type="button"
-                                onClick={() => setPraiseOpenFor(null)}
+                                onClick={() => {
+                                  setPraiseOpenFor(null);
+                                  setPraiseEditIndex(null);
+                                }}
                                 className="rounded-xl border border-[#ece0db] bg-white px-3 py-1.5 text-xs font-medium text-[#7c6d69] transition hover:bg-[#faf6f3]"
                               >
                                 취소
@@ -799,12 +822,21 @@ export function DailyLogForm({
                                 type="button"
                                 disabled={!praiseDraft.trim()}
                                 onClick={() => {
-                                  updateEntry(student.studentId, { praiseComment: praiseDraft.trim() });
+                                  const trimmed = praiseDraft.trim();
+                                  updateEntry(student.studentId, {
+                                    praiseComments:
+                                      praiseEditIndex === null
+                                        ? [...entry.praiseComments, trimmed]
+                                        : entry.praiseComments.map((comment, index) =>
+                                            index === praiseEditIndex ? trimmed : comment,
+                                          ),
+                                  });
                                   setPraiseOpenFor(null);
+                                  setPraiseEditIndex(null);
                                 }}
                                 className="rounded-xl bg-[#6d5aa8] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#5d4ba5] disabled:cursor-not-allowed disabled:opacity-40"
                               >
-                                칭찬 저장
+                                {praiseEditIndex === null ? "칭찬 추가" : "칭찬 저장"}
                               </button>
                             </div>
                           </div>

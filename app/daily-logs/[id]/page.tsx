@@ -40,10 +40,13 @@ export default async function DailyLogDetailPage({
     notFound();
   }
 
-  const praiseCommentByStudent = new Map<string, string>();
+  const praiseCommentsByStudent = new Map<string, string[]>();
   for (const praise of praiseRows) {
-    if (praise.comment && !praiseCommentByStudent.has(praise.student_id)) {
-      praiseCommentByStudent.set(praise.student_id, praise.comment);
+    if (praise.comment) {
+      praiseCommentsByStudent.set(praise.student_id, [
+        ...(praiseCommentsByStudent.get(praise.student_id) ?? []),
+        praise.comment,
+      ]);
     }
   }
 
@@ -222,10 +225,14 @@ export default async function DailyLogDetailPage({
                         </div>
                       ) : null}
 
-                      {lessonLog.student && praiseCommentByStudent.has(lessonLog.student.id) ? (
+                      {lessonLog.student && praiseCommentsByStudent.has(lessonLog.student.id) ? (
                         <div className="rounded-2xl bg-[#f6effa] p-3 text-sm text-[#7a5a92]">
                           <span className="text-xs font-semibold">💜 오늘의 칭찬</span>
-                          <div className="mt-0.5">{praiseCommentByStudent.get(lessonLog.student.id)}</div>
+                          <div className="mt-0.5 space-y-0.5">
+                            {praiseCommentsByStudent.get(lessonLog.student.id)!.map((comment, index) => (
+                              <div key={`${index}-${comment}`}>{comment}</div>
+                            ))}
+                          </div>
                         </div>
                       ) : null}
 

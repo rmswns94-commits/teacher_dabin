@@ -30,8 +30,11 @@ export const studentLessonEntrySchema = z.object({
   participationLevel: z.enum(["active", "normal", "passive"]).optional().or(z.literal("")),
   parentNoteNeeded: z.boolean().optional(),
   parentNote: shortText(1000, "학부모 전달 내용"),
-  // 칭찬 한표: 비어 있으면 칭찬 없음. 내용이 있어야만 Praise가 저장된다.
-  praiseComment: shortText(120, "칭찬"),
+  // 칭찬 한표: 한 수업에서 여러 개 가능. 빈 문자열은 서버에서 걸러져 저장되지 않는다.
+  praiseComments: z
+    .array(z.string().trim().max(120, "칭찬은 120자 이내로 입력해주세요."))
+    .max(20, "칭찬은 수업당 20개까지 기록할 수 있어요.")
+    .optional(),
   questionLevel: z.enum(["high", "normal", "low"]).optional().or(z.literal("")),
   kindnessLevel: z.enum(["good", "normal", "poor"]).optional().or(z.literal("")),
   effortLevel: z.enum(["high", "normal", "low"]).optional().or(z.literal("")),

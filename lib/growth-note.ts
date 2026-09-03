@@ -205,10 +205,12 @@ export function buildGrowthNoteViewModel(input: BuildGrowthNoteInput): StudentGr
   }
 
   // 이번 주 선생님의 칭찬: Teacher가 [칭찬 한표]로 직접 남긴 코멘트 원문만 사용.
-  // 원문에 없는 사실을 새로 만들지 않도록 요약 생성 없이 원문을 그대로 보여준다 (dedupe, 최대 3개).
+  // 원문에 없는 사실을 새로 만들지 않도록 요약 생성 없이 원문을 그대로 보여준다.
+  // 완전히 동일한 문장만 1회로 dedupe하고, Teacher 기록을 조용히 누락하지 않는다
+  // (극단적으로 많은 경우 대비 safeguard 12개).
   const teacherPraises = [
     ...new Set(input.weekPraiseComments.map((comment) => comment.trim()).filter(Boolean)),
-  ].slice(0, 3);
+  ].slice(0, 12);
 
   // 숙제: 평가된 기록이 있을 때만 (사실 기반, 부정 표현 없이)
   const homeworkEvaluated = input.weekRecords.filter((r) => r.homeworkStatus !== null).length;

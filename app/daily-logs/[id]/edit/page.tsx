@@ -23,12 +23,15 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
     notFound();
   }
 
-  // 칭찬 한표 복원: comment가 있는 manual praise만 폼에서 편집한다.
+  // 칭찬 한표 복원: comment가 있는 manual praise 전부 폼에서 편집한다 (입력 순서 유지).
   // legacy category 칭찬(comment null)은 폼에 싣지 않고 그대로 보존된다.
-  const praiseCommentByStudent = new Map<string, string>();
+  const praiseCommentsByStudent = new Map<string, string[]>();
   for (const praise of praiseRows) {
-    if (praise.comment && !praiseCommentByStudent.has(praise.student_id)) {
-      praiseCommentByStudent.set(praise.student_id, praise.comment);
+    if (praise.comment) {
+      praiseCommentsByStudent.set(praise.student_id, [
+        ...(praiseCommentsByStudent.get(praise.student_id) ?? []),
+        praise.comment,
+      ]);
     }
   }
 
@@ -61,7 +64,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           effortLevel: lessonLog.effort_level ?? "",
           parentNote: lessonLog.parent_note ?? "",
         },
-        praiseComment: praiseCommentByStudent.get(lessonLog.student!.id) ?? "",
+        praiseComments: praiseCommentsByStudent.get(lessonLog.student!.id) ?? [],
         makeup: makeup
           ? {
               status: makeup.status,

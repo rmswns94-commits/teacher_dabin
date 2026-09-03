@@ -423,26 +423,31 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   }
 
   // 칭찬 한표 동기화: 이 일지의 "코멘트 칭찬"만 폼 상태 그대로 교체한다 (멱등).
+  // - 한 학생이 한 수업에서 칭찬을 여러 개 받을 수 있다 (row 단위 독립 record).
   // - 자동 생성 없음: 집중/참여/질문/배려/노력 등 관찰값은 Praise를 만들지 않는다.
   //   Praise는 Teacher가 [칭찬 한표]로 직접 남긴 comment가 있을 때만 저장된다.
   // - 예전 category chip 방식의 legacy 칭찬(comment null)은 건드리지 않고 보존한다.
+  const praiseBaseTime = Date.now();
   const praiseRows = input.students.flatMap((entry) => {
-    const comment = entry.attendance === "absent" ? "" : entry.praiseComment?.trim() ?? "";
-
-    if (!comment) {
+    if (entry.attendance === "absent") {
       return [];
     }
 
-    return [
-      {
-        user_id: user.id,
-        student_id: entry.studentId,
-        daily_log_id: dailyLogId,
-        category: "other" as const,
-        comment,
-        source: "manual_daily_log" as const,
-      },
-    ];
+    const comments = (entry.praiseComments ?? [])
+      .map((comment) => comment.trim())
+      .filter(Boolean);
+
+    return comments.map((comment, index) => ({
+      user_id: user.id,
+      student_id: entry.studentId,
+      daily_log_id: dailyLogId,
+      category: "other" as const,
+      comment,
+      source: "manual_daily_log" as const,
+      // batch insert는 created_at default가 전부 같은 값이라 Teacher가 적은 순서가
+      // 뒤섞일 수 있어, ms 단위로 어긋난 timestamp를 명시해 입력 순서를 보존한다.
+      created_at: new Date(praiseBaseTime + index).toISOString(),
+    }));
   });
 
   const { error: praiseDeleteError } = await supabase
