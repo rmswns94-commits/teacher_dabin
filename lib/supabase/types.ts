@@ -28,6 +28,11 @@ export type PreparationItem = {
   id: string;
   text: string;
   completed: boolean;
+  // 날짜 있는 항목(다음 수업 계획 연동)용 optional 필드 — 기존 수동 항목은 필드 없음.
+  // source가 daily_log_next_plan인 항목은 해당 일지 저장 시에만 생성/갱신/제거된다.
+  dueDate?: string | null; // "YYYY-MM-DD"
+  source?: "daily_log_next_plan";
+  sourceDailyLogId?: string;
 };
 
 export type ClassGroupRecord = {
@@ -118,6 +123,7 @@ export type DailyLogRecord = {
   memo: string | null;
   homework: string | null;
   next_lesson_plan: string | null;
+  next_plan_date: string | null; // 다음 수업 계획의 계획 날짜 (To Do 연동 기준)
   vocab_total: number | null;
   status: DailyLogStatus;
   created_at: string;

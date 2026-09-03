@@ -51,11 +51,20 @@ export const dailyLogSchema = z
     memo: shortText(1000, "메모"),
     homework: shortText(1000, "오늘 숙제"),
     nextLessonPlan: shortText(1000, "다음 수업 계획"),
+    nextPlanDate: dateString.optional().or(z.literal("")),
     vocabTotal: numberString.optional().or(z.literal("")),
     status: z.enum(["draft", "completed"], { message: "저장 상태를 확인해주세요." }),
     students: z.array(studentLessonEntrySchema).min(1, "학생 기록이 필요합니다."),
   })
   .superRefine((value, ctx) => {
+    // 다음 수업 계획은 내용+날짜 한 쌍으로 관리한다
+    if ((value.nextLessonPlan ?? "").trim() && !value.nextPlanDate) {
+      ctx.addIssue({ code: "custom", path: ["nextPlanDate"], message: "다음 수업 계획 날짜를 선택해주세요." });
+    }
+    if (value.nextPlanDate && value.nextPlanDate <= value.classDate) {
+      ctx.addIssue({ code: "custom", path: ["nextPlanDate"], message: "다음 수업 계획 날짜는 수업일 이후로 선택해주세요." });
+    }
+
     const total = value.vocabTotal ? Number(value.vocabTotal) : null;
 
     if (total !== null && total <= 0) {
@@ -136,6 +145,7 @@ export const historyLogUpdateSchema = z.object({
   memo: shortText(1000, "메모"),
   homework: shortText(1000, "오늘 숙제"),
   nextLessonPlan: shortText(1000, "다음 수업 계획"),
+  nextPlanDate: dateString.optional().or(z.literal("")),
 });
 
 export type HistoryLogUpdateInput = z.infer<typeof historyLogUpdateSchema>;

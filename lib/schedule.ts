@@ -251,3 +251,19 @@ export function slotsOverlap(
   return formatTimeHM(a.start_time) < formatTimeHM(b.end_time) &&
     formatTimeHM(b.start_time) < formatTimeHM(a.end_time);
 }
+
+// 기준 날짜 "이후"의 그룹 시간표상 가장 빠른 수업 날짜 (date-only, KST-safe).
+// 다음 수업 계획 기본 날짜 등에 사용 — 시간표가 없으면 null.
+export function nextClassDateAfter(scheduleDays: number[], dateStr: string): string | null {
+  if (scheduleDays.length === 0) {
+    return null;
+  }
+  const daySet = new Set(scheduleDays);
+  for (let offset = 1; offset <= 14; offset += 1) {
+    const candidate = addDays(dateStr, offset);
+    if (daySet.has(dayOfWeekOf(candidate))) {
+      return candidate;
+    }
+  }
+  return null;
+}

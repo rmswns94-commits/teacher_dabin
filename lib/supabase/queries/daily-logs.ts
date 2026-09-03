@@ -2,6 +2,7 @@ import { formatKoreanDateFull } from "@/lib/dates";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type {
   AttendanceStatus,
+  PreparationItem,
   ClassGroupRecord,
   DailyLogRecord,
   DailyLogStatus,
@@ -206,6 +207,64 @@ export async function getDailyLogDetailForCurrentUser(dailyLogId: string) {
   } as DailyLogDetail;
 }
 
+// 다음 수업 계획 ↔ 그룹 준비 항목(To Do) 동기화.
+// identity = sourceDailyLogId (일지당 linked 항목 최대 1개 — upsert/idempotent, 재시도에도 중복 없음).
+// planText/planDate가 비면 linked 항목만 제거한다 — Teacher가 직접 만든 수동 항목은 절대 건드리지 않는다.
+// (preparation_items 체크리스트는 완료 이력 보존 정책이 없어, 계획 삭제 시 완료된 linked 항목도 함께 제거된다)
+async function syncNextPlanPreparation(
+  supabase: NonNullable<Awaited<ReturnType<typeof createServerSupabaseClient>>>,
+  userId: string,
+  groupId: string,
+  dailyLogId: string,
+  planText: string,
+  planDate: string | null,
+) {
+  const { data: groupRow, error: readError } = await supabase
+    .from("class_groups")
+    .select("preparation_items")
+    .eq("id", groupId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (readError || !groupRow) {
+    console.error("syncNextPlanPreparation read error", readError);
+    return;
+  }
+
+  const items = (groupRow.preparation_items ?? []) as PreparationItem[];
+  const index = items.findIndex((item) => item.sourceDailyLogId === dailyLogId);
+  let next: PreparationItem[] | null = null;
+
+  if (planText && planDate) {
+    const linked: PreparationItem = {
+      id: index >= 0 ? items[index].id : `nlp-${dailyLogId}`,
+      text: planText,
+      completed: index >= 0 ? items[index].completed : false,
+      dueDate: planDate,
+      source: "daily_log_next_plan",
+      sourceDailyLogId: dailyLogId,
+    };
+    const unchanged =
+      index >= 0 && items[index].text === linked.text && items[index].dueDate === linked.dueDate;
+    if (!unchanged) {
+      next = index >= 0 ? items.map((item, n) => (n === index ? linked : item)) : [...items, linked];
+    }
+  } else if (index >= 0) {
+    next = items.filter((_, n) => n !== index);
+  }
+
+  if (next) {
+    const { error: writeError } = await supabase
+      .from("class_groups")
+      .update({ preparation_items: next })
+      .eq("id", groupId)
+      .eq("user_id", userId);
+    if (writeError) {
+      console.error("syncNextPlanPreparation write error", writeError);
+    }
+  }
+}
+
 // 같은 Teacher + 같은 날짜 + 같은 그룹의 수업일지는 최대 1개.
 // typed error로 구분해 UI가 전용 경고 dialog를 띄울 수 있게 한다.
 // 기준은 항상 "선택한 수업 날짜" — 오늘이 아닐 수 있으므로 문구에 날짜를 명시한다.
@@ -293,6 +352,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     memo: input.memo?.trim() || null,
     homework: input.homework?.trim() || null,
     next_lesson_plan: input.nextLessonPlan?.trim() || null,
+    next_plan_date: input.nextPlanDate || null,
     vocab_total: vocabTotal,
     status: input.status,
   };
@@ -342,6 +402,16 @@ export async function saveDailyLog(input: DailyLogFormInput) {
 
     dailyLogId = created.id;
   }
+
+  // 다음 수업 계획 → 그룹 준비 항목(To Do) 동기화 (일지당 1개 upsert — 중복/재시도 안전)
+  await syncNextPlanPreparation(
+    supabase,
+    user.id,
+    input.groupId,
+    dailyLogId!,
+    input.nextLessonPlan?.trim() ?? "",
+    input.nextPlanDate || null,
+  );
 
   // 학부모 전달 상태 보존: 이미 "전달 완료"한 기록을 일지 재저장이 pending으로
   // 되돌리지 않도록, 내용이 그대로면 completed 상태를 유지한다.
@@ -545,7 +615,7 @@ export async function deleteDailyLog(dailyLogId: string) {
   // ownership 검증 — 다른 Teacher의 일지 id로는 삭제 불가 (RLS + 명시 확인)
   const { data: existing } = await supabase
     .from("daily_logs")
-    .select("id, class_date")
+    .select("id, class_date, group_id")
     .eq("id", dailyLogId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -606,6 +676,16 @@ export async function deleteDailyLog(dailyLogId: string) {
     throw new Error("수업일지를 삭제하지 못했어요. 다시 시도해주세요.");
   }
 
+  // 이 일지에서 생성된 linked 준비 항목만 제거 (수동 항목은 보존)
+  await syncNextPlanPreparation(
+    supabase,
+    user.id,
+    existing.group_id as string,
+    dailyLogId,
+    "",
+    null,
+  );
+
   return existing.class_date as string;
 }
 
@@ -647,6 +727,7 @@ export type DailyLogHistorySummary = {
   lesson_content: string | null;
   homework: string | null;
   next_lesson_plan: string | null;
+  next_plan_date: string | null;
   memo: string | null;
   updated_at: string;
   studentCount: number;
@@ -670,7 +751,7 @@ export async function getGroupHistoryLogs(
   const { data, error } = await supabase
     .from("daily_logs")
     .select(
-      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, next_lesson_plan, memo, updated_at, student_lesson_logs(count)",
+      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, next_lesson_plan, next_plan_date, memo, updated_at, student_lesson_logs(count)",
     )
     .eq("user_id", user.id)
     .eq("group_id", groupId)
@@ -704,12 +785,32 @@ export async function updateDailyLogFields(input: {
   memo: string;
   homework: string;
   nextLessonPlan: string;
+  nextPlanDate: string | null;
 }) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
   if (!supabase || !user) {
     throw new Error("로그인이 필요해요.");
+  }
+
+  // 다음 수업 계획은 내용+날짜 쌍 검증 (날짜는 수업일 이후)
+  const planText = input.nextLessonPlan.trim();
+  const planDate = input.nextPlanDate || null;
+  if (planText && !planDate) {
+    throw new Error("다음 수업 계획 날짜를 선택해주세요.");
+  }
+  const { data: existingRow } = await supabase
+    .from("daily_logs")
+    .select("class_date")
+    .eq("id", input.dailyLogId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!existingRow) {
+    throw new Error("수업일지를 찾을 수 없어요.");
+  }
+  if (planDate && planDate <= (existingRow.class_date as string)) {
+    throw new Error("다음 수업 계획 날짜는 수업일 이후로 선택해주세요.");
   }
 
   const { data, error } = await supabase
@@ -719,12 +820,13 @@ export async function updateDailyLogFields(input: {
       default_progress: input.defaultProgress.trim() || null,
       memo: input.memo.trim() || null,
       homework: input.homework.trim() || null,
-      next_lesson_plan: input.nextLessonPlan.trim() || null,
+      next_lesson_plan: planText || null,
+      next_plan_date: planDate,
     })
     .eq("id", input.dailyLogId)
     .eq("user_id", user.id)
     .select(
-      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, next_lesson_plan, memo, updated_at",
+      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, next_lesson_plan, next_plan_date, memo, updated_at",
     )
     .single();
 
@@ -732,6 +834,16 @@ export async function updateDailyLogFields(input: {
     console.error("updateDailyLogFields error", error);
     throw new Error("이전 수업 기록을 저장하지 못했어요. 다시 시도해주세요.");
   }
+
+  // linked 준비 항목도 동일 identity로 갱신/제거
+  await syncNextPlanPreparation(
+    supabase,
+    user.id,
+    (data as { group_id: string }).group_id,
+    input.dailyLogId,
+    planText,
+    planDate,
+  );
 
   return data as unknown as Omit<DailyLogHistorySummary, "studentCount">;
 }

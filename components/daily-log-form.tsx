@@ -5,6 +5,7 @@ import { useEffect, useState, useTransition } from "react";
 import {
   BookOpen,
   CalendarCheck,
+  CalendarDays,
   CheckCheck,
   ChevronDown,
   ChevronUp,
@@ -22,7 +23,9 @@ import { MakeupStatusBadge } from "@/components/status-badge";
 import { useHistoryImport } from "@/components/lesson-history-panel";
 import { saveDailyLogAction } from "@/app/daily-logs/actions";
 import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comments";
+import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate } from "@/lib/dates";
+import { nextClassDateAfter } from "@/lib/schedule";
 import {
   effortLevelLabels,
   effortLevelValues,
@@ -165,18 +168,22 @@ export function DailyLogForm({
   classDate: initialClassDate,
   group,
   students,
+  scheduleDays = [],
   initial,
 }: {
   dailyLogId?: string;
   classDate: string;
   group: { id: string; name: string; grade?: string };
   students: DailyLogFormStudent[];
+  // 그룹 시간표 요일 (다음 수업 계획 기본 날짜 계산용 — 없으면 날짜 직접 선택)
+  scheduleDays?: number[];
   initial?: {
     title: string;
     defaultProgress: string;
     memo: string;
     homework: string;
     nextLessonPlan: string;
+    nextPlanDate?: string;
     vocabTotal?: string;
   };
 }) {
@@ -186,6 +193,12 @@ export function DailyLogForm({
   const [memo, setMemo] = useState(initial?.memo ?? "");
   const [homework, setHomework] = useState(initial?.homework ?? "");
   const [nextLessonPlan, setNextLessonPlan] = useState(initial?.nextLessonPlan ?? "");
+  // 다음 수업 계획 날짜: 저장값 우선, 없으면 수업일 이후 그룹의 실제 다음 수업일.
+  // Teacher가 직접 고르면(touched) 날짜 변경 등 rerender에도 자동 재계산하지 않는다.
+  const [nextPlanDate, setNextPlanDate] = useState(
+    () => initial?.nextPlanDate || nextClassDateAfter(scheduleDays, initialClassDate) || "",
+  );
+  const [planDateTouched, setPlanDateTouched] = useState(Boolean(initial?.nextPlanDate));
   const [showSummary, setShowSummary] = useState(false);
   const [entries, setEntries] = useState<Record<string, EntryState>>(() =>
     Object.fromEntries(students.map((student) => [student.studentId, initEntry(student)])),
@@ -273,6 +286,15 @@ export function DailyLogForm({
 
   const save = (status: "draft" | "completed") => {
     setError("");
+    // 다음 수업 계획은 내용+날짜 한 쌍 (날짜는 수업일 이후)
+    if (nextLessonPlan.trim() && !nextPlanDate) {
+      setError("다음 수업 계획 날짜를 선택해주세요.");
+      return;
+    }
+    if (nextPlanDate && classDate && nextPlanDate <= classDate) {
+      setError("다음 수업 계획 날짜는 수업일 이후로 선택해주세요.");
+      return;
+    }
     startTransition(async () => {
       const result = await saveDailyLogAction({
         dailyLogId,
@@ -283,6 +305,7 @@ export function DailyLogForm({
         memo,
         homework,
         nextLessonPlan,
+        nextPlanDate: nextLessonPlan.trim() ? nextPlanDate : "",
         vocabTotal,
         status,
         students: students.map((student) => {
@@ -342,7 +365,13 @@ export function DailyLogForm({
               <input
                 type="date"
                 value={classDate}
-                onChange={(event) => setClassDate(event.target.value)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setClassDate(value);
+                  if (!planDateTouched && value) {
+                    setNextPlanDate(nextClassDateAfter(scheduleDays, value) ?? "");
+                  }
+                }}
                 className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8]"
                 required
               />
@@ -408,9 +437,29 @@ export function DailyLogForm({
               />
             </label>
 
-            <label className="block">
-              <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
-                <CircleArrowRight className="h-3.5 w-3.5 text-[#3e7d6b]" /> 다음 수업 계획
+            <div className="block min-w-0">
+              <span className="mb-2 flex min-h-[30px] flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                <span className="flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
+                  <CircleArrowRight className="h-3.5 w-3.5 text-[#3e7d6b]" /> 다음 수업 계획
+                </span>
+                {/* 계획 날짜 — 기본은 수업일 이후 실제 다음 수업일, 눌러서 변경 가능 */}
+                <span
+                  className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#d8ebe0] bg-[#f4faf7] px-2.5 text-xs font-medium text-[#3e7d6b]"
+                  onClick={(event) => event.preventDefault()}
+                >
+                  <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <input
+                    type="date"
+                    aria-label="다음 수업 계획 날짜 선택"
+                    value={nextPlanDate}
+                    min={addDaysStr(classDate, 1)}
+                    onChange={(event) => {
+                      setNextPlanDate(event.target.value);
+                      setPlanDateTouched(true);
+                    }}
+                    className="min-w-0 max-w-[140px] bg-transparent text-xs font-medium text-[#3e7d6b] outline-none"
+                  />
+                </span>
               </span>
               <textarea
                 value={nextLessonPlan}
@@ -419,7 +468,7 @@ export function DailyLogForm({
                 className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                 placeholder={"Unit 3 p.54~59 / 관계대명사 목적격 복습"}
               />
-            </label>
+            </div>
           </div>
 
           <label className="block">

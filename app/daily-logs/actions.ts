@@ -143,6 +143,7 @@ export async function updateHistoryLogAction(input: HistoryLogUpdateInput) {
       memo: parsed.data.memo ?? "",
       homework: parsed.data.homework ?? "",
       nextLessonPlan: parsed.data.nextLessonPlan ?? "",
+      nextPlanDate: parsed.data.nextPlanDate || null,
     });
 
     revalidatePath("/daily-logs");

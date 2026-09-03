@@ -12,6 +12,7 @@ import {
   getPraisesForDailyLog,
 } from "@/lib/supabase/queries/daily-logs";
 import { getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
+import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
 
 export default async function EditDailyLogPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -78,7 +79,11 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
 
   // Students who joined the group after this log was written can still be added.
   const knownIds = new Set(students.map((student) => student.studentId));
-  const currentMembers = await getGroupStudentsForCurrentUser(log.group_id);
+  const [currentMembers, groupSchedules] = await Promise.all([
+    getGroupStudentsForCurrentUser(log.group_id),
+    // 다음 수업 계획 기본 날짜 계산용 시간표 (legacy row는 저장 전까지 DB 미변경)
+    getGroupSchedules(log.group_id),
+  ]);
 
   for (const member of currentMembers) {
     if (!member.archived && !knownIds.has(member.id)) {
@@ -104,6 +109,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           classDate={log.class_date}
           group={{ id: log.group_id, name: log.group?.name ?? "수업 그룹", grade: log.group?.grade }}
           students={students}
+          scheduleDays={groupSchedules.map((slot) => slot.day_of_week)}
           initial={{
             title: log.title ?? "",
             // migration 미적용 legacy row도 수업 내용을 잃지 않게 병합해 편집한다
@@ -112,6 +118,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
             memo: log.memo ?? "",
             homework: log.homework ?? "",
             nextLessonPlan: log.next_lesson_plan ?? "",
+            nextPlanDate: log.next_plan_date ?? "",
             vocabTotal: log.vocab_total === null ? "" : String(log.vocab_total),
           }}
         />

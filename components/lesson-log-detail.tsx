@@ -150,6 +150,9 @@ export function LessonLogDetail({
               <div className="rounded-2xl bg-[#eef7f2] p-3.5">
                 <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#3e7d6b]">
                   <CircleArrowRight className="h-3.5 w-3.5" aria-hidden /> 다음 수업 계획
+                  {detail.next_plan_date ? (
+                    <span className="normal-case tracking-normal text-[#5f9683]">· {formatKoreanDate(detail.next_plan_date)}</span>
+                  ) : null}
                 </div>
                 <div className="mt-1.5 whitespace-pre-line text-sm leading-6 text-[#33473f]">
                   {detail.next_lesson_plan}

@@ -388,6 +388,11 @@ export default async function GroupDetailPage({
                             <span className={item.completed ? "line-through opacity-60" : undefined}>
                               {item.text}
                             </span>
+                            {item.dueDate ? (
+                              <span className="ml-auto shrink-0 rounded-full bg-[#eef2fb] px-2 py-0.5 text-[10px] font-medium text-[#5b6fae]">
+                                📅 {formatKoreanDate(item.dueDate)}
+                              </span>
+                            ) : null}
                           </button>
                         </form>
                         <form action={deletePreparationItemAction.bind(null, id, item.id)}>

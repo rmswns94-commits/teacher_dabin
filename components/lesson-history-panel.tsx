@@ -66,6 +66,7 @@ type EditValues = {
   defaultProgress: string;
   homework: string;
   nextLessonPlan: string;
+  nextPlanDate: string;
   memo: string;
 };
 
@@ -237,6 +238,7 @@ export function LessonHistoryWorkspace({
       defaultProgress: mergeLegacyLessonContent(selected.default_progress, selected.lesson_content),
       homework: selected.homework ?? "",
       nextLessonPlan: selected.next_lesson_plan ?? "",
+      nextPlanDate: selected.next_plan_date ?? "",
       memo: selected.memo ?? "",
     };
     setEditValues(values);
@@ -291,6 +293,7 @@ export function LessonHistoryWorkspace({
         defaultProgress: editValues.defaultProgress,
         homework: editValues.homework,
         nextLessonPlan: editValues.nextLessonPlan,
+        nextPlanDate: editValues.nextPlanDate,
         memo: editValues.memo,
       });
       if ("error" in result) {
@@ -432,7 +435,14 @@ export function LessonHistoryWorkspace({
                     }
                   />
                   <Section label="오늘 숙제" value={selected.homework} />
-                  <Section label="다음 수업 계획" value={selected.next_lesson_plan} />
+                  <Section
+                    label={
+                      selected.next_plan_date
+                        ? `다음 수업 계획 · ${formatKoreanDate(selected.next_plan_date)}`
+                        : "다음 수업 계획"
+                    }
+                    value={selected.next_lesson_plan}
+                  />
                   <Section label="수업 메모" value={selected.memo} />
                 </div>
 
@@ -610,6 +620,19 @@ export function LessonHistoryWorkspace({
                     setEditValues((prev) => prev && { ...prev, nextLessonPlan: value })
                   }
                 />
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-[#7c6d69]">
+                    다음 수업 계획 날짜
+                  </span>
+                  <input
+                    type="date"
+                    value={editValues.nextPlanDate}
+                    onChange={(event) =>
+                      setEditValues((prev) => prev && { ...prev, nextPlanDate: event.target.value })
+                    }
+                    className="w-full min-w-0 max-w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2 text-sm outline-none focus:border-[#c9b9e8]"
+                  />
+                </label>
                 <EditField
                   label="수업 메모"
                   rows={2}
