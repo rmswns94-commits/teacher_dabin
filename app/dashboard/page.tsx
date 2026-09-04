@@ -12,6 +12,7 @@ import {
 import { AppShell } from "@/components/app-shell";
 import { Doodle, Tape } from "@/components/doodle";
 import { EncouragementCard } from "@/components/encouragement-card";
+import { CurrentClassRemaining } from "@/components/current-class-remaining";
 import { NextClassCountdown } from "@/components/next-class-countdown";
 import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -291,40 +292,52 @@ export default async function DashboardPage() {
                   </span>
                 </div>
 
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <Link
-                    href={`/groups/${hero.group.id}`}
-                    className="text-2xl font-semibold tracking-[-0.02em] text-[#2d2928] hover:underline"
-                  >
-                    {hero.group.name}
-                  </Link>
-                  <NextClassCountdown startEpoch={hero.startEpoch} endEpoch={hero.endEpoch} />
-                </div>
-
-                <div className="mt-1.5 text-[15px] tabular-nums text-[#665b5a]">
-                  {occurrenceDateLabel(hero)} · {formatTimeRange(hero.schedule.start_time, hero.schedule.end_time)}
-                </div>
-
-                <div className="mt-5">
-                  {isCurrentClass ? (
-                    <Button className="gap-2" asChild>
+                {/* 좌: 수업 정보 · 우: (수업 중일 때) 남은 수업 시간 블록 — 좁으면 아래로 wrap */}
+                <div className="mt-3 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-3">
                       <Link
-                        href={
-                          heroTodayLog
-                            ? `/daily-logs/${heroTodayLog.id}/edit`
-                            : `/daily-logs/new?groupId=${hero.group.id}`
-                        }
+                        href={`/groups/${hero.group.id}`}
+                        className="text-2xl font-semibold tracking-[-0.02em] text-[#2d2928] hover:underline"
                       >
-                        <NotebookPen className="h-4 w-4" /> 수업일지 열기 →
+                        {hero.group.name}
                       </Link>
-                    </Button>
-                  ) : (
-                    <Button className="gap-2" asChild>
-                      <Link href={`/groups/${hero.group.id}`}>
-                        <ListTodo className="h-4 w-4" /> 수업 준비 열기 →
-                      </Link>
-                    </Button>
-                  )}
+                      <NextClassCountdown startEpoch={hero.startEpoch} endEpoch={hero.endEpoch} />
+                    </div>
+
+                    <div className="mt-1.5 text-[15px] tabular-nums text-[#665b5a]">
+                      {occurrenceDateLabel(hero)} · {formatTimeRange(hero.schedule.start_time, hero.schedule.end_time)}
+                    </div>
+
+                    <div className="mt-5">
+                      {isCurrentClass ? (
+                        <Button className="gap-2" asChild>
+                          <Link
+                            href={
+                              heroTodayLog
+                                ? `/daily-logs/${heroTodayLog.id}/edit`
+                                : `/daily-logs/new?groupId=${hero.group.id}`
+                            }
+                          >
+                            <NotebookPen className="h-4 w-4" /> 수업일지 열기 →
+                          </Link>
+                        </Button>
+                      ) : (
+                        <Button className="gap-2" asChild>
+                          <Link href={`/groups/${hero.group.id}`}>
+                            <ListTodo className="h-4 w-4" /> 수업 준비 열기 →
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {isCurrentClass ? (
+                    <CurrentClassRemaining
+                      startEpoch={hero.startEpoch}
+                      endEpoch={hero.endEpoch}
+                    />
+                  ) : null}
                 </div>
               </div>
             </div>
