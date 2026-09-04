@@ -208,6 +208,41 @@ function SegmentedToggle({
   );
 }
 
+// 상단/하단 공용 저장 액션 — 새 form/state/action 없이 부모의 handler·pending을
+// 그대로 받는 presentational 컴포넌트. 두 위치 모두 같은 함수 reference를 사용한다.
+function SaveActions({
+  isPending,
+  onDraft,
+  onFinal,
+}: {
+  isPending: boolean;
+  onDraft: () => void;
+  onFinal: () => void;
+}) {
+  return (
+    <>
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={isPending}
+        onClick={onDraft}
+        className="min-h-[44px]"
+      >
+        {isPending ? "저장 중..." : "임시 저장"}
+      </Button>
+      <Button
+        type="button"
+        disabled={isPending}
+        onClick={onFinal}
+        className="min-h-[44px] gap-2"
+      >
+        <CheckCheck className="h-4 w-4" />
+        수업 기록 완료
+      </Button>
+    </>
+  );
+}
+
 export function DailyLogForm({
   dailyLogId,
   classDate: initialClassDate,
@@ -603,22 +638,32 @@ export function DailyLogForm({
         composingRef.current = false;
       }}
     >
-      {/* 자동 임시저장 상태 — final 저장과 별개인 background 보호 표시 */}
-      {autosave.status !== "idle" ? (
-        <div className="-mb-3 flex justify-end text-[11px]">
-          {autosave.status === "saving" ? (
-            <span className="flex items-center gap-1 text-[#a79996]">
-              <Cloud className="h-3 w-3" aria-hidden /> 저장 중...
-            </span>
-          ) : autosave.status === "saved" ? (
-            <span className="flex items-center gap-1 text-[#7ba58f]">
-              <Cloud className="h-3 w-3" aria-hidden /> 임시저장됨 · {autosave.savedAtLabel}
-            </span>
-          ) : (
-            <span className="text-[#b0766f]">임시저장 실패 · 입력 내용은 화면에 남아 있어요</span>
-          )}
-        </div>
-      ) : null}
+      {/* 상단 저장 액션 — 하단과 완전히 동일한 handler/pending 공유 (긴 폼에서
+          아래까지 내려가지 않아도 저장 가능). 자동 임시저장 상태도 같은 줄에 표시 */}
+      <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+        {autosave.status !== "idle" ? (
+          <span className="text-[11px]">
+            {autosave.status === "saving" ? (
+              <span className="flex items-center gap-1 text-[#a79996]">
+                <Cloud className="h-3 w-3" aria-hidden /> 저장 중...
+              </span>
+            ) : autosave.status === "saved" ? (
+              <span className="flex items-center gap-1 text-[#7ba58f]">
+                <Cloud className="h-3 w-3" aria-hidden /> 임시저장됨 · {autosave.savedAtLabel}
+              </span>
+            ) : (
+              <span className="text-[#b0766f]">임시저장 실패 · 입력 내용은 화면에 남아 있어요</span>
+            )}
+          </span>
+        ) : null}
+        <span className="flex flex-wrap items-center justify-end gap-2">
+          <SaveActions
+            isPending={isPending}
+            onDraft={() => save("draft")}
+            onFinal={() => setShowSummary(true)}
+          />
+        </span>
+      </div>
 
       {autoRestored && draft ? (
         <div className="rounded-2xl border border-[#d8ebe0] bg-[#f0faf5] px-4 py-2.5 text-sm text-[#2f6d54]">
@@ -1327,13 +1372,11 @@ export function DailyLogForm({
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2 pb-8">
-        <Button type="button" variant="secondary" disabled={isPending} onClick={() => save("draft")}>
-          {isPending ? "저장 중..." : "임시 저장"}
-        </Button>
-        <Button type="button" disabled={isPending} onClick={() => setShowSummary(true)} className="gap-2">
-          <CheckCheck className="h-4 w-4" />
-          수업 기록 완료
-        </Button>
+        <SaveActions
+          isPending={isPending}
+          onDraft={() => save("draft")}
+          onFinal={() => setShowSummary(true)}
+        />
         <span className="text-xs text-[#8a7b77]">
           임시 저장한 일지는 목록에서 &quot;작성 중&quot;으로 표시돼요.
         </span>
