@@ -12,7 +12,7 @@ import {
 import { AppShell } from "@/components/app-shell";
 import { Doodle, Tape } from "@/components/doodle";
 import { EncouragementCard } from "@/components/encouragement-card";
-import { CurrentClassRemaining } from "@/components/current-class-remaining";
+import { ClassStatusPanel } from "@/components/current-class-remaining";
 import { NextClassCountdown } from "@/components/next-class-countdown";
 import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import { DashboardTodoCard } from "@/components/dashboard-todo-card";
 import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
 import { currentEpochMs } from "@/lib/todo-window";
 import { getUpcomingExamEvents } from "@/lib/supabase/queries/calendar-events";
-import { DAY_LABELS, formatTimeRange, getScheduleOverview, type ClassOccurrence } from "@/lib/schedule";
+import { DAY_LABELS, formatTimeHM, formatTimeRange, getScheduleOverview, type ClassOccurrence } from "@/lib/schedule";
 import { getDisplayName } from "@/lib/supabase/auth";
 import { getDashboardOverview, getDashboardStats } from "@/lib/supabase/queries/dashboard";
 import { getCurrentUserGroups, getGroupLatestProgress } from "@/lib/supabase/queries/groups";
@@ -294,7 +294,7 @@ export default async function DashboardPage() {
 
                 {/* 좌: 수업 정보 · 우: (수업 중일 때) 남은 수업 시간 블록 — 좁으면 아래로 wrap */}
                 <div className="mt-3 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
-                  <div className="min-w-0">
+                  <div className="min-w-[230px] max-w-full flex-shrink-0">
                     <div className="flex flex-wrap items-center gap-3">
                       <Link
                         href={`/groups/${hero.group.id}`}
@@ -332,12 +332,21 @@ export default async function DashboardPage() {
                     </div>
                   </div>
 
-                  {isCurrentClass ? (
-                    <CurrentClassRemaining
-                      startEpoch={hero.startEpoch}
-                      endEpoch={hero.endEpoch}
-                    />
-                  ) : null}
+                  {/* 넓은 수업 상태 패널 — 수업 중/수업 사이/하루 종료 전환은 client에서 */}
+                  <ClassStatusPanel
+                    startEpoch={hero.startEpoch}
+                    endEpoch={hero.endEpoch}
+                    next={
+                      followUp
+                        ? {
+                            startEpoch: followUp.startEpoch,
+                            startLabel: formatTimeHM(followUp.schedule.start_time),
+                            daysFromNow: followUp.daysFromNow,
+                          }
+                        : null
+                    }
+                    allDone={allDoneToday}
+                  />
                 </div>
               </div>
             </div>
