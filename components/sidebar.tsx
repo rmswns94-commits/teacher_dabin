@@ -1,9 +1,10 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   ListTodo,
+  Settings,
   CalendarCheck,
   ChevronDown,
   ChevronRight,
@@ -11,19 +12,14 @@ import {
   FolderKanban,
   Heart,
   Home,
-  LogOut,
   Menu,
   NotebookPen,
   Sprout,
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import { FeedbackDialog } from "@/components/feedback-dialog";
-import { InstallAppButton } from "@/components/install-app";
-import { createClient } from "@/lib/supabase/client";
-import { getDisplayName } from "@/lib/supabase/auth";
 import { groupIconOf } from "@/lib/group-icons";
 import { cn } from "@/lib/utils";
 
@@ -103,9 +99,6 @@ export function Sidebar({
   pendingMakeupCount?: number;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [userName, setUserName] = useState("선생님");
-  const [userEmail, setUserEmail] = useState("");
   const inGroupsSection = pathname === "/groups" || pathname.startsWith("/groups/");
   const [groupsOpen, setGroupsOpen] = useState(inGroupsSection);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -119,22 +112,6 @@ export function Sidebar({
     }
   }
 
-  useEffect(() => {
-    const supabase = createClient();
-
-    const loadUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        setUserName(getDisplayName(user));
-        setUserEmail(user.email ?? "");
-      }
-    };
-
-    void loadUser();
-  }, []);
 
   // Entering the groups section (e.g. via dashboard quick action) opens the tree.
   // Adjust-state-during-render pattern instead of an effect.
@@ -146,12 +123,6 @@ export function Sidebar({
     }
   }
 
-  const handleSignOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  };
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
@@ -340,37 +311,18 @@ export function Sidebar({
                 isActive={isActive("/pretty-words")}
               />
             </li>
+            <li>
+              <NavLink
+                label="설정"
+                href="/settings"
+                icon={Settings}
+                isActive={isActive("/settings")}
+              />
+            </li>
           </ul>
         </div>
       </nav>
 
-      <div className="border-t border-[#e6e6ea] p-4 space-y-3">
-        <div className="flex items-center gap-2.5 rounded-xl bg-[#f4f4f6] px-3 py-2.5 text-xs text-[#5c5c66]">
-          <span
-            aria-hidden
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2b2b31] text-sm font-semibold text-white shadow-sm"
-          >
-            {userName.trim().charAt(0) || "선"}
-          </span>
-          <div className="min-w-0">
-            <div className="truncate font-semibold text-[#232327]">{userName}</div>
-            {userEmail ? <div className="truncate text-[11px] text-[#8a8a93]">{userEmail}</div> : null}
-          </div>
-        </div>
-
-        <InstallAppButton />
-
-        <FeedbackDialog />
-
-        <button
-          type="button"
-          onClick={handleSignOut}
-          className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm text-[#7a7a84] transition hover:bg-[#f4f4f6] hover:text-[#4c4c55]"
-        >
-          <LogOut className="h-4 w-4" />
-          로그아웃
-        </button>
-      </div>
       </aside>
     </>
   );
