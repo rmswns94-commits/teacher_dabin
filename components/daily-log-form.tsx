@@ -723,8 +723,7 @@ export function DailyLogForm({
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <label className="block">
-              {/* 옆 칸(다음 수업 계획)의 날짜 배지 header와 높이를 맞춰 textarea 정렬 유지 */}
-              <span className="mb-2 flex min-h-[38px] items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
+              <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
                 <NotebookTabs className="h-3.5 w-3.5 text-[#6652b9]" /> 오늘 숙제
               </span>
               <textarea
@@ -737,25 +736,8 @@ export function DailyLogForm({
             </label>
 
             <div className="block min-w-0">
-              <span className="mb-2 flex min-h-[38px] flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-                <span className="flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
-                  <CircleArrowRight className="h-3.5 w-3.5 text-[#3e7d6b]" /> 다음 수업 계획
-                </span>
-                {/* 계획 날짜 — 기본은 수업일 이후 실제 다음 수업일, 눌러서 변경 가능 */}
-                <span className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#d8ebe0] bg-[#f4faf7] px-2.5 text-xs font-medium text-[#3e7d6b]">
-                  <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                  <input
-                    type="date"
-                    aria-label="다음 수업 계획 날짜 선택"
-                    value={nextPlanDate}
-                    min={addDaysStr(classDate, 1)}
-                    onChange={(event) => {
-                      setNextPlanDate(event.target.value);
-                      setPlanDateTouched(true);
-                    }}
-                    className="min-w-0 max-w-[140px] bg-transparent text-xs font-medium text-[#3e7d6b] outline-none"
-                  />
-                </span>
+              <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
+                <CircleArrowRight className="h-3.5 w-3.5 text-[#3e7d6b]" /> 다음 수업 계획
               </span>
               <textarea
                 value={nextLessonPlan}
@@ -764,6 +746,23 @@ export function DailyLogForm({
                 className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                 placeholder={"Unit 3 p.54~59 / 관계대명사 목적격 복습"}
               />
+              {/* 계획 날짜 — header에 두면 iPad 가로(열폭 ~312px)에서 줄바꿈이 생겨
+                  textarea 아래 전용 줄로 분리. 기본은 수업일 이후 실제 다음 수업일 */}
+              <span className="mt-2 flex min-h-[38px] w-fit max-w-full items-center gap-1.5 rounded-xl border border-[#d8ebe0] bg-[#f4faf7] px-2.5 text-xs font-medium text-[#3e7d6b]">
+                <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="shrink-0">계획 날짜</span>
+                <input
+                  type="date"
+                  aria-label="다음 수업 계획 날짜 선택"
+                  value={nextPlanDate}
+                  min={addDaysStr(classDate, 1)}
+                  onChange={(event) => {
+                    setNextPlanDate(event.target.value);
+                    setPlanDateTouched(true);
+                  }}
+                  className="min-w-0 max-w-[140px] bg-transparent text-xs font-medium text-[#3e7d6b] outline-none"
+                />
+              </span>
             </div>
           </div>
 
