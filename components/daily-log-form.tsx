@@ -654,7 +654,8 @@ export function DailyLogForm({
         <CardContent className="space-y-4">
           {/* iPad Safari date input은 intrinsic min-width가 커서, grid 자식과 input에
               min-w-0/max-w-full이 없으면 옆 칸(수업 그룹)을 침범한다 — 학생 폼과 동일 패턴 */}
-          <div className="grid gap-4 md:grid-cols-2">
+          {/* iPad portrait에서는 1열 stack — 겹침 방지가 2열 유지보다 우선 */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <label className="block min-w-0">
               <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">날짜</span>
               <input
@@ -718,7 +719,7 @@ export function DailyLogForm({
             </label>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <label className="block">
               {/* 옆 칸(다음 수업 계획)의 날짜 배지 header와 높이를 맞춰 textarea 정렬 유지 */}
               <span className="mb-2 flex min-h-[38px] items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">

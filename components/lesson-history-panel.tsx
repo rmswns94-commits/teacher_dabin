@@ -693,8 +693,7 @@ export function LessonHistoryWorkspace({
             <Button
               type="button"
               variant="secondary"
-              size="sm"
-              className="gap-1.5"
+              className="min-h-[42px] gap-1.5"
               aria-label="이전 수업 기록 열기"
               onClick={() => setOpen(true)}
             >
