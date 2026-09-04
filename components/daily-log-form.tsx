@@ -654,8 +654,10 @@ export function DailyLogForm({
         <CardContent className="space-y-4">
           {/* iPad Safari date input은 intrinsic min-width가 커서, grid 자식과 input에
               min-w-0/max-w-full이 없으면 옆 칸(수업 그룹)을 침범한다 — 학생 폼과 동일 패턴 */}
-          {/* iPad portrait에서는 1열 stack — 겹침 방지가 2열 유지보다 우선 */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* 날짜는 날짜 문자열+Safari native control이 들어갈 만큼만(고정 180px 트랙),
+              수업 그룹이 남은 폭(minmax(0,1fr))을 사용한다. lg 미만은 1열 stack —
+              겹침이 구조적으로 불가능하고, 두 컨트롤은 min-h로 높이를 정확히 맞춘다. */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[180px_minmax(0,1fr)]">
             <label className="block min-w-0">
               <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">날짜</span>
               <input
@@ -668,14 +670,14 @@ export function DailyLogForm({
                     setNextPlanDate(nextClassDateAfter(scheduleDays, value) ?? "");
                   }
                 }}
-                className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8]"
+                className="min-h-[46px] w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8]"
                 required
               />
             </label>
 
             <div className="block min-w-0">
               <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">수업 그룹</span>
-              <div className="flex min-w-0 items-center justify-between gap-2 rounded-2xl border border-[#ece0db] bg-[#f8f3ef] px-3 py-2.5 text-sm text-[#2b2323]">
+              <div className="flex min-h-[46px] min-w-0 items-center justify-between gap-2 rounded-2xl border border-[#ece0db] bg-[#f8f3ef] px-3 py-2.5 text-sm text-[#2b2323]">
                 <span className="min-w-0 truncate font-medium">{group.name}</span>
                 {!dailyLogId ? (
                   <Link
