@@ -35,13 +35,11 @@ const topItems = [{ label: "오늘", href: "/dashboard", icon: Home }];
 
 const lessonItems = [
   { label: "수업 일지", href: "/daily-logs", icon: NotebookPen },
+  { label: "오늘 할 일", href: "/todos", icon: ListTodo },
   { label: "학생", href: "/students", icon: Users },
 ];
 
-const afterGroupItems = [
-  { label: "오늘 할 일", href: "/todos", icon: ListTodo },
-  { label: "보충수업", href: "/makeups", icon: CalendarCheck },
-];
+const afterGroupItems = [{ label: "보충수업", href: "/makeups", icon: CalendarCheck }];
 
 const materialItems = [{ label: "영어 지문", href: "/passages", icon: FileText }];
 
