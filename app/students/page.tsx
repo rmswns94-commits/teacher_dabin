@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDownUp, Cake, ChevronRight, Search } from "lucide-react";
+import { ArrowDown, ArrowDownUp, ArrowUp, Cake, ChevronRight, Search } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
@@ -58,9 +58,22 @@ export default async function StudentsPage({
   const activeFilter = ["attention", "birthday", "unassigned"].includes(params.filter ?? "")
     ? (params.filter as "attention" | "birthday" | "unassigned")
     : "";
-  const activeSort = ["grade", "group"].includes(params.sort ?? "")
-    ? (params.sort as "grade" | "group")
+  // 정렬 파라미터: 기준(이름/학년/반) + 방향. 활성 pill을 다시 누르면 역순으로 토글된다.
+  const activeSortParam = [
+    "name_desc",
+    "grade",
+    "grade_desc",
+    "group",
+    "group_desc",
+  ].includes(params.sort ?? "")
+    ? (params.sort as "name_desc" | "grade" | "grade_desc" | "group" | "group_desc")
     : "";
+  const sortBase = activeSortParam.startsWith("grade")
+    ? "grade"
+    : activeSortParam.startsWith("group")
+      ? "group"
+      : "";
+  const sortDesc = activeSortParam.endsWith("desc");
 
   const today = todayDateString();
   const since = addDaysStr(today, -30);
@@ -141,19 +154,23 @@ export default async function StudentsPage({
     return names.length ? [...names].sort((a, b) => a.localeCompare(b, "ko"))[0] : null;
   };
 
+  // 역순은 기준 키에만 적용 — 같은 학년/반 안에서 이름은 항상 가나다순, 미배정은 항상 맨 뒤
   visibleStudents = [...visibleStudents].sort((a, b) => {
-    if (activeSort === "grade") {
-      return (
-        (gradeRank.get(a.grade) ?? 99) - (gradeRank.get(b.grade) ?? 99) || byName(a, b)
-      );
+    if (sortBase === "grade") {
+      const diff = (gradeRank.get(a.grade) ?? 99) - (gradeRank.get(b.grade) ?? 99);
+      return (sortDesc ? -diff : diff) || byName(a, b);
     }
-    if (activeSort === "group") {
+    if (sortBase === "group") {
       const keyA = groupSortKey(a);
       const keyB = groupSortKey(b);
       if (keyA === null || keyB === null) {
         return keyA === keyB ? byName(a, b) : keyA === null ? 1 : -1;
       }
-      return keyA.localeCompare(keyB, "ko") || byName(a, b);
+      const diff = keyA.localeCompare(keyB, "ko");
+      return (sortDesc ? -diff : diff) || byName(a, b);
+    }
+    if (sortDesc) {
+      return byName(b, a); // 이름 역순 (ㅎ→ㄱ)
     }
     // 이름순(기본) — 생일 필터에서는 생일 날짜순이 더 자연스러워 그대로 유지
     if (activeFilter === "birthday") {
@@ -171,9 +188,19 @@ export default async function StudentsPage({
     return qs ? `/students?${qs}` : "/students";
   };
   const filterHref = (key: string) =>
-    buildHref({ filter: key, sort: activeSort, q: params.q });
-  const sortHref = (key: string) =>
-    buildHref({ filter: activeFilter, sort: key, q: params.q });
+    buildHref({ filter: key, sort: activeSortParam, q: params.q });
+  // 비활성 pill 클릭 → 그 기준 오름차순, 활성 pill 다시 클릭 → 역순 ↔ 오름차순 토글
+  const sortHref = (key: string) => {
+    const target =
+      sortBase === key && !sortDesc
+        ? key
+          ? `${key}_desc`
+          : "name_desc"
+        : sortBase === key && sortDesc
+          ? key
+          : key;
+    return buildHref({ filter: activeFilter, sort: target, q: params.q });
+  };
 
   const emptyMessage =
     activeFilter === "attention"
@@ -207,7 +234,7 @@ export default async function StudentsPage({
             <CardContent className="py-4">
               <form action="/students" className="flex items-center gap-3">
                 {activeFilter ? <input type="hidden" name="filter" value={activeFilter} /> : null}
-                {activeSort ? <input type="hidden" name="sort" value={activeSort} /> : null}
+                {activeSortParam ? <input type="hidden" name="sort" value={activeSortParam} /> : null}
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f6f0fb] text-[#5e4eb5]">
                   <Search className="h-4 w-4" />
                 </div>
@@ -222,7 +249,7 @@ export default async function StudentsPage({
                 </Button>
                 {q ? (
                   <Button variant="ghost" size="sm" asChild>
-                    <Link href={buildHref({ filter: activeFilter, sort: activeSort })}>
+                    <Link href={buildHref({ filter: activeFilter, sort: activeSortParam })}>
                       전체 보기
                     </Link>
                   </Button>
@@ -264,12 +291,15 @@ export default async function StudentsPage({
             <span aria-hidden className="mx-1 self-center text-[#ddcfc9]">|</span>
 
             {SORTS.map((sortOption) => {
-              const isActive = activeSort === sortOption.key;
+              const isActive = sortBase === sortOption.key;
+              // 활성 pill: 현재 방향 화살표 (다시 누르면 반대로), 비활성: 양방향 아이콘
+              const Icon = isActive ? (sortDesc ? ArrowDown : ArrowUp) : ArrowDownUp;
 
               return (
                 <Link
                   key={sortOption.key}
                   href={sortHref(sortOption.key)}
+                  title={isActive ? "다시 누르면 반대로 정렬돼요" : undefined}
                   className={cn(
                     "flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition",
                     isActive
@@ -277,8 +307,9 @@ export default async function StudentsPage({
                       : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
                   )}
                 >
-                  <ArrowDownUp className="h-3 w-3 opacity-60" aria-hidden />
+                  <Icon className="h-3 w-3 opacity-60" aria-hidden />
                   {sortOption.label}
+                  {isActive && sortDesc ? <span className="opacity-70">역순</span> : null}
                 </Link>
               );
             })}
