@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Hi_Melody } from "next/font/google";
 import "./globals.css";
 
 import { NavHistoryTracker } from "@/components/nav-history-tracker";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 
 const geistSans = Geist({
@@ -56,6 +57,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full text-[#2d2928]">
         <ServiceWorkerRegistration />
         <NavHistoryTracker />
+        <PullToRefresh />
         {children}
       </body>
     </html>
