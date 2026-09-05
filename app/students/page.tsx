@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Cake, ChevronRight, Search } from "lucide-react";
+import { ArrowDownUp, Cake, ChevronRight, Search } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate, formatShortMonthDay, todayDateString } from "@/lib/dates";
-import { formatGrade } from "@/lib/grades";
+import { formatGrade, gradeValues } from "@/lib/grades";
 import { computeStudentStatuses, emptyStudentStatus } from "@/lib/student-status";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getCurrentUserMakeups } from "@/lib/supabase/queries/makeups";
@@ -41,15 +41,25 @@ const FILTERS = [
   { key: "unassigned", label: "미배정" },
 ] as const;
 
+// 정렬 카테고리 — 이름순(기본) / 학년순(초1→고1) / 반순(그룹 이름 가나다, 미배정 맨 뒤)
+const SORTS = [
+  { key: "", label: "이름순" },
+  { key: "grade", label: "학년순" },
+  { key: "group", label: "반순" },
+] as const;
+
 export default async function StudentsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; filter?: string; saved?: string; deleted?: string }>;
+  searchParams?: Promise<{ q?: string; filter?: string; sort?: string; saved?: string; deleted?: string }>;
 }) {
   const params = (await searchParams) ?? {};
   const q = (params.q ?? "").trim().toLowerCase();
   const activeFilter = ["attention", "birthday", "unassigned"].includes(params.filter ?? "")
     ? (params.filter as "attention" | "birthday" | "unassigned")
+    : "";
+  const activeSort = ["grade", "group"].includes(params.sort ?? "")
+    ? (params.sort as "grade" | "group")
     : "";
 
   const today = todayDateString();
@@ -123,20 +133,47 @@ export default async function StudentsPage({
     return matchesSearch(student);
   });
 
-  visibleStudents =
-    activeFilter === "birthday"
-      ? [...visibleStudents].sort((a, b) =>
-          (a.birth_date?.slice(8) ?? "").localeCompare(b.birth_date?.slice(8) ?? ""),
-        )
-      : [...visibleStudents].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  const byName = (a: StudentRecord, b: StudentRecord) => a.name.localeCompare(b.name, "ko");
+  const gradeRank = new Map(gradeValues.map((value, index) => [value as string, index]));
+  // 반순 정렬 키: 소속 그룹 중 가나다순 첫 그룹 이름 (미배정 = null → 맨 뒤로)
+  const groupSortKey = (student: StudentRecord) => {
+    const names = groupsByStudent.get(student.id) ?? [];
+    return names.length ? [...names].sort((a, b) => a.localeCompare(b, "ko"))[0] : null;
+  };
 
-  const filterHref = (key: string) => {
+  visibleStudents = [...visibleStudents].sort((a, b) => {
+    if (activeSort === "grade") {
+      return (
+        (gradeRank.get(a.grade) ?? 99) - (gradeRank.get(b.grade) ?? 99) || byName(a, b)
+      );
+    }
+    if (activeSort === "group") {
+      const keyA = groupSortKey(a);
+      const keyB = groupSortKey(b);
+      if (keyA === null || keyB === null) {
+        return keyA === keyB ? byName(a, b) : keyA === null ? 1 : -1;
+      }
+      return keyA.localeCompare(keyB, "ko") || byName(a, b);
+    }
+    // 이름순(기본) — 생일 필터에서는 생일 날짜순이 더 자연스러워 그대로 유지
+    if (activeFilter === "birthday") {
+      return (a.birth_date?.slice(8) ?? "").localeCompare(b.birth_date?.slice(8) ?? "");
+    }
+    return byName(a, b);
+  });
+
+  const buildHref = (next: { filter?: string; sort?: string; q?: string }) => {
     const query = new URLSearchParams();
-    if (key) query.set("filter", key);
-    if (params.q) query.set("q", params.q);
+    if (next.filter) query.set("filter", next.filter);
+    if (next.sort) query.set("sort", next.sort);
+    if (next.q) query.set("q", next.q);
     const qs = query.toString();
     return qs ? `/students?${qs}` : "/students";
   };
+  const filterHref = (key: string) =>
+    buildHref({ filter: key, sort: activeSort, q: params.q });
+  const sortHref = (key: string) =>
+    buildHref({ filter: activeFilter, sort: key, q: params.q });
 
   const emptyMessage =
     activeFilter === "attention"
@@ -170,6 +207,7 @@ export default async function StudentsPage({
             <CardContent className="py-4">
               <form action="/students" className="flex items-center gap-3">
                 {activeFilter ? <input type="hidden" name="filter" value={activeFilter} /> : null}
+                {activeSort ? <input type="hidden" name="sort" value={activeSort} /> : null}
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f6f0fb] text-[#5e4eb5]">
                   <Search className="h-4 w-4" />
                 </div>
@@ -184,7 +222,7 @@ export default async function StudentsPage({
                 </Button>
                 {q ? (
                   <Button variant="ghost" size="sm" asChild>
-                    <Link href={activeFilter ? `/students?filter=${activeFilter}` : "/students"}>
+                    <Link href={buildHref({ filter: activeFilter, sort: activeSort })}>
                       전체 보기
                     </Link>
                   </Button>
@@ -219,6 +257,28 @@ export default async function StudentsPage({
                 >
                   {filter.label}
                   <span className="tabular-nums opacity-70">{count}</span>
+                </Link>
+              );
+            })}
+
+            <span aria-hidden className="mx-1 self-center text-[#ddcfc9]">|</span>
+
+            {SORTS.map((sortOption) => {
+              const isActive = activeSort === sortOption.key;
+
+              return (
+                <Link
+                  key={sortOption.key}
+                  href={sortHref(sortOption.key)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                    isActive
+                      ? "border-[#d3c8ec] bg-[#f2edf9] text-[#5c4ca8]"
+                      : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
+                  )}
+                >
+                  <ArrowDownUp className="h-3 w-3 opacity-60" aria-hidden />
+                  {sortOption.label}
                 </Link>
               );
             })}
