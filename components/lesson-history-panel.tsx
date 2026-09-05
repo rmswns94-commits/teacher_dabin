@@ -65,6 +65,7 @@ type EditValues = {
   title: string;
   defaultProgress: string;
   homework: string;
+  homeworkDueDate: string;
   nextLessonPlan: string;
   nextPlanDate: string;
   memo: string;
@@ -237,6 +238,7 @@ export function LessonHistoryWorkspace({
       // 수정 초기값도 legacy 수업 내용을 병합한 canonical 진도 기준 (기존 수정 화면과 동일)
       defaultProgress: mergeLegacyLessonContent(selected.default_progress, selected.lesson_content),
       homework: selected.homework ?? "",
+      homeworkDueDate: selected.homework_due_date ?? "",
       nextLessonPlan: selected.next_lesson_plan ?? "",
       nextPlanDate: selected.next_plan_date ?? "",
       memo: selected.memo ?? "",
@@ -292,6 +294,7 @@ export function LessonHistoryWorkspace({
         title: editValues.title,
         defaultProgress: editValues.defaultProgress,
         homework: editValues.homework,
+        homeworkDueDate: editValues.homeworkDueDate,
         nextLessonPlan: editValues.nextLessonPlan,
         nextPlanDate: editValues.nextPlanDate,
         memo: editValues.memo,
@@ -434,7 +437,14 @@ export function LessonHistoryWorkspace({
                       "기록된 진도가 없어요."
                     }
                   />
-                  <Section label="오늘 숙제" value={selected.homework} />
+                  <Section
+                    label={
+                      selected.homework_due_date
+                        ? `오늘 숙제 · ${formatKoreanDate(selected.homework_due_date)}`
+                        : "오늘 숙제"
+                    }
+                    value={selected.homework}
+                  />
                   <Section
                     label={
                       selected.next_plan_date
@@ -612,6 +622,19 @@ export function LessonHistoryWorkspace({
                   value={editValues.homework}
                   onChange={(value) => setEditValues((prev) => prev && { ...prev, homework: value })}
                 />
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-[#7c6d69]">
+                    숙제 날짜 (선택)
+                  </span>
+                  <input
+                    type="date"
+                    value={editValues.homeworkDueDate}
+                    onChange={(event) =>
+                      setEditValues((prev) => prev && { ...prev, homeworkDueDate: event.target.value })
+                    }
+                    className="w-full min-w-0 max-w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2 text-sm outline-none focus:border-[#c9b9e8]"
+                  />
+                </label>
                 <EditField
                   label="다음 수업 계획"
                   rows={2}

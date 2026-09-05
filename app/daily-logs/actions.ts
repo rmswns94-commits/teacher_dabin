@@ -156,6 +156,7 @@ export async function updateHistoryLogAction(input: HistoryLogUpdateInput) {
       defaultProgress: parsed.data.defaultProgress ?? "",
       memo: parsed.data.memo ?? "",
       homework: parsed.data.homework ?? "",
+      homeworkDueDate: parsed.data.homeworkDueDate || null,
       nextLessonPlan: parsed.data.nextLessonPlan ?? "",
       nextPlanDate: parsed.data.nextPlanDate || null,
     });

@@ -140,6 +140,9 @@ export function LessonLogDetail({
               <div className="rounded-2xl bg-[#fdf6ec] p-3.5">
                 <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#94702f]">
                   <NotebookTabs className="h-3.5 w-3.5" aria-hidden /> 오늘 숙제
+                  {detail.homework_due_date ? (
+                    <span className="normal-case tracking-normal text-[#ad8c53]">· {formatKoreanDate(detail.homework_due_date)}</span>
+                  ) : null}
                 </div>
                 <div className="mt-1.5 whitespace-pre-line text-sm leading-6 text-[#5c4a2e]">
                   {detail.homework}

@@ -485,14 +485,14 @@ export async function createTodoAction(input: {
 
 // 삭제: 수동 항목은 제거, 일지 연동(linked) 항목은 tombstone(dismissed)으로 전환 —
 // 화면에서는 전부 사라지되, 원본 일지를 단순 재저장해도 부활하지 않게 한다.
-// (원본 Daily Log의 next_lesson_plan/next_plan_date는 기록이므로 건드리지 않는다)
+// (원본 Daily Log의 계획/숙제 필드는 기록이므로 건드리지 않는다)
 export async function deletePreparationItemAction(groupId: string, itemId: string) {
   const items = await getOwnedPreparationItems(groupId);
   const target = items.find((item) => item.id === itemId);
-  const next =
-    target?.source === "daily_log_next_plan"
-      ? items.map((item) => (item.id === itemId ? { ...item, dismissed: true } : item))
-      : items.filter((item) => item.id !== itemId);
+  const isLinked = Boolean(target?.sourceDailyLogId);
+  const next = isLinked
+    ? items.map((item) => (item.id === itemId ? { ...item, dismissed: true } : item))
+    : items.filter((item) => item.id !== itemId);
 
   await updateGroupPreparationItems(groupId, next);
   revalidatePreparation(groupId);

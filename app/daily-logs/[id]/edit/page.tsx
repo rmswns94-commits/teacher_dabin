@@ -119,6 +119,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
             defaultProgress: mergeLegacyLessonContent(log.default_progress, log.lesson_content),
             memo: log.memo ?? "",
             homework: log.homework ?? "",
+            homeworkDueDate: log.homework_due_date ?? "",
             nextLessonPlan: log.next_lesson_plan ?? "",
             nextPlanDate: log.next_plan_date ?? "",
             vocabTotal: log.vocab_total === null ? "" : String(log.vocab_total),

@@ -207,15 +207,21 @@ export async function getDailyLogDetailForCurrentUser(dailyLogId: string) {
   } as DailyLogDetail;
 }
 
-// 다음 수업 계획 ↔ 그룹 준비 항목(To Do) 동기화.
-// identity = sourceDailyLogId (일지당 linked 항목 최대 1개 — upsert/idempotent, 재시도에도 중복 없음).
+// 일지 필드(다음 수업 계획/숙제) ↔ 그룹 준비 항목(To Do) 동기화.
+// identity = sourceDailyLogId + source (일지당 source별 linked 항목 최대 1개 — upsert/idempotent, 재시도에도 중복 없음).
 // planText/planDate가 비면 linked 항목만 제거한다 — Teacher가 직접 만든 수동 항목은 절대 건드리지 않는다.
 // (preparation_items 체크리스트는 완료 이력 보존 정책이 없어, 계획 삭제 시 완료된 linked 항목도 함께 제거된다)
-async function syncNextPlanPreparation(
+const LINKED_ID_PREFIX = {
+  daily_log_next_plan: "nlp",
+  daily_log_homework: "hw",
+} as const;
+
+async function syncLinkedPreparation(
   supabase: NonNullable<Awaited<ReturnType<typeof createServerSupabaseClient>>>,
   userId: string,
   groupId: string,
   dailyLogId: string,
+  source: keyof typeof LINKED_ID_PREFIX,
   planText: string,
   planDate: string | null,
 ) {
@@ -227,12 +233,17 @@ async function syncNextPlanPreparation(
     .maybeSingle();
 
   if (readError || !groupRow) {
-    console.error("syncNextPlanPreparation read error", readError);
+    console.error("syncLinkedPreparation read error", readError);
     return;
   }
 
   const items = (groupRow.preparation_items ?? []) as PreparationItem[];
-  const index = items.findIndex((item) => item.sourceDailyLogId === dailyLogId);
+  // 기존 항목은 전부 next_plan source로 저장돼 있어 source 누락 시 next_plan으로 간주한다
+  const index = items.findIndex(
+    (item) =>
+      item.sourceDailyLogId === dailyLogId &&
+      (item.source ?? "daily_log_next_plan") === source,
+  );
   const existing = index >= 0 ? items[index] : null;
   let next: PreparationItem[] | null = null;
 
@@ -243,12 +254,12 @@ async function syncNextPlanPreparation(
     } else {
       // 신규/변경(삭제된 계획을 실제로 고친 경우 포함) → live 항목으로 생성/갱신
       const linked: PreparationItem = {
-        id: existing ? existing.id : `nlp-${dailyLogId}`,
+        id: existing ? existing.id : `${LINKED_ID_PREFIX[source]}-${dailyLogId}`,
         text: planText,
         completed: existing && !existing.dismissed ? existing.completed : false,
         completedAt: existing && !existing.dismissed ? existing.completedAt ?? null : null,
         dueDate: planDate,
-        source: "daily_log_next_plan",
+        source,
         sourceDailyLogId: dailyLogId,
       };
       const unchanged =
@@ -274,7 +285,7 @@ async function syncNextPlanPreparation(
       .eq("id", groupId)
       .eq("user_id", userId);
     if (writeError) {
-      console.error("syncNextPlanPreparation write error", writeError);
+      console.error("syncLinkedPreparation write error", writeError);
     }
   }
 }
@@ -365,6 +376,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     default_progress: input.defaultProgress?.trim() || null,
     memo: input.memo?.trim() || null,
     homework: input.homework?.trim() || null,
+    homework_due_date: input.homework?.trim() ? input.homeworkDueDate || null : null,
     next_lesson_plan: input.nextLessonPlan?.trim() || null,
     next_plan_date: input.nextPlanDate || null,
     vocab_total: vocabTotal,
@@ -417,14 +429,24 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     dailyLogId = created.id;
   }
 
-  // 다음 수업 계획 → 그룹 준비 항목(To Do) 동기화 (일지당 1개 upsert — 중복/재시도 안전)
-  await syncNextPlanPreparation(
+  // 다음 수업 계획/숙제 → 그룹 준비 항목(To Do) 동기화 (일지당 source별 1개 upsert — 중복/재시도 안전)
+  await syncLinkedPreparation(
     supabase,
     user.id,
     input.groupId,
     dailyLogId!,
+    "daily_log_next_plan",
     input.nextLessonPlan?.trim() ?? "",
     input.nextPlanDate || null,
+  );
+  await syncLinkedPreparation(
+    supabase,
+    user.id,
+    input.groupId,
+    dailyLogId!,
+    "daily_log_homework",
+    input.homework?.trim() ?? "",
+    input.homework?.trim() ? input.homeworkDueDate || null : null,
   );
 
   // 학부모 전달 상태 보존: 이미 "전달 완료"한 기록을 일지 재저장이 pending으로
@@ -691,11 +713,21 @@ export async function deleteDailyLog(dailyLogId: string) {
   }
 
   // 이 일지에서 생성된 linked 준비 항목만 제거 (수동 항목은 보존)
-  await syncNextPlanPreparation(
+  await syncLinkedPreparation(
     supabase,
     user.id,
     existing.group_id as string,
     dailyLogId,
+    "daily_log_next_plan",
+    "",
+    null,
+  );
+  await syncLinkedPreparation(
+    supabase,
+    user.id,
+    existing.group_id as string,
+    dailyLogId,
+    "daily_log_homework",
     "",
     null,
   );
@@ -740,6 +772,7 @@ export type DailyLogHistorySummary = {
   default_progress: string | null;
   lesson_content: string | null;
   homework: string | null;
+  homework_due_date: string | null;
   next_lesson_plan: string | null;
   next_plan_date: string | null;
   memo: string | null;
@@ -765,7 +798,7 @@ export async function getGroupHistoryLogs(
   const { data, error } = await supabase
     .from("daily_logs")
     .select(
-      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, next_lesson_plan, next_plan_date, memo, updated_at, student_lesson_logs(count)",
+      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, homework_due_date, next_lesson_plan, next_plan_date, memo, updated_at, student_lesson_logs(count)",
     )
     .eq("user_id", user.id)
     .eq("group_id", groupId)
@@ -798,6 +831,7 @@ export async function updateDailyLogFields(input: {
   defaultProgress: string;
   memo: string;
   homework: string;
+  homeworkDueDate: string | null;
   nextLessonPlan: string;
   nextPlanDate: string | null;
 }) {
@@ -814,6 +848,8 @@ export async function updateDailyLogFields(input: {
   if (planText && !planDate) {
     throw new Error("다음 수업 계획 날짜를 선택해주세요.");
   }
+  const homeworkText = input.homework.trim();
+  const homeworkDate = homeworkText ? input.homeworkDueDate || null : null;
   const { data: existingRow } = await supabase
     .from("daily_logs")
     .select("class_date")
@@ -826,6 +862,9 @@ export async function updateDailyLogFields(input: {
   if (planDate && planDate <= (existingRow.class_date as string)) {
     throw new Error("다음 수업 계획 날짜는 수업일 이후로 선택해주세요.");
   }
+  if (homeworkDate && homeworkDate <= (existingRow.class_date as string)) {
+    throw new Error("숙제 날짜는 수업일 이후로 선택해주세요.");
+  }
 
   const { data, error } = await supabase
     .from("daily_logs")
@@ -833,14 +872,15 @@ export async function updateDailyLogFields(input: {
       title: input.title.trim() || null,
       default_progress: input.defaultProgress.trim() || null,
       memo: input.memo.trim() || null,
-      homework: input.homework.trim() || null,
+      homework: homeworkText || null,
+      homework_due_date: homeworkDate,
       next_lesson_plan: planText || null,
       next_plan_date: planDate,
     })
     .eq("id", input.dailyLogId)
     .eq("user_id", user.id)
     .select(
-      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, next_lesson_plan, next_plan_date, memo, updated_at",
+      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, homework_due_date, next_lesson_plan, next_plan_date, memo, updated_at",
     )
     .single();
 
@@ -850,13 +890,23 @@ export async function updateDailyLogFields(input: {
   }
 
   // linked 준비 항목도 동일 identity로 갱신/제거
-  await syncNextPlanPreparation(
+  await syncLinkedPreparation(
     supabase,
     user.id,
     (data as { group_id: string }).group_id,
     input.dailyLogId,
+    "daily_log_next_plan",
     planText,
     planDate,
+  );
+  await syncLinkedPreparation(
+    supabase,
+    user.id,
+    (data as { group_id: string }).group_id,
+    input.dailyLogId,
+    "daily_log_homework",
+    homeworkText,
+    homeworkDate,
   );
 
   return data as unknown as Omit<DailyLogHistorySummary, "studentCount">;

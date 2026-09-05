@@ -141,7 +141,7 @@ export default async function DashboardPage() {
 
   // 날짜 있는 To Do(다음 수업 계획 연동 + 직접 등록 dated 항목): due가 "오늘"인 것만 후보로 (노출 시각은 client에서
   // 수업 window 기준 판단 — 수업 종료 후엔 숨기고, DB row는 그대로 둔다).
-  // 시험 일정과는 무관 (source = daily_log_next_plan 항목만).
+  // 시험 일정과는 무관 (source = daily_log_next_plan/daily_log_homework 항목).
   const duePlanItems = allGroups
     .flatMap((planGroup) =>
       (activePreparationItems(planGroup.preparation_items) as PreparationItem[])

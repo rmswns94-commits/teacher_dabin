@@ -50,6 +50,7 @@ export const dailyLogSchema = z
     defaultProgress: shortText(4000, "공통 진도"),
     memo: shortText(1000, "메모"),
     homework: shortText(1000, "오늘 숙제"),
+    homeworkDueDate: dateString.optional().or(z.literal("")),
     nextLessonPlan: shortText(1000, "다음 수업 계획"),
     nextPlanDate: dateString.optional().or(z.literal("")),
     vocabTotal: numberString.optional().or(z.literal("")),
@@ -63,6 +64,10 @@ export const dailyLogSchema = z
     }
     if (value.nextPlanDate && value.nextPlanDate <= value.classDate) {
       ctx.addIssue({ code: "custom", path: ["nextPlanDate"], message: "다음 수업 계획 날짜는 수업일 이후로 선택해주세요." });
+    }
+    // 숙제 날짜는 선택 사항 — 골랐다면 수업일 이후여야 그 날 To Do로 뜬다
+    if (value.homeworkDueDate && value.homeworkDueDate <= value.classDate) {
+      ctx.addIssue({ code: "custom", path: ["homeworkDueDate"], message: "숙제 날짜는 수업일 이후로 선택해주세요." });
     }
 
     const total = value.vocabTotal ? Number(value.vocabTotal) : null;
@@ -144,6 +149,7 @@ export const historyLogUpdateSchema = z.object({
   defaultProgress: shortText(4000, "공통 진도"),
   memo: shortText(1000, "메모"),
   homework: shortText(1000, "오늘 숙제"),
+  homeworkDueDate: dateString.optional().or(z.literal("")),
   nextLessonPlan: shortText(1000, "다음 수업 계획"),
   nextPlanDate: dateString.optional().or(z.literal("")),
 });

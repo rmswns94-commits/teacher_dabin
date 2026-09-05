@@ -154,6 +154,7 @@ type DraftPayload = {
   defaultProgress: string;
   memo: string;
   homework: string;
+  homeworkDueDate: string;
   nextLessonPlan: string;
   nextPlanDate: string;
   vocabTotal: string;
@@ -265,6 +266,7 @@ export function DailyLogForm({
     defaultProgress: string;
     memo: string;
     homework: string;
+    homeworkDueDate?: string;
     nextLessonPlan: string;
     nextPlanDate?: string;
     vocabTotal?: string;
@@ -291,6 +293,10 @@ export function DailyLogForm({
   const [memo, setMemo] = useState(restoredText(restored?.memo, initial?.memo ?? ""));
   const [homework, setHomework] = useState(
     restoredText(restored?.homework, initial?.homework ?? ""),
+  );
+  // 숙제 날짜(선택): 고르면 그 날짜의 To Do로 숙제가 노출된다 — 기본값 없음(옵트인)
+  const [homeworkDueDate, setHomeworkDueDate] = useState(
+    restoredText(restored?.homeworkDueDate, "") || initial?.homeworkDueDate || "",
   );
   const [nextLessonPlan, setNextLessonPlan] = useState(
     restoredText(restored?.nextLessonPlan, initial?.nextLessonPlan ?? ""),
@@ -367,6 +373,7 @@ export function DailyLogForm({
       defaultProgress,
       memo,
       homework,
+      homeworkDueDate,
       nextLessonPlan,
       nextPlanDate,
       vocabTotal,
@@ -375,7 +382,7 @@ export function DailyLogForm({
     if (initialSnapshotRef.current === null) {
       initialSnapshotRef.current = JSON.stringify(formStateRef.current);
     }
-  }, [classDate, title, defaultProgress, memo, homework, nextLessonPlan, nextPlanDate, vocabTotal, entries]);
+  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, nextLessonPlan, nextPlanDate, vocabTotal, entries]);
   useEffect(
     () =>
       registerDirtyCheck(
@@ -466,6 +473,7 @@ export function DailyLogForm({
       defaultProgress: string;
       memo: string;
       homework: string;
+      homeworkDueDate: string;
       nextLessonPlan: string;
       nextPlanDate: string;
       vocabTotal: string;
@@ -476,6 +484,7 @@ export function DailyLogForm({
     if (typeof data.defaultProgress === "string") setDefaultProgress(data.defaultProgress);
     if (typeof data.memo === "string") setMemo(data.memo);
     if (typeof data.homework === "string") setHomework(data.homework);
+    if (typeof data.homeworkDueDate === "string") setHomeworkDueDate(data.homeworkDueDate);
     if (typeof data.nextLessonPlan === "string") setNextLessonPlan(data.nextLessonPlan);
     if (typeof data.nextPlanDate === "string") {
       setNextPlanDate(data.nextPlanDate);
@@ -572,6 +581,11 @@ export function DailyLogForm({
       setError("다음 수업 계획 날짜는 수업일 이후로 선택해주세요.");
       return;
     }
+    // 숙제 날짜는 선택 사항 — 골랐다면 수업일 이후여야 그 날 To Do로 뜬다
+    if (homework.trim() && homeworkDueDate && classDate && homeworkDueDate <= classDate) {
+      setError("숙제 날짜는 수업일 이후로 선택해주세요.");
+      return;
+    }
     finalSavingRef.current = true; // final 저장 중 autosave tick 중단
     startTransition(async () => {
       const result = await saveDailyLogAction({
@@ -583,6 +597,7 @@ export function DailyLogForm({
         defaultProgress,
         memo,
         homework,
+        homeworkDueDate: homework.trim() ? homeworkDueDate : "",
         nextLessonPlan,
         nextPlanDate: nextLessonPlan.trim() ? nextPlanDate : "",
         vocabTotal,
@@ -767,7 +782,7 @@ export function DailyLogForm({
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <label className="block">
+            <div className="block min-w-0">
               <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
                 <NotebookTabs className="h-3.5 w-3.5 text-[#6652b9]" /> 오늘 숙제
               </span>
@@ -778,7 +793,31 @@ export function DailyLogForm({
                 className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                 placeholder={"Workbook p.24~27 / Unit 3 단어 1~30"}
               />
-            </label>
+              {/* 숙제 날짜(선택) — 계획 날짜와 같은 패턴으로 textarea 아래 전용 줄.
+                  고르면 그 날짜의 To Do로 숙제가 뜨고, 비워두면 일지에만 남는다 */}
+              <span className="mt-2 flex min-h-[38px] w-fit max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-xs font-medium text-[#6652b9]">
+                <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="shrink-0">숙제 날짜</span>
+                <input
+                  type="date"
+                  aria-label="숙제 표시 날짜 선택 (선택 사항)"
+                  value={homeworkDueDate}
+                  min={addDaysStr(classDate, 1)}
+                  onChange={(event) => setHomeworkDueDate(event.target.value)}
+                  className="min-w-0 max-w-[140px] bg-transparent text-xs font-medium text-[#6652b9] outline-none"
+                />
+                {homeworkDueDate ? (
+                  <button
+                    type="button"
+                    onClick={() => setHomeworkDueDate("")}
+                    aria-label="숙제 날짜 지우기"
+                    className="shrink-0 rounded-lg px-1 text-[#9b8bc9] transition hover:text-[#6652b9]"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </span>
+            </div>
 
             <div className="block min-w-0">
               <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
