@@ -83,15 +83,26 @@ export function EncouragementCard() {
       <Tape />
       <Card className="relative overflow-hidden border border-solid border-[#f2ddcf] bg-gradient-to-br from-[#fff8f3] to-[#fdf3ea]">
         <CatDoodle variant="heart" className="absolute bottom-1 right-3 h-14 w-16" />
-        <Doodle kind="sparkle" className="absolute right-20 top-4 h-4 w-4 text-[#ecd9c7]" />
+        <Doodle kind="sparkle" className="absolute right-36 top-4 h-4 w-4 text-[#ecd9c7]" />
 
         <CardContent className="relative p-5">
-          <div className="flex items-center gap-2 text-sm font-semibold text-[#7a6455]">
-            <Sprout className="h-4 w-4 text-[#5f8d6f]" aria-hidden />
-            오늘의 한마디
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#7a6455]">
+              <Sprout className="h-4 w-4 text-[#5f8d6f]" aria-hidden />
+              오늘의 한마디
+            </div>
+            <button
+              type="button"
+              onClick={refreshMessage}
+              disabled={!entry}
+              aria-label="다른 한마디 보기"
+              className="flex min-h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs text-[#a2886f] transition hover:bg-white/70 hover:text-[#7a6455] disabled:opacity-40"
+            >
+              다른 한마디 <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+            </button>
           </div>
 
-          <div className="mt-3 flex min-h-14 items-start gap-3">
+          <div className="mt-3 flex min-h-14 items-start gap-3 pr-16">
             {entry ? (
               <span
                 aria-hidden
@@ -105,17 +116,6 @@ export function EncouragementCard() {
             </p>
           </div>
 
-          <div className="mt-2 flex justify-end">
-            <button
-              type="button"
-              onClick={refreshMessage}
-              disabled={!entry}
-              aria-label="다른 한마디 보기"
-              className="flex min-h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs text-[#a2886f] transition hover:bg-white/70 hover:text-[#7a6455] disabled:opacity-40"
-            >
-              다른 한마디 <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-            </button>
-          </div>
         </CardContent>
       </Card>
     </div>
