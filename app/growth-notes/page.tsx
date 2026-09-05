@@ -4,7 +4,9 @@ import { ArrowLeft, ChevronRight } from "lucide-react";
 import { Sparkles } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { DailyQuoteCard } from "@/components/daily-quote-card";
 import { PageHeader } from "@/components/page-header";
+import { dailyQuoteOf } from "@/lib/constants/daily-quotes";
 import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
 import { formatKoreanDate, toDateString, todayDateString } from "@/lib/dates";
 import { vocabPercent } from "@/lib/elementary";
@@ -145,6 +147,9 @@ export default async function GrowthNotesPage({
             title="🌱 성장노트"
             description="이번 주에는 어떤 모습으로 성장해볼까요?"
           />
+
+          {/* 오늘의 명언 — 날짜(KST) 기준 365개 문구 중 하루 하나 */}
+          <DailyQuoteCard quote={dailyQuoteOf(todayDateString())} />
 
           {/* 9개의 성장왕 — 순수 소개 화면 (달성 여부/랭킹/카운트 표시 금지) */}
           <section>
