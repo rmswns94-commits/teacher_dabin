@@ -128,7 +128,7 @@ function buildQuery(params: {
 export default async function DailyLogsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ month?: string; date?: string; groupId?: string; status?: string; log?: string; deleted?: string }>;
+  searchParams?: Promise<{ month?: string; date?: string; groupId?: string; status?: string; log?: string; deleted?: string; saved?: string }>;
 }) {
   const params = (await searchParams) ?? {};
   const today = todayDateString();
@@ -255,6 +255,11 @@ export default async function DailyLogsPage({
           {params.deleted ? (
             <div className="mb-4 rounded-2xl border border-[#d8ebe0] bg-[#f0faf5] px-4 py-3 text-sm text-[#2f6d54]">
               수업일지를 삭제했어요.
+            </div>
+          ) : null}
+          {params.saved ? (
+            <div className="mb-4 rounded-2xl border border-[#d8ebe0] bg-[#f0faf5] px-4 py-3 text-sm text-[#2f6d54]">
+              수업 기록을 저장했어요.
             </div>
           ) : null}
           <PageHeader

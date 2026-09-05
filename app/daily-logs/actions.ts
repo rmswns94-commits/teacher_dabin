@@ -65,6 +65,15 @@ export async function saveDailyLogAction(input: DailyLogFormInput & { draftId?: 
   revalidatePath("/dashboard");
   // 관찰값(질문/배려/노력 등) 변경이 성장노트 주간 판정에 바로 반영되게 한다
   revalidatePath("/growth-notes", "layout");
+
+  // 기존 일지 수정에서 [수업 마무리 완료] → 작업하던 날짜가 선택된 수업일지 달력으로 복귀.
+  // 새 일지 작성은 저장 결과 확인이 우선이라 기존처럼 상세 화면으로 보낸다.
+  if (parsed.data.dailyLogId && parsed.data.status === "completed") {
+    redirect(
+      `/daily-logs?month=${parsed.data.classDate.slice(0, 7)}&date=${parsed.data.classDate}&saved=1`,
+    );
+  }
+
   redirect(`/daily-logs/${dailyLogId}?saved=1`);
 }
 
