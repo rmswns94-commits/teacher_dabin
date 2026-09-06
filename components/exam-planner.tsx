@@ -48,9 +48,10 @@ function buildMondayGrid(month: string): (string | null)[][] {
 
 type SheetMode = { type: "list" } | { type: "add" } | { type: "edit"; planId: string };
 
-type PlanFormValues = { planDate: string; unitLabel: string; title: string; memo: string };
+// MVP 입력은 날짜 + 할 내용 두 가지 (unit_label/memo는 legacy DB 컬럼으로만 보존)
+type PlanFormValues = { planDate: string; title: string };
 
-// 완료 체크 원형 버튼 — 시각은 작아도 hit area를 확보한다 (cell ~36px, Sheet 44px)
+// 완료 체크 원형 버튼 — 시각은 작아도 hit area를 확보한다 (cell ~32px, Sheet 44px)
 function CheckCircle({
   completed,
   title,
@@ -77,14 +78,14 @@ function CheckCircle({
       }}
       className={cn(
         "flex shrink-0 items-center justify-center",
-        size === "cell" ? "-my-1.5 -ml-1 h-9 w-8" : "h-11 w-11 -my-1",
+        size === "cell" ? "-my-1.5 -ml-0.5 h-8 w-7" : "h-11 w-11 -my-1",
       )}
     >
       <span
         aria-hidden
         className={cn(
           "flex items-center justify-center rounded-full border-2 transition",
-          size === "cell" ? "h-[15px] w-[15px]" : "h-[19px] w-[19px]",
+          size === "cell" ? "h-[14px] w-[14px]" : "h-[19px] w-[19px]",
           completed
             ? "border-[#8fc7ab] bg-[#8fc7ab] text-white"
             : "border-[#cdbfe8] bg-white",
@@ -100,7 +101,7 @@ function CheckCircle({
   );
 }
 
-// Sheet 내부 등록/수정 폼 — Sheet 폭이 좁아 전 필드 1열 w-full (2열 강제 금지).
+// Sheet 내부 등록/수정 폼 — 날짜 + 할 내용만 (전 필드 1열 w-full, 2열 강제 금지).
 // responsive 전환으로 인스턴스가 바뀌지 않도록 부모에서 mode가 유지되는 동안 계속 마운트된다.
 function PlanForm({
   initial,
@@ -122,17 +123,7 @@ function PlanForm({
   onDirtyChange: (dirty: boolean) => void;
 }) {
   const [planDate, setPlanDate] = useState(initial.planDate);
-  const [unitLabel, setUnitLabel] = useState(initial.unitLabel);
   const [title, setTitle] = useState(initial.title);
-  const [memo, setMemo] = useState(initial.memo);
-
-  const markDirty = () =>
-    onDirtyChange(
-      planDate !== initial.planDate ||
-        unitLabel !== initial.unitLabel ||
-        title !== initial.title ||
-        memo !== initial.memo,
-    );
 
   return (
     <div className="space-y-3">
@@ -151,44 +142,16 @@ function PlanForm({
       </label>
 
       <label className="block min-w-0">
-        <span className="mb-1 block text-xs font-semibold text-[#7c6d69]">단원/구분 (선택)</span>
-        <input
-          value={unitLabel}
-          onChange={(event) => {
-            setUnitLabel(event.target.value);
-            markDirty();
-          }}
-          maxLength={30}
-          placeholder="5과"
-          className="min-h-[44px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none focus:border-[#c9b9e8]"
-        />
-      </label>
-
-      <label className="block min-w-0">
         <span className="mb-1 block text-xs font-semibold text-[#7c6d69]">할 내용</span>
         <input
           value={title}
           onChange={(event) => {
             setTitle(event.target.value);
-            markDirty();
+            onDirtyChange(event.target.value !== initial.title || planDate !== initial.planDate);
           }}
           maxLength={120}
           placeholder="백발백중 문법 오답 풀이"
           className="min-h-[44px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none focus:border-[#c9b9e8]"
-        />
-      </label>
-
-      <label className="block min-w-0">
-        <span className="mb-1 block text-xs font-semibold text-[#7c6d69]">메모 (선택)</span>
-        <textarea
-          value={memo}
-          onChange={(event) => {
-            setMemo(event.target.value);
-            markDirty();
-          }}
-          rows={2}
-          maxLength={500}
-          className="w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-[#c9b9e8]"
         />
       </label>
 
@@ -202,7 +165,7 @@ function PlanForm({
         <button
           type="button"
           disabled={isPending || !title.trim() || !planDate}
-          onClick={() => onSubmit({ planDate, unitLabel, title, memo })}
+          onClick={() => onSubmit({ planDate, title })}
           className="min-h-[44px] flex-1 rounded-xl bg-[#2b2b31] px-3 text-sm font-medium text-white transition hover:bg-[#3a3a42] disabled:opacity-50"
         >
           {isPending ? "저장 중..." : submitLabel}
@@ -238,6 +201,7 @@ export function ExamPlanner({
   examTypeLabel,
   today,
   initialPlans,
+  plansFailed = false,
 }: {
   examId: string;
   examStart: string;
@@ -245,6 +209,8 @@ export function ExamPlanner({
   examTypeLabel: string;
   today: string; // KST "YYYY-MM-DD" (서버 계산 — client timezone에 의존하지 않는다)
   initialPlans: ExamPrepPlanRecord[];
+  // 계획 조회 자체가 실패한 상태 (0개 empty와 구분 — 조용히 위장하지 않는다)
+  plansFailed?: boolean;
 }) {
   const [plans, setPlans] = useState<ExamPrepPlanRecord[]>(initialPlans);
   const [month, setMonth] = useState(today.slice(0, 7));
@@ -350,22 +316,9 @@ export function ExamPlanner({
   };
 
   const sheetDate = selectedDate ?? today;
+  const sheetPlans = plansByDate.get(sheetDate) ?? [];
   const editingPlan =
     sheetMode?.type === "edit" ? plans.find((p) => p.id === sheetMode.planId) ?? null : null;
-
-  // Sheet용 unit grouping (연속된 같은 단원은 라벨 한 번만 — DB는 unit_label 단순 field 그대로)
-  const sheetGroups = useMemo(() => {
-    const groups: { unit: string | null; items: ExamPrepPlanRecord[] }[] = [];
-    for (const plan of plansByDate.get(sheetDate) ?? []) {
-      const last = groups[groups.length - 1];
-      if (last && last.unit === (plan.unit_label ?? null)) {
-        last.items.push(plan);
-      } else {
-        groups.push({ unit: plan.unit_label ?? null, items: [plan] });
-      }
-    }
-    return groups;
-  }, [plansByDate, sheetDate]);
 
   const navButton =
     "flex h-10 min-w-10 items-center justify-center rounded-xl border border-[#ece0db] bg-white px-2 text-sm font-medium text-[#564d4d] transition hover:bg-[#faf6f3]";
@@ -447,6 +400,13 @@ export function ExamPlanner({
         <p className="px-1 pb-2 text-xs text-[#a2665f]">{toggleError}</p>
       ) : null}
 
+      {plansFailed ? (
+        <div className="mb-3 rounded-2xl border border-[#f0d9d5] bg-[#fff9f7] px-4 py-2.5 text-sm leading-6 text-[#7f5d57]">
+          시험 대비 계획을 불러오지 못했어요. 새로고침해도 계속되면 Supabase SQL Editor에서{" "}
+          <code>20260907_create_exam_prep_plans.sql</code> 적용 여부를 확인해주세요.
+        </div>
+      ) : null}
+
       {/* ── Calendar + (넓으면 우측 Sheet) — 같은 component tree, CSS container query로만 전환 ── */}
       <div className="flex min-w-0 items-start">
         <div className="@container min-w-0 flex-1">
@@ -496,7 +456,7 @@ export function ExamPlanner({
                       }
                     }}
                     className={cn(
-                      "min-h-[88px] min-w-0 cursor-pointer border-b border-r border-[#f3eae3] px-1 py-1 text-left align-top transition first:border-l @min-[540px]:min-h-[100px] @min-[760px]:min-h-[116px] @min-[760px]:px-1.5",
+                      "min-h-[84px] min-w-0 cursor-pointer border-b border-r border-[#f3eae3] px-1 py-0.5 text-left align-top transition first:border-l @min-[540px]:min-h-[96px] @min-[760px]:min-h-[118px]",
                       inExamPeriod ? "bg-[#fbeef3]/55" : "bg-white hover:bg-[#faf7f3]",
                       isSelected && "ring-1 ring-inset ring-[#c9b9e8]",
                     )}
@@ -526,14 +486,16 @@ export function ExamPlanner({
                     </div>
 
                     {dayPlans.length > 0 ? (
-                      <div className="mt-0.5 space-y-px">
-                        {dayPlans.slice(0, 3).map((plan, planIndex) => (
+                      // 폰트는 wrapper에 지정 — globals의 button { font: inherit } 덕에 버튼이 상속받는다
+                      // (button에 직접 준 text-* 유틸리티는 unlayered 규칙에 밀려 적용되지 않음)
+                      <div className="mt-px text-[11px] leading-[14px]">
+                        {dayPlans.slice(0, 4).map((plan, planIndex) => (
                           <div
                             key={plan.id}
                             className={cn(
                               "flex min-w-0 items-center",
                               planIndex === 1 && "hidden @min-[540px]:flex",
-                              planIndex === 2 && "hidden @min-[760px]:flex",
+                              planIndex >= 2 && "hidden @min-[760px]:flex",
                             )}
                           >
                             <CheckCircle
@@ -551,40 +513,32 @@ export function ExamPlanner({
                                 setSheetMode({ type: "edit", planId: plan.id });
                                 setFormError("");
                               }}
-                              className="block min-w-0 flex-1 truncate py-0.5 text-left text-[12px] leading-4"
+                              className={cn(
+                                "block min-w-0 flex-1 truncate py-px text-left",
+                                plan.completed
+                                  ? "text-[#9a8f8a] line-through decoration-[#c9beb8]"
+                                  : "text-[#453b3b]",
+                              )}
                             >
-                              {plan.unit_label ? (
-                                <span className="mr-0.5 text-[11px] font-semibold text-[#6d5aa8]">
-                                  {plan.unit_label}
-                                </span>
-                              ) : null}
-                              <span
-                                className={cn(
-                                  plan.completed
-                                    ? "text-[#9a8f8a] line-through decoration-[#c9beb8]"
-                                    : "text-[#453b3b]",
-                                )}
-                              >
-                                {plan.title}
-                              </span>
+                              {plan.title}
                             </button>
                           </div>
                         ))}
 
-                        {/* +N — 표시 가능한 개수는 container 폭에 따라 1/2/3개 (버튼 탭 = 날짜 Sheet) */}
+                        {/* +N — 표시 가능한 개수는 container 폭에 따라 1/2/4개 (버튼 탭 = 날짜 Sheet) */}
                         {dayPlans.length > 1 ? (
-                          <button type="button" onClick={(event) => { event.stopPropagation(); openList(date); }} className="rounded-md px-1 py-0.5 text-[11px] font-medium text-[#8b7ae6] @min-[540px]:hidden">
+                          <button type="button" onClick={(event) => { event.stopPropagation(); openList(date); }} className="rounded-md px-1 py-px text-[#8b7ae6] @min-[540px]:hidden">
                             +{dayPlans.length - 1}
                           </button>
                         ) : null}
                         {dayPlans.length > 2 ? (
-                          <button type="button" onClick={(event) => { event.stopPropagation(); openList(date); }} className="hidden rounded-md px-1 py-0.5 text-[11px] font-medium text-[#8b7ae6] @min-[540px]:inline-flex @min-[760px]:hidden">
+                          <button type="button" onClick={(event) => { event.stopPropagation(); openList(date); }} className="hidden rounded-md px-1 py-px text-[#8b7ae6] @min-[540px]:inline-flex @min-[760px]:hidden">
                             +{dayPlans.length - 2}
                           </button>
                         ) : null}
-                        {dayPlans.length > 3 ? (
-                          <button type="button" onClick={(event) => { event.stopPropagation(); openList(date); }} className="hidden rounded-md px-1 py-0.5 text-[11px] font-medium text-[#8b7ae6] @min-[760px]:inline-flex">
-                            +{dayPlans.length - 3}
+                        {dayPlans.length > 4 ? (
+                          <button type="button" onClick={(event) => { event.stopPropagation(); openList(date); }} className="hidden rounded-md px-1 py-px text-[#8b7ae6] @min-[760px]:inline-flex">
+                            +{dayPlans.length - 4}
                           </button>
                         ) : null}
                       </div>
@@ -636,54 +590,42 @@ export function ExamPlanner({
               <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
                 {sheetMode.type === "list" ? (
                   <div className="space-y-3">
-                    {sheetGroups.length === 0 ? (
+                    {sheetPlans.length === 0 ? (
                       <p className="rounded-xl bg-[#f8f3ef] p-3 text-sm text-[#655d5d]">
-                        이 날짜에는 아직 계획이 없어요.
+                        이 날짜에는 아직 계획이 없어요. 시험 대비 계획을 등록해보세요.
                       </p>
                     ) : (
-                      sheetGroups.map((group, groupIndex) => (
-                        <div key={groupIndex}>
-                          {group.unit ? (
-                            <div className="mb-1 text-xs font-semibold text-[#6d5aa8]">{group.unit}</div>
-                          ) : null}
-                          <div className="space-y-0.5">
-                            {group.items.map((plan) => (
-                              <div key={plan.id} className="flex min-w-0 items-center gap-1">
-                                <CheckCircle
-                                  completed={plan.completed}
-                                  title={plan.title}
-                                  onToggle={() => toggleCompleted(plan)}
-                                  size="sheet"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSheetMode({ type: "edit", planId: plan.id });
-                                    setFormError("");
-                                  }}
-                                  className="min-w-0 flex-1 rounded-lg px-1 py-2 text-left transition hover:bg-[#faf6f3]"
-                                >
-                                  <span
-                                    className={cn(
-                                      "block text-sm leading-5",
-                                      plan.completed
-                                        ? "text-[#9a8f8a] line-through decoration-[#c9beb8]"
-                                        : "text-[#2d2928]",
-                                    )}
-                                  >
-                                    {plan.title}
-                                  </span>
-                                  {plan.memo ? (
-                                    <span className="mt-0.5 block text-xs leading-4 text-[#8a7b77]">
-                                      {plan.memo}
-                                    </span>
-                                  ) : null}
-                                </button>
-                              </div>
-                            ))}
+                      <div className="space-y-0.5">
+                        {sheetPlans.map((plan) => (
+                          <div key={plan.id} className="flex min-w-0 items-center gap-1">
+                            <CheckCircle
+                              completed={plan.completed}
+                              title={plan.title}
+                              onToggle={() => toggleCompleted(plan)}
+                              size="sheet"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSheetMode({ type: "edit", planId: plan.id });
+                                setFormError("");
+                              }}
+                              className="min-w-0 flex-1 rounded-lg px-1 py-2 text-left transition hover:bg-[#faf6f3]"
+                            >
+                              <span
+                                className={cn(
+                                  "block text-sm leading-5",
+                                  plan.completed
+                                    ? "text-[#9a8f8a] line-through decoration-[#c9beb8]"
+                                    : "text-[#2d2928]",
+                                )}
+                              >
+                                {plan.title}
+                              </span>
+                            </button>
                           </div>
-                        </div>
-                      ))
+                        ))}
+                      </div>
                     )}
 
                     {formError ? <p className="text-xs text-[#a2665f]">{formError}</p> : null}
@@ -702,7 +644,7 @@ export function ExamPlanner({
                 ) : sheetMode.type === "add" ? (
                   <PlanForm
                     key={`add-${sheetDate}`}
-                    initial={{ planDate: sheetDate, unitLabel: "", title: "", memo: "" }}
+                    initial={{ planDate: sheetDate, title: "" }}
                     isPending={isPending}
                     error={formError}
                     submitLabel="계획 추가"
@@ -719,9 +661,7 @@ export function ExamPlanner({
                     key={`edit-${editingPlan.id}`}
                     initial={{
                       planDate: editingPlan.plan_date,
-                      unitLabel: editingPlan.unit_label ?? "",
                       title: editingPlan.title,
-                      memo: editingPlan.memo ?? "",
                     }}
                     isPending={isPending}
                     error={formError}

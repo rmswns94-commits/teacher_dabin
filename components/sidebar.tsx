@@ -14,13 +14,15 @@ import {
   Home,
   Menu,
   NotebookPen,
+  PanelLeftClose,
+  PanelLeftOpen,
   School,
   Sparkles,
   Sprout,
   Users,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { groupIconOf } from "@/lib/group-icons";
 import { cn } from "@/lib/utils";
@@ -31,6 +33,47 @@ function BetaBadge() {
       Beta
     </span>
   );
+}
+
+// ── 데스크톱/iPad 가로용 사이드바 접기 preference ──────────────────────
+// localStorage + useSyncExternalStore: 서버 스냅샷은 항상 "펼침"이라 hydration mismatch가
+// 없고, hydration 직후 저장값으로 안전하게 전환된다. navigation이 아니므로 router 미사용,
+// 접힘/펼침은 Sidebar 내부 상태만 바뀌어 main content(플래너 등)는 remount되지 않는다.
+const SIDEBAR_COLLAPSE_KEY = "dabin-sidebar-collapsed";
+let collapseListeners: (() => void)[] = [];
+
+function subscribeCollapse(listener: () => void) {
+  collapseListeners.push(listener);
+  return () => {
+    collapseListeners = collapseListeners.filter((l) => l !== listener);
+  };
+}
+
+function getCollapsedSnapshot() {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function getCollapsedServerSnapshot() {
+  return false;
+}
+
+function setCollapsedPref(next: boolean) {
+  try {
+    if (next) {
+      localStorage.setItem(SIDEBAR_COLLAPSE_KEY, "1");
+    } else {
+      localStorage.removeItem(SIDEBAR_COLLAPSE_KEY);
+    }
+  } catch {
+    // storage를 못 쓰는 환경이면 세션 한정 동작도 없이 그대로 둔다
+  }
+  for (const listener of collapseListeners) {
+    listener();
+  }
 }
 
 const topItems = [{ label: "오늘", href: "/dashboard", icon: Home }];
@@ -105,6 +148,12 @@ export function Sidebar({
   const inGroupsSection = pathname === "/groups" || pathname.startsWith("/groups/");
   const [groupsOpen, setGroupsOpen] = useState(inGroupsSection);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // lg 이상에서만 의미 있는 접기 상태 (모바일 drawer는 기존 그대로)
+  const collapsed = useSyncExternalStore(
+    subscribeCollapse,
+    getCollapsedSnapshot,
+    getCollapsedServerSnapshot,
+  );
 
   // 모바일 드로어는 페이지를 이동하면 자동으로 닫는다 (render 중 상태 조정 패턴).
   const [prevPathname, setPrevPathname] = useState(pathname);
@@ -152,11 +201,25 @@ export function Sidebar({
         />
       ) : null}
 
+      {/* 접힌 상태에서도 항상 다시 열 수 있는 고정 버튼 (lg+ 전용 — 모바일은 햄버거 유지) */}
+      {collapsed ? (
+        <button
+          type="button"
+          onClick={() => setCollapsedPref(false)}
+          aria-label="사이드바 펼치기"
+          className="fixed left-3 top-3 z-30 hidden h-11 w-11 items-center justify-center rounded-xl border border-[#e6e6ea] bg-white/95 text-[#4c4c55] shadow-sm backdrop-blur-sm transition hover:bg-[#f4f4f6] lg:flex"
+        >
+          <PanelLeftOpen className="h-5 w-5" aria-hidden />
+        </button>
+      ) : null}
+
       <aside
         className={cn(
           "flex h-screen w-full max-w-[260px] flex-col border-r border-[#e6e6ea] bg-white/95 backdrop-blur-sm",
           "max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-50 max-lg:w-[260px] max-lg:bg-white max-lg:transition-transform max-lg:duration-200",
           mobileOpen ? "max-lg:translate-x-0 max-lg:shadow-2xl" : "max-lg:-translate-x-full",
+          // 데스크톱/iPad 가로 접기: 완전 숨김으로 Calendar 등 main content가 전폭 사용
+          collapsed && "lg:hidden",
         )}
       >
       <div className="flex items-center gap-3 border-b border-[#e6e6ea] px-5 py-5">
@@ -179,6 +242,15 @@ export function Sidebar({
           className="flex h-8 w-8 items-center justify-center rounded-lg text-[#7a7a84] transition hover:bg-[#f4f4f6] lg:hidden"
         >
           <X className="h-4 w-4" aria-hidden />
+        </button>
+        {/* 뒤로가기(←)와 혼동되지 않게 panel 아이콘 사용 — 접으면 main이 전폭 사용 */}
+        <button
+          type="button"
+          onClick={() => setCollapsedPref(true)}
+          aria-label="사이드바 접기"
+          className="hidden h-10 w-10 items-center justify-center rounded-xl text-[#7a7a84] transition hover:bg-[#f4f4f6] hover:text-[#4c4c55] lg:flex"
+        >
+          <PanelLeftClose className="h-5 w-5" aria-hidden />
         </button>
       </div>
 

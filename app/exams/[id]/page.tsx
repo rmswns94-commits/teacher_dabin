@@ -38,7 +38,7 @@ export default async function SchoolExamDetailPage({
   const { id } = await params;
   const today = todayDateString();
 
-  const [exam, students, plans] = await Promise.all([
+  const [exam, students, planResult] = await Promise.all([
     getSchoolExamById(id),
     // 수정 다이얼로그의 학생 selector + 학교 suggestion용
     getCurrentUserStudents(),
@@ -125,7 +125,8 @@ export default async function SchoolExamDetailPage({
             examEnd={exam.event.end_date}
             examTypeLabel={examTypeLabels[exam.exam_type]}
             today={today}
-            initialPlans={plans}
+            initialPlans={planResult.rows}
+            plansFailed={planResult.failed}
           />
 
           {/* ── Calendar 아래: 시험 정보 → 대상 학생 → 범위 → 약점/오답 → 메모 ── */}

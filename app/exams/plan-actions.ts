@@ -17,7 +17,7 @@ type PlanResult = { error: string } | { success: true; plan: ExamPrepPlanRecord 
 
 export async function createExamPlanAction(
   examId: string,
-  values: { planDate: string; unitLabel: string; title: string; memo: string },
+  values: { planDate: string; title: string },
 ): Promise<PlanResult> {
   const parsed = examPlanSchema.safeParse(values);
 
@@ -29,9 +29,7 @@ export async function createExamPlanAction(
     const plan = await createExamPrepPlan({
       examId,
       planDate: parsed.data.planDate,
-      unitLabel: parsed.data.unitLabel || null,
       title: parsed.data.title,
-      memo: parsed.data.memo || null,
     });
     return { success: true, plan };
   } catch (error) {
@@ -43,7 +41,7 @@ export async function createExamPlanAction(
 
 export async function updateExamPlanAction(
   planId: string,
-  values: { planDate: string; unitLabel: string; title: string; memo: string },
+  values: { planDate: string; title: string },
 ): Promise<PlanResult> {
   const parsed = examPlanSchema.safeParse(values);
 
@@ -54,9 +52,7 @@ export async function updateExamPlanAction(
   try {
     const plan = await updateExamPrepPlan(planId, {
       planDate: parsed.data.planDate,
-      unitLabel: parsed.data.unitLabel || null,
       title: parsed.data.title,
-      memo: parsed.data.memo || null,
     });
     return { success: true, plan };
   } catch (error) {
