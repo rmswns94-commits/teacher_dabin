@@ -270,6 +270,20 @@ export type SchoolExamStudentRecord = {
   created_at: string;
 };
 
+// 시험 대비 플래너의 날짜별 계획 (school_exam_details 종속, Teacher 직접 등록만)
+export type ExamPrepPlanRecord = {
+  id: string;
+  user_id: string;
+  school_exam_id: string;
+  plan_date: string; // "YYYY-MM-DD"
+  unit_label: string | null; // 단원 구분 (예: "5과")
+  title: string;
+  memo: string | null;
+  completed: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type MakeupLessonRecord = {
   id: string;
   user_id: string;
