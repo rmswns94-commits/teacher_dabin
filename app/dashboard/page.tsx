@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import {
   BookOpenCheck,
   CalendarDays,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { ClassBriefing, ClassBriefingSkeleton } from "@/components/class-briefing";
 import { Doodle, Tape } from "@/components/doodle";
 import { EncouragementCard } from "@/components/encouragement-card";
 import { ClassStatusPanel } from "@/components/current-class-remaining";
@@ -96,6 +98,7 @@ export default async function DashboardPage() {
       id: event.id,
       school: extractSchoolName(event.title),
       title: event.title,
+      groupId: event.group_id ?? null,
       groupName: event.group?.name ?? null,
       dateLabel:
         event.end_date > event.start_date
@@ -368,6 +371,25 @@ export default async function DashboardPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* 수업 전 반 브리핑 — 오늘 수업(진행 중 포함)인 hero 그룹 하나만, 기존 데이터 정리(AI 없음).
+              Suspense로 감싸 hero 첫 렌더를 막지 않는다 (브리핑 쿼리는 스트리밍으로 뒤에 채워짐). */}
+          {hero && hero.daysFromNow === 0 && focusGroup ? (
+            <Suspense fallback={<ClassBriefingSkeleton />}>
+              <ClassBriefing
+                group={{ id: focusGroup.id, name: focusGroup.name, icon: focusGroup.icon ?? null }}
+                isNow={isCurrentClass}
+                startTime={formatTimeHM(hero.schedule.start_time)}
+                today={today}
+                exams={upcomingExams
+                  .filter((exam) => exam.groupId === focusGroup.id)
+                  .map((exam) => ({ id: exam.id, title: exam.title, badge: exam.badge }))}
+                prepTexts={activePreparationItems(focusGroup.preparation_items)
+                  .filter((item) => !item.completed && (!item.dueDate || item.dueDate <= today))
+                  .map((item) => item.text)}
+              />
+            </Suspense>
+          ) : null}
 
           {showEndedNudge && lastEnded ? (
             <Card className="mt-4">
