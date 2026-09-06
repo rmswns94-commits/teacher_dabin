@@ -19,7 +19,7 @@ export function StudentDeleteButton({
   const remove = () => {
     if (
       !window.confirm(
-        `${studentName} 학생을 정말 삭제할까요?\n\n이 학생의 수업 기록과 보충 기록도 함께 삭제되고, 되돌릴 수 없어요.`,
+        `${studentName} 학생을 정말 삭제할까요?\n\n이 학생의 수업 기록·보충 기록·약점 노트도 함께 삭제되고, 되돌릴 수 없어요.`,
       )
     ) {
       return;

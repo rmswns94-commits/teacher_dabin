@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { StudentDeleteButton } from "@/components/student-delete-button";
 import { StudentEditDialog } from "@/components/student-edit-dialog";
+import { StudentWeaknessesCard } from "@/components/student-weaknesses-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PendingButton } from "@/components/pending-button";
 import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
@@ -29,8 +30,11 @@ import {
   growthLabels,
   scopeMakeupsToWeek,
 } from "@/lib/growth";
+import { nextClassDateAfter } from "@/lib/schedule";
 import { genderLabels } from "@/lib/validation/student";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
+import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
+import { getStudentWeaknessesForCurrentUser } from "@/lib/supabase/queries/weaknesses";
 import {
   getStudentLessonHistory,
   getStudentMakeups,
@@ -75,15 +79,19 @@ export default async function StudentDetailPage({
   const monthStart = `${today.slice(0, 7)}-01`;
   const praiseSince = weekStart < monthStart ? weekStart : monthStart;
 
-  const [student, groups, studentGroups, history, makeups, praises] = await Promise.all([
-    getStudentByIdForCurrentUser(id),
-    getCurrentUserGroups(),
-    getStudentGroupsForCurrentUser(id),
-    // 학생 상세는 최근 기록 중심(30일 출결/최근 5건/단어 6건) — 180일이면 충분히 커버
-    getStudentLessonHistory(id, addDaysStr(today, -180)),
-    getStudentMakeups(id),
-    getStudentPraises(id, praiseSince),
-  ]);
+  const [student, groups, studentGroups, history, makeups, praises, weaknesses, schedules] =
+    await Promise.all([
+      getStudentByIdForCurrentUser(id),
+      getCurrentUserGroups(),
+      getStudentGroupsForCurrentUser(id),
+      // 학생 상세는 최근 기록 중심(30일 출결/최근 5건/단어 6건) — 180일이면 충분히 커버
+      getStudentLessonHistory(id, addDaysStr(today, -180)),
+      getStudentMakeups(id),
+      getStudentPraises(id, praiseSince),
+      getStudentWeaknessesForCurrentUser(id),
+      // AppShell도 같은 쿼리를 쓰므로 요청당 1번으로 dedupe — 약점 due 기본값(다음 수업일) 계산용
+      getCurrentUserSchedulesWithGroup(),
+    ]);
 
   if (!student) {
     notFound();
@@ -100,6 +108,18 @@ export default async function StudentDetailPage({
     .slice(0, 5);
   const openMakeups = makeups.filter((makeup) => makeup.status === "required" || makeup.status === "scheduled");
   const pastMakeups = makeups.filter((makeup) => makeup.status === "completed" || makeup.status === "cancelled");
+
+  // 약점 "다시 확인" 기본값: 학생이 속한 반들의 시간표에서 오늘 이후 가장 빠른 수업일.
+  // 시간표가 없으면 강제로 추측하지 않고 날짜 선택 상태로 둔다.
+  const studentGroupIds = new Set(studentGroups.map((group) => group.id));
+  const studentScheduleDays = [
+    ...new Set(
+      schedules
+        .filter((slot) => studentGroupIds.has(slot.group_id))
+        .map((slot) => slot.day_of_week),
+    ),
+  ];
+  const weaknessDefaultDueDate = nextClassDateAfter(studentScheduleDays, today) ?? "";
 
   const isElementary = isElementaryGrade(student.grade);
   const logDateById = new Map(
@@ -299,6 +319,15 @@ export default async function StudentDetailPage({
                 </div>
               </CardContent>
             </Card>
+
+            {/* 약점 노트 + 복습 큐 — Teacher가 직접 등록한 것만 (관찰값 자동 생성 없음) */}
+            <StudentWeaknessesCard
+              studentId={id}
+              studentName={student.name}
+              weaknesses={weaknesses}
+              today={today}
+              defaultReviewDueDate={weaknessDefaultDueDate}
+            />
 
             <Card>
               <CardHeader>
@@ -816,7 +845,7 @@ export default async function StudentDetailPage({
         <div className="mt-8 border-t border-dashed border-[#f0ddd8] pt-5 pb-8">
           <div className="text-sm font-semibold text-[#8a5d52]">학생 삭제</div>
           <p className="mt-1 text-xs leading-5 text-[#a68e88]">
-            학생과 연결된 수업 기록·보충 기록이 함께 삭제되며 되돌릴 수 없어요.
+            학생과 연결된 수업 기록·보충 기록·약점 노트가 함께 삭제되며 되돌릴 수 없어요.
           </p>
           <div className="mt-3">
             <StudentDeleteButton studentId={id} studentName={student.name} />

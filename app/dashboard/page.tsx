@@ -27,6 +27,8 @@ import { DAY_LABELS, formatTimeHM, formatTimeRange, getScheduleOverview, type Cl
 import { getDisplayName } from "@/lib/supabase/auth";
 import { getDashboardOverview, getDashboardStats } from "@/lib/supabase/queries/dashboard";
 import { getCurrentUserGroups, getGroupLatestProgress } from "@/lib/supabase/queries/groups";
+import { getDueWeaknessesForCurrentUser } from "@/lib/supabase/queries/weaknesses";
+import { weaknessCategoryLabels } from "@/lib/validation/weakness";
 import type { PreparationItem } from "@/lib/supabase/types";
 import { getCurrentUserSchedulesWithGroup, type ScheduleGroupInfo } from "@/lib/supabase/queries/schedules";
 import { getServerUser } from "@/lib/supabase/server";
@@ -71,7 +73,7 @@ function occurrenceDateLabel(occ: ClassOccurrence<ScheduleGroupInfo>) {
 export default async function DashboardPage() {
   const user = await getServerUser();
   const today = todayDateString();
-  const [stats, overview, schedules, examEvents, allGroups] = await Promise.all([
+  const [stats, overview, schedules, examEvents, allGroups, dueWeaknesses] = await Promise.all([
     getDashboardStats(),
     getDashboardOverview(),
     getCurrentUserSchedulesWithGroup(),
@@ -79,6 +81,8 @@ export default async function DashboardPage() {
     getUpcomingExamEvents(today, addDaysStr(today, EXAM_DISPLAY_DAYS)),
     // 다음 수업 계획 To Do(전체 그룹의 dated 준비 항목) 계산용 — group/icon batch, N+1 없음
     getCurrentUserGroups(),
+    // 복습 큐: due 지난 active 약점만 batch 1쿼리 (학생별 쿼리 금지)
+    getDueWeaknessesForCurrentUser(today, 6),
   ]);
   const displayName = getDisplayName(user);
 
@@ -546,6 +550,30 @@ export default async function DashboardPage() {
                           <span className="text-sm text-[#2d2928]">{item.title}</span>
                           <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-medium ${item.badgeClass}`}>
                             {item.badge}
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              {/* 복습 필요 — 학생 약점 노트 중 다시 확인할 날짜가 오늘이거나 지난 것 (compact) */}
+              {dueWeaknesses.length > 0 ? (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle>복습 필요</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1.5">
+                    {dueWeaknesses.map((weakness) => (
+                      <Link key={weakness.id} href={`/students/${weakness.student_id}`} className="block">
+                        <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-2 transition hover:bg-[#f2edf9]">
+                          <span className="min-w-0 truncate text-sm text-[#2d2928]">
+                            <span className="font-medium">{weakness.student?.name ?? "학생"}</span>
+                            <span className="text-[#8a7b77]"> · {weakness.title}</span>
+                          </span>
+                          <span className="shrink-0 rounded-full bg-[#fdf3e4] px-2 py-1 text-[10px] font-medium text-[#94702f]">
+                            {weaknessCategoryLabels[weakness.category]}
                           </span>
                         </div>
                       </Link>

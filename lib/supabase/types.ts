@@ -198,6 +198,36 @@ export type StudentPraiseRecord = {
   created_at: string;
 };
 
+export type WeaknessCategory =
+  | "grammar"
+  | "vocabulary"
+  | "reading"
+  | "listening"
+  | "writing"
+  | "pronunciation"
+  | "homework"
+  | "other";
+
+export type WeaknessStatus = "active" | "resolved";
+
+// Teacher가 명시적으로 등록한 학생 약점 노트. 관찰값으로 자동 생성하지 않으며,
+// 같은 제목이 반복 등록돼도 병합하지 않는다 (record 단위 독립).
+export type StudentWeaknessRecord = {
+  id: string;
+  user_id: string;
+  student_id: string;
+  group_id: string | null;
+  source_daily_log_id: string | null;
+  category: WeaknessCategory;
+  title: string;
+  note: string | null;
+  review_due_date: string | null; // "YYYY-MM-DD" — 지나도 자동 변경 없음 (복습 큐에 계속 남음)
+  status: WeaknessStatus;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+};
+
 export type MakeupLessonRecord = {
   id: string;
   user_id: string;

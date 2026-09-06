@@ -30,6 +30,8 @@ import {
   discardDailyLogDraftAction,
   saveDailyLogAction,
 } from "@/app/daily-logs/actions";
+import { createStudentWeaknessAction } from "@/app/students/weakness-actions";
+import { WeaknessFormDialog, type WeaknessFormValues } from "@/components/weakness-form-dialog";
 import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comments";
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate } from "@/lib/dates";
@@ -593,6 +595,41 @@ export function DailyLogForm({
   const [praiseOpenFor, setPraiseOpenFor] = useState<string | null>(null);
   const [praiseDraft, setPraiseDraft] = useState("");
   const [praiseEditIndex, setPraiseEditIndex] = useState<number | null>(null);
+
+  // 약점 기록: 공용 WeaknessFormDialog를 학생별로 연다. 일지 폼 내용과 달리
+  // 저장 즉시 확정되는 독립 기록 — 일지 재저장/삭제와 무관하게 학생 상세에 남는다.
+  const [weaknessOpenFor, setWeaknessOpenFor] = useState<string | null>(null);
+  const [weaknessError, setWeaknessError] = useState("");
+  const [weaknessSavedFor, setWeaknessSavedFor] = useState<string | null>(null);
+  const [weaknessPending, startWeaknessTransition] = useTransition();
+
+  const submitWeakness = (studentId: string, values: WeaknessFormValues) => {
+    setWeaknessError("");
+    startWeaknessTransition(async () => {
+      const result = await createStudentWeaknessAction({
+        studentId,
+        groupId: group.id,
+        // 이미 저장된 일지(수정 화면·임시 저장 후)라면 출처로 연결, 아직 미저장이면 null
+        sourceDailyLogId: persistedLogIdRef.current ?? "",
+        category: values.category,
+        title: values.title,
+        note: values.note,
+        reviewDueDate: values.reviewDueDate,
+      });
+
+      if ("error" in result) {
+        setWeaknessError(result.error);
+        return;
+      }
+
+      setWeaknessOpenFor(null);
+      setWeaknessSavedFor(studentId);
+      setTimeout(
+        () => setWeaknessSavedFor((prev) => (prev === studentId ? null : prev)),
+        2500,
+      );
+    });
+  };
 
   const updateEntry = (studentId: string, patch: Partial<EntryState>) => {
     setEntries((prev) => ({ ...prev, [studentId]: { ...prev[studentId], ...patch } }));
@@ -1334,6 +1371,21 @@ export function DailyLogForm({
                           💜 칭찬 한표 +
                         </button>
 
+                        {/* 약점 노트 — 공용 폼으로 즉시 저장 (학생 상세의 약점 노트에 모임) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWeaknessError("");
+                            setWeaknessOpenFor(student.studentId);
+                          }}
+                          className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#ecd9b4] bg-[#fdf8ec] px-3 py-1.5 text-xs font-medium text-[#8a6828] transition hover:bg-[#fdf3e4]"
+                        >
+                          📌 약점 기록 +
+                        </button>
+                        {weaknessSavedFor === student.studentId ? (
+                          <span className="text-xs text-[#3d7f64]">약점을 기록했어요 ✓</span>
+                        ) : null}
+
                         <button
                           type="button"
                           aria-pressed={entry.parentNoteNeeded}
@@ -1408,6 +1460,19 @@ export function DailyLogForm({
                             </div>
                           </div>
                         </div>
+                      ) : null}
+
+                      {weaknessOpenFor === student.studentId ? (
+                        <WeaknessFormDialog
+                          heading="약점 기록"
+                          studentName={student.name}
+                          defaultReviewDueDate={nextClassDateAfter(scheduleDays, classDate) ?? ""}
+                          dueDateHint="다음 수업일로 제안했어요"
+                          isPending={weaknessPending}
+                          error={weaknessError}
+                          onCancel={() => setWeaknessOpenFor(null)}
+                          onSubmit={(values) => submitWeakness(student.studentId, values)}
+                        />
                       ) : null}
 
                       {entry.parentNoteNeeded ? (
