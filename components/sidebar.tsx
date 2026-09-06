@@ -304,7 +304,7 @@ export function Sidebar({
             </li>
             <li>
               <NavLink
-                label="이쁜 말♥"
+                label="교육 철학"
                 href="/pretty-words"
                 icon={Heart}
                 isActive={isActive("/pretty-words")}
