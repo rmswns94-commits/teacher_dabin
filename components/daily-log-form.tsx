@@ -438,6 +438,10 @@ export function DailyLogForm({
   const autosaveInFlightRef = useRef(false);
   const composingRef = useRef(false);
   const finalSavingRef = useRef(false);
+  // [임시 저장]으로 생성/갱신된 일지 id — 이후 저장이 insert가 아니라 update가 되도록
+  // payload의 dailyLogId로 항상 이 값을 쓴다 (edit 화면은 prop으로 이미 채워져 있음).
+  const persistedLogIdRef = useRef<string | null>(dailyLogId ?? null);
+  const [draftSavedNotice, setDraftSavedNotice] = useState("");
 
   useEffect(() => {
     const tick = async () => {
@@ -460,7 +464,7 @@ export function DailyLogForm({
       setAutosave({ status: "saving" });
       const result = await autosaveDailyLogDraftAction({
         draftId: draftIdRef.current,
-        dailyLogId: dailyLogId ?? null,
+        dailyLogId: persistedLogIdRef.current,
         groupId: group.id,
         classDate: classDateNow,
         payload: formStateRef.current,
@@ -611,6 +615,7 @@ export function DailyLogForm({
 
   const save = (status: "draft" | "completed") => {
     setError("");
+    setDraftSavedNotice("");
     // 다음 수업 계획은 내용+날짜 한 쌍 (날짜는 수업일 이후)
     if (nextLessonPlan.trim() && !nextPlanDate) {
       setError("다음 수업 계획 날짜를 선택해주세요.");
@@ -628,7 +633,7 @@ export function DailyLogForm({
     finalSavingRef.current = true; // final 저장 중 autosave tick 중단
     startTransition(async () => {
       const result = await saveDailyLogAction({
-        dailyLogId,
+        dailyLogId: persistedLogIdRef.current ?? undefined,
         draftId: draftIdRef.current,
         classDate,
         groupId: group.id,
@@ -676,6 +681,20 @@ export function DailyLogForm({
       if (result && "duplicate" in result && result.duplicate) {
         setShowSummary(false);
         setDuplicateOpen(true);
+        return;
+      }
+
+      // 임시 저장 성공 — 이동 없이 작성 화면 유지 (완료 저장은 서버 redirect로
+      // 달력의 방금 저장한 일지 상세로 이동하므로 여기 도달하지 않는다)
+      if (result && "success" in result && result.success) {
+        persistedLogIdRef.current = result.dailyLogId;
+        draftIdRef.current = null; // 서버가 autosave draft를 정리했음 — 다음 autosave는 새로 시작
+        const snapshot = JSON.stringify(formStateRef.current);
+        lastSavedSnapshotRef.current = snapshot; // 변경 없으면 autosave가 재저장하지 않게
+        initialSnapshotRef.current = snapshot; // 뒤로가기 unsaved 경고 방지
+        setDraftPrompt(false);
+        setAutosave({ status: "saved", savedAtLabel: kstTimeLabel(new Date().toISOString()) });
+        setDraftSavedNotice("임시 저장했어요. 목록에는 “작성 중”으로 표시돼요.");
         return;
       }
 
@@ -1518,6 +1537,12 @@ export function DailyLogForm({
       {error ? (
         <div className="rounded-2xl border border-[#f0d9d5] bg-[#fff9f7] px-4 py-3 text-sm text-[#7f5d57]">
           {error}
+        </div>
+      ) : null}
+
+      {draftSavedNotice ? (
+        <div className="rounded-2xl border border-[#d8ebe0] bg-[#f0faf5] px-4 py-3 text-sm text-[#2f6d54]">
+          {draftSavedNotice}
         </div>
       ) : null}
 

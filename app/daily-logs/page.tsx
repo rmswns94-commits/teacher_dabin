@@ -7,6 +7,7 @@ import { CalendarEventItem, EventCreateButton } from "@/components/calendar-even
 import { DailyLogsFilter } from "@/components/daily-logs-filter";
 import { ExcelExportButton } from "@/components/excel-export";
 import { LessonLogDetail } from "@/components/lesson-log-detail";
+import { ScrollToSavedLog } from "@/components/scroll-to-saved-log";
 import { PageHeader } from "@/components/page-header";
 import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -262,6 +263,8 @@ export default async function DailyLogsPage({
               수업 기록을 저장했어요.
             </div>
           ) : null}
+          {/* 저장 복귀(saved=1)일 때만 방금 저장한 카드로 스크롤 — 일반 클릭에는 미관여 */}
+          {params.saved && selectedLogId ? <ScrollToSavedLog logId={selectedLogId} /> : null}
           <PageHeader
             title="수업 일지"
             description="매일의 수업 기록을 날짜별로 꺼내볼 수 있어요."
@@ -627,10 +630,11 @@ export default async function DailyLogsPage({
                             status,
                             log: isActive ? null : log.id,
                           })}
+                          id={`log-card-${log.id}`}
                           aria-current={isActive ? "true" : undefined}
                           aria-expanded={isActive}
                           className={cn(
-                            "flex items-center gap-3.5 rounded-2xl border-2 border-dashed px-4 py-4 transition",
+                            "scroll-mt-3 flex items-center gap-3.5 rounded-2xl border-2 border-dashed px-4 py-4 transition",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d9c1e8]",
                             isActive
                               ? "border-[#d9c9ef] bg-[#f5f1fb] shadow-sm"

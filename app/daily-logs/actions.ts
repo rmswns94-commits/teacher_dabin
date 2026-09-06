@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, RedirectType } from "next/navigation";
 
 import {
   deleteDailyLog,
@@ -66,16 +66,20 @@ export async function saveDailyLogAction(input: DailyLogFormInput & { draftId?: 
   // 관찰값(질문/배려/노력 등) 변경이 성장노트 주간 판정에 바로 반영되게 한다
   revalidatePath("/growth-notes", "layout");
 
-  // 기존 일지 수정에서 [수업 마무리 완료] → 작업하던 날짜 + 방금 수정한 일지가 선택된
-  // 수업일지 달력으로 복귀 (log 파라미터로 아래 상세까지 바로 펼쳐진다).
-  // 새 일지 작성은 저장 결과 확인이 우선이라 기존처럼 상세 화면으로 보낸다.
-  if (parsed.data.dailyLogId && parsed.data.status === "completed") {
-    redirect(
-      `/daily-logs?month=${parsed.data.classDate.slice(0, 7)}&date=${parsed.data.classDate}&log=${dailyLogId}&saved=1`,
-    );
+  // [임시 저장]은 이동 없이 작성 화면을 유지한다 — 이후 저장(임시/완료)이 insert가
+  // 아니라 update가 되도록, 방금 저장된 일지 id를 클라이언트에 돌려준다.
+  if (parsed.data.status === "draft") {
+    return { success: true as const, dailyLogId: dailyLogId!, classDate: parsed.data.classDate };
   }
 
-  redirect(`/daily-logs/${dailyLogId}?saved=1`);
+  // [수업 기록 완료] (작성/수정 공통) → 저장된 class_date가 선택되고 방금 저장한
+  // 일지 카드 바로 아래에 상세가 펼쳐진 수업일지 달력으로 이동한다. source of truth는
+  // 저장 결과의 id + classDate (오늘 날짜/최신 created_at으로 추측하지 않는다).
+  // replace라 뒤로가기가 완료된 작성 화면으로 되돌아가지 않는다.
+  redirect(
+    `/daily-logs?month=${parsed.data.classDate.slice(0, 7)}&date=${parsed.data.classDate}&log=${dailyLogId}&saved=1`,
+    RedirectType.replace,
+  );
 }
 
 // 수업일지 삭제 (destructive — client에서 확인 dialog를 거친 뒤 호출).
