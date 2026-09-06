@@ -306,6 +306,17 @@ export class DuplicateDailyLogError extends Error {
 // Postgres unique violation (DB-level race 방지용 unique index가 있을 때)
 const UNIQUE_VIOLATION = "23505";
 
+// 코드가 기대하는 컬럼이 DB에 없음 = 대기 중인 migration 미적용 (42703: undefined column,
+// PGRST204: PostgREST schema cache에 컬럼 없음). "다시 시도"로 해결되지 않으므로
+// 원인을 그대로 알려준다 — 오류를 숨기지 않는 명시적 안내.
+const SCHEMA_MISMATCH_CODES = new Set(["42703", "PGRST204"]);
+
+function schemaMismatchMessage(error: { code?: string } | null | undefined) {
+  return error?.code && SCHEMA_MISMATCH_CODES.has(error.code)
+    ? "데이터베이스에 최신 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 대기 중인 migration을 실행한 뒤 다시 저장해주세요."
+    : null;
+}
+
 // Saves the daily log header, all per-student records, and keeps makeup
 // lessons consistent with the attendance data. Upserts are idempotent, so
 // retrying after a partial failure never duplicates rows.
@@ -411,7 +422,9 @@ export async function saveDailyLog(input: DailyLogFormInput) {
         throw new DuplicateDailyLogError(input.classDate);
       }
       console.error("saveDailyLog update error", updateError);
-      throw new Error("수업 기록을 저장하지 못했어요. 다시 시도해주세요.");
+      throw new Error(
+        schemaMismatchMessage(updateError) ?? "수업 기록을 저장하지 못했어요. 다시 시도해주세요.",
+      );
     }
   } else {
     const { data: created, error: insertError } = await supabase
@@ -426,7 +439,9 @@ export async function saveDailyLog(input: DailyLogFormInput) {
         throw new DuplicateDailyLogError(input.classDate);
       }
       console.error("saveDailyLog insert error", insertError);
-      throw new Error("수업 기록을 저장하지 못했어요. 다시 시도해주세요.");
+      throw new Error(
+        schemaMismatchMessage(insertError) ?? "수업 기록을 저장하지 못했어요. 다시 시도해주세요.",
+      );
     }
 
     dailyLogId = created.id;
@@ -859,7 +874,14 @@ export async function getPreviousReflectionNext(
     .maybeSingle();
 
   if (error) {
-    console.error("getPreviousReflectionNext error", error);
+    // 0건은 maybeSingle이 error 없이 null을 주므로 여기는 진짜 쿼리 오류만 온다.
+    // dev overlay에서 {}로 보이지 않게 구조화해서 남긴다 (사용자 UI에는 미노출).
+    console.error("getPreviousReflectionNext error", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
     return null;
   }
 
