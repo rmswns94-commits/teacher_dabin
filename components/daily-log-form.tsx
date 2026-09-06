@@ -16,6 +16,7 @@ import {
   Clock3,
   NotebookPen,
   NotebookTabs,
+  Sparkles,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -158,6 +159,9 @@ type DraftPayload = {
   nextLessonPlan: string;
   nextPlanDate: string;
   vocabTotal: string;
+  reflectionGood: string;
+  reflectionHard: string;
+  reflectionNext: string;
   entries: Record<string, EntryState>;
 };
 
@@ -252,6 +256,7 @@ export function DailyLogForm({
   scheduleDays = [],
   draft = null,
   initial,
+  previousReflection = null,
 }: {
   dailyLogId?: string;
   classDate: string;
@@ -270,7 +275,12 @@ export function DailyLogForm({
     nextLessonPlan: string;
     nextPlanDate?: string;
     vocabTotal?: string;
+    reflectionGood?: string;
+    reflectionHard?: string;
+    reflectionNext?: string;
   };
+  // 같은 그룹 직전 completed 일지의 "다음에 다르게 해볼 것" — 회고 카드에 리마인드로 표시
+  previousReflection?: { classDate: string; reflectionNext: string } | null;
 }) {
   // 최근(10분 내) 임시저장 draft는 mount 시점에 자동 복원 — reload 복구가 목적이라
   // effect/remount 없이 초기 state로만 반영한다 (IME/입력에 영향 없음).
@@ -297,6 +307,23 @@ export function DailyLogForm({
   // 숙제 날짜(선택): 고르면 그 날짜의 To Do로 숙제가 노출된다 — 기본값 없음(옵트인)
   const [homeworkDueDate, setHomeworkDueDate] = useState(
     restoredText(restored?.homeworkDueDate, "") || initial?.homeworkDueDate || "",
+  );
+  // 수업 회고 (강사 자기 성찰) — 전부 선택 입력, 값이 있으면 카드 자동 펼침
+  const [reflectionGood, setReflectionGood] = useState(
+    restoredText(restored?.reflectionGood, initial?.reflectionGood ?? ""),
+  );
+  const [reflectionHard, setReflectionHard] = useState(
+    restoredText(restored?.reflectionHard, initial?.reflectionHard ?? ""),
+  );
+  const [reflectionNext, setReflectionNext] = useState(
+    restoredText(restored?.reflectionNext, initial?.reflectionNext ?? ""),
+  );
+  const [reflectionOpen, setReflectionOpen] = useState(() =>
+    Boolean(
+      restoredText(restored?.reflectionGood, initial?.reflectionGood ?? "") ||
+        restoredText(restored?.reflectionHard, initial?.reflectionHard ?? "") ||
+        restoredText(restored?.reflectionNext, initial?.reflectionNext ?? ""),
+    ),
   );
   const [nextLessonPlan, setNextLessonPlan] = useState(
     restoredText(restored?.nextLessonPlan, initial?.nextLessonPlan ?? ""),
@@ -377,12 +404,15 @@ export function DailyLogForm({
       nextLessonPlan,
       nextPlanDate,
       vocabTotal,
+      reflectionGood,
+      reflectionHard,
+      reflectionNext,
       entries,
     };
     if (initialSnapshotRef.current === null) {
       initialSnapshotRef.current = JSON.stringify(formStateRef.current);
     }
-  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, nextLessonPlan, nextPlanDate, vocabTotal, entries]);
+  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, nextLessonPlan, nextPlanDate, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries]);
   useEffect(
     () =>
       registerDirtyCheck(
@@ -477,6 +507,9 @@ export function DailyLogForm({
       nextLessonPlan: string;
       nextPlanDate: string;
       vocabTotal: string;
+      reflectionGood: string;
+      reflectionHard: string;
+      reflectionNext: string;
       entries: Record<string, EntryState>;
     }>;
     if (typeof data.classDate === "string" && data.classDate) setClassDate(data.classDate);
@@ -491,6 +524,12 @@ export function DailyLogForm({
       if (data.nextPlanDate) setPlanDateTouched(true);
     }
     if (typeof data.vocabTotal === "string") setVocabTotal(data.vocabTotal);
+    if (typeof data.reflectionGood === "string") setReflectionGood(data.reflectionGood);
+    if (typeof data.reflectionHard === "string") setReflectionHard(data.reflectionHard);
+    if (typeof data.reflectionNext === "string") setReflectionNext(data.reflectionNext);
+    if (data.reflectionGood || data.reflectionHard || data.reflectionNext) {
+      setReflectionOpen(true); // 복원한 회고가 접힘 뒤에 숨지 않게
+    }
     if (data.entries && typeof data.entries === "object") {
       setEntries((prev) => {
         const next = { ...prev };
@@ -601,6 +640,9 @@ export function DailyLogForm({
         nextLessonPlan,
         nextPlanDate: nextLessonPlan.trim() ? nextPlanDate : "",
         vocabTotal,
+        reflectionGood,
+        reflectionHard,
+        reflectionNext,
         status,
         students: students.map((student) => {
           const entry = entries[student.studentId];
@@ -1404,6 +1446,75 @@ export function DailyLogForm({
         })}
       </div>
 
+      {/* 수업 회고 (강사 자기 성찰) — 전부 선택 입력. 기본 접힘, 값이 있으면 자동 펼침.
+          "다음에 다르게 해볼 것"은 같은 반의 다음 일지 작성 화면에 지난 다짐으로 리마인드된다. */}
+      <Card className="p-4">
+        <button
+          type="button"
+          onClick={() => setReflectionOpen((open) => !open)}
+          aria-expanded={reflectionOpen}
+          className="flex w-full items-center justify-between gap-2 text-left"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold text-[#2b2323]">
+            <Sparkles className="h-4 w-4 text-[#8a6fc9]" aria-hidden />
+            오늘 수업 회고 (선택)
+            <span className="text-xs font-normal text-[#8a7b77]">
+              30초 돌아보기 — 쓰는 만큼 다음 수업이 좋아져요
+            </span>
+          </span>
+          {reflectionOpen ? (
+            <ChevronUp className="h-4 w-4 shrink-0 text-[#8a7b77]" aria-hidden />
+          ) : (
+            <ChevronDown className="h-4 w-4 shrink-0 text-[#8a7b77]" aria-hidden />
+          )}
+        </button>
+
+        {previousReflection ? (
+          <div className="mt-3 rounded-2xl border border-[#e8ddf3] bg-[#fbf8ff] px-3.5 py-2.5 text-sm text-[#5a4a80]">
+            <span className="font-medium">
+              지난 수업의 다짐 ({formatKoreanDate(previousReflection.classDate)})
+            </span>
+            <span className="mx-1.5 text-[#c0b3d8]">·</span>
+            <span className="whitespace-pre-line">{previousReflection.reflectionNext}</span>
+          </div>
+        ) : null}
+
+        {reflectionOpen ? (
+          <div className="mt-3 grid gap-3 lg:grid-cols-3">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-[#3e7d6b]">잘된 점</span>
+              <textarea
+                value={reflectionGood}
+                onChange={(event) => setReflectionGood(event.target.value)}
+                rows={3}
+                className="w-full rounded-2xl border border-[#dcebe2] bg-[#fbfdfc] px-3 py-2.5 text-sm outline-none focus:border-[#b7d8c6] placeholder:text-[#a79996]"
+                placeholder="예) 문법 설명 전에 예문부터 보여주니 이해가 빨랐다"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-[#8a5d52]">아쉬웠던 점</span>
+              <textarea
+                value={reflectionHard}
+                onChange={(event) => setReflectionHard(event.target.value)}
+                rows={3}
+                className="w-full rounded-2xl border border-[#f0ded8] bg-[#fffcfa] px-3 py-2.5 text-sm outline-none focus:border-[#e2c4ba] placeholder:text-[#a79996]"
+                placeholder="예) 단어시험 채점에 수업 시간을 너무 썼다"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-[#5c4ca8]">다음에 다르게 해볼 것</span>
+              <textarea
+                value={reflectionNext}
+                onChange={(event) => setReflectionNext(event.target.value)}
+                rows={3}
+                className="w-full rounded-2xl border border-[#e2d8f3] bg-[#fcfaff] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                placeholder="예) 채점은 짝 바꿔 하게 하고, 그 시간에 개별 질문 받기"
+              />
+            </label>
+          </div>
+        ) : null}
+      </Card>
+
       {error ? (
         <div className="rounded-2xl border border-[#f0d9d5] bg-[#fff9f7] px-4 py-3 text-sm text-[#7f5d57]">
           {error}
@@ -1492,6 +1603,9 @@ export function DailyLogForm({
           defaultProgress={defaultProgress}
           homework={homework}
           nextLessonPlan={nextLessonPlan}
+          reflectionFilled={Boolean(
+            reflectionGood.trim() || reflectionHard.trim() || reflectionNext.trim(),
+          )}
           students={students}
           entries={entries}
           isPending={isPending}
@@ -1508,6 +1622,7 @@ function CompletionSummary({
   defaultProgress,
   homework,
   nextLessonPlan,
+  reflectionFilled,
   students,
   entries,
   isPending,
@@ -1518,6 +1633,7 @@ function CompletionSummary({
   defaultProgress: string;
   homework: string;
   nextLessonPlan: string;
+  reflectionFilled: boolean;
   students: DailyLogFormStudent[];
   entries: Record<string, EntryState>;
   isPending: boolean;
@@ -1558,6 +1674,7 @@ function CompletionSummary({
   const reminders = [
     !homework.trim() ? "오늘 숙제가 비어 있어요." : null,
     !nextLessonPlan.trim() ? "다음 수업 계획이 비어 있어요." : null,
+    !reflectionFilled ? "오늘 수업 회고가 비어 있어요." : null,
   ].filter(Boolean) as string[];
 
   return (

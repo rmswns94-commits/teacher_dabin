@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { getDailyLogDraft } from "@/lib/supabase/queries/daily-log-drafts";
-import { getGroupHistoryLogs } from "@/lib/supabase/queries/daily-logs";
+import { getGroupHistoryLogs, getPreviousReflectionNext } from "@/lib/supabase/queries/daily-logs";
 import {
   getCurrentUserGroups,
   getGroupLatestProgress,
@@ -30,7 +30,7 @@ export default async function NewDailyLogPage({
   // 그룹 목록과 (선택된 그룹의) 학생/직전 수업/이전 기록을 한 번에 병렬 조회한다.
   // 이전 기록은 lightweight 첫 페이지만 — 실패해도 작성 화면은 그대로 동작해야 한다.
   const emptyHistory = { rows: [], hasMore: false, failed: false };
-  const [groups, groupStudentsRaw, lastLesson, history, groupSchedules, draftRow] = await Promise.all([
+  const [groups, groupStudentsRaw, lastLesson, history, groupSchedules, draftRow, prevReflection] = await Promise.all([
     getCurrentUserGroups(),
     requestedGroupId ? getGroupStudentsForCurrentUser(requestedGroupId) : Promise.resolve([]),
     requestedGroupId ? getGroupLatestProgress(requestedGroupId) : Promise.resolve(null),
@@ -42,6 +42,8 @@ export default async function NewDailyLogPage({
     requestedGroupId ? getGroupSchedules(requestedGroupId) : Promise.resolve([]),
     // 같은 group+date의 자동 임시저장 draft (있으면 폼에서 복구 배너)
     requestedGroupId ? getDailyLogDraft({ groupId: requestedGroupId, classDate: date }) : Promise.resolve(null),
+    // 직전 completed 일지의 "다음에 다르게 해볼 것" — 회고 카드의 지난 다짐 배너
+    requestedGroupId ? getPreviousReflectionNext(requestedGroupId, date) : Promise.resolve(null),
   ]);
 
   const selectedGroup = requestedGroupId
@@ -151,6 +153,14 @@ export default async function NewDailyLogPage({
                 name: student.name,
                 grade: student.grade,
               }))}
+              previousReflection={
+                prevReflection
+                  ? {
+                      classDate: prevReflection.class_date,
+                      reflectionNext: prevReflection.reflection_next,
+                    }
+                  : null
+              }
             />
           </>
         )}

@@ -54,6 +54,10 @@ export const dailyLogSchema = z
     nextLessonPlan: shortText(1000, "다음 수업 계획"),
     nextPlanDate: dateString.optional().or(z.literal("")),
     vocabTotal: numberString.optional().or(z.literal("")),
+    // 수업 회고 (강사 자기 성찰) — 전부 선택 입력
+    reflectionGood: shortText(1000, "잘된 점"),
+    reflectionHard: shortText(1000, "아쉬웠던 점"),
+    reflectionNext: shortText(1000, "다음에 다르게 해볼 것"),
     status: z.enum(["draft", "completed"], { message: "저장 상태를 확인해주세요." }),
     students: z.array(studentLessonEntrySchema).min(1, "학생 기록이 필요합니다."),
   })

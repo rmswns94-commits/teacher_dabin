@@ -380,6 +380,9 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     next_lesson_plan: input.nextLessonPlan?.trim() || null,
     next_plan_date: input.nextPlanDate || null,
     vocab_total: vocabTotal,
+    reflection_good: input.reflectionGood?.trim() || null,
+    reflection_hard: input.reflectionHard?.trim() || null,
+    reflection_next: input.reflectionNext?.trim() || null,
     status: input.status,
   };
 
@@ -776,6 +779,9 @@ export type DailyLogHistorySummary = {
   next_lesson_plan: string | null;
   next_plan_date: string | null;
   memo: string | null;
+  reflection_good: string | null;
+  reflection_hard: string | null;
+  reflection_next: string | null;
   updated_at: string;
   studentCount: number;
 };
@@ -798,7 +804,7 @@ export async function getGroupHistoryLogs(
   const { data, error } = await supabase
     .from("daily_logs")
     .select(
-      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, homework_due_date, next_lesson_plan, next_plan_date, memo, updated_at, student_lesson_logs(count)",
+      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, homework_due_date, next_lesson_plan, next_plan_date, memo, reflection_good, reflection_hard, reflection_next, updated_at, student_lesson_logs(count)",
     )
     .eq("user_id", user.id)
     .eq("group_id", groupId)
@@ -821,6 +827,49 @@ export async function getGroupHistoryLogs(
   });
 
   return { rows: rows.slice(0, limit), hasMore: rows.length > limit };
+}
+
+export type PreviousReflectionNext = { class_date: string; reflection_next: string };
+
+// 같은 그룹의 "직전 completed 일지"(class_date < beforeDate)의 다짐(reflection_next).
+// 직전 일지에 다짐이 없으면 null — 더 과거로 거슬러 올라가지 않는다(오래된 다짐의 stale 노출 방지).
+// 그룹당 하루 1일지 제약 덕분에 수정 화면에서는 자기 날짜 미만 조건만으로 자기 자신이 제외된다.
+// migration 미적용 등 조회 실패 시에도 null만 반환 — 작성 화면은 항상 동작해야 한다.
+export async function getPreviousReflectionNext(
+  groupId: string,
+  beforeDate: string,
+): Promise<PreviousReflectionNext | null> {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("daily_logs")
+    .select("class_date, reflection_next")
+    .eq("user_id", user.id)
+    .eq("group_id", groupId)
+    .eq("status", "completed")
+    .lt("class_date", beforeDate)
+    .order("class_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("getPreviousReflectionNext error", error);
+    return null;
+  }
+
+  const reflectionNext = (data?.reflection_next as string | null)?.trim();
+
+  if (!data || !reflectionNext) {
+    return null;
+  }
+
+  return { class_date: data.class_date as string, reflection_next: reflectionNext };
 }
 
 // 이전 일지의 공통 필드만 update (학생 평가/칭찬은 기존 전체 수정 화면 재사용).
@@ -880,7 +929,7 @@ export async function updateDailyLogFields(input: {
     .eq("id", input.dailyLogId)
     .eq("user_id", user.id)
     .select(
-      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, homework_due_date, next_lesson_plan, next_plan_date, memo, updated_at",
+      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, homework_due_date, next_lesson_plan, next_plan_date, memo, reflection_good, reflection_hard, reflection_next, updated_at",
     )
     .single();
 

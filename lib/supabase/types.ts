@@ -129,6 +129,9 @@ export type DailyLogRecord = {
   homework_due_date: string | null; // 숙제 표시 날짜 (선택 — 있으면 그 날 To Do로 노출)
   next_lesson_plan: string | null;
   next_plan_date: string | null; // 다음 수업 계획의 계획 날짜 (To Do 연동 기준)
+  reflection_good: string | null; // 수업 회고: 잘된 점 (강사 전용 — 학생/성장노트 노출 금지)
+  reflection_hard: string | null; // 수업 회고: 아쉬웠던 점
+  reflection_next: string | null; // 수업 회고: 다음에 다르게 해볼 것 (다음 일지 작성 화면에 리마인드)
   vocab_total: number | null;
   status: DailyLogStatus;
   created_at: string;

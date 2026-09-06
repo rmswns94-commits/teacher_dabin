@@ -454,6 +454,9 @@ export function LessonHistoryWorkspace({
                     value={selected.next_lesson_plan}
                   />
                   <Section label="수업 메모" value={selected.memo} />
+                  <Section label="회고 · 잘된 점" value={selected.reflection_good} />
+                  <Section label="회고 · 아쉬웠던 점" value={selected.reflection_hard} />
+                  <Section label="회고 · 다음에 다르게" value={selected.reflection_next} />
                 </div>
 
                 {/* 학생 기록: 펼칠 때만 batch 조회 (lazy) */}

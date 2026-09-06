@@ -9,6 +9,7 @@ import { getDailyLogDraft } from "@/lib/supabase/queries/daily-log-drafts";
 import {
   getDailyLogDetailForCurrentUser,
   getPraisesForDailyLog,
+  getPreviousReflectionNext,
 } from "@/lib/supabase/queries/daily-logs";
 import { getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
 import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
@@ -80,10 +81,12 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
 
   // Students who joined the group after this log was written can still be added.
   const knownIds = new Set(students.map((student) => student.studentId));
-  const [currentMembers, groupSchedules] = await Promise.all([
+  const [currentMembers, groupSchedules, prevReflection] = await Promise.all([
     getGroupStudentsForCurrentUser(log.group_id),
     // 다음 수업 계획 기본 날짜 계산용 시간표 (legacy row는 저장 전까지 DB 미변경)
     getGroupSchedules(log.group_id),
+    // 이 일지 이전 completed 일지의 다짐 (자기 자신은 class_date 미만 조건으로 자연 제외)
+    getPreviousReflectionNext(log.group_id, log.class_date),
   ]);
 
   for (const member of currentMembers) {
@@ -123,7 +126,18 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
             nextLessonPlan: log.next_lesson_plan ?? "",
             nextPlanDate: log.next_plan_date ?? "",
             vocabTotal: log.vocab_total === null ? "" : String(log.vocab_total),
+            reflectionGood: log.reflection_good ?? "",
+            reflectionHard: log.reflection_hard ?? "",
+            reflectionNext: log.reflection_next ?? "",
           }}
+          previousReflection={
+            prevReflection
+              ? {
+                  classDate: prevReflection.class_date,
+                  reflectionNext: prevReflection.reflection_next,
+                }
+              : null
+          }
         />
       </main>
     </AppShell>

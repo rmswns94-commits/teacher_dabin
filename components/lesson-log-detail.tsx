@@ -171,6 +171,35 @@ export function LessonLogDetail({
           </div>
         ) : null}
 
+        {/* 수업 회고 (강사 전용 화면이므로 노출 무방) — 값 있는 항목만 */}
+        {detail.reflection_good || detail.reflection_hard || detail.reflection_next ? (
+          <div className="mt-3 rounded-2xl bg-[#f5f2ff] p-3.5">
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-[#6d5aa8]">
+              오늘 수업 회고
+            </div>
+            <div className="mt-1.5 space-y-1.5 text-sm leading-6 text-[#4a4160]">
+              {detail.reflection_good ? (
+                <div>
+                  <span className="font-medium text-[#3e7d6b]">잘된 점</span> ·{" "}
+                  <span className="whitespace-pre-line">{detail.reflection_good}</span>
+                </div>
+              ) : null}
+              {detail.reflection_hard ? (
+                <div>
+                  <span className="font-medium text-[#8a5d52]">아쉬웠던 점</span> ·{" "}
+                  <span className="whitespace-pre-line">{detail.reflection_hard}</span>
+                </div>
+              ) : null}
+              {detail.reflection_next ? (
+                <div>
+                  <span className="font-medium text-[#5c4ca8]">다음에 다르게</span> ·{" "}
+                  <span className="whitespace-pre-line">{detail.reflection_next}</span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         {/* 출결 + 학생별 기록 */}
         <SectionHeading>출결 · 학생 기록</SectionHeading>
         <div className="mt-2 flex items-center gap-1.5 text-xs">
