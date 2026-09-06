@@ -38,8 +38,8 @@ export function DailyLogDeleteButton({
 
       // 같은 날짜의 목록으로 복귀 (달력 선택 유지) + 삭제 안내 배너
       const month = result.classDate.slice(0, 7);
+      // 액션의 revalidatePath("/daily-logs")로 replace가 이미 최신 데이터를 받는다
       router.replace(`/daily-logs?month=${month}&date=${result.classDate}&deleted=1`);
-      router.refresh();
     });
   };
 

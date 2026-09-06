@@ -1,6 +1,8 @@
+import { cache } from "react";
+
 import { DAY_LABELS, formatScheduleSlot, slotsOverlap } from "@/lib/schedule";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
-import type { ClassGroupScheduleRecord, PreparationItem, StudentGrade } from "@/lib/supabase/types";
+import type { ClassGroupScheduleRecord, StudentGrade } from "@/lib/supabase/types";
 
 function pickOne<T>(value: unknown): T | null {
   if (Array.isArray(value)) {
@@ -39,13 +41,13 @@ export type ScheduleGroupInfo = {
   name: string;
   grade: StudentGrade;
   archived: boolean;
-  preparation_items: PreparationItem[] | null;
 };
 
 export type ScheduleWithGroup = ClassGroupScheduleRecord & { group: ScheduleGroupInfo | null };
 
 // Every schedule of the current user with its group, archived groups excluded.
-export async function getCurrentUserSchedulesWithGroup() {
+// (preparation_items 같은 큰 jsonb는 싣지 않는다 — 필요한 화면은 그룹 쿼리에서 받는다)
+async function fetchSchedulesWithGroup() {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
@@ -55,7 +57,7 @@ export async function getCurrentUserSchedulesWithGroup() {
 
   const { data, error } = await supabase
     .from("class_group_schedules")
-    .select("*, class_groups(id, name, grade, archived, preparation_items)")
+    .select("*, class_groups(id, name, grade, archived)")
     .eq("user_id", user.id);
 
   if (error) {
@@ -70,6 +72,13 @@ export async function getCurrentUserSchedulesWithGroup() {
     }))
     .filter((row) => row.group && !row.group.archived) as ScheduleWithGroup[];
 }
+
+// 페이지 렌더용 — AppShell(모든 페이지)과 개별 페이지가 함께 호출해도 요청당 1쿼리로 dedupe.
+export const getCurrentUserSchedulesWithGroup = cache(fetchSchedulesWithGroup);
+
+// 쓰기 경로(블록 교체 등) 전용: 삭제/삽입 사이에 반드시 최신 상태를 다시 읽어야 하므로
+// 캐시를 우회한다 — 캐시본을 쓰면 방금 지운 slot과 자기 자신 겹침 판정이 난다.
+const getCurrentUserSchedulesFresh = fetchSchedulesWithGroup;
 
 // 여러 요일을 한 번에 등록한다. 완전히 같은 (요일+시간)이 이미 있으면
 // 조용히 건너뛰고, 시간이 겹치는 다른 schedule이 있으면 에러를 낸다.
@@ -99,7 +108,7 @@ export async function addGroupSchedules(
   }
 
   const excluded = new Set(excludeIds);
-  const existing = (await getCurrentUserSchedulesWithGroup()).filter(
+  const existing = (await getCurrentUserSchedulesFresh()).filter(
     (slot) => !excluded.has(slot.id),
   );
 

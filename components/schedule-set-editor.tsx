@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Fragment, useState, useTransition } from "react";
 
@@ -29,7 +28,6 @@ export function ScheduleSetEditor({
   groupId: string;
   slots: ClassGroupScheduleRecord[];
 }) {
-  const router = useRouter();
   const blocks = groupSchedulesByTime(slots);
 
   const [picker, setPicker] = useState<PickerValue>(emptyPicker);
@@ -64,7 +62,6 @@ export function ScheduleSetEditor({
       }
 
       resetPicker();
-      router.refresh();
     });
   };
 
@@ -90,8 +87,6 @@ export function ScheduleSetEditor({
       if (editingIds && editingIds[0] === block.slotIds[0]) {
         resetPicker();
       }
-
-      router.refresh();
     });
   };
 

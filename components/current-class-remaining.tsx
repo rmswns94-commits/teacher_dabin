@@ -113,17 +113,22 @@ export function ClassStatusPanel({
   endEpoch,
   next,
   allDone,
+  initialNow,
 }: {
   startEpoch: number;
   endEpoch: number;
   // hero 수업 "다음"의 실제 수업 (Teacher 기준 — Dashboard의 followUp 재사용)
   next: { startEpoch: number; startLabel: string; daysFromNow: number } | null;
   allDone: boolean;
+  // 서버 렌더 시각 — hydration mismatch 방지용 (mount 직후 실제 시각으로 동기화)
+  initialNow: number;
 }) {
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(initialNow);
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    const refresh = () => setNow(Date.now());
+    refresh(); // mount 직후 실제 브라우저 시각으로 동기화 (초기값은 서버 렌더 시각)
+    const timer = setInterval(refresh, 30_000);
     return () => clearInterval(timer);
   }, []);
 

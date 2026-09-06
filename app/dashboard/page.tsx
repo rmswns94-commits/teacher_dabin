@@ -114,7 +114,9 @@ export default async function DashboardPage() {
     scheduleOverview.endedToday.length > 0 &&
     (!scheduleOverview.next || scheduleOverview.next.daysFromNow > 0);
 
-  const focusGroup = hero?.group ?? null;
+  // 같은 페이지에서 이미 받은 allGroups에서 찾는다 — schedules embed로 preparation_items
+  // jsonb를 중복 전송하지 않기 위해 (스케줄 쿼리는 모든 페이지의 AppShell에서도 돈다)
+  const focusGroup = hero ? allGroups.find((group) => group.id === hero.group.id) ?? null : null;
   const latestProgress = focusGroup ? await getGroupLatestProgress(focusGroup.id) : null;
 
   // To do list는 read-only summary: 수업 그룹 상세에서 Teacher가 실제 등록한
@@ -302,7 +304,11 @@ export default async function DashboardPage() {
                       >
                         {hero.group.name}
                       </Link>
-                      <NextClassCountdown startEpoch={hero.startEpoch} endEpoch={hero.endEpoch} />
+                      <NextClassCountdown
+                        startEpoch={hero.startEpoch}
+                        endEpoch={hero.endEpoch}
+                        initialNow={currentEpochMs()}
+                      />
                     </div>
 
                     <div className="mt-1.5 text-[15px] tabular-nums text-[#665b5a]">
@@ -336,6 +342,7 @@ export default async function DashboardPage() {
                   <ClassStatusPanel
                     startEpoch={hero.startEpoch}
                     endEpoch={hero.endEpoch}
+                    initialNow={currentEpochMs()}
                     next={
                       followUp
                         ? {

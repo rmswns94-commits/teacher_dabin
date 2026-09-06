@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Ellipsis, Heart, Pencil, Plus, Quote, RefreshCw, Trash2 } from "lucide-react";
 import { useState, useTransition } from "react";
 
@@ -181,7 +180,6 @@ function WordFormDialog({
 /* ---------- 등록 버튼 ---------- */
 
 export function PrettyWordCreateButton({ label = "이쁜 말 등록하기" }: { label?: string }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
@@ -200,7 +198,6 @@ export function PrettyWordCreateButton({ label = "이쁜 말 등록하기" }: { 
       setOpen(false);
       setSavedMessage("예쁜 문장을 하나 더 모았어요 ♡");
       setTimeout(() => setSavedMessage(""), 2500);
-      router.refresh();
     });
   };
 
@@ -251,7 +248,6 @@ function hashId(id: string) {
 }
 
 export function PrettyWordCard({ word }: { word: PrettyWordRecord }) {
-  const router = useRouter();
   const hash = hashId(word.id);
   const variant = noteVariants[hash % noteVariants.length];
   const hasTape = hash % 4 === 0;
@@ -290,7 +286,6 @@ export function PrettyWordCard({ word }: { word: PrettyWordRecord }) {
         return;
       }
 
-      router.refresh();
     });
   };
 
@@ -305,7 +300,6 @@ export function PrettyWordCard({ word }: { word: PrettyWordRecord }) {
       }
 
       setEditing(false);
-      router.refresh();
     });
   };
 

@@ -79,7 +79,8 @@ export default async function StudentDetailPage({
     getStudentByIdForCurrentUser(id),
     getCurrentUserGroups(),
     getStudentGroupsForCurrentUser(id),
-    getStudentLessonHistory(id),
+    // 학생 상세는 최근 기록 중심(30일 출결/최근 5건/단어 6건) — 180일이면 충분히 커버
+    getStudentLessonHistory(id, addDaysStr(today, -180)),
     getStudentMakeups(id),
     getStudentPraises(id, praiseSince),
   ]);

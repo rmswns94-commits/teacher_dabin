@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Check, SquarePen } from "lucide-react";
 import { useState, useTransition } from "react";
 
@@ -254,7 +253,6 @@ export function StudentEditDialog({
   initial: StudentEditInitialValues;
   groups: GroupOption[];
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
@@ -273,7 +271,6 @@ export function StudentEditDialog({
       setOpen(false);
       setSavedMessage("학생 정보를 수정했어요.");
       setTimeout(() => setSavedMessage(""), 2500);
-      router.refresh();
     });
   };
 

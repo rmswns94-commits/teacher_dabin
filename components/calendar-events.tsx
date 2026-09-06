@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { CalendarPlus, Pencil, Trash2 } from "lucide-react";
 import { useState, useTransition } from "react";
 
@@ -166,7 +165,6 @@ export function EventCreateButton({
   variant?: "secondary" | "outline" | "ghost";
   size?: "sm" | "default";
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -182,7 +180,6 @@ export function EventCreateButton({
       }
 
       setOpen(false);
-      router.refresh();
     });
   };
 
@@ -230,7 +227,6 @@ export function CalendarEventItem({
   event: CalendarEventWithGroup;
   groups: GroupOption[];
 }) {
-  const router = useRouter();
   const meta = eventMetaOf(event.event_type);
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -255,7 +251,6 @@ export function CalendarEventItem({
         return;
       }
 
-      router.refresh();
     });
   };
 
@@ -270,7 +265,6 @@ export function CalendarEventItem({
       }
 
       setEditing(false);
-      router.refresh();
     });
   };
 

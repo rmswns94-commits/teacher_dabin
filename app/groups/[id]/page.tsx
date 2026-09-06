@@ -38,7 +38,6 @@ import {
   getGroupLatestProgress,
   getGroupRecentLogs,
   getGroupStudentsForCurrentUser,
-  getLessonQuickCheckCounts,
 } from "@/lib/supabase/queries/groups";
 import { gradeDisplay, gradeOptions, isElementaryGrade } from "@/lib/grades";
 import { groupIconOf } from "@/lib/group-icons";
@@ -88,11 +87,20 @@ export default async function GroupDetailPage({
     notFound();
   }
 
-  // 초등 그룹: 가장 최근 일지 기준의 체크 요약 (쿼리 1번 추가)
+  // 초등 그룹: 가장 최근 일지 기준의 체크 요약 — 추가 쿼리 없이 recentLogs embed로 집계
   const isElementary = isElementaryGrade(group.grade);
   const latestLog = recentLogs[0] ?? null;
   const quickCheck =
-    isElementary && latestLog ? await getLessonQuickCheckCounts(latestLog.id) : null;
+    isElementary && latestLog
+      ? (latestLog.student_lesson_logs ?? []).reduce(
+          (acc, row) => ({
+            homeworkMissing: acc.homeworkMissing + (row.homework_status === "missing" ? 1 : 0),
+            retest: acc.retest + (row.vocab_retest ? 1 : 0),
+            parentPending: acc.parentPending + (row.parent_note_status === "pending" ? 1 : 0),
+          }),
+          { homeworkMissing: 0, retest: 0, parentPending: 0 },
+        )
+      : null;
 
   const members = allMembers.filter((student) => !student.archived);
   const memberSet = new Set(allMembers.map((student) => student.id));

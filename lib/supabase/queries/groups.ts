@@ -4,9 +4,10 @@ import { cache } from "react";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type { ClassGroupRecord, PreparationItem, StudentGrade, StudentRecord } from "@/lib/supabase/types";
 
-// cache(): AppShell(사이드바)과 페이지가 같은 요청 안에서 그룹 목록을
-// 각각 조회해도 실제 쿼리는 인자별로 1회만 나간다.
-export const getCurrentUserGroups = cache(async (includeArchived = false) => {
+// cache(): AppShell(사이드바)과 페이지가 같은 요청 안에서 그룹 목록을 각각 조회해도
+// 실제 쿼리는 1회만 나간다. cache는 인자별로 엔트리가 갈리므로(false/true가 각각 1쿼리)
+// 내부에서는 인자 없이 전체를 한 번만 읽고, archived 필터는 JS에서 적용한다.
+const getAllUserGroups = cache(async () => {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
@@ -14,17 +15,11 @@ export const getCurrentUserGroups = cache(async (includeArchived = false) => {
     return [] as ClassGroupRecord[];
   }
 
-  let query = supabase
+  const { data, error } = await supabase
     .from("class_groups")
     .select("*")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
-
-  if (!includeArchived) {
-    query = query.eq("archived", false);
-  }
-
-  const { data, error } = await query;
 
   if (error) {
     console.error("getCurrentUserGroups error", error);
@@ -33,6 +28,11 @@ export const getCurrentUserGroups = cache(async (includeArchived = false) => {
 
   return (data ?? []) as ClassGroupRecord[];
 });
+
+export async function getCurrentUserGroups(includeArchived = false) {
+  const all = await getAllUserGroups();
+  return includeArchived ? all : all.filter((group) => !group.archived);
+}
 
 // 그룹별 학생 수를 쿼리 1번으로 모두 계산한다 (그룹당 count 쿼리 N+1 방지).
 export async function getAllGroupStudentCounts() {
@@ -82,28 +82,6 @@ export async function getGroupByIdForCurrentUser(groupId: string) {
   }
 
   return data as ClassGroupRecord | null;
-}
-
-export async function getGroupStudentCount(groupId: string) {
-  const supabase = await createServerSupabaseClient();
-  const user = await getServerUser();
-
-  if (!supabase || !user) {
-    return 0;
-  }
-
-  const { count, error } = await supabase
-    .from("student_group_memberships")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .eq("group_id", groupId);
-
-  if (error) {
-    console.error("getGroupStudentCount error", error);
-    return 0;
-  }
-
-  return count ?? 0;
 }
 
 export async function getGroupStudentsForCurrentUser(groupId: string) {
@@ -388,6 +366,12 @@ export type GroupRecentLog = {
   lesson_content: string | null;
   default_progress: string | null;
   status: "draft" | "completed";
+  // 초등 quick check 집계용 embed — 추가 쿼리 없이 최신 일지의 학생 상태를 함께 받는다
+  student_lesson_logs: {
+    homework_status: string | null;
+    vocab_retest: boolean;
+    parent_note_status: string | null;
+  }[];
 };
 
 export async function getGroupRecentLogs(groupId: string, limit = 5) {
@@ -400,7 +384,9 @@ export async function getGroupRecentLogs(groupId: string, limit = 5) {
 
   const { data, error } = await supabase
     .from("daily_logs")
-    .select("id, class_date, title, lesson_content, default_progress, status")
+    .select(
+      "id, class_date, title, lesson_content, default_progress, status, student_lesson_logs(homework_status, vocab_retest, parent_note_status)",
+    )
     .eq("user_id", user.id)
     .eq("group_id", groupId)
     .order("class_date", { ascending: false })
@@ -598,36 +584,6 @@ export async function getUpcomingGroupExams(fromDate: string, toDate: string) {
   }
 
   return (data ?? []) as GroupExamSummary[];
-}
-
-// 그룹 대시보드 "최근 체크"용: 특정 일지의 학생 기록을 쿼리 1번으로 집계.
-export async function getLessonQuickCheckCounts(dailyLogId: string) {
-  const supabase = await createServerSupabaseClient();
-  const user = await getServerUser();
-  const counts = { homeworkMissing: 0, retest: 0, parentPending: 0 };
-
-  if (!supabase || !user) {
-    return counts;
-  }
-
-  const { data, error } = await supabase
-    .from("student_lesson_logs")
-    .select("homework_status, vocab_retest, parent_note_status")
-    .eq("user_id", user.id)
-    .eq("daily_log_id", dailyLogId);
-
-  if (error) {
-    console.error("getLessonQuickCheckCounts error", error);
-    return counts;
-  }
-
-  for (const row of data ?? []) {
-    if (row.homework_status === "missing") counts.homeworkMissing += 1;
-    if (row.vocab_retest) counts.retest += 1;
-    if (row.parent_note_status === "pending") counts.parentPending += 1;
-  }
-
-  return counts;
 }
 
 export async function getGroupOrThrow(groupId: string) {

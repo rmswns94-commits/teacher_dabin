@@ -22,7 +22,9 @@ export type StudentLessonHistoryItem = StudentLessonLogRecord & {
     | null;
 };
 
-export async function getStudentLessonHistory(studentId: string) {
+// sinceDate(YYYY-MM-DD)를 주면 그 날짜 이후 수업만 조회한다 — 학생 상세는 최근 기록만
+// 쓰므로 전체 history 무제한 조회를 피한다 (이 파일의 다른 함수들과 같은 bounded 정책).
+export async function getStudentLessonHistory(studentId: string, sinceDate?: string) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
@@ -30,11 +32,17 @@ export async function getStudentLessonHistory(studentId: string) {
     return [] as StudentLessonHistoryItem[];
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("student_lesson_logs")
-    .select("*, daily_logs(id, class_date, title, default_progress, vocab_total, class_groups(id, name))")
+    .select("*, daily_logs!inner(id, class_date, title, default_progress, vocab_total, class_groups(id, name))")
     .eq("user_id", user.id)
     .eq("student_id", studentId);
+
+  if (sinceDate) {
+    query = query.gte("daily_logs.class_date", sinceDate);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("getStudentLessonHistory error", error);

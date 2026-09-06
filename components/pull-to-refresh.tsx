@@ -3,6 +3,8 @@
 import { RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { anyRegisteredFormDirty } from "@/components/unsaved-guard";
+
 // 당겨서 새로고침 (터치 기기 전용).
 // 이 앱은 body가 아닌 페이지 내부 컨테이너(h-screen overflow-y-auto)가 스크롤되고
 // iOS 홈 화면 설치(standalone)도 지원해서 브라우저 기본 pull-to-refresh가 동작하지
@@ -93,6 +95,10 @@ export function PullToRefresh() {
         }
         if (container && container.scrollTop > 0) {
           tracking = false; // 맨 위가 아니면 일반 스크롤
+          return;
+        }
+        if (anyRegisteredFormDirty()) {
+          tracking = false; // 작성 중인 폼이 있으면 당겨서 새로고침으로 입력을 날리지 않는다
           return;
         }
         active = true;

@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Pencil, Plus, Sparkles } from "lucide-react";
 import { useState, useTransition } from "react";
 
@@ -17,7 +16,6 @@ export function HighlightCard({
   groupId: string;
   initialHighlight: string;
 }) {
-  const router = useRouter();
   const [text, setText] = useState(initialHighlight);
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
@@ -46,7 +44,6 @@ export function HighlightCard({
       setEditing(false);
       setSavedMessage("하이라이트를 저장했어요.");
       setTimeout(() => setSavedMessage(""), 2500);
-      router.refresh();
     });
   };
 

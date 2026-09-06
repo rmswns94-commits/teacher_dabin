@@ -151,7 +151,12 @@ export type DailyLogDetail = DailyLogRecord & {
   makeups: MakeupLessonRecord[];
 };
 
-export async function getDailyLogDetailForCurrentUser(dailyLogId: string) {
+// options.withMakeups=false: 보충 정보가 필요 없는 소비처(이전 기록 패널의 학생 기록 lazy 조회)가
+// 버려질 makeup 쿼리 1번을 아낄 수 있게 한다. 기본값은 기존과 동일하게 포함.
+export async function getDailyLogDetailForCurrentUser(
+  dailyLogId: string,
+  options?: { withMakeups?: boolean },
+) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
@@ -185,7 +190,7 @@ export async function getDailyLogDetailForCurrentUser(dailyLogId: string) {
   let makeups: MakeupLessonRecord[] = [];
   const lessonLogIds = lessonLogs.map((log) => log.id);
 
-  if (lessonLogIds.length > 0) {
+  if (options?.withMakeups !== false && lessonLogIds.length > 0) {
     const { data: makeupRows, error: makeupError } = await supabase
       .from("makeup_lessons")
       .select("*")

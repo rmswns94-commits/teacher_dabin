@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Check, UserRoundPlus } from "lucide-react";
 import { useState, useTransition } from "react";
 
@@ -254,7 +253,6 @@ export function StudentCreateDialog({
   groups: GroupOption[];
   label?: string;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
@@ -273,7 +271,6 @@ export function StudentCreateDialog({
       setOpen(false);
       setSavedMessage("학생을 등록했어요.");
       setTimeout(() => setSavedMessage(""), 2500);
-      router.refresh();
     });
   };
 

@@ -136,7 +136,8 @@ export async function loadGroupHistoryAction(input: {
 export async function loadHistoryRecordsAction(dailyLogId: string) {
   try {
     const [detail, praises] = await Promise.all([
-      getDailyLogDetailForCurrentUser(dailyLogId),
+      // 패널은 학생 기록만 쓰므로 보충 조회는 생략 (버려지던 쿼리 1번 절감)
+      getDailyLogDetailForCurrentUser(dailyLogId, { withMakeups: false }),
       getPraisesForDailyLog(dailyLogId),
     ]);
 

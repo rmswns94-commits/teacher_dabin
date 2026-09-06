@@ -40,20 +40,21 @@ export function WelcomeHero() {
               수업 준비에서 학생별 코멘트, 결석 보완까지 한눈에. 하루를 더 차분하고 체계적으로 운영해보세요.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link href="/dashboard">
-                <Button className="gap-2">
+              {/* asChild: <a> 안에 <button>이 중첩되면 invalid HTML — 앱의 다른 곳과 동일 패턴 */}
+              <Button className="gap-2" asChild>
+                <Link href="/dashboard">
                   시작하기 <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
-              <Link href="/dashboard">
-                <Button variant="secondary">대시보드 둘러보기</Button>
-              </Link>
-              <Link href="/login">
-                <Button variant="outline">로그인</Button>
-              </Link>
-              <Link href="/signup">
-                <Button variant="accent">회원가입</Button>
-              </Link>
+                </Link>
+              </Button>
+              <Button variant="secondary" asChild>
+                <Link href="/dashboard">대시보드 둘러보기</Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href="/login">로그인</Link>
+              </Button>
+              <Button variant="accent" asChild>
+                <Link href="/signup">회원가입</Link>
+              </Button>
             </div>
           </div>
 

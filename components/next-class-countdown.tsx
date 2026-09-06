@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Phase = "upcoming" | "current" | "ended";
 
@@ -50,26 +50,45 @@ function label(startEpoch: number, endEpoch: number, now: number) {
 export function NextClassCountdown({
   startEpoch,
   endEpoch,
+  initialNow,
   className,
 }: {
   startEpoch: number;
   endEpoch: number;
+  // 서버 렌더 시각 — hydration mismatch 방지용 (mount 직후 실제 시각으로 동기화)
+  initialNow: number;
   className?: string;
 }) {
   const router = useRouter();
-  const [now, setNow] = useState(() => Date.now());
-  const [initialPhase] = useState<Phase>(() => phaseOf(startEpoch, endEpoch, Date.now()));
+  const [now, setNow] = useState(initialNow);
+  // 기준 phase는 ref로 관리한다. router.refresh()는 컴포넌트를 remount하지 않아
+  // useState 초기값이 다시 계산되지 않으므로, state로 두면 수업 전환 후
+  // "phase 불일치 → 30초마다 영구 refresh" 루프가 생긴다 (실제 있었던 버그).
+  const baseRef = useRef<{ slotKey: string; phase: Phase } | null>(null);
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    const refresh = () => setNow(Date.now());
+    refresh(); // mount 직후 실제 브라우저 시각으로 동기화 (초기값은 서버 렌더 시각)
+    const timer = setInterval(refresh, 30_000);
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
-    if (phaseOf(startEpoch, endEpoch, now) !== initialPhase) {
+    const slotKey = `${startEpoch}:${endEpoch}`;
+    const phase = phaseOf(startEpoch, endEpoch, now);
+
+    // 첫 평가이거나 서버가 다음 수업으로 교체한 경우(slot 변경) → 기준만 재설정
+    if (!baseRef.current || baseRef.current.slotKey !== slotKey) {
+      baseRef.current = { slotKey, phase };
+      return;
+    }
+
+    // 같은 slot에서 phase가 실제로 전환된 순간에만, 전환당 1회 refresh
+    if (baseRef.current.phase !== phase) {
+      baseRef.current = { slotKey, phase };
       router.refresh();
     }
-  }, [now, startEpoch, endEpoch, initialPhase, router]);
+  }, [now, startEpoch, endEpoch, router]);
 
   const phase = phaseOf(startEpoch, endEpoch, now);
   const soon = phase === "upcoming" && startEpoch - now <= 30 * 60000;

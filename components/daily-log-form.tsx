@@ -423,6 +423,19 @@ export function DailyLogForm({
     [],
   );
 
+  // 새로고침/탭 닫기 보호 — 다른 폼들과 달리 이 폼만 빠져 있었다 (앱에서 가장 큰 입력 폼).
+  // dirty 판정은 이벤트 시점에만 lazy로 수행해 keystroke 비용 0 (한글 조합에 영향 없음).
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (JSON.stringify(formStateRef.current) !== initialSnapshotRef.current) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
   // ── 자동 임시저장 (1분) ────────────────────────────────────────────
   // 조건: 변경 존재 + 이전 요청 미진행 + IME 조합 중 아님 + final 저장 중 아님.
   // 성공해도 router.refresh/revalidate/side effect 없음 — draft snapshot만 갱신.
@@ -464,14 +477,24 @@ export function DailyLogForm({
       }
       autosaveInFlightRef.current = true; // in-flight guard (요청 직렬화)
       setAutosave({ status: "saving" });
-      const result = await autosaveDailyLogDraftAction({
-        draftId: draftIdRef.current,
-        dailyLogId: persistedLogIdRef.current,
-        groupId: group.id,
-        classDate: classDateNow,
-        payload: formStateRef.current,
-      });
-      autosaveInFlightRef.current = false;
+      let result: Awaited<ReturnType<typeof autosaveDailyLogDraftAction>>;
+      try {
+        result = await autosaveDailyLogDraftAction({
+          draftId: draftIdRef.current,
+          dailyLogId: persistedLogIdRef.current,
+          groupId: group.id,
+          classDate: classDateNow,
+          payload: formStateRef.current,
+        });
+      } catch (error) {
+        // 오프라인 등으로 promise가 reject돼도 in-flight 플래그가 잠기지 않게 한다
+        // (안 그러면 이 폼 세션의 autosave가 영구 중단된다)
+        console.error("autosave request failed", error);
+        setAutosave({ status: "error" });
+        return;
+      } finally {
+        autosaveInFlightRef.current = false;
+      }
       if ("error" in result) {
         setAutosave({ status: "error" });
         return; // 입력값은 그대로 — 다음 interval에서 재시도

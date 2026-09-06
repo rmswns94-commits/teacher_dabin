@@ -75,7 +75,10 @@ export async function togglePrettyWordFavoriteAction(
     return friendlyError(error, "즐겨찾기를 저장하지 못했어요.");
   }
 
-  revalidatePath("/pretty-words");
+  // revalidatePath 없음(의도): 하트는 클라이언트 낙관적 토글로 즉시 반영되고,
+  // 페이지가 dynamic이라 다음 진입 시 서버 값이 어차피 새로 읽힌다.
+  // revalidate를 하면 토글마다 페이지 전체 RSC 페이로드가 응답에 실려 와
+  // 낙관적 업데이트의 이점이 사라진다.
   return { success: true };
 }
 
