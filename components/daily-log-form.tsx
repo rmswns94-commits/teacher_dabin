@@ -221,6 +221,8 @@ function SegmentedToggle({
 }
 
 // 틀린 단어 chip 입력 — Enter 또는 [추가]로 등록, chip ✕로 삭제.
+// 쉼표/줄바꿈으로 구분하면 한 번에 여러 단어가 등록된다 ("a, b, c" → chip 3개).
+// 공백은 구분자가 아니다 — "give up" 같은 구동사를 한 단어로 적을 수 있게.
 // 같은 시험 안 중복(대소문자/공백 무시)은 추가 시점에 조용히 걸러준다.
 // IME-safe: 조합 중 Enter는 submit으로 오인하지 않는다 (한국어 입력 대비).
 function VocabMistakeChips({
@@ -235,18 +237,34 @@ function VocabMistakeChips({
   const [draft, setDraft] = useState("");
 
   const add = () => {
-    const word = draft.trim().replace(/\s+/g, " ");
+    const incoming = draft
+      .split(/[,\n·]/)
+      .map((part) => part.trim().replace(/\s+/g, " "))
+      // 단어당 60자 제한(검증 스키마와 동일) — 초과분은 저장에서 막히기 전에 여기서 거른다
+      .filter((part) => part && part.length <= 60);
 
-    if (!word) {
+    if (incoming.length === 0) {
       return;
     }
 
-    if (words.some((existing) => vocabWordKey(existing) === vocabWordKey(word))) {
-      setDraft("");
-      return;
+    const next = [...words];
+    const seen = new Set(words.map((existing) => vocabWordKey(existing)));
+
+    for (const word of incoming) {
+      const key = vocabWordKey(word);
+
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      next.push(word);
     }
 
-    onChange([...words, word]);
+    if (next.length > words.length) {
+      onChange(next);
+    }
+
     setDraft("");
   };
 
@@ -282,9 +300,9 @@ function VocabMistakeChips({
             add();
           }
         }}
-        maxLength={60}
-        placeholder="틀린 단어"
-        className="w-32 min-w-0 rounded-xl border border-[#ece0db] bg-white px-2.5 py-1.5 text-sm outline-none focus:border-[#c9b9e8]"
+        maxLength={200}
+        placeholder="틀린 단어 (쉼표로 여러 개)"
+        className="w-44 min-w-0 rounded-xl border border-[#ece0db] bg-white px-2.5 py-1.5 text-sm outline-none focus:border-[#c9b9e8]"
         aria-label={`${studentName} 틀린 단어 입력`}
       />
       <button
