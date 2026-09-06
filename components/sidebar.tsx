@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -76,20 +76,54 @@ function setCollapsedPref(next: boolean) {
   }
 }
 
-const topItems = [{ label: "오늘", href: "/dashboard", icon: Home }];
+// ── Navigation 단일 config ─────────────────────────────────────────────
+// 데스크톱 사이드바와 모바일 drawer가 같은 aside를 쓰므로 이 정의 하나가 유일한 소스다.
+// route는 기존 그대로 — 표시 이름/순서/섹션만 재정리 (시험 대비=/exams, 보충 수업=/makeups,
+// 교육 철학=/pretty-words 기존 route 유지). "이쁜 말♥" 별도 메뉴는 두지 않는다(route는 보존).
+type NavItem = {
+  label: string;
+  href: string;
+  icon: typeof Home;
+  // 수업 그룹만 그룹 트리(펼침) 특수 렌더
+  groupTree?: boolean;
+  // 보충 수업의 대기 건수 badge
+  makeupBadge?: boolean;
+};
 
-const lessonItems = [
-  { label: "수업 일지", href: "/daily-logs", icon: NotebookPen },
-  { label: "오늘 할 일", href: "/todos", icon: ListTodo },
-  { label: "학생", href: "/students", icon: Users },
+const topItem: NavItem = { label: "오늘", href: "/dashboard", icon: Home };
+
+const navSections: { label: string; items: NavItem[] }[] = [
+  {
+    label: "수업 관리",
+    items: [
+      { label: "수업 일지", href: "/daily-logs", icon: NotebookPen },
+      { label: "오늘 할 일", href: "/todos", icon: ListTodo },
+      { label: "수업 그룹", href: "/groups", icon: FolderKanban, groupTree: true },
+      { label: "시험 대비", href: "/exams", icon: School },
+      { label: "보충 수업", href: "/makeups", icon: CalendarCheck, makeupBadge: true },
+    ],
+  },
+  {
+    label: "학생 관리",
+    items: [
+      { label: "학생", href: "/students", icon: Users },
+      { label: "성장노트", href: "/growth-notes", icon: Sprout },
+    ],
+  },
+  {
+    label: "강사 기록",
+    items: [
+      { label: "교육 철학", href: "/pretty-words", icon: Heart },
+      { label: "수업 회고", href: "/reflections", icon: Sparkles },
+    ],
+  },
+  {
+    label: "수업 자료",
+    items: [{ label: "영어 지문", href: "/passages", icon: FileText }],
+  },
 ];
 
-const afterGroupItems = [
-  { label: "보충수업", href: "/makeups", icon: CalendarCheck },
-  { label: "시험 관리", href: "/exams", icon: School },
-];
-
-const materialItems = [{ label: "영어 지문", href: "/passages", icon: FileText }];
+const bottomItem: NavItem = { label: "설정", href: "/settings", icon: Settings };
 
 export type SidebarGroup = { id: string; name: string; icon: string | null };
 
@@ -164,7 +198,6 @@ export function Sidebar({
     }
   }
 
-
   // Entering the groups section (e.g. via dashboard quick action) opens the tree.
   // Adjust-state-during-render pattern instead of an effect.
   const [wasInGroupsSection, setWasInGroupsSection] = useState(inGroupsSection);
@@ -175,8 +208,79 @@ export function Sidebar({
     }
   }
 
-
+  // nested route에서도 상위 메뉴가 active (/exams/abc → 시험 대비, /students/1 → 학생)
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+
+  // 수업 그룹 항목의 특수 렌더 (그룹 트리 펼침 — 기존 동작 그대로)
+  const renderGroupTreeItem = (item: NavItem) => (
+    <li key={item.href}>
+      <div
+        className={cn(
+          "flex items-center gap-1 rounded-xl transition-all",
+          inGroupsSection
+            ? "bg-[#f0f0f3] shadow-sm ring-1 ring-[#e2e2e8]"
+            : "hover:bg-[#f4f4f6]",
+        )}
+      >
+        <Link
+          href={item.href}
+          className={cn(
+            "flex flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold",
+            inGroupsSection ? "text-[#232327]" : "text-[#3c3c45]",
+          )}
+        >
+          <span
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-lg",
+              inGroupsSection ? "bg-white text-[#33333b]" : "bg-[#f2f2f4] text-[#5c5c66]",
+            )}
+          >
+            <FolderKanban className="h-4 w-4" />
+          </span>
+          {item.label}
+        </Link>
+        {groups.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setGroupsOpen((open) => !open)}
+            aria-label={groupsOpen ? "수업 그룹 목록 접기" : "수업 그룹 목록 펼치기"}
+            aria-expanded={groupsOpen}
+            className="mr-2 flex h-7 w-7 items-center justify-center rounded-lg text-[#7a7a84] transition hover:bg-white hover:text-[#4c4c55]"
+          >
+            {groupsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
+        ) : null}
+      </div>
+
+      {groupsOpen && groups.length > 0 ? (
+        <ul className="ml-6 mt-1 max-h-48 space-y-0.5 overflow-y-auto border-l border-[#e6e6ea] pl-3">
+          {groups.map((group) => {
+            const groupActive = pathname.startsWith(`/groups/${group.id}`);
+
+            return (
+              <li key={group.id}>
+                <Link
+                  href={`/groups/${group.id}`}
+                  aria-current={groupActive ? "page" : undefined}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all",
+                    groupActive
+                      ? "bg-[#f0f0f3] font-semibold text-[#232327] ring-1 ring-[#e2e2e8]"
+                      : "text-[#4c4c55] hover:bg-[#f4f4f6] hover:text-[#232327]",
+                  )}
+                >
+                  <span aria-hidden className="shrink-0 text-[13px] leading-none">
+                    {groupIconOf(group.icon)}
+                  </span>
+                  <span className="truncate">{group.name}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </li>
+  );
 
   return (
     <>
@@ -254,156 +358,44 @@ export function Sidebar({
         </button>
       </div>
 
-      {/* 섹션 사이는 divide-y 구분선으로 깔끔하게 나눈다 */}
+      {/* 섹션 사이는 divide-y의 아주 연한 구분선 — 오늘(최상단)과 설정(최하단)은 heading 없는 독립 항목 */}
       <nav className="flex-1 divide-y divide-[#ececf0] overflow-y-auto px-3">
-        <ul className="space-y-1.5 py-4">
-          {topItems.map((item) => (
-            <li key={item.href}>
-              <NavLink {...item} isActive={isActive(item.href)} />
-            </li>
-          ))}
+        <ul className="space-y-1 py-3.5">
+          <li>
+            <NavLink {...topItem} isActive={isActive(topItem.href)} />
+          </li>
         </ul>
 
-        <div className="py-4">
-          <div className="mb-2 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9a9aa3]">
-            수업 관리
+        {navSections.map((section) => (
+          <div key={section.label} className="py-3.5">
+            <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9a9aa3]">
+              {section.label}
+            </div>
+            <ul className="space-y-1">
+              {section.items.map((item) =>
+                item.groupTree ? (
+                  renderGroupTreeItem(item)
+                ) : (
+                  <li key={item.href}>
+                    <NavLink
+                      label={item.label}
+                      href={item.href}
+                      icon={item.icon}
+                      isActive={isActive(item.href)}
+                      badgeCount={item.makeupBadge ? pendingMakeupCount : undefined}
+                    />
+                  </li>
+                ),
+              )}
+            </ul>
           </div>
-          <ul className="space-y-1.5">
-            {lessonItems.map((item) => (
-              <li key={item.href}>
-                <NavLink {...item} isActive={isActive(item.href)} />
-              </li>
-            ))}
+        ))}
 
-            <li>
-              <div
-                className={cn(
-                  "flex items-center gap-1 rounded-xl transition-all",
-                  pathname === "/groups"
-                    ? "bg-[#f0f0f3] shadow-sm ring-1 ring-[#e2e2e8]"
-                    : "hover:bg-[#f4f4f6]",
-                )}
-              >
-                <Link
-                  href="/groups"
-                  className={cn(
-                    "flex flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold",
-                    pathname === "/groups" ? "text-[#232327]" : "text-[#3c3c45]",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-lg",
-                      pathname === "/groups" ? "bg-white text-[#33333b]" : "bg-[#f2f2f4] text-[#5c5c66]",
-                    )}
-                  >
-                    <FolderKanban className="h-4 w-4" />
-                  </span>
-                  수업 그룹
-                </Link>
-                {groups.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => setGroupsOpen((open) => !open)}
-                    aria-label={groupsOpen ? "수업 그룹 목록 접기" : "수업 그룹 목록 펼치기"}
-                    aria-expanded={groupsOpen}
-                    className="mr-2 flex h-7 w-7 items-center justify-center rounded-lg text-[#7a7a84] transition hover:bg-white hover:text-[#4c4c55]"
-                  >
-                    {groupsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  </button>
-                ) : null}
-              </div>
-
-              {groupsOpen && groups.length > 0 ? (
-                <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto border-l border-[#e6e6ea] pl-3 ml-6">
-                  {groups.map((group) => {
-                    const groupActive = pathname.startsWith(`/groups/${group.id}`);
-
-                    return (
-                      <li key={group.id}>
-                        <Link
-                          href={`/groups/${group.id}`}
-                          aria-current={groupActive ? "page" : undefined}
-                          className={cn(
-                            "flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all",
-                            groupActive
-                              ? "bg-[#f0f0f3] font-semibold text-[#232327] ring-1 ring-[#e2e2e8]"
-                              : "text-[#4c4c55] hover:bg-[#f4f4f6] hover:text-[#232327]",
-                          )}
-                        >
-                          <span aria-hidden className="shrink-0 text-[13px] leading-none">
-                            {groupIconOf(group.icon)}
-                          </span>
-                          <span className="truncate">{group.name}</span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
-            </li>
-
-            {afterGroupItems.map((item) => (
-              <li key={item.href}>
-                <NavLink
-                  {...item}
-                  isActive={isActive(item.href)}
-                  badgeCount={item.href === "/makeups" ? pendingMakeupCount : undefined}
-                />
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="py-4">
-          <div className="mb-2 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9a9aa3]">
-            수업 자료
-          </div>
-          <ul className="space-y-1.5">
-            {materialItems.map((item) => (
-              <li key={item.href}>
-                <NavLink {...item} isActive={isActive(item.href)} />
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="py-4">
-          <ul className="space-y-1.5">
-            <li>
-              <NavLink
-                label="성장노트"
-                href="/growth-notes"
-                icon={Sprout}
-                isActive={isActive("/growth-notes")}
-              />
-            </li>
-            <li>
-              <NavLink
-                label="교육 철학"
-                href="/pretty-words"
-                icon={Heart}
-                isActive={isActive("/pretty-words")}
-              />
-            </li>
-            <li>
-              <NavLink
-                label="수업 회고"
-                href="/reflections"
-                icon={Sparkles}
-                isActive={isActive("/reflections")}
-              />
-            </li>
-            <li>
-              <NavLink
-                label="설정"
-                href="/settings"
-                icon={Settings}
-                isActive={isActive("/settings")}
-              />
-            </li>
-          </ul>
-        </div>
+        <ul className="space-y-1 py-3.5">
+          <li>
+            <NavLink {...bottomItem} isActive={isActive(bottomItem.href)} />
+          </li>
+        </ul>
       </nav>
 
       </aside>
