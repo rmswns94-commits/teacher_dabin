@@ -40,6 +40,14 @@ export function dayOfWeekOf(dateStr: string) {
   return new Date(`${dateStr}T12:00:00Z`).getUTCDay();
 }
 
+// 달력 날짜 차이 (to - from, 일 단위). D-Day 계산의 공통 소스 — UTC 정오 고정이라
+// 타임존/서머타임으로 하루가 밀리지 않는다. D-18 = daysBetween(today, examStart) === 18.
+export function daysBetween(fromYmd: string, toYmd: string) {
+  return Math.round(
+    (Date.parse(`${toYmd}T12:00:00Z`) - Date.parse(`${fromYmd}T12:00:00Z`)) / 86_400_000,
+  );
+}
+
 // 일요일 시작 주 단위 grid. 빈 칸은 null.
 export function buildMonthGrid(month: string): (string | null)[][] {
   const [y, m] = month.split("-").map(Number);

@@ -19,7 +19,7 @@ import { NextClassCountdown } from "@/components/next-class-countdown";
 import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
+import { addDaysStr, dayOfWeekOf, daysBetween } from "@/lib/calendar";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { DashboardTodoCard } from "@/components/dashboard-todo-card";
 import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
@@ -90,9 +90,7 @@ export default async function DashboardPage() {
 
   const upcomingExams = examEvents.map((event) => {
     const inPeriod = event.start_date <= today && today <= event.end_date;
-    const dday = Math.round(
-      (Date.parse(`${event.start_date}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86_400_000,
-    );
+    const dday = daysBetween(today, event.start_date);
 
     return {
       id: event.id,

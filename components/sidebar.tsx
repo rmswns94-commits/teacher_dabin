@@ -14,6 +14,7 @@ import {
   Home,
   Menu,
   NotebookPen,
+  School,
   Sparkles,
   Sprout,
   Users,
@@ -40,7 +41,10 @@ const lessonItems = [
   { label: "학생", href: "/students", icon: Users },
 ];
 
-const afterGroupItems = [{ label: "보충수업", href: "/makeups", icon: CalendarCheck }];
+const afterGroupItems = [
+  { label: "보충수업", href: "/makeups", icon: CalendarCheck },
+  { label: "시험 관리", href: "/exams", icon: School },
+];
 
 const materialItems = [{ label: "영어 지문", href: "/passages", icon: FileText }];
 

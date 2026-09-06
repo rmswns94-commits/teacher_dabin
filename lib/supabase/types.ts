@@ -241,6 +241,35 @@ export type VocabMistakeRecord = {
   created_at: string;
 };
 
+export type SchoolExamType = "midterm" | "final" | "other";
+export type SchoolExamPrepStatus = "not_started" | "preparing" | "ready";
+
+// 학교별 시험 metadata. 시험 날짜의 single source는 calendar_events(calendar_event_id) —
+// 이 record는 학교/학년/학기/범위/준비 상태만 갖는다. school_name은 등록 당시 snapshot.
+export type SchoolExamDetailRecord = {
+  id: string;
+  user_id: string;
+  calendar_event_id: string;
+  school_name: string;
+  grade: StudentGrade;
+  exam_year: number;
+  semester: 1 | 2;
+  exam_type: SchoolExamType;
+  scope_text: string | null; // Phase 7 free-text 범위 (Phase 8 structured scope와 공존 예정)
+  memo: string | null;
+  prep_status: SchoolExamPrepStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SchoolExamStudentRecord = {
+  id: string;
+  user_id: string;
+  school_exam_id: string;
+  student_id: string;
+  created_at: string;
+};
+
 export type MakeupLessonRecord = {
   id: string;
   user_id: string;
