@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
   BookOpen,
@@ -387,6 +388,7 @@ export function DailyLogForm({
     });
   }, [historyImport, defaultProgress]);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   // 뒤로가기 버튼의 unsaved 확인용 dirty 판정 — 스냅샷 비교는 뒤로가기 클릭 시점에만
   // 수행한다 (매 keystroke마다 큰 객체를 직렬화하면 iPad에서 입력 렌더가 느려져
@@ -616,18 +618,25 @@ export function DailyLogForm({
   const save = (status: "draft" | "completed") => {
     setError("");
     setDraftSavedNotice("");
+    // 검증 실패는 요약 모달을 닫고 화면의 오류 배너로 보여준다
+    // (모달이 열린 채 남으면 아무 일도 안 일어난 것처럼 보인다)
+    const failValidation = (message: string) => {
+      setShowSummary(false);
+      setError(message);
+    };
+
     // 다음 수업 계획은 내용+날짜 한 쌍 (날짜는 수업일 이후)
     if (nextLessonPlan.trim() && !nextPlanDate) {
-      setError("다음 수업 계획 날짜를 선택해주세요.");
+      failValidation("다음 수업 계획 날짜를 선택해주세요.");
       return;
     }
     if (nextPlanDate && classDate && nextPlanDate <= classDate) {
-      setError("다음 수업 계획 날짜는 수업일 이후로 선택해주세요.");
+      failValidation("다음 수업 계획 날짜는 수업일 이후로 선택해주세요.");
       return;
     }
     // 숙제 날짜는 선택 사항 — 골랐다면 수업일 이후여야 그 날 To Do로 뜬다
     if (homework.trim() && homeworkDueDate && classDate && homeworkDueDate <= classDate) {
-      setError("숙제 날짜는 수업일 이후로 선택해주세요.");
+      failValidation("숙제 날짜는 수업일 이후로 선택해주세요.");
       return;
     }
     finalSavingRef.current = true; // final 저장 중 autosave tick 중단
@@ -676,18 +685,31 @@ export function DailyLogForm({
         }),
       });
 
-      finalSavingRef.current = false;
-
       if (result && "duplicate" in result && result.duplicate) {
+        finalSavingRef.current = false;
         setShowSummary(false);
         setDuplicateOpen(true);
         return;
       }
 
-      // 임시 저장 성공 — 이동 없이 작성 화면 유지 (완료 저장은 서버 redirect로
-      // 달력의 방금 저장한 일지 상세로 이동하므로 여기 도달하지 않는다)
       if (result && "success" in result && result.success) {
+        // 저장 성공 — 이후 저장이 update가 되도록 정확한 일지 id를 기억한다
         persistedLogIdRef.current = result.dailyLogId;
+
+        if (result.completed) {
+          // [수업 기록 완료] (작성/수정 공통): 저장 결과의 id + classDate만으로
+          // 방금 저장한 일지가 선택된 달력으로 이동한다. navigation 책임은 여기 한 곳뿐.
+          // replace라 뒤로가기가 완료된 작성 화면으로 되돌아가지 않는다.
+          // finalSavingRef는 그대로 둬서 전환 중 autosave가 끼어들지 않게 한다.
+          initialSnapshotRef.current = JSON.stringify(formStateRef.current); // unsaved 경고 방지
+          router.replace(
+            `/daily-logs?month=${result.classDate.slice(0, 7)}&date=${result.classDate}&log=${result.dailyLogId}&saved=1`,
+          );
+          return;
+        }
+
+        // 임시 저장 성공 — 이동 없이 작성 화면 유지
+        finalSavingRef.current = false;
         draftIdRef.current = null; // 서버가 autosave draft를 정리했음 — 다음 autosave는 새로 시작
         const snapshot = JSON.stringify(formStateRef.current);
         lastSavedSnapshotRef.current = snapshot; // 변경 없으면 autosave가 재저장하지 않게
@@ -698,6 +720,9 @@ export function DailyLogForm({
         return;
       }
 
+      // 저장 실패 — 요약 모달을 닫고 오류를 보이게 한다 (이동 없음, 입력값 유지)
+      finalSavingRef.current = false;
+      setShowSummary(false);
       if (result?.error) {
         setError(result.error);
       }
