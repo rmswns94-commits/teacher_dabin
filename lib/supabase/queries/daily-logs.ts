@@ -1,4 +1,5 @@
 import { formatKoreanDateFull } from "@/lib/dates";
+import { dedupeVocabWords } from "@/lib/vocab";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type {
   AttendanceStatus,
@@ -650,6 +651,63 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     }
   }
 
+  // 틀린 단어 동기화: 이 일지의 오답 rows를 폼 상태 그대로 교체한다 (멱등 — 재저장에도 중복 없음).
+  // Draft autosave는 daily_log_drafts payload에만 담기고, 실제 rows는 이 final 저장에서만 반영된다.
+  // - 같은 일지 안에서는 정규화(소문자/공백) 기준 dedupe, 결석 학생은 기록하지 않는다.
+  // - 다른 날짜 일지의 같은 단어는 별개 occurrence (반복 오답 집계용).
+  const mistakeBaseTime = Date.now();
+  const mistakeRows = input.students.flatMap((entry, studentIndex) => {
+    if (entry.attendance === "absent") {
+      return [];
+    }
+
+    return dedupeVocabWords(entry.vocabMistakes ?? []).map((word, index) => ({
+      user_id: user.id,
+      student_id: entry.studentId,
+      daily_log_id: dailyLogId,
+      word,
+      // batch insert는 created_at default가 전부 같은 값이라 입력 순서 보존용 ms 오프셋
+      // (단어는 시험당 최대 50개 — 학생 간 100ms 간격이면 겹치지 않는다)
+      created_at: new Date(mistakeBaseTime + studentIndex * 100 + index).toISOString(),
+    }));
+  });
+
+  // migration 미적용(테이블 없음)이어도 오답을 안 쓴 저장은 막지 않는다 — 지울 rows도 없기 때문.
+  // 오답을 입력했다면 조용히 사라지지 않게 명확한 안내로 실패시킨다.
+  const MISSING_TABLE = new Set(["42P01", "PGRST205"]);
+  const mistakeMigrationMessage =
+    "틀린 단어 저장에 필요한 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20260906_create_vocab_mistakes.sql을 실행한 뒤 다시 저장해주세요.";
+
+  const { error: mistakeDeleteError } = await supabase
+    .from("vocab_mistakes")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("daily_log_id", dailyLogId);
+
+  if (mistakeDeleteError) {
+    const missingTable = MISSING_TABLE.has(mistakeDeleteError.code ?? "");
+
+    if (!missingTable || mistakeRows.length > 0) {
+      console.error("saveDailyLog vocab mistake delete error", mistakeDeleteError);
+      throw new Error(
+        missingTable
+          ? mistakeMigrationMessage
+          : "틀린 단어를 저장하지 못했어요. 저장 버튼을 다시 눌러주세요.",
+      );
+    }
+  } else if (mistakeRows.length > 0) {
+    const { error: mistakeInsertError } = await supabase.from("vocab_mistakes").insert(mistakeRows);
+
+    if (mistakeInsertError) {
+      console.error("saveDailyLog vocab mistake insert error", mistakeInsertError);
+      throw new Error(
+        MISSING_TABLE.has(mistakeInsertError.code ?? "")
+          ? mistakeMigrationMessage
+          : "틀린 단어를 저장하지 못했어요. 저장 버튼을 다시 눌러주세요.",
+      );
+    }
+  }
+
   // 참고: legacy manual 성장 체크(student_growth_checks)는 더 이상 저장/삭제하지 않는다.
   // 기존 데이터는 보존하되, 새 Achievement 판정에는 사용하지 않는다.
 
@@ -658,6 +716,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
 
 // 수업일지 안전 삭제. 실제 FK 정책 기준으로 처리한다:
 // - student_lesson_logs.daily_log_id = ON DELETE CASCADE → 출결/평가는 DB가 함께 삭제
+// - vocab_mistakes.daily_log_id = ON DELETE CASCADE → 그 시험의 오답도 자동 삭제
 // - student_growth_checks.daily_log_id = ON DELETE CASCADE → legacy 체크도 자동 삭제
 // - student_praises.daily_log_id = ON DELETE SET NULL → orphan 칭찬이 남지 않게 먼저 명시 삭제
 // - makeup_lessons.student_lesson_log_id = ON DELETE SET NULL → 미처리(required/scheduled)

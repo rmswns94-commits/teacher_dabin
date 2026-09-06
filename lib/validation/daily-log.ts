@@ -26,6 +26,11 @@ export const studentLessonEntrySchema = z.object({
   homeworkStatus: z.enum(["completed", "partial", "missing"]).optional().or(z.literal("")),
   vocabCorrect: numberString.optional().or(z.literal("")),
   vocabRetest: z.boolean().optional(),
+  // 단어시험 틀린 단어: 빈 문자열/같은 시험 내 중복(정규화 기준)은 서버에서 걸러 저장된다.
+  vocabMistakes: z
+    .array(z.string().trim().max(60, "단어는 60자 이내로 입력해주세요."))
+    .max(50, "틀린 단어는 시험당 50개까지 기록할 수 있어요.")
+    .optional(),
   focusLevel: z.enum(["good", "normal", "distracted"]).optional().or(z.literal("")),
   participationLevel: z.enum(["active", "normal", "passive"]).optional().or(z.literal("")),
   parentNoteNeeded: z.boolean().optional(),

@@ -13,12 +13,15 @@ import {
 } from "@/lib/supabase/queries/daily-logs";
 import { getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
 import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
+import { getVocabMistakesForDailyLog } from "@/lib/supabase/queries/vocab-mistakes";
 
 export default async function EditDailyLogPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [log, praiseRows, draftRow] = await Promise.all([
+  const [log, praiseRows, mistakeRows, draftRow] = await Promise.all([
     getDailyLogDetailForCurrentUser(id),
     getPraisesForDailyLog(id),
+    // 이 시험의 틀린 단어 (입력 순서 유지 — final 저장 시 폼 상태로 전체 교체)
+    getVocabMistakesForDailyLog(id),
     // 이 일지의 수정 draft (있으면 폼에서 복구 배너 — 원본은 final 저장 전까지 불변)
     getDailyLogDraft({ dailyLogId: id }),
   ]);
@@ -37,6 +40,14 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
         praise.comment,
       ]);
     }
+  }
+
+  const vocabMistakesByStudent = new Map<string, string[]>();
+  for (const mistake of mistakeRows) {
+    vocabMistakesByStudent.set(mistake.student_id, [
+      ...(vocabMistakesByStudent.get(mistake.student_id) ?? []),
+      mistake.word,
+    ]);
   }
 
   const makeupByLessonLog = new Map(
@@ -68,6 +79,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           effortLevel: lessonLog.effort_level ?? "",
           parentNote: lessonLog.parent_note ?? "",
         },
+        vocabMistakes: vocabMistakesByStudent.get(lessonLog.student!.id) ?? [],
         praiseComments: praiseCommentsByStudent.get(lessonLog.student!.id) ?? [],
         makeup: makeup
           ? {

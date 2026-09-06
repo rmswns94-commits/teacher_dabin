@@ -228,6 +228,19 @@ export type StudentWeaknessRecord = {
   resolved_at: string | null;
 };
 
+// 단어시험 오답 occurrence. 점수는 daily_logs.vocab_total + student_lesson_logs.vocab_correct에
+// 있고, 이 record는 해당 시험(일지)에서 틀린 단어 하나를 뜻한다.
+// 같은 일지 안에서는 저장 시 정규화 기준으로 dedupe되고, 다른 날짜의 같은 단어는 별도 row.
+export type VocabMistakeRecord = {
+  id: string;
+  user_id: string;
+  student_id: string;
+  daily_log_id: string;
+  word: string;
+  note: string | null;
+  created_at: string;
+};
+
 export type MakeupLessonRecord = {
   id: string;
   user_id: string;

@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { StudentDeleteButton } from "@/components/student-delete-button";
 import { StudentEditDialog } from "@/components/student-edit-dialog";
+import { StudentVocabCard } from "@/components/student-vocab-card";
 import { StudentWeaknessesCard } from "@/components/student-weaknesses-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PendingButton } from "@/components/pending-button";
@@ -34,7 +35,9 @@ import { nextClassDateAfter } from "@/lib/schedule";
 import { genderLabels } from "@/lib/validation/student";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
+import { getStudentVocabMistakes } from "@/lib/supabase/queries/vocab-mistakes";
 import { getStudentWeaknessesForCurrentUser } from "@/lib/supabase/queries/weaknesses";
+import { aggregateVocabMistakes } from "@/lib/vocab";
 import {
   getStudentLessonHistory,
   getStudentMakeups,
@@ -79,8 +82,17 @@ export default async function StudentDetailPage({
   const monthStart = `${today.slice(0, 7)}-01`;
   const praiseSince = weekStart < monthStart ? weekStart : monthStart;
 
-  const [student, groups, studentGroups, history, makeups, praises, weaknesses, schedules] =
-    await Promise.all([
+  const [
+    student,
+    groups,
+    studentGroups,
+    history,
+    makeups,
+    praises,
+    weaknesses,
+    schedules,
+    vocabMistakes,
+  ] = await Promise.all([
       getStudentByIdForCurrentUser(id),
       getCurrentUserGroups(),
       getStudentGroupsForCurrentUser(id),
@@ -91,6 +103,8 @@ export default async function StudentDetailPage({
       getStudentWeaknessesForCurrentUser(id),
       // AppShell도 같은 쿼리를 쓰므로 요청당 1번으로 dedupe — 약점 due 기본값(다음 수업일) 계산용
       getCurrentUserSchedulesWithGroup(),
+      // 단어시험 오답 occurrence — history와 같은 180일 창으로 batch 1쿼리 (N+1 금지)
+      getStudentVocabMistakes(id, addDaysStr(today, -180)),
     ]);
 
   if (!student) {
@@ -148,6 +162,20 @@ export default async function StudentDetailPage({
   const vocabHistory = history
     .filter((item) => item.vocab_correct !== null && (item.dailyLog?.vocab_total ?? 0) > 0)
     .slice(0, 6);
+
+  // 시험(일지)별 틀린 단어 — 조회는 최신순이라 뒤집어서 입력 순서(오름차순)로 담는다
+  const mistakesByLog = new Map<string, string[]>();
+  for (const mistake of [...vocabMistakes].reverse()) {
+    mistakesByLog.set(mistake.daily_log_id, [
+      ...(mistakesByLog.get(mistake.daily_log_id) ?? []),
+      mistake.word,
+    ]);
+  }
+  // 자주 틀리는 단어 = 다른 날짜 시험에서 2회 이상 (같은 시험 안은 저장 시 이미 dedupe)
+  const frequentMistakes = aggregateVocabMistakes(vocabMistakes)
+    .filter((item) => item.count >= 2)
+    .slice(0, 8)
+    .map((item) => ({ word: item.word, count: item.count }));
 
   // 학부모 전달
   const pendingParentNotes = history.filter((item) => item.parent_note_status === "pending");
@@ -676,39 +704,20 @@ export default async function StudentDetailPage({
               </Card>
             ) : null}
 
-            {isElementary || vocabHistory.length > 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>단어시험</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {vocabHistory.length === 0 ? (
-                    <div className="rounded-2xl bg-[#f8f3ef] p-3 text-xs text-[#655d5d]">
-                      아직 단어시험 기록이 없어요.
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {vocabHistory.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between rounded-xl bg-[#f8f6fc] px-3 py-2 text-xs tabular-nums"
-                        >
-                          <span className="text-[#564d4d]">
-                            {formatKoreanDate(item.dailyLog?.class_date)}
-                          </span>
-                          <span className="font-medium text-[#33333b]">
-                            {item.vocab_correct} / {item.dailyLog?.vocab_total}
-                          </span>
-                          <span className="text-[#54479c]">
-                            {vocabPercent(item.vocab_correct!, item.dailyLog!.vocab_total!)}%
-                            {item.vocab_retest ? " · 재시험" : ""}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+            {isElementary || vocabHistory.length > 0 || vocabMistakes.length > 0 ? (
+              <StudentVocabCard
+                studentId={id}
+                rows={vocabHistory.map((item) => ({
+                  id: item.id,
+                  date: item.dailyLog?.class_date ?? null,
+                  correct: item.vocab_correct!,
+                  total: item.dailyLog!.vocab_total!,
+                  retest: item.vocab_retest,
+                  words: item.dailyLog ? mistakesByLog.get(item.dailyLog.id) ?? [] : [],
+                }))}
+                frequentWords={frequentMistakes}
+                defaultDueDate={weaknessDefaultDueDate}
+              />
             ) : null}
 
             {isElementary || praises.length > 0 ? (

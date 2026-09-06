@@ -36,6 +36,7 @@ import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comm
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate } from "@/lib/dates";
 import { nextClassDateAfter } from "@/lib/schedule";
+import { vocabWordKey } from "@/lib/vocab";
 import { currentEpochMs } from "@/lib/todo-window";
 import {
   effortLevelLabels,
@@ -76,6 +77,7 @@ export type DailyLogFormStudent = {
     effortLevel?: string;
     parentNote?: string;
   };
+  vocabMistakes?: string[];
   praiseComments?: string[];
   makeup?: {
     status: "required" | "scheduled" | "completed" | "cancelled";
@@ -97,6 +99,7 @@ type EntryState = {
   homeworkStatus: string;
   vocabCorrect: string;
   vocabRetest: boolean;
+  vocabMistakes: string[];
   focusLevel: string;
   participationLevel: string;
   questionLevel: string;
@@ -124,6 +127,7 @@ function initEntry(student: DailyLogFormStudent): EntryState {
     homeworkStatus: student.entry?.homeworkStatus ?? "",
     vocabCorrect: student.entry?.vocabCorrect ?? "",
     vocabRetest: student.entry?.vocabRetest ?? false,
+    vocabMistakes: student.vocabMistakes ?? [],
     focusLevel: student.entry?.focusLevel ?? "",
     participationLevel: student.entry?.participationLevel ?? "",
     questionLevel: student.entry?.questionLevel ?? "",
@@ -212,6 +216,85 @@ function SegmentedToggle({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// 틀린 단어 chip 입력 — Enter 또는 [추가]로 등록, chip ✕로 삭제.
+// 같은 시험 안 중복(대소문자/공백 무시)은 추가 시점에 조용히 걸러준다.
+// IME-safe: 조합 중 Enter는 submit으로 오인하지 않는다 (한국어 입력 대비).
+function VocabMistakeChips({
+  studentName,
+  words,
+  onChange,
+}: {
+  studentName: string;
+  words: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+
+  const add = () => {
+    const word = draft.trim().replace(/\s+/g, " ");
+
+    if (!word) {
+      return;
+    }
+
+    if (words.some((existing) => vocabWordKey(existing) === vocabWordKey(word))) {
+      setDraft("");
+      return;
+    }
+
+    onChange([...words, word]);
+    setDraft("");
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={`${studentName} 틀린 단어`}>
+      <span className="w-8 shrink-0 text-xs font-semibold text-[#7c6d69]">오답</span>
+      {words.map((word) => (
+        <span
+          key={word}
+          className="flex min-h-[34px] items-center gap-1.5 rounded-xl bg-[#f0ecfb] px-2.5 py-1 text-xs text-[#54479c]"
+        >
+          {word}
+          <button
+            type="button"
+            aria-label={`${word} 오답에서 삭제`}
+            onClick={() => onChange(words.filter((existing) => existing !== word))}
+            className="text-[#9a8db5] transition hover:text-[#54479c]"
+          >
+            ✕
+          </button>
+        </span>
+      ))}
+      <input
+        value={draft}
+        // IME-safe: 조합 중 값 재작성 금지 — 길이 제한은 native maxLength가 담당
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (isComposingEvent(event)) {
+            return;
+          }
+          if (event.key === "Enter") {
+            event.preventDefault();
+            add();
+          }
+        }}
+        maxLength={60}
+        placeholder="틀린 단어"
+        className="w-32 min-w-0 rounded-xl border border-[#ece0db] bg-white px-2.5 py-1.5 text-sm outline-none focus:border-[#c9b9e8]"
+        aria-label={`${studentName} 틀린 단어 입력`}
+      />
+      <button
+        type="button"
+        onClick={add}
+        disabled={!draft.trim()}
+        className="min-h-[38px] rounded-xl border border-[#ece0db] bg-white px-2.5 py-1.5 text-xs font-medium text-[#7c6d69] transition hover:bg-[#faf6f3] disabled:opacity-40"
+      >
+        추가
+      </button>
     </div>
   );
 }
@@ -733,6 +816,7 @@ export function DailyLogForm({
             homeworkStatus: entry.homeworkStatus as "" | "completed" | "partial" | "missing",
             vocabCorrect: entry.vocabCorrect,
             vocabRetest: entry.vocabRetest,
+            vocabMistakes: entry.vocabMistakes,
             focusLevel: entry.focusLevel as "" | "good" | "normal" | "distracted",
             participationLevel: entry.participationLevel as "" | "active" | "normal" | "passive",
             questionLevel: entry.questionLevel as "" | "high" | "normal" | "low",
@@ -1259,6 +1343,13 @@ export function DailyLogForm({
                           </button>
                         </div>
                       </div>
+
+                      {/* 틀린 단어 — draft autosave에는 payload로만 담기고 final 저장 시 rows 반영 */}
+                      <VocabMistakeChips
+                        studentName={student.name}
+                        words={entry.vocabMistakes}
+                        onChange={(next) => updateEntry(student.studentId, { vocabMistakes: next })}
+                      />
 
                       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
                         <SegmentedToggle
