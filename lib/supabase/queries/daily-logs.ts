@@ -872,6 +872,97 @@ export async function getPreviousReflectionNext(
   return { class_date: data.class_date as string, reflection_next: reflectionNext };
 }
 
+// ── 수업 회고 모아보기 ─────────────────────────────────────────
+
+export type ReflectionLogRow = {
+  id: string;
+  class_date: string;
+  reflection_good: string | null;
+  reflection_hard: string | null;
+  reflection_next: string | null;
+  group: Pick<ClassGroupRecord, "id" | "name" | "icon"> | null;
+};
+
+const REFLECTION_NOT_EMPTY =
+  "reflection_good.not.is.null,reflection_hard.not.is.null,reflection_next.not.is.null";
+
+// 회고가 하나라도 적힌 일지만 최신순으로 (draft 일지의 회고도 포함 — 회고는 일지 상태와
+// 무관한 강사 기록). migration 미적용 등 조회 실패 시 failed로 표시하고 화면은 뜨게 한다.
+export async function getReflectionLogs(options: { groupId?: string; limit?: number } = {}) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return { rows: [] as ReflectionLogRow[], hasMore: false, failed: false };
+  }
+
+  const limit = Math.min(Math.max(options.limit ?? 60, 1), 500);
+
+  let query = supabase
+    .from("daily_logs")
+    .select(
+      "id, class_date, reflection_good, reflection_hard, reflection_next, class_groups(id, name, icon)",
+    )
+    .eq("user_id", user.id)
+    .or(REFLECTION_NOT_EMPTY)
+    .order("class_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit + 1);
+
+  if (options.groupId) {
+    query = query.eq("group_id", options.groupId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("getReflectionLogs error", error);
+    return { rows: [] as ReflectionLogRow[], hasMore: false, failed: true };
+  }
+
+  const rows = (data ?? []).map((row) => ({
+    id: row.id as string,
+    class_date: row.class_date as string,
+    reflection_good: row.reflection_good as string | null,
+    reflection_hard: row.reflection_hard as string | null,
+    reflection_next: row.reflection_next as string | null,
+    group: pickOne<Pick<ClassGroupRecord, "id" | "name" | "icon">>(row.class_groups),
+  }));
+
+  return { rows: rows.slice(0, limit), hasMore: rows.length > limit, failed: false };
+}
+
+// 요약 카운트: 전체 회고 수 + 이번 달 회고 수 (head count 2번 — row 데이터 미전송)
+export async function getReflectionCounts(monthStart: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return { total: 0, thisMonth: 0 };
+  }
+
+  const [totalResult, monthResult] = await Promise.all([
+    supabase
+      .from("daily_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .or(REFLECTION_NOT_EMPTY),
+    supabase
+      .from("daily_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .or(REFLECTION_NOT_EMPTY)
+      .gte("class_date", monthStart),
+  ]);
+
+  if (totalResult.error || monthResult.error) {
+    console.error("getReflectionCounts error", totalResult.error ?? monthResult.error);
+    return { total: 0, thisMonth: 0 };
+  }
+
+  return { total: totalResult.count ?? 0, thisMonth: monthResult.count ?? 0 };
+}
+
 // 이전 일지의 공통 필드만 update (학생 평가/칭찬은 기존 전체 수정 화면 재사용).
 // group/date는 바꾸지 않으므로 중복 일지 가드와 충돌할 일이 없다.
 export async function updateDailyLogFields(input: {

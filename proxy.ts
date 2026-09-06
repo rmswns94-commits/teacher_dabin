@@ -12,6 +12,7 @@ const protectedRoutes = [
   "/groups",
   "/growth-notes",
   "/pretty-words",
+  "/reflections",
   "/settings",
 ];
 
@@ -99,6 +100,7 @@ export const config = {
     "/groups/:path*",
     "/growth-notes/:path*",
     "/pretty-words/:path*",
+    "/reflections/:path*",
     "/settings/:path*",
   ],
 };

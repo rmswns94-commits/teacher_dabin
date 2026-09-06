@@ -14,6 +14,7 @@ import {
   Home,
   Menu,
   NotebookPen,
+  Sparkles,
   Sprout,
   Users,
   X,
@@ -307,6 +308,14 @@ export function Sidebar({
                 href="/pretty-words"
                 icon={Heart}
                 isActive={isActive("/pretty-words")}
+              />
+            </li>
+            <li>
+              <NavLink
+                label="수업 회고"
+                href="/reflections"
+                icon={Sparkles}
+                isActive={isActive("/reflections")}
               />
             </li>
             <li>
