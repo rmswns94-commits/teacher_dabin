@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { ScrollJumpButton } from "@/components/scroll-jump-button";
+import { ScrollJumpControls } from "@/components/scroll-jump-controls";
 import { Sidebar } from "@/components/sidebar";
 import { getGroupNextOccurrences } from "@/lib/schedule";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
@@ -31,7 +31,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
       />
       <div className="app-main flex-1 overflow-hidden max-lg:pt-14">
         {children}
-        <ScrollJumpButton />
+        <ScrollJumpControls />
       </div>
     </div>
   );
