@@ -1,4 +1,5 @@
 import { formatKoreanDateFull } from "@/lib/dates";
+import { sortByKoreanName } from "@/lib/korean-sort";
 import { dedupeVocabWords } from "@/lib/vocab";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type {
@@ -181,12 +182,16 @@ export async function getDailyLogDetailForCurrentUser(
     return null;
   }
 
-  const lessonLogs = ((data.student_lesson_logs ?? []) as Record<string, unknown>[])
-    .map((row) => ({
+  // 상세/수정/캘린더 인라인 상세 공통: DB 저장 순서와 무관하게 이름 가나다순으로 표시
+  // (공용 collator — 작성 화면과 동일한 정렬 기준, 동명이인은 학생 id로 안정 정렬)
+  const lessonLogs = sortByKoreanName(
+    ((data.student_lesson_logs ?? []) as Record<string, unknown>[]).map((row) => ({
       ...(row as unknown as StudentLessonLogRecord),
       student: pickOne<Pick<StudentRecord, "id" | "name" | "grade">>(row.students),
-    }))
-    .sort((a, b) => (a.student?.name ?? "").localeCompare(b.student?.name ?? "", "ko"));
+    })),
+    (log) => log.student?.name ?? "",
+    (log) => log.student?.id ?? log.id,
+  );
 
   let makeups: MakeupLessonRecord[] = [];
   const lessonLogIds = lessonLogs.map((log) => log.id);

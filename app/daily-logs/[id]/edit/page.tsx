@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { DailyLogForm, type DailyLogFormStudent } from "@/components/daily-log-form";
 import { PageHeader } from "@/components/page-header";
 import { formatKoreanDate } from "@/lib/dates";
+import { sortByKoreanName } from "@/lib/korean-sort";
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import { getDailyLogDraft } from "@/lib/supabase/queries/daily-log-drafts";
 import {
@@ -107,6 +108,14 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
     }
   }
 
+  // 기존 기록 + 이후 합류한 학생을 합친 뒤 이름 가나다순으로 정렬해 폼에 로드한다.
+  // 평가값은 entries가 studentId 기준이라 순서와 무관하게 정확히 연결된다.
+  const sortedStudents = sortByKoreanName(
+    students,
+    (student) => student.name,
+    (student) => student.studentId,
+  );
+
   return (
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
@@ -120,7 +129,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           dailyLogId={log.id}
           classDate={log.class_date}
           group={{ id: log.group_id, name: log.group?.name ?? "수업 그룹", grade: log.group?.grade }}
-          students={students}
+          students={sortedStudents}
           scheduleDays={groupSchedules.map((slot) => slot.day_of_week)}
           draft={
             draftRow

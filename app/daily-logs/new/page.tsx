@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
+import { sortByKoreanName } from "@/lib/korean-sort";
 import { getDailyLogDraft } from "@/lib/supabase/queries/daily-log-drafts";
 import { getGroupHistoryLogs, getPreviousReflectionNext } from "@/lib/supabase/queries/daily-logs";
 import {
@@ -49,8 +50,14 @@ export default async function NewDailyLogPage({
   const selectedGroup = requestedGroupId
     ? groups.find((group) => group.id === requestedGroupId)
     : undefined;
+  // 학생 평가 목록은 항상 이름 가나다순 (membership 생성순이 아니라)
+  // — 폼 로드 전에 정렬해 두므로 작성 중 재정렬/remount가 없다.
   const groupStudents = selectedGroup
-    ? groupStudentsRaw.filter((student) => !student.archived)
+    ? sortByKoreanName(
+        groupStudentsRaw.filter((student) => !student.archived),
+        (student) => student.name,
+        (student) => student.id,
+      )
     : [];
 
   return (
