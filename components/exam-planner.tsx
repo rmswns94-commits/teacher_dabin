@@ -77,8 +77,9 @@ function CheckCircle({
         onToggle();
       }}
       className={cn(
+        // 여러 줄 계획에서도 첫 줄 옆에 정렬되도록 top 기준 (hit area는 유지)
         "flex shrink-0 items-center justify-center",
-        size === "cell" ? "-my-1.5 -ml-0.5 h-8 w-7" : "h-11 w-11 -my-1",
+        size === "cell" ? "-mt-1 -ml-0.5 h-8 w-7" : "-mt-0.5 h-11 w-11",
       )}
     >
       <span
@@ -143,15 +144,18 @@ function PlanForm({
 
       <label className="block min-w-0">
         <span className="mb-1 block text-xs font-semibold text-[#7c6d69]">할 내용</span>
-        <input
+        {/* 여러 줄 입력: Enter = 줄바꿈 (form submit 아님 — 저장은 아래 버튼으로만).
+            onChange에서 값 재작성 없음 — newline/IME 조합이 그대로 보존된다. */}
+        <textarea
           value={title}
           onChange={(event) => {
             setTitle(event.target.value);
             onDirtyChange(event.target.value !== initial.title || planDate !== initial.planDate);
           }}
-          maxLength={120}
-          placeholder="백발백중 문법 오답 풀이"
-          className="min-h-[44px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none focus:border-[#c9b9e8]"
+          rows={4}
+          maxLength={500}
+          placeholder={"백발백중 문법 오답 풀이\n이그잼포유 관계대명사\n객관식 문제 숙제"}
+          className="min-h-[110px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-[#c9b9e8]"
         />
       </label>
 
@@ -487,17 +491,17 @@ export function ExamPlanner({
 
                     {dayPlans.length > 0 ? (
                       // 폰트는 wrapper에 지정 — globals의 button { font: inherit } 덕에 버튼이 상속받는다
-                      // (button에 직접 준 text-* 유틸리티는 unlayered 규칙에 밀려 적용되지 않음)
-                      <div className="mt-px text-[11px] leading-[14px]">
-                        {dayPlans.slice(0, 4).map((plan, planIndex) => (
-                          <div
-                            key={plan.id}
-                            className={cn(
-                              "flex min-w-0 items-center",
-                              planIndex === 1 && "hidden @min-[540px]:flex",
-                              planIndex >= 2 && "hidden @min-[760px]:flex",
-                            )}
-                          >
+                      // (button에 직접 준 text-* 유틸리티는 unlayered 규칙에 밀려 적용되지 않음).
+                      // 계획은 truncate/line-clamp/+N 없이 전부 표시 — 내용이 많으면 셀(주 row)이
+                      // 자연스럽게 늘어난다 (min-h만 있고 max-h/내부 scroll 없음).
+                      <div className="mt-px space-y-0.5 text-[11px] leading-[14px]">
+                        {/* 아주 좁은 컨테이너(모바일)만 본문 대신 개수 marker —
+                            날짜를 탭하면 Sheet에서 전체 multiline 본문을 확인한다 */}
+                        <span className="inline-flex rounded-md bg-[#efe8fb] px-1.5 py-0.5 font-medium text-[#5d4ba5] @min-[540px]:hidden">
+                          계획 {dayPlans.length}
+                        </span>
+                        {dayPlans.map((plan) => (
+                          <div key={plan.id} className="hidden min-w-0 items-start @min-[540px]:flex">
                             <CheckCircle
                               completed={plan.completed}
                               title={plan.title}
@@ -514,7 +518,9 @@ export function ExamPlanner({
                                 setFormError("");
                               }}
                               className={cn(
-                                "block min-w-0 flex-1 truncate py-px text-left",
+                                // 입력한 줄바꿈 그대로 + 자연스러운 wrapping (break-words —
+                                // 한글 문장은 자연 개행, 아주 긴 영어/URL만 강제 개행)
+                                "block min-w-0 flex-1 whitespace-pre-wrap break-words py-px text-left",
                                 plan.completed
                                   ? "text-[#9a8f8a] line-through decoration-[#c9beb8]"
                                   : "text-[#453b3b]",
@@ -524,23 +530,6 @@ export function ExamPlanner({
                             </button>
                           </div>
                         ))}
-
-                        {/* +N — 표시 가능한 개수는 container 폭에 따라 1/2/4개 (버튼 탭 = 날짜 Sheet) */}
-                        {dayPlans.length > 1 ? (
-                          <button type="button" onClick={(event) => { event.stopPropagation(); openList(date); }} className="rounded-md px-1 py-px text-[#8b7ae6] @min-[540px]:hidden">
-                            +{dayPlans.length - 1}
-                          </button>
-                        ) : null}
-                        {dayPlans.length > 2 ? (
-                          <button type="button" onClick={(event) => { event.stopPropagation(); openList(date); }} className="hidden rounded-md px-1 py-px text-[#8b7ae6] @min-[540px]:inline-flex @min-[760px]:hidden">
-                            +{dayPlans.length - 2}
-                          </button>
-                        ) : null}
-                        {dayPlans.length > 4 ? (
-                          <button type="button" onClick={(event) => { event.stopPropagation(); openList(date); }} className="hidden rounded-md px-1 py-px text-[#8b7ae6] @min-[760px]:inline-flex">
-                            +{dayPlans.length - 4}
-                          </button>
-                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -597,7 +586,7 @@ export function ExamPlanner({
                     ) : (
                       <div className="space-y-0.5">
                         {sheetPlans.map((plan) => (
-                          <div key={plan.id} className="flex min-w-0 items-center gap-1">
+                          <div key={plan.id} className="flex min-w-0 items-start gap-1">
                             <CheckCircle
                               completed={plan.completed}
                               title={plan.title}
@@ -612,9 +601,10 @@ export function ExamPlanner({
                               }}
                               className="min-w-0 flex-1 rounded-lg px-1 py-2 text-left transition hover:bg-[#faf6f3]"
                             >
+                              {/* Sheet에서도 multiline 전체 표시 — ellipsis/clamp 없음 */}
                               <span
                                 className={cn(
-                                  "block text-sm leading-5",
+                                  "block whitespace-pre-wrap break-words text-sm leading-5",
                                   plan.completed
                                     ? "text-[#9a8f8a] line-through decoration-[#c9beb8]"
                                     : "text-[#2d2928]",
