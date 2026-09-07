@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { CatDoodle } from "@/components/cat-doodle";
 import { PageHeader } from "@/components/page-header";
 import {
   ReflectionDayCard,
@@ -27,8 +28,14 @@ import {
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import { cn } from "@/lib/utils";
 
-// 수업일지 캘린더와 같은 가족: 일요일 시작 grid, 큰 월 header, 오늘/선택 강조.
-const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"] as const;
+// 초록 노트 달력 디자인(참고 이미지): 일요일 시작, 진초록 요일 헤더(SUN~SAT),
+// 일요일 숫자는 웜 오렌지, 구름 속 큰 월 숫자 + 마스코트 고양이 장식.
+const WEEKDAY_LABELS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"] as const;
+
+const MONTH_EN = [
+  "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
+  "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER",
+] as const;
 
 export default async function ReflectionsPage({
   searchParams,
@@ -124,7 +131,9 @@ export default async function ReflectionsPage({
   const dateHref = (date: string) => `/reflections?month=${month}&date=${date}`;
   const monthHref = (value: string) => `/reflections?month=${value}`;
   const navButton =
-    "flex h-10 min-w-10 items-center justify-center rounded-xl border border-[#ece0db] bg-white px-2 text-sm font-medium text-[#564d4d] transition hover:bg-[#faf6f3]";
+    "flex h-9 min-w-9 items-center justify-center rounded-xl border border-[#bcd9b4] bg-white px-2 text-sm font-medium text-[#3f7d54] transition hover:bg-[#f2f9ef]";
+  const monthEn = MONTH_EN[Number(month.slice(5, 7)) - 1];
+  const monthTotal = markers.rows.length;
 
   return (
     <AppShell>
@@ -135,96 +144,130 @@ export default async function ReflectionsPage({
             description="날짜를 고르면 그날 모든 반의 회고를 하루 카드 하나로 모아 보여드려요."
           />
 
-          {/* ── 월간 캘린더 ── */}
-          <Card className="p-4 sm:p-5">
-            <div className="flex flex-wrap items-center gap-3 pb-3">
-              <h2 className="font-display text-2xl font-semibold tracking-[-0.01em] text-[#2b2323]">
-                {monthLabel(month)}
-              </h2>
-              <div className="flex items-center gap-1">
-                <Link href={monthHref(addMonths(month, -1))} aria-label="이전 달" className={navButton}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Link>
-                <Link href={dateHref(today)} className={navButton}>
-                  오늘
-                </Link>
-                <Link href={monthHref(addMonths(month, 1))} aria-label="다음 달" className={navButton}>
-                  <ChevronRight className="h-4 w-4" />
-                </Link>
+          {/* ── 월간 캘린더 (초록 노트 디자인) ── */}
+          <Card className="overflow-hidden border-[#cfe4c8] bg-[#ecf6e8] p-0">
+            {/* 상단 바: MONTH / nav / YEAR */}
+            <div className="px-4 pt-3 sm:px-6">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t-2 border-[#3f7d54] pt-2.5">
+                <span className="text-sm font-bold tracking-[0.18em] text-[#3f7d54]">{monthEn}</span>
+                <div className="flex items-center gap-1">
+                  <Link href={monthHref(addMonths(month, -1))} aria-label="이전 달" className={navButton}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Link>
+                  <Link href={dateHref(today)} className={navButton}>
+                    오늘
+                  </Link>
+                  <Link href={monthHref(addMonths(month, 1))} aria-label="다음 달" className={navButton}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Link>
+                </div>
+                <span className="text-sm font-bold tracking-[0.18em] text-[#3f7d54]">
+                  {month.slice(0, 4)}
+                </span>
               </div>
             </div>
 
             {markers.failed ? (
-              <div className="mb-3 rounded-2xl border border-[#f0d9d5] bg-[#fff9f7] px-4 py-2.5 text-sm text-[#7f5d57]">
+              <div className="mx-4 mt-3 rounded-2xl border border-[#f0d9d5] bg-[#fff9f7] px-4 py-2.5 text-sm text-[#7f5d57] sm:mx-6">
                 수업 회고를 불러오지 못했어요. 잠시 후 새로고침해주세요.
               </div>
             ) : null}
 
-            <div className="grid grid-cols-7 border-b border-[#eee3dc] pb-1.5">
-              {WEEKDAY_LABELS.map((label, index) => (
-                <div
-                  key={label}
-                  className={cn(
-                    "px-1.5 text-center text-[11px] font-semibold sm:text-left sm:text-xs",
-                    index === 0 ? "text-[#b06a84]" : index === 6 ? "text-[#5c7ea6]" : "text-[#8a7b77]",
-                  )}
-                >
-                  {label}
-                </div>
-              ))}
+            {/* 일러스트 존 + 구름 속 큰 월 숫자 */}
+            <div className="px-4 sm:px-6">
+              <div aria-hidden className="flex items-end justify-between px-2 pt-1 text-xl sm:text-2xl">
+                <span>🌳</span>
+                <span className="pb-1 text-base">🌷</span>
+                <CatDoodle className="-mb-1 h-12 w-14" />
+                <span className="pb-1 text-base">🌼</span>
+                <span>🌲</span>
+              </div>
+              <div className="mx-auto -mb-px flex h-14 w-44 items-center justify-center rounded-t-[70px] bg-white sm:h-16">
+                <span className="font-display text-4xl font-bold tracking-[0.06em] text-[#3f7d54]">
+                  {month.slice(5, 7)}
+                </span>
+              </div>
             </div>
 
-            {weeks.map((week, weekIndex) => (
-              <div key={weekIndex} className="grid grid-cols-7">
-                {week.map((date, dayIndex) => {
-                  if (!date) {
+            {/* 흰 달력 sheet */}
+            <div className="bg-white px-2.5 pb-4 sm:px-4">
+              {/* 진초록 요일 헤더 */}
+              <div className="grid grid-cols-7 overflow-hidden rounded-lg bg-[#3f7d54]">
+                {WEEKDAY_LABELS.map((label) => (
+                  <div
+                    key={label}
+                    className="border-r border-white/25 py-1.5 text-center text-[10px] font-bold tracking-[0.06em] text-white last:border-r-0 sm:text-[11px]"
+                  >
+                    {label}
+                  </div>
+                ))}
+              </div>
+
+              {weeks.map((week, weekIndex) => (
+                <div key={weekIndex} className="grid grid-cols-7">
+                  {week.map((date, dayIndex) => {
+                    if (!date) {
+                      return (
+                        <div
+                          key={`empty-${dayIndex}`}
+                          className="min-h-[64px] border-b border-r border-[#e4efdd] bg-[#f7fbf4]/70 first:border-l sm:min-h-[76px]"
+                        />
+                      );
+                    }
+
+                    const count = countByDate.get(date) ?? 0;
+                    const isToday = date === today;
+                    const isSelected = date === selectedDate;
+
                     return (
-                      <div
-                        key={`empty-${dayIndex}`}
-                        className="min-h-[64px] border-b border-r border-[#f3eae3] bg-[#fbf8f4]/60 first:border-l sm:min-h-[76px]"
-                      />
-                    );
-                  }
-
-                  const count = countByDate.get(date) ?? 0;
-                  const isToday = date === today;
-                  const isSelected = date === selectedDate;
-
-                  return (
-                    <Link
-                      key={date}
-                      href={dateHref(date)}
-                      aria-label={`${formatKoreanDate(date, true)} 수업 회고 ${count}개`}
-                      className={cn(
-                        "min-h-[64px] min-w-0 border-b border-r border-[#f3eae3] px-1 py-1 transition first:border-l sm:min-h-[76px] sm:px-1.5",
-                        "bg-white hover:bg-[#faf7f3]",
-                        isSelected && "ring-1 ring-inset ring-[#c9b9e8]",
-                      )}
-                    >
-                      <span
+                      <Link
+                        key={date}
+                        href={dateHref(date)}
+                        aria-label={`${formatKoreanDate(date, true)} 수업 회고 ${count}개`}
                         className={cn(
-                          "flex h-6 w-6 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums",
-                          isToday
-                            ? "bg-[#8b7ae6] text-white"
-                            : dayIndex === 0
-                              ? "text-[#b06a84]"
-                              : dayIndex === 6
-                                ? "text-[#5c7ea6]"
-                                : "text-[#453b3b]",
+                          "min-h-[64px] min-w-0 border-b border-r border-[#e4efdd] px-1 py-1 transition first:border-l sm:min-h-[76px]",
+                          "bg-white hover:bg-[#f4faf1]",
+                          isSelected && "ring-1 ring-inset ring-[#8cc39b]",
                         )}
                       >
-                        {Number(date.slice(8))}
-                      </span>
-                      {count > 0 ? (
-                        <span className="mt-0.5 inline-flex items-center gap-0.5 rounded-md bg-[#efe8fb] px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-[#5d4ba5]">
-                          ✦ {count}
-                        </span>
-                      ) : null}
-                    </Link>
-                  );
-                })}
+                        {/* 날짜 숫자 가운데 정렬 — 일요일은 웜 오렌지 (참고 디자인) */}
+                        <div className="flex min-w-0 flex-col items-center gap-0.5">
+                          <span
+                            className={cn(
+                              "flex h-6 w-6 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums",
+                              isToday
+                                ? "bg-[#4d9163] text-white"
+                                : dayIndex === 0
+                                  ? "text-[#e8863c]"
+                                  : "text-[#334638]",
+                            )}
+                          >
+                            {Number(date.slice(8))}
+                          </span>
+                          {count > 0 ? (
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#e3f2df] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[#3a7048]">
+                              ✦ {count}
+                            </span>
+                          ) : null}
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+
+              {/* 하단 노트 라인 + 마스코트 + 캡션 */}
+              <div className="mt-4 flex items-end gap-3 px-2">
+                <CatDoodle variant="heart" className="h-10 w-12 shrink-0" />
+                <div className="flex-1 space-y-3.5 pb-1">
+                  <div className="border-b border-[#cfe4c8]" />
+                  <div className="border-b border-[#cfe4c8]" />
+                </div>
               </div>
-            ))}
+              <p className="mt-2 text-center text-[11px] text-[#6b9678]">
+                {monthLabel(month)}의 수업 회고 {monthTotal}개 — 돌아본 만큼 수업이 자라요.
+              </p>
+            </div>
           </Card>
 
           {/* ── 선택 날짜의 하루 회고 ── */}
