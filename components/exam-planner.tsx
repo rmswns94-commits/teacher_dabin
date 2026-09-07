@@ -9,7 +9,7 @@ import {
   setExamPlanCompletedAction,
   updateExamPlanAction,
 } from "@/app/exams/plan-actions";
-import { addMonths, dayOfWeekOf, monthLabel } from "@/lib/calendar";
+import { addMonths, buildMonthGrid, monthLabel } from "@/lib/calendar";
 import { formatKoreanDate } from "@/lib/dates";
 import { examDdayInfo } from "@/lib/school-exam-display";
 import type { ExamPrepPlanRecord } from "@/lib/supabase/types";
@@ -21,29 +21,22 @@ import { cn } from "@/lib/utils";
 // 계획 데이터는 시험 단위 전체를 서버에서 1회 batch로 받아 client state가 단일 소스:
 // 월 이동은 추가 fetch가 없어(race 원천 차단) 즉시이고, 완료 toggle은 optimistic + 절대값 set.
 
-const WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"] as const;
+// 스프링 노트 달력 디자인: 일요일 시작(SUN~SAT), 주말은 웜 레드 강조 (참고 디자인 기준)
+const WEEKDAY_LABELS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"] as const;
+const WEEKEND_TEXT = "text-[#d95f4c]";
 
-// 월요일 시작 월간 grid (기존 buildMonthGrid는 일요일 시작 — 플래너는 수업 흐름에 맞춰 월요일 시작)
-function buildMondayGrid(month: string): (string | null)[][] {
-  const [y, m] = month.split("-").map(Number);
-  const lastDay = new Date(Date.UTC(y, m, 0, 12)).getUTCDate();
-  const firstOffset = (dayOfWeekOf(`${month}-01`) + 6) % 7; // 0 = 월요일
-
-  const cells: (string | null)[] = [
-    ...Array.from({ length: firstOffset }, () => null),
-    ...Array.from({ length: lastDay }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`),
-  ];
-
-  while (cells.length % 7 !== 0) {
-    cells.push(null);
-  }
-
-  const weeks: (string | null)[][] = [];
-  for (let i = 0; i < cells.length; i += 7) {
-    weeks.push(cells.slice(i, i + 7));
-  }
-
-  return weeks;
+// 상단 스프링 코일 장식 (participate하지 않는 순수 decoration)
+function SpringCoils() {
+  return (
+    <div aria-hidden className="pointer-events-none absolute -top-3.5 left-0 right-0 flex justify-around px-5">
+      {Array.from({ length: 11 }, (_, i) => (
+        <span
+          key={i}
+          className="h-7 w-2.5 rounded-full border border-[#a9c8e4] bg-gradient-to-b from-[#dcecf9] to-[#aecde9] shadow-[0_1px_2px_rgba(120,150,180,0.35)]"
+        />
+      ))}
+    </div>
+  );
 }
 
 type SheetMode = { type: "list" } | { type: "add" } | { type: "edit"; planId: string };
@@ -233,7 +226,7 @@ export function ExamPlanner({
     return map;
   }, [plans]);
 
-  const weeks = useMemo(() => buildMondayGrid(month), [month]);
+  const weeks = useMemo(() => buildMonthGrid(month), [month]);
   const completedCount = plans.filter((plan) => plan.completed).length;
   const totalCount = plans.length;
   const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
@@ -329,7 +322,7 @@ export function ExamPlanner({
 
   return (
     <section
-      className="@container rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-3 shadow-sm sm:p-4"
+      className="@container rounded-3xl border border-[#d5e6f3] bg-gradient-to-b from-[#e2f0fa] via-[#edf5fb] to-[#eef6ef] p-3 shadow-sm sm:p-4"
       aria-label="시험 대비 월간 플래너"
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing) {
@@ -414,14 +407,18 @@ export function ExamPlanner({
       {/* ── Calendar + (넓으면 우측 Sheet) — 같은 component tree, CSS container query로만 전환 ── */}
       <div className="flex min-w-0 items-start">
         <div className="@container min-w-0 flex-1">
-          {/* 요일 헤더 (월요일 시작) */}
-          <div className="grid grid-cols-7 border-b border-[#eee3dc] pb-1.5">
+          {/* 스프링 노트 sheet — 코일 장식이 상단에 걸리도록 위 여백 확보 */}
+          <div className="relative mt-4 rounded-2xl border border-[#dfe7ef] bg-white px-1.5 pb-2 pt-6 shadow-[0_12px_28px_rgba(120,150,180,0.14)] sm:px-2">
+          <SpringCoils />
+
+          {/* 요일 헤더 (일요일 시작 — SUN/SAT 웜 레드) */}
+          <div className="grid grid-cols-7 border-b-2 border-[#eef1f5] pb-2">
             {WEEKDAY_LABELS.map((label, index) => (
               <div
                 key={label}
                 className={cn(
-                  "px-1.5 text-center text-[11px] font-semibold @min-[760px]:text-left @min-[760px]:text-xs",
-                  index === 5 ? "text-[#5c7ea6]" : index === 6 ? "text-[#b06a84]" : "text-[#8a7b77]",
+                  "px-1 text-center text-[10px] font-bold tracking-[0.08em] @min-[540px]:text-[11px]",
+                  index === 0 || index === 6 ? WEEKEND_TEXT : "text-[#4a4a55]",
                 )}
               >
                 {label}
@@ -436,7 +433,7 @@ export function ExamPlanner({
                   return (
                     <div
                       key={`empty-${dayIndex}`}
-                      className="border-b border-r border-[#f3eae3] bg-[#fbf8f4]/60 first:border-l"
+                      className="border-b border-r border-[#eef1f5] bg-[#f8fafc]/70 first:border-l"
                     />
                   );
                 }
@@ -460,32 +457,31 @@ export function ExamPlanner({
                       }
                     }}
                     className={cn(
-                      "min-h-[84px] min-w-0 cursor-pointer border-b border-r border-[#f3eae3] px-1 py-0.5 text-left align-top transition first:border-l @min-[540px]:min-h-[96px] @min-[760px]:min-h-[118px]",
-                      inExamPeriod ? "bg-[#fbeef3]/55" : "bg-white hover:bg-[#faf7f3]",
-                      isSelected && "ring-1 ring-inset ring-[#c9b9e8]",
+                      "min-h-[84px] min-w-0 cursor-pointer border-b border-r border-[#eef1f5] px-1 py-1 text-left align-top transition first:border-l @min-[540px]:min-h-[96px] @min-[760px]:min-h-[118px]",
+                      inExamPeriod ? "bg-[#fdeeee]/75" : "bg-white hover:bg-[#f7fafd]",
+                      isSelected && "ring-1 ring-inset ring-[#a9c8e8]",
                     )}
                   >
-                    <div className="flex min-w-0 items-center gap-1">
+                    {/* 날짜 숫자는 참고 디자인처럼 가운데 정렬, 그 아래 시험 badge */}
+                    <div className="flex min-w-0 flex-col items-center gap-0.5">
                       <span
                         className={cn(
                           "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums",
                           isToday
                             ? "bg-[#8b7ae6] text-white"
-                            : dayIndex === 5
-                              ? "text-[#5c7ea6]"
-                              : dayIndex === 6
-                                ? "text-[#b06a84]"
-                                : "text-[#453b3b]",
+                            : dayIndex === 0 || dayIndex === 6
+                              ? WEEKEND_TEXT
+                              : "text-[#3f3f49]",
                         )}
                       >
                         {dayNum}
                       </span>
                       {date === examStart ? (
-                        <span className="hidden min-w-0 truncate text-[10px] font-semibold text-[#a05a7c] @min-[540px]:block">
-                          {examTypeLabel} 시작
+                        <span className="hidden max-w-full truncate rounded-full bg-[#fbdcda] px-2 py-0.5 text-[10px] font-semibold text-[#c05a50] @min-[540px]:block">
+                          {examTypeLabel}
                         </span>
                       ) : inExamPeriod ? (
-                        <span aria-hidden className="hidden h-1.5 w-1.5 shrink-0 rounded-full bg-[#e4a9c0] @min-[540px]:block" />
+                        <span aria-hidden className="hidden h-1.5 w-1.5 shrink-0 rounded-full bg-[#f0b0ab] @min-[540px]:block" />
                       ) : null}
                     </div>
 
@@ -497,7 +493,7 @@ export function ExamPlanner({
                       <div className="mt-px space-y-0.5 text-[11px] leading-[14px]">
                         {/* 아주 좁은 컨테이너(모바일)만 본문 대신 개수 marker —
                             날짜를 탭하면 Sheet에서 전체 multiline 본문을 확인한다 */}
-                        <span className="inline-flex rounded-md bg-[#efe8fb] px-1.5 py-0.5 font-medium text-[#5d4ba5] @min-[540px]:hidden">
+                        <span className="mx-auto inline-flex rounded-full bg-[#d9efe3] px-2 py-0.5 font-medium text-[#3d7f64] @min-[540px]:hidden">
                           계획 {dayPlans.length}
                         </span>
                         {dayPlans.map((plan) => (
@@ -537,6 +533,14 @@ export function ExamPlanner({
               })}
             </div>
           ))}
+          </div>
+
+          {/* 프레임 하단 꽃 장식 (참고 디자인의 잔디+꽃 느낌 — decoration only) */}
+          <div aria-hidden className="pointer-events-none mt-1.5 flex justify-between px-1 text-sm opacity-80">
+            <span>🌼</span>
+            <span>🌿</span>
+            <span>🌼</span>
+          </div>
         </div>
 
         {/* ── 날짜 Sheet: 넓은 container(≥820px)는 우측 고정 패널(Calendar context 유지),
