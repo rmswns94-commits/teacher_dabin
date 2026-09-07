@@ -800,7 +800,10 @@ export default async function StudentDetailPage({
                         <div className="flex items-center gap-2">
                           <MakeupStatusBadge status={makeup.status} />
                           <span className="tabular-nums text-[#655d5d]">
-                            결석 {formatKoreanDate(makeup.original_class_date)} ·{" "}
+                            {makeup.source === "manual"
+                              ? "직접 등록"
+                              : `결석 ${formatKoreanDate(makeup.original_class_date)}`}{" "}
+                            ·{" "}
                             {makeup.scheduled_date
                               ? `보충 ${formatKoreanDate(makeup.scheduled_date)}${
                                   makeup.start_time ? ` ${makeup.start_time.slice(0, 5)}` : ""
@@ -818,7 +821,9 @@ export default async function StudentDetailPage({
                         <div className="flex items-center gap-2">
                           <MakeupStatusBadge status={makeup.status} />
                           <span className="text-[#655d5d]">
-                            결석 {formatKoreanDate(makeup.original_class_date)}
+                            {makeup.source === "manual"
+                              ? "직접 등록"
+                              : `결석 ${formatKoreanDate(makeup.original_class_date)}`}
                             {makeup.status === "completed"
                               ? ` · ${formatKoreanDate(makeup.completed_date)} 완료`
                               : ""}

@@ -17,8 +17,14 @@ export type MakeupWithStudent = MakeupLessonRecord & {
   dailyLogId: string | null;
 };
 
-// 보충 목록 + 학생 + (결석 일지를 거쳐) 그룹까지 relation embed 쿼리 1번.
-// 보충 1건마다 학생/그룹/일지를 따로 조회하지 않는다 (N+1 금지).
+// migration 미적용(컬럼/relationship 없음) 시 legacy 모양으로 재시도하기 위한 코드들
+const SCHEMA_MISMATCH_CODES = new Set(["42703", "PGRST200", "PGRST204"]);
+
+const MANUAL_MIGRATION_MESSAGE =
+  "보충 직접 등록에 필요한 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20260908_add_manual_makeups.sql을 실행한 뒤 다시 시도해주세요.";
+
+// 보충 목록 + 학생 + 그룹 relation embed 쿼리 1번 (N+1 금지).
+// 그룹은 직접 등록 보충의 group_id를 우선하고, 결석 연동 legacy는 일지 경유로 파생한다.
 export async function getCurrentUserMakeups() {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
@@ -27,13 +33,24 @@ export async function getCurrentUserMakeups() {
     return [] as MakeupWithStudent[];
   }
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("makeup_lessons")
     .select(
-      "*, students(id, name, grade), student_lesson_logs(daily_log_id, daily_logs(id, class_groups(id, name)))",
+      "*, students(id, name, grade), direct_group:class_groups!makeup_lessons_group_id_fkey(id, name), student_lesson_logs(daily_log_id, daily_logs(id, class_groups(id, name)))",
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
+
+  if (error && SCHEMA_MISMATCH_CODES.has(error.code ?? "")) {
+    // migration 적용 전에도 기존 보충 화면은 그대로 떠야 한다 — legacy select로 재시도
+    ({ data, error } = await supabase
+      .from("makeup_lessons")
+      .select(
+        "*, students(id, name, grade), student_lesson_logs(daily_log_id, daily_logs(id, class_groups(id, name)))",
+      )
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false }));
+  }
 
   if (error) {
     console.error("getCurrentUserMakeups error", error);
@@ -45,14 +62,180 @@ export async function getCurrentUserMakeups() {
       row.student_lesson_logs,
     );
     const dailyLog = pickOne<{ id: string; class_groups: unknown }>(lessonLog?.daily_logs);
+    const record = row as unknown as MakeupLessonRecord & { direct_group?: unknown };
 
     return {
-      ...(row as unknown as MakeupLessonRecord),
+      ...record,
+      source: record.source ?? "absence",
       student: pickOne<Pick<StudentRecord, "id" | "name" | "grade">>(row.students),
-      group: pickOne<Pick<ClassGroupRecord, "id" | "name">>(dailyLog?.class_groups),
+      group:
+        pickOne<Pick<ClassGroupRecord, "id" | "name">>(record.direct_group) ??
+        pickOne<Pick<ClassGroupRecord, "id" | "name">>(dailyLog?.class_groups),
       dailyLogId: dailyLog?.id ?? null,
     };
   });
+}
+
+// ── 직접 등록 보충 ──────────────────────────────────────────────────────
+// 결석 연동 없이 Teacher가 학생/그룹/날짜/시간을 지정한다. 날짜가 이미 있으므로
+// pending(required)을 거치지 않고 바로 scheduled로 생성한다.
+// original_class_date는 NOT NULL 제약 유지를 위해 보충 날짜로 채운다(표시는 source 기준 —
+// manual row에서 이 값은 어디에도 "결석"으로 보여주지 않는다).
+export async function createManualMakeup(input: {
+  studentId: string;
+  groupId: string | null;
+  scheduledDate: string;
+  startTime: string | null;
+  endTime: string | null;
+  memo: string | null;
+}) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  const { data: student } = await supabase
+    .from("students")
+    .select("id")
+    .eq("id", input.studentId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!student) {
+    throw new Error("학생 정보를 찾을 수 없어요.");
+  }
+
+  if (input.groupId) {
+    const { data: group } = await supabase
+      .from("class_groups")
+      .select("id")
+      .eq("id", input.groupId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!group) {
+      throw new Error("수업 그룹을 찾을 수 없어요.");
+    }
+  }
+
+  const { error } = await supabase.from("makeup_lessons").insert({
+    user_id: user.id,
+    student_id: input.studentId,
+    student_lesson_log_id: null,
+    group_id: input.groupId,
+    source: "manual",
+    original_class_date: input.scheduledDate,
+    status: "scheduled",
+    scheduled_date: input.scheduledDate,
+    start_time: input.startTime,
+    end_time: input.endTime,
+    comment: input.memo?.trim() || null,
+  });
+
+  if (error) {
+    console.error("createManualMakeup error", error);
+    throw new Error(
+      SCHEMA_MISMATCH_CODES.has(error.code ?? "")
+        ? MANUAL_MIGRATION_MESSAGE
+        : "보충 수업을 등록하지 못했어요. 다시 시도해주세요.",
+    );
+  }
+
+  return true;
+}
+
+// 직접 등록 보충 수정 (학생/그룹/날짜/시간/메모).
+// 완료된 기록은 history 보호를 위해 이 경로로 수정하지 않는다.
+export async function updateManualMakeup(
+  makeupId: string,
+  input: {
+    studentId: string;
+    groupId: string | null;
+    scheduledDate: string;
+    startTime: string | null;
+    endTime: string | null;
+    memo: string | null;
+  },
+) {
+  const { supabase, user, makeup } = await getOwnedMakeup(makeupId);
+
+  if (makeup.source !== "manual") {
+    throw new Error("결석 연동 보충은 [일정 변경]에서 수정해주세요.");
+  }
+
+  if (makeup.status === "completed") {
+    throw new Error("완료된 보충 기록은 수정할 수 없어요.");
+  }
+
+  const { data: student } = await supabase
+    .from("students")
+    .select("id")
+    .eq("id", input.studentId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!student) {
+    throw new Error("학생 정보를 찾을 수 없어요.");
+  }
+
+  if (input.groupId) {
+    const { data: group } = await supabase
+      .from("class_groups")
+      .select("id")
+      .eq("id", input.groupId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!group) {
+      throw new Error("수업 그룹을 찾을 수 없어요.");
+    }
+  }
+
+  const { error } = await supabase
+    .from("makeup_lessons")
+    .update({
+      student_id: input.studentId,
+      group_id: input.groupId,
+      original_class_date: input.scheduledDate,
+      scheduled_date: input.scheduledDate,
+      status: "scheduled",
+      start_time: input.startTime,
+      end_time: input.endTime,
+      comment: input.memo?.trim() || null,
+    })
+    .eq("id", makeupId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("updateManualMakeup error", error);
+    throw new Error("보충 수업을 수정하지 못했어요. 다시 시도해주세요.");
+  }
+
+  return true;
+}
+
+// 직접 등록 보충 삭제 (결석 연동 보충은 기존 취소(cancelled) 흐름 유지 — 이 경로 사용 불가)
+export async function deleteManualMakeup(makeupId: string) {
+  const { supabase, user, makeup } = await getOwnedMakeup(makeupId);
+
+  if (makeup.source !== "manual") {
+    throw new Error("결석 연동 보충은 삭제 대신 [취소]로 기록을 남겨주세요.");
+  }
+
+  const { error } = await supabase
+    .from("makeup_lessons")
+    .delete()
+    .eq("id", makeupId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("deleteManualMakeup error", error);
+    throw new Error("보충 수업을 삭제하지 못했어요. 다시 시도해주세요.");
+  }
+
+  return true;
 }
 
 // 사이드바 badge용: 아직 일정을 못 잡은 보충(required) 개수만 head count.
@@ -98,16 +281,35 @@ export async function getMonthlyScheduledMakeups(monthStart: string, monthEnd: s
     return [] as MonthlyMakeupMarker[];
   }
 
-  const { data, error } = await supabase
+  const primary = await supabase
     .from("makeup_lessons")
     .select(
-      "id, scheduled_date, start_time, missed_progress, students(id, name), student_lesson_logs(daily_logs(class_groups(id, name)))",
+      "id, scheduled_date, start_time, missed_progress, students(id, name), direct_group:class_groups!makeup_lessons_group_id_fkey(id, name), student_lesson_logs(daily_logs(class_groups(id, name)))",
     )
     .eq("user_id", user.id)
     .eq("status", "scheduled")
     .gte("scheduled_date", monthStart)
     .lte("scheduled_date", monthEnd)
     .order("scheduled_date", { ascending: true });
+
+  let data: Record<string, unknown>[] | null = primary.data;
+  let error = primary.error;
+
+  if (error && SCHEMA_MISMATCH_CODES.has(error.code ?? "")) {
+    // migration 적용 전 fallback (legacy select)
+    const fallback = await supabase
+      .from("makeup_lessons")
+      .select(
+        "id, scheduled_date, start_time, missed_progress, students(id, name), student_lesson_logs(daily_logs(class_groups(id, name)))",
+      )
+      .eq("user_id", user.id)
+      .eq("status", "scheduled")
+      .gte("scheduled_date", monthStart)
+      .lte("scheduled_date", monthEnd)
+      .order("scheduled_date", { ascending: true });
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) {
     console.error("getMonthlyScheduledMakeups error", error);
@@ -117,6 +319,9 @@ export async function getMonthlyScheduledMakeups(monthStart: string, monthEnd: s
   return (data ?? []).map((row) => {
     const lessonLog = pickOne<{ daily_logs: unknown }>(row.student_lesson_logs);
     const dailyLog = pickOne<{ class_groups: unknown }>(lessonLog?.daily_logs);
+    const directGroup = pickOne<Pick<ClassGroupRecord, "id" | "name">>(
+      (row as { direct_group?: unknown }).direct_group,
+    );
 
     return {
       id: row.id as string,
@@ -124,7 +329,7 @@ export async function getMonthlyScheduledMakeups(monthStart: string, monthEnd: s
       start_time: (row.start_time as string | null) ?? null,
       missed_progress: (row.missed_progress as string | null) ?? null,
       student: pickOne<Pick<StudentRecord, "id" | "name">>(row.students),
-      group: pickOne<Pick<ClassGroupRecord, "id" | "name">>(dailyLog?.class_groups),
+      group: directGroup ?? pickOne<Pick<ClassGroupRecord, "id" | "name">>(dailyLog?.class_groups),
     };
   });
 }

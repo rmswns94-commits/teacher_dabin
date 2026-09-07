@@ -1,10 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarCheck, CheckCheck, CircleX, Search } from "lucide-react";
+import { CalendarCheck, CalendarPlus, CheckCheck, CircleX, Search, SquarePen, Trash2 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 
-import { cancelMakeupAction, completeMakeupAction, scheduleMakeupAction } from "@/app/makeups/actions";
+import {
+  cancelMakeupAction,
+  completeMakeupAction,
+  createManualMakeupAction,
+  deleteManualMakeupAction,
+  scheduleMakeupAction,
+  updateManualMakeupAction,
+} from "@/app/makeups/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatKoreanDate } from "@/lib/dates";
@@ -13,6 +20,8 @@ import { DAY_LABELS, formatTimeHM } from "@/lib/schedule";
 export type MakeupRow = {
   id: string;
   status: "required" | "scheduled" | "completed" | "cancelled";
+  // 결석 연동('absence') vs 보충 탭 직접 등록('manual') — manual은 결석 표시 대신 badge
+  source: "absence" | "manual";
   studentId: string | null;
   studentName: string;
   gradeLabel: string;
@@ -34,6 +43,14 @@ export type TeacherSlot = {
   start_time: string;
   end_time: string;
   groupName: string;
+};
+
+// 직접 등록 다이얼로그의 학생 선택지 (소속 그룹까지 batch로 미리 받아 학생별 쿼리 없음)
+export type MakeupStudentOption = {
+  id: string;
+  name: string;
+  gradeLabel: string;
+  groups: { id: string; name: string }[];
 };
 
 type FilterKey = "all" | "required" | "scheduled" | "done";
@@ -220,6 +237,220 @@ function ScheduleDialog({
   );
 }
 
+// ---------- 직접 등록 / 직접 등록 수정 ----------
+// 결석 연동 없이 Teacher가 학생·그룹·날짜·시간을 지정한다.
+// 날짜가 이미 있으므로 pending 없이 바로 "다가오는 보충"으로 들어간다.
+
+function ManualMakeupDialog({
+  row,
+  students,
+  today,
+  slots,
+  scheduledKeys,
+  onClose,
+}: {
+  // row가 있으면 직접 등록 record 수정, 없으면 신규 등록
+  row: MakeupRow | null;
+  students: MakeupStudentOption[];
+  today: string;
+  slots: TeacherSlot[];
+  // 같은 학생·같은 날짜에 이미 잡힌 보충 (soft warning용 — 하루 2회 보충은 막지 않는다)
+  scheduledKeys: { id: string; studentId: string | null; date: string | null }[];
+  onClose: () => void;
+}) {
+  const [studentId, setStudentId] = useState(row?.studentId ?? "");
+  const [groupId, setGroupId] = useState(row?.groupId ?? "");
+  const [date, setDate] = useState(row?.scheduledDate ?? today);
+  const [startTime, setStartTime] = useState(row?.startTime ?? "");
+  const [endTime, setEndTime] = useState(row?.endTime ?? "");
+  const [memo, setMemo] = useState(row?.comment ?? "");
+  const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  const selectedStudent = students.find((student) => student.id === studentId) ?? null;
+  const groupOptions = selectedStudent?.groups ?? [];
+
+  const pickStudent = (nextId: string) => {
+    setStudentId(nextId);
+    const next = students.find((student) => student.id === nextId);
+    // 소속 그룹이 하나면 자동 선택 (Teacher가 바꿀 수 있음), 여러 개면 직접 선택
+    setGroupId(next && next.groups.length === 1 ? next.groups[0].id : "");
+  };
+
+  const dirty =
+    studentId !== (row?.studentId ?? "") ||
+    groupId !== (row?.groupId ?? "") ||
+    date !== (row?.scheduledDate ?? today) ||
+    startTime !== (row?.startTime ?? "") ||
+    endTime !== (row?.endTime ?? "") ||
+    memo !== (row?.comment ?? "");
+
+  // 정규 수업과 겹치면 경고만 (막지는 않음)
+  const conflicts = useMemo(() => {
+    if (!date || !startTime || !endTime) return [] as string[];
+    const dow = new Date(`${date}T12:00:00Z`).getUTCDay();
+    return [
+      ...new Set(
+        slots
+          .filter(
+            (slot) =>
+              slot.day_of_week === dow &&
+              formatTimeHM(slot.start_time) < endTime &&
+              startTime < formatTimeHM(slot.end_time),
+          )
+          .map((slot) => slot.groupName),
+      ),
+    ];
+  }, [date, startTime, endTime, slots]);
+
+  // 같은 학생·같은 날짜 중복 soft warning (등록은 막지 않는다)
+  const duplicate = scheduledKeys.some(
+    (key) => key.studentId === studentId && key.date === date && key.id !== row?.id,
+  );
+
+  // 그룹이 있는 학생은 그룹 선택 필수, 그룹이 없는 학생은 그룹 없이 등록 가능
+  const groupOk = groupOptions.length === 0 || Boolean(groupId);
+
+  const submit = () => {
+    setError("");
+    startTransition(async () => {
+      const values = {
+        studentId,
+        groupId,
+        scheduledDate: date,
+        startTime,
+        endTime,
+        memo,
+      };
+      const result = row
+        ? await updateManualMakeupAction(row.id, values)
+        : await createManualMakeupAction(values);
+
+      if ("error" in result) {
+        setError(result.error);
+        return;
+      }
+
+      onClose();
+    });
+  };
+
+  return (
+    <DialogShell title={row ? "보충 수업 수정" : "보충 수업 등록"} dirty={dirty} onClose={onClose}>
+      <div className="mt-1 text-xs text-[#6b6b74]">
+        결석 기록 없이도 보충 일정을 직접 등록할 수 있어요.
+      </div>
+
+      <div className="mt-4 space-y-3">
+        <label className="block min-w-0">
+          <span className={labelClass}>학생</span>
+          <select
+            value={studentId}
+            onChange={(e) => pickStudent(e.target.value)}
+            className={inputClass}
+            aria-label="보충 학생 선택"
+          >
+            <option value="">학생 선택</option>
+            {students.map((student) => (
+              <option key={student.id} value={student.id}>
+                {student.name}
+                {student.gradeLabel ? ` (${student.gradeLabel})` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block min-w-0">
+          <span className={labelClass}>수업 그룹</span>
+          <select
+            value={groupId}
+            onChange={(e) => setGroupId(e.target.value)}
+            disabled={!selectedStudent || groupOptions.length === 0}
+            className={inputClass}
+            aria-label="보충 수업 그룹 선택"
+          >
+            <option value="">
+              {!selectedStudent
+                ? "학생을 먼저 선택해주세요"
+                : groupOptions.length === 0
+                  ? "소속 그룹 없음 (그룹 없이 등록)"
+                  : "그룹 선택"}
+            </option>
+            {groupOptions.map((group) => (
+              <option key={group.id} value={group.id}>{group.name}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block min-w-0">
+          <span className={labelClass}>보충 수업 날짜</span>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className={`${inputClass} min-w-0 max-w-full`}
+          />
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block min-w-0">
+            <span className={labelClass}>시작 (선택)</span>
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              className={`${inputClass} min-w-0 max-w-full`}
+            />
+          </label>
+          <label className="block min-w-0">
+            <span className={labelClass}>종료 (선택)</span>
+            <input
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              className={`${inputClass} min-w-0 max-w-full`}
+            />
+          </label>
+        </div>
+        <label className="block">
+          <span className={labelClass}>메모 (선택)</span>
+          <input
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+            className={inputClass}
+            placeholder="관계대명사 지난 진도 보충"
+          />
+        </label>
+
+        {duplicate ? (
+          <p className="rounded-xl bg-[#fdf3e4] px-3 py-2 text-xs text-[#8a6828]">
+            같은 날짜에 이 학생의 보충이 이미 있어요. 하루 두 번 보충이 맞는지 확인해주세요.
+          </p>
+        ) : null}
+        {conflicts.length > 0 ? (
+          <p className="rounded-xl bg-[#fdeee3] px-3 py-2 text-xs text-[#a2643c]">
+            이 시간에는 {conflicts.join(", ")} 정규 수업이 있어요.
+          </p>
+        ) : null}
+        {error ? <p className="text-xs text-[#a2665f]">{error}</p> : null}
+      </div>
+
+      <div className="mt-5 flex justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          취소
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          disabled={isPending || !studentId || !date || !groupOk}
+          onClick={submit}
+        >
+          {isPending ? "저장 중..." : row ? "변경사항 저장" : "등록"}
+        </Button>
+      </div>
+    </DialogShell>
+  );
+}
+
 // ---------- 보충 완료 ----------
 
 function CompleteDialog({
@@ -358,12 +589,17 @@ function MakeupCard({
   onSchedule,
   onComplete,
   onCancel,
+  onEdit,
+  onDelete,
 }: {
   row: MakeupRow;
   today: string;
   onSchedule: () => void;
   onComplete: () => void;
   onCancel: () => void;
+  // 직접 등록 record 전용
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   const isOpen = row.status === "required" || row.status === "scheduled";
   const sinceAbsence = daysBetween(row.absenceDate, today);
@@ -403,7 +639,12 @@ function MakeupCard({
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#6b6b74]">
-        {row.dailyLogId ? (
+        {/* 직접 등록 record는 결석 날짜 개념이 없다 — source badge로 구분 */}
+        {row.source === "manual" ? (
+          <span className="rounded-full bg-[#f0f0f3] px-2 py-0.5 text-[10px] font-medium text-[#6b6b74]">
+            직접 등록
+          </span>
+        ) : row.dailyLogId ? (
           <Link href={`/daily-logs/${row.dailyLogId}`} className="hover:underline">
             {formatKoreanDate(row.absenceDate)} 결석
           </Link>
@@ -438,10 +679,17 @@ function MakeupCard({
 
       {isOpen ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="secondary" className="gap-1.5" onClick={onSchedule}>
-            <CalendarCheck className="h-3.5 w-3.5" />
-            {row.status === "required" ? "일정 잡기" : "일정 변경"}
-          </Button>
+          {/* 직접 등록은 학생/그룹까지 한 폼에서 수정, 결석 연동은 기존 일정 잡기/변경 유지 */}
+          {row.source === "manual" ? (
+            <Button type="button" size="sm" variant="secondary" className="gap-1.5" onClick={onEdit}>
+              <SquarePen className="h-3.5 w-3.5" /> 수정
+            </Button>
+          ) : (
+            <Button type="button" size="sm" variant="secondary" className="gap-1.5" onClick={onSchedule}>
+              <CalendarCheck className="h-3.5 w-3.5" />
+              {row.status === "required" ? "일정 잡기" : "일정 변경"}
+            </Button>
+          )}
           {row.status === "scheduled" ? (
             <Button type="button" size="sm" className="gap-1.5" onClick={onComplete}>
               <CheckCheck className="h-3.5 w-3.5" /> 보충 완료
@@ -456,6 +704,32 @@ function MakeupCard({
           >
             <CircleX className="h-3.5 w-3.5" /> 취소
           </Button>
+          {row.source === "manual" ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="gap-1.5 text-[#8f625f]"
+              onClick={onDelete}
+            >
+              <Trash2 className="h-3.5 w-3.5" /> 삭제
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* 완료/취소된 직접 등록 record도 정리(삭제)는 가능 — history 영향 경고는 confirm에서 */}
+      {!isOpen && row.source === "manual" ? (
+        <div className="mt-3">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="gap-1.5 text-[#8f625f]"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5" /> 삭제
+          </Button>
         </div>
       ) : null}
     </Card>
@@ -468,14 +742,18 @@ export function MakeupsBoard({
   makeups,
   today,
   slots,
+  students,
 }: {
   makeups: MakeupRow[];
   today: string;
   slots: TeacherSlot[];
+  students: MakeupStudentOption[];
 }) {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [q, setQ] = useState("");
-  const [dialog, setDialog] = useState<{ kind: "schedule" | "complete"; id: string } | null>(null);
+  const [dialog, setDialog] = useState<
+    { kind: "schedule" | "complete" | "manual-edit"; id: string } | { kind: "manual-create" } | null
+  >(null);
   const [, startTransition] = useTransition();
 
   const query = q.trim().toLowerCase();
@@ -504,7 +782,10 @@ export function MakeupsBoard({
     done: makeups.filter((row) => row.status === "completed").length,
   };
 
-  const dialogRow = dialog ? (makeups.find((row) => row.id === dialog.id) ?? null) : null;
+  const dialogRow =
+    dialog && dialog.kind !== "manual-create"
+      ? (makeups.find((row) => row.id === dialog.id) ?? null)
+      : null;
 
   const cancel = (row: MakeupRow) => {
     if (!window.confirm(`${row.studentName} 학생의 보충을 취소할까요?\n취소 기록은 남아있어요.`)) {
@@ -519,6 +800,25 @@ export function MakeupsBoard({
     });
   };
 
+  // 직접 등록 record 삭제 — 완료된 기록은 성장노트(틈새왕) 계산에 쓰일 수 있어 경고를 강화
+  const removeManual = (row: MakeupRow) => {
+    const message =
+      row.status === "completed"
+        ? `${row.studentName} 학생의 완료된 보충 기록입니다.\n삭제하면 성장노트 기록에 영향을 줄 수 있어요. 삭제할까요?`
+        : `${row.studentName} 학생의 보충 일정을 삭제할까요?`;
+
+    if (!window.confirm(message)) {
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await deleteManualMakeupAction(row.id);
+      if ("error" in result) {
+        window.alert(result.error);
+      }
+    });
+  };
+
   const cardOf = (row: MakeupRow) => (
     <MakeupCard
       key={row.id}
@@ -527,8 +827,15 @@ export function MakeupsBoard({
       onSchedule={() => setDialog({ kind: "schedule", id: row.id })}
       onComplete={() => setDialog({ kind: "complete", id: row.id })}
       onCancel={() => cancel(row)}
+      onEdit={() => setDialog({ kind: "manual-edit", id: row.id })}
+      onDelete={() => removeManual(row)}
     />
   );
+
+  // 직접 등록 중복 soft warning용 (예정된 보충의 학생+날짜)
+  const scheduledKeys = makeups
+    .filter((row) => row.status === "scheduled")
+    .map((row) => ({ id: row.id, studentId: row.studentId, date: row.scheduledDate }));
 
   // 다가오는 보충: 날짜별 헤더로 묶기
   const upcomingByDate: [string, MakeupRow[]][] = [];
@@ -548,15 +855,25 @@ export function MakeupsBoard({
 
   return (
     <div>
-      <div className="flex items-center gap-2.5 rounded-2xl border border-[#e6e6ea] bg-white px-4 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-        <Search className="h-4 w-4 shrink-0 text-[#8a8a93]" aria-hidden />
-        <input
-          value={q}
-          onChange={(event) => setQ(event.target.value)}
-          className="w-full border-none bg-transparent text-sm text-[#33333b] outline-none placeholder:text-[#9a9aa3]"
-          placeholder="학생 이름 검색"
-          aria-label="학생 이름 검색"
-        />
+      {/* 검색 + 직접 등록 — 좁은 화면에서는 버튼이 다음 줄로 wrap (겹침 없음) */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex min-w-[220px] flex-1 items-center gap-2.5 rounded-2xl border border-[#e6e6ea] bg-white px-4 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+          <Search className="h-4 w-4 shrink-0 text-[#8a8a93]" aria-hidden />
+          <input
+            value={q}
+            onChange={(event) => setQ(event.target.value)}
+            className="w-full border-none bg-transparent text-sm text-[#33333b] outline-none placeholder:text-[#9a9aa3]"
+            placeholder="학생 이름 검색"
+            aria-label="학생 이름 검색"
+          />
+        </div>
+        <Button
+          type="button"
+          className="gap-2"
+          onClick={() => setDialog({ kind: "manual-create" })}
+        >
+          <CalendarPlus className="h-4 w-4" /> 보충 수업 등록
+        </Button>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -686,6 +1003,28 @@ export function MakeupsBoard({
           key={`complete-${dialogRow.id}`}
           row={dialogRow}
           today={today}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
+      {dialog?.kind === "manual-create" ? (
+        <ManualMakeupDialog
+          key="manual-create"
+          row={null}
+          students={students}
+          today={today}
+          slots={slots}
+          scheduledKeys={scheduledKeys}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
+      {dialogRow && dialog?.kind === "manual-edit" ? (
+        <ManualMakeupDialog
+          key={`manual-edit-${dialogRow.id}`}
+          row={dialogRow}
+          students={students}
+          today={today}
+          slots={slots}
+          scheduledKeys={scheduledKeys}
           onClose={() => setDialog(null)}
         />
       ) : null}

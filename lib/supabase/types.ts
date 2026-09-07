@@ -284,11 +284,19 @@ export type ExamPrepPlanRecord = {
   updated_at: string;
 };
 
+// source: 결석 연동('absence') vs 보충 탭 직접 등록('manual').
+// manual은 결석 일지와 연결이 없고(student_lesson_log_id null),
+// original_class_date는 NOT NULL 제약 유지를 위해 보충 날짜로 채워진다 (표시는 source 기준).
+export type MakeupSource = "absence" | "manual";
+
 export type MakeupLessonRecord = {
   id: string;
   user_id: string;
   student_id: string;
   student_lesson_log_id: string | null;
+  // 직접 등록 보충의 수업 그룹 (결석 연동 legacy row는 null — 일지 경유로 파생)
+  group_id: string | null;
+  source: MakeupSource;
   original_class_date: string;
   missed_progress: string | null;
   status: MakeupStatus;

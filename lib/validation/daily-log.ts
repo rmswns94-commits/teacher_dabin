@@ -145,6 +145,27 @@ export const makeupScheduleSchema = z
     { message: "종료 시간은 시작 시간보다 늦어야 해요.", path: ["endTime"] },
   );
 
+// 보충 탭 직접 등록 (결석 연동 없이 학생/그룹/날짜/시간을 Teacher가 지정)
+export const manualMakeupSchema = z
+  .object({
+    studentId: z.string().uuid({ message: "학생을 선택해주세요." }),
+    groupId: z.string().uuid().optional().or(z.literal("")),
+    scheduledDate: dateString,
+    startTime: timeString.optional(),
+    endTime: timeString.optional(),
+    memo: z.string().trim().max(1000, "메모는 1000자 이내로 입력해주세요.").optional().or(z.literal("")),
+  })
+  .refine((value) => !value.startTime === !value.endTime, {
+    message: "시작과 종료 시간을 함께 입력해주세요.",
+    path: ["endTime"],
+  })
+  .refine(
+    (value) => !value.startTime || !value.endTime || value.startTime < value.endTime,
+    { message: "종료 시간은 시작 시간보다 늦어야 해요.", path: ["endTime"] },
+  );
+
+export type ManualMakeupInput = z.infer<typeof manualMakeupSchema>;
+
 export const makeupCompleteSchema = z.object({
   completedDate: dateString,
   completedProgress: shortText(300, "보충한 진도"),

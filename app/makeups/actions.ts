@@ -2,8 +2,19 @@
 
 import { revalidatePath } from "next/cache";
 
-import { cancelMakeup, completeMakeup, scheduleMakeup } from "@/lib/supabase/queries/makeups";
-import { makeupCompleteSchema, makeupScheduleSchema } from "@/lib/validation/daily-log";
+import {
+  cancelMakeup,
+  completeMakeup,
+  createManualMakeup,
+  deleteManualMakeup,
+  scheduleMakeup,
+  updateManualMakeup,
+} from "@/lib/supabase/queries/makeups";
+import {
+  makeupCompleteSchema,
+  makeupScheduleSchema,
+  manualMakeupSchema,
+} from "@/lib/validation/daily-log";
 
 type ActionResult = { error: string } | { success: true };
 
@@ -61,6 +72,83 @@ export async function completeMakeupAction(
     });
   } catch (error) {
     return { error: messageOf(error, "보충수업을 완료 처리하지 못했어요.") };
+  }
+
+  revalidateMakeupPages();
+  return { success: true };
+}
+
+// 보충 탭 직접 등록 — 결석 연동 없이 바로 scheduled로 생성 (자동 Todo/일지 생성 없음)
+export async function createManualMakeupAction(values: {
+  studentId: string;
+  groupId: string;
+  scheduledDate: string;
+  startTime: string;
+  endTime: string;
+  memo: string;
+}): Promise<ActionResult> {
+  const parsed = manualMakeupSchema.safeParse(values);
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "입력 내용을 다시 확인해주세요." };
+  }
+
+  try {
+    await createManualMakeup({
+      studentId: parsed.data.studentId,
+      groupId: parsed.data.groupId || null,
+      scheduledDate: parsed.data.scheduledDate,
+      startTime: parsed.data.startTime || null,
+      endTime: parsed.data.endTime || null,
+      memo: parsed.data.memo || null,
+    });
+  } catch (error) {
+    return { error: messageOf(error, "보충 수업을 등록하지 못했어요.") };
+  }
+
+  revalidateMakeupPages();
+  return { success: true };
+}
+
+export async function updateManualMakeupAction(
+  makeupId: string,
+  values: {
+    studentId: string;
+    groupId: string;
+    scheduledDate: string;
+    startTime: string;
+    endTime: string;
+    memo: string;
+  },
+): Promise<ActionResult> {
+  const parsed = manualMakeupSchema.safeParse(values);
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "입력 내용을 다시 확인해주세요." };
+  }
+
+  try {
+    await updateManualMakeup(makeupId, {
+      studentId: parsed.data.studentId,
+      groupId: parsed.data.groupId || null,
+      scheduledDate: parsed.data.scheduledDate,
+      startTime: parsed.data.startTime || null,
+      endTime: parsed.data.endTime || null,
+      memo: parsed.data.memo || null,
+    });
+  } catch (error) {
+    return { error: messageOf(error, "보충 수업을 수정하지 못했어요.") };
+  }
+
+  revalidateMakeupPages();
+  return { success: true };
+}
+
+export async function deleteManualMakeupAction(makeupId: string): Promise<ActionResult> {
+  try {
+    await deleteManualMakeup(makeupId);
+  } catch (error) {
+    return { error: messageOf(error, "보충 수업을 삭제하지 못했어요.") };
   }
 
   revalidateMakeupPages();
