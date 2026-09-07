@@ -165,16 +165,17 @@ export default async function TodayTodosPage() {
                             <button
                               type="submit"
                               aria-pressed={false}
-                              className="flex min-h-11 w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition hover:bg-[#f8f3fb]"
+                              className="flex min-h-11 w-full items-start gap-2.5 rounded-xl px-2 py-1.5 text-left transition hover:bg-[#f8f3fb]"
                             >
+                              {/* 여러 줄 할 일: checkbox는 첫 줄 높이에 정렬 (items-start + mt) */}
                               <span
                                 aria-hidden
-                                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-[#d9c8f0] bg-white"
+                                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-[#d9c8f0] bg-white"
                               >
                                 <Check className="h-3 w-3 text-transparent" strokeWidth={3} />
                               </span>
                               <span className="min-w-0 flex-1">
-                                <span className="block break-words text-sm text-[#2d2928]">
+                                <span className="block whitespace-pre-wrap break-words text-sm text-[#2d2928]">
                                   {item.text}
                                 </span>
                                 <span
@@ -212,16 +213,16 @@ export default async function TodayTodosPage() {
                             <button
                               type="submit"
                               aria-pressed={true}
-                              className="flex min-h-11 w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition hover:bg-[#f4f9f6]"
+                              className="flex min-h-11 w-full items-start gap-2.5 rounded-xl px-2 py-1.5 text-left transition hover:bg-[#f4f9f6]"
                             >
                               <span
                                 aria-hidden
-                                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#8fc7ab]"
+                                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#8fc7ab]"
                               >
                                 <Check className="h-3 w-3 text-white" strokeWidth={3} />
                               </span>
                               <span className="min-w-0 flex-1 opacity-75">
-                                <span className="block break-words text-sm text-[#8a7b77] [text-decoration:line-through]">
+                                <span className="block whitespace-pre-wrap break-words text-sm text-[#8a7b77] [text-decoration:line-through]">
                                   {item.text}
                                 </span>
                                 <span className="mt-0.5 block text-[11px] text-[#b0a39f]">

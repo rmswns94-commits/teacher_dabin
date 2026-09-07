@@ -43,19 +43,20 @@ function ToggleRow({
       <button
         type="submit"
         aria-pressed={completed}
-        className="flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 py-1.5 text-left text-[13px] transition hover:bg-[#f2edf9]"
+        className="flex min-h-10 w-full items-start gap-2.5 rounded-xl px-3 py-1.5 text-left text-[13px] transition hover:bg-[#f2edf9]"
       >
+        {/* 여러 줄 할 일: checkbox는 첫 줄에 정렬 */}
         {completed ? (
           <span
             aria-hidden
-            className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[#8fc7ab]"
+            className="mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[#8fc7ab]"
           >
             <Check className="h-3 w-3 text-white" strokeWidth={3} />
           </span>
         ) : (
           <span
             aria-hidden
-            className="h-[18px] w-[18px] shrink-0 rounded-full border-2 border-[#d9c8f0] bg-white"
+            className="mt-px h-[18px] w-[18px] shrink-0 rounded-full border-2 border-[#d9c8f0] bg-white"
           />
         )}
         {children}
@@ -157,8 +158,8 @@ export function DashboardTodoCard({
                   <span
                     className={
                       item.completed
-                        ? "text-[#8a7b77] [text-decoration:line-through] opacity-70"
-                        : "text-[#2d2928]"
+                        ? "min-w-0 flex-1 whitespace-pre-wrap break-words text-[#8a7b77] [text-decoration:line-through] opacity-70"
+                        : "min-w-0 flex-1 whitespace-pre-wrap break-words text-[#2d2928]"
                     }
                   >
                     {item.text}
@@ -193,8 +194,8 @@ export function DashboardTodoCard({
                       <span
                         className={
                           item.completed
-                            ? "text-[#8a7b77] [text-decoration:line-through] opacity-70"
-                            : "text-[#2d2928]"
+                            ? "block whitespace-pre-wrap break-words text-[#8a7b77] [text-decoration:line-through] opacity-70"
+                            : "block whitespace-pre-wrap break-words text-[#2d2928]"
                         }
                       >
                         {item.text}

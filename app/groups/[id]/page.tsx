@@ -58,7 +58,8 @@ import {
 
 function cnCheckItem(completed: boolean) {
   return [
-    "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm transition hover:bg-[#f8f3f0]",
+    // items-start: 여러 줄 할 일에서 checkbox가 첫 줄에 정렬되게
+    "flex w-full items-start gap-2 rounded-xl px-2 py-1.5 text-left text-sm transition hover:bg-[#f8f3f0]",
     completed ? "text-[#7c6d69]" : "text-[#2b2323]",
   ].join(" ");
 }
@@ -380,17 +381,22 @@ export default async function GroupDetailPage({
                             {item.completed ? (
                               <span
                                 aria-hidden
-                                className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[#8fc7ab]"
+                                className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[#8fc7ab]"
                               >
                                 <Check className="h-3 w-3 text-white" strokeWidth={3} />
                               </span>
                             ) : (
                               <span
                                 aria-hidden
-                                className="h-[18px] w-[18px] shrink-0 rounded-full border-2 border-[#d9c8f0] bg-white"
+                                className="mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full border-2 border-[#d9c8f0] bg-white"
                               />
                             )}
-                            <span className={item.completed ? "line-through opacity-60" : undefined}>
+                            <span
+                              className={[
+                                "min-w-0 flex-1 whitespace-pre-wrap break-words",
+                                item.completed ? "line-through opacity-60" : "",
+                              ].join(" ")}
+                            >
                               {item.text}
                             </span>
                             {item.dueDate ? (
@@ -431,12 +437,15 @@ export default async function GroupDetailPage({
                   </div>
                 ) : null}
 
-                <form action={addPreparationItemAction.bind(null, id)} className="flex gap-2">
-                  <input
+                {/* 오늘 할 일 dialog와 같은 정책: textarea라 Enter=줄바꿈(submit 아님), 등록은 버튼만.
+                    여러 줄을 적어도 준비 항목 1개로 저장된다. */}
+                <form action={addPreparationItemAction.bind(null, id)} className="flex items-start gap-2">
+                  <textarea
                     name="text"
-                    maxLength={100}
-                    placeholder="준비 항목 추가 (예: Unit 3 단어 테스트)"
-                    className="flex-1 rounded-xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                    rows={2}
+                    maxLength={300}
+                    placeholder={"준비 항목 추가 (예: Unit 3 단어 테스트)\nEnter로 여러 줄도 가능해요"}
+                    className="min-h-[62px] min-w-0 flex-1 rounded-xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                     required
                   />
                   <PendingButton variant="secondary" size="sm" pendingText="추가 중..." className="gap-1">

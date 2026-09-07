@@ -119,7 +119,8 @@ export type StudentLessonEntryInput = z.infer<typeof studentLessonEntrySchema>;
 
 export const preparationItemSchema = z.object({
   id: z.string().min(1),
-  text: z.string().trim().min(1, "준비 항목 내용을 입력해주세요.").max(100, "준비 항목은 100자 이내로 입력해주세요."),
+  // .trim()은 가장자리만 — 내부 줄바꿈(\n)은 유지된다 (여러 줄 할 일)
+  text: z.string().trim().min(1, "준비 항목 내용을 입력해주세요.").max(300, "준비 항목은 300자 이내로 입력해주세요."),
   completed: z.boolean(),
 });
 

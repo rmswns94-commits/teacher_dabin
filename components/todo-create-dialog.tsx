@@ -105,13 +105,19 @@ export function TodoCreateDialog({
 
               <label className="block min-w-0">
                 <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">할 일</span>
-                <input
+                {/* 여러 줄 입력: Enter = 줄바꿈 (form 요소가 없어 submit 불가 — 등록은 버튼만).
+                    onChange에서 값을 재작성하지 않는다 (한글 IME 안전). 줄바꿈은 저장까지 유지. */}
+                <textarea
                   value={text}
                   onChange={(event) => setText(event.target.value)}
-                  maxLength={100}
-                  placeholder="프린트 20장 출력"
-                  className="w-full min-w-0 rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996] md:text-sm"
+                  rows={4}
+                  maxLength={300}
+                  placeholder={"중2 기말 대비\n백발백중 프린트 출력\n단어시험지 20부 준비"}
+                  className="min-h-[110px] w-full min-w-0 rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996] md:text-sm"
                 />
+                <span className="mt-1 block text-[11px] text-[#a79996]">
+                  Enter로 줄을 바꿔 여러 줄로 적을 수 있어요. 하나의 할 일로 등록돼요.
+                </span>
               </label>
 
               <label className="block min-w-0">

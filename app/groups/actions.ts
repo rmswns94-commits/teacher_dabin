@@ -394,7 +394,9 @@ function revalidatePreparation(groupId: string) {
 export async function addPreparationItemAction(groupId: string, formData: FormData) {
   const parsed = preparationItemSchema.safeParse({
     id: globalThis.crypto.randomUUID(),
-    text: String(formData.get("text") ?? ""),
+    // HTML form 제출은 textarea 줄바꿈을 CRLF(\r\n)로 보낸다 — dialog 경로(LF)와
+    // 같은 표기로 정규화 (줄바꿈 자체는 그대로 보존)
+    text: String(formData.get("text") ?? "").replace(/\r\n?/g, "\n"),
     completed: false,
   });
 
@@ -443,6 +445,8 @@ export async function createTodoAction(input: {
   text: string;
   dueDate: string;
 }) {
+  // trim은 가장자리 공백만 — 내부 줄바꿈(\n)은 그대로 저장한다.
+  // 줄바꿈은 "한 할 일 안의 표현"이며, 줄 수만큼 row를 쪼개지 않는다 (row 1개 유지).
   const text = input.text.trim();
 
   if (!input.groupId) {
@@ -451,8 +455,8 @@ export async function createTodoAction(input: {
   if (!text) {
     return { error: "할 일 내용을 입력해주세요." };
   }
-  if (text.length > 100) {
-    return { error: "할 일은 100자 이내로 입력해주세요." };
+  if (text.length > 300) {
+    return { error: "할 일은 300자 이내로 입력해주세요." };
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate)) {
     return { error: "날짜를 확인해주세요." };
