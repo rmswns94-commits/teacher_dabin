@@ -51,6 +51,89 @@ export type DayReflectionRow = {
   group: Pick<ClassGroupRecord, "id" | "name" | "icon"> | null;
 };
 
+// 월 누적 회고: 기간 내 회고 전체를 그룹 embed와 함께 1쿼리 batch (반별/일별 반복 쿼리 금지).
+// 정렬은 class_date asc → created_at asc (deterministic).
+export async function getReflectionsForRange(startDate: string, endDate: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return { rows: [] as DayReflectionRow[], failed: false };
+  }
+
+  const { data, error } = await supabase
+    .from("daily_logs")
+    .select(
+      "id, class_date, group_id, reflection_good, reflection_hard, reflection_next, class_groups(id, name, icon)",
+    )
+    .eq("user_id", user.id)
+    .gte("class_date", startDate)
+    .lte("class_date", endDate)
+    .or(REFLECTION_NOT_EMPTY)
+    .order("class_date", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("getReflectionsForRange error", { code: error.code, message: error.message });
+    return { rows: [] as DayReflectionRow[], failed: true };
+  }
+
+  const rows = (data ?? []).map((row) => ({
+    ...(row as unknown as Omit<DayReflectionRow, "group">),
+    group: pickOne<Pick<ClassGroupRecord, "id" | "name" | "icon">>(row.class_groups),
+  }));
+
+  return { rows, failed: false };
+}
+
+export type ReflectionSlimRow = {
+  id: string;
+  class_date: string;
+  reflection_good: string | null;
+  reflection_hard: string | null;
+  reflection_next: string | null;
+};
+
+// 전체 누적 회고의 초기 로드: 회고 텍스트+날짜만 (그룹/학생 등 불필요 필드 미조회 — §최소 데이터).
+// PostgREST 기본 1000행 제한을 넘겨도 안전하게 1000행 단위 페이징 loop로 전부 수집한다.
+// aggregate(기간/통계/월별/자주 적은 문구)는 서버에서 계산하고 DOM에는 요약만 내린다.
+export async function getAllReflectionSlims() {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return { rows: [] as ReflectionSlimRow[], failed: false };
+  }
+
+  const PAGE = 1000;
+  const MAX_ROWS = 20000; // 안전 상한 (loop 폭주 방지)
+  const rows: ReflectionSlimRow[] = [];
+
+  for (let from = 0; from < MAX_ROWS; from += PAGE) {
+    const { data, error } = await supabase
+      .from("daily_logs")
+      .select("id, class_date, reflection_good, reflection_hard, reflection_next")
+      .eq("user_id", user.id)
+      .or(REFLECTION_NOT_EMPTY)
+      .order("class_date", { ascending: true })
+      .order("created_at", { ascending: true })
+      .range(from, from + PAGE - 1);
+
+    if (error) {
+      console.error("getAllReflectionSlims error", { code: error.code, message: error.message });
+      return { rows: [] as ReflectionSlimRow[], failed: true };
+    }
+
+    rows.push(...((data ?? []) as ReflectionSlimRow[]));
+
+    if (!data || data.length < PAGE) {
+      break;
+    }
+  }
+
+  return { rows, failed: false };
+}
+
 // 선택한 날짜의 회고 전체 (그룹 embed로 batch — 반별 반복 쿼리 금지)
 export async function getReflectionsForDate(date: string) {
   const supabase = await createServerSupabaseClient();

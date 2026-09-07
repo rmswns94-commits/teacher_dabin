@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarRange, ChevronLeft, ChevronRight, History } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { CatDoodle } from "@/components/cat-doodle";
@@ -269,6 +269,25 @@ export default async function ReflectionsPage({
               </p>
             </div>
           </Card>
+
+          {/* ── 누적 회고 아카이브 — 월 버튼의 월은 현재 캘린더 표시 월(URL month)이 기준
+              (new Date() 기준 금지: 월 이동 시 label도 함께 바뀐다) ── */}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              href={`/reflections/monthly?month=${month}`}
+              className="flex min-h-11 items-center gap-1.5 rounded-2xl border border-[#e2d8f3] bg-white px-4 text-sm font-medium text-[#5c4ca8] shadow-sm transition hover:bg-[#faf7ff]"
+            >
+              <CalendarRange className="h-4 w-4" aria-hidden />
+              {monthLabel(month)} 누적 회고
+            </Link>
+            <Link
+              href="/reflections/archive"
+              className="flex min-h-11 items-center gap-1.5 rounded-2xl border border-[#e2d8f3] bg-white px-4 text-sm font-medium text-[#5c4ca8] shadow-sm transition hover:bg-[#faf7ff]"
+            >
+              <History className="h-4 w-4" aria-hidden />
+              전체 누적 회고
+            </Link>
+          </div>
 
           {/* ── 선택 날짜의 하루 회고 ── */}
           <div className="mt-5 space-y-3 pb-10">
