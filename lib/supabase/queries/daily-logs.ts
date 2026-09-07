@@ -974,7 +974,7 @@ export type ReflectionLogRow = {
   group: Pick<ClassGroupRecord, "id" | "name" | "icon"> | null;
 };
 
-const REFLECTION_NOT_EMPTY =
+export const REFLECTION_NOT_EMPTY =
   "reflection_good.not.is.null,reflection_hard.not.is.null,reflection_next.not.is.null";
 
 // 회고가 하나라도 적힌 일지만 최신순으로 (draft 일지의 회고도 포함 — 회고는 일지 상태와
