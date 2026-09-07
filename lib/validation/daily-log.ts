@@ -19,7 +19,8 @@ export const studentLessonEntrySchema = z.object({
   strengths: shortText(1000, "잘한 부분"),
   improvements: shortText(1000, "보완할 부분"),
   memo: shortText(1000, "메모"),
-  missedProgress: shortText(300, "놓친 진도"),
+  // 여러 줄 입력 지원 — trim은 앞뒤 공백만, 내부 \n은 보존된다
+  missedProgress: shortText(1000, "놓친 진도"),
   needsMakeup: z.boolean(),
   makeupScheduledDate: dateString.optional().or(z.literal("")),
   // 학생 평가 quick check — 모든 학년 공통 (전부 optional — 입력 안 한 값은 null로 저장)

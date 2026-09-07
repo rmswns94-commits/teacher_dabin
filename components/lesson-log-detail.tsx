@@ -234,7 +234,10 @@ export function LessonLogDetail({
 
                 {lessonLog.attendance === "absent" ? (
                   <div className="mt-1.5 rounded-xl bg-[#fff5f2] p-2.5 text-xs leading-5 text-[#8a5d52]">
-                    <div>놓친 진도: {makeup?.missed_progress || "기록 없음"}</div>
+                    {/* Teacher가 입력한 줄바꿈 그대로 전체 표시 (truncate/clamp 없음) */}
+                    <div className="whitespace-pre-line break-words">
+                      놓친 진도: {makeup?.missed_progress || "기록 없음"}
+                    </div>
                     {makeup ? (
                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
                         <MakeupStatusBadge status={makeup.status} />

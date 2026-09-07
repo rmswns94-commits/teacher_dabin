@@ -187,7 +187,7 @@ function ScheduleDialog({
         {row.groupName ? ` · ${row.groupName}` : ""}
       </div>
       {row.missedProgress ? (
-        <div className="mt-2 rounded-xl bg-[#f4f4f6] px-3 py-2 text-xs text-[#4c4c55]">
+        <div className="mt-2 whitespace-pre-line break-words rounded-xl bg-[#f4f4f6] px-3 py-2 text-xs text-[#4c4c55]">
           놓친 진도 · {row.missedProgress}
         </div>
       ) : null}
@@ -495,8 +495,12 @@ function CompleteDialog({
       <div className="mt-1 text-xs text-[#6b6b74]">
         {row.studentName}
         {row.groupName ? ` · ${row.groupName}` : ""}
-        {row.missedProgress ? ` · 놓친 진도 ${row.missedProgress}` : ""}
       </div>
+      {row.missedProgress ? (
+        <div className="mt-2 whitespace-pre-line break-words rounded-xl bg-[#f4f4f6] px-3 py-2 text-xs text-[#4c4c55]">
+          놓친 진도 · {row.missedProgress}
+        </div>
+      ) : null}
 
       <div className="mt-4 space-y-3">
         <label className="block">
@@ -510,10 +514,12 @@ function CompleteDialog({
         </label>
         <label className="block">
           <span className={labelClass}>실제 보충 내용</span>
-          <input
+          {/* 놓친 진도가 여러 줄이면 기본값도 여러 줄 — textarea로 그대로 편집 */}
+          <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className={inputClass}
+            rows={3}
+            className={`${inputClass} leading-6`}
             placeholder="관계대명사 목적격 설명 및 문제풀이"
           />
         </label>
@@ -668,10 +674,14 @@ function MakeupCard({
       </div>
 
       {row.missedProgress ? (
-        <div className="mt-1.5 text-sm text-[#33333b]">놓친 진도 · {row.missedProgress}</div>
+        <div className="mt-1.5 whitespace-pre-line break-words text-sm text-[#33333b]">
+          놓친 진도 · {row.missedProgress}
+        </div>
       ) : null}
       {row.status === "completed" && row.completedProgress ? (
-        <div className="mt-1 text-sm text-[#3d7f64]">보충한 내용 · {row.completedProgress}</div>
+        <div className="mt-1 whitespace-pre-line break-words text-sm text-[#3d7f64]">
+          보충한 내용 · {row.completedProgress}
+        </div>
       ) : null}
       {row.status === "completed" && row.comment ? (
         <div className="mt-1 whitespace-pre-line text-xs text-[#6b6b74]">{row.comment}</div>

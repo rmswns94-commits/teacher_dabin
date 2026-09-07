@@ -584,7 +584,7 @@ export default async function DailyLogsPage({
                           <span className="text-xs text-[#6b6b74]">{makeup.group.name}</span>
                         ) : null}
                         {makeup.missed_progress ? (
-                          <span className="truncate text-xs text-[#8a8a93]">
+                          <span className="min-w-0 whitespace-pre-line break-words text-xs text-[#8a8a93]">
                             {makeup.missed_progress}
                           </span>
                         ) : null}

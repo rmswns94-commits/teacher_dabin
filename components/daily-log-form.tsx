@@ -1209,11 +1209,19 @@ export function DailyLogForm({
                   </div>
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-semibold text-[#8a5d52]">놓친 진도</span>
-                    <input
+                    {/* 여러 줄 입력: Enter = 줄바꿈 (submit 아님 — 저장은 하단 버튼).
+                        onChange에서 값 재작성 없음 — newline/IME 조합이 그대로 보존된다. */}
+                    <textarea
                       value={entry.missedProgress}
                       onChange={(event) => updateEntry(student.studentId, { missedProgress: event.target.value })}
-                      className="w-full rounded-xl border border-[#f0ddd8] bg-white px-3 py-2 text-sm outline-none focus:border-[#e3bcb4] placeholder:text-[#b5a29e]"
-                      placeholder={defaultProgress.trim() ? `공통 진도: ${defaultProgress.trim()}` : "놓친 진도를 입력해주세요"}
+                      rows={4}
+                      maxLength={1000}
+                      className="min-h-[96px] w-full min-w-0 max-w-full rounded-xl border border-[#f0ddd8] bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-[#e3bcb4] placeholder:text-[#b5a29e]"
+                      placeholder={
+                        defaultProgress.trim()
+                          ? `공통 진도: ${defaultProgress.trim()}`
+                          : "관계대명사 주격 개념\nGrammar Inside p.42~45\n5과 단어시험"
+                      }
                     />
                     <span className="mt-1 block text-[11px] text-[#a68e88]">
                       {entry.missedProgress && entry.missedProgress === defaultProgress.trim()

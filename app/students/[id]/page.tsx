@@ -812,7 +812,9 @@ export default async function StudentDetailPage({
                           </span>
                         </div>
                         {makeup.missed_progress ? (
-                          <div className="mt-1.5 text-[#564d4d]">놓친 진도: {makeup.missed_progress}</div>
+                          <div className="mt-1.5 whitespace-pre-line break-words text-[#564d4d]">
+                            놓친 진도: {makeup.missed_progress}
+                          </div>
                         ) : null}
                       </div>
                     ))}
