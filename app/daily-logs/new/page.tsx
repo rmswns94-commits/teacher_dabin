@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { CircleArrowRight, NotebookTabs } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
@@ -10,7 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { sortByKoreanName } from "@/lib/korean-sort";
-import { getDailyLogDraft } from "@/lib/supabase/queries/daily-log-drafts";
+import {
+  getActiveDraftResumeTarget,
+  getDailyLogDraft,
+} from "@/lib/supabase/queries/daily-log-drafts";
 import { getGroupHistoryLogs, getPreviousReflectionNext } from "@/lib/supabase/queries/daily-logs";
 import {
   getCurrentUserGroups,
@@ -22,9 +26,21 @@ import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
 export default async function NewDailyLogPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ groupId?: string; date?: string }>;
+  searchParams?: Promise<{ groupId?: string; date?: string; resume?: string; fresh?: string }>;
 }) {
   const params = (await searchParams) ?? {};
+
+  // [수업 일지 작성하기] bare 진입(파라미터 없음): 작성 중인 draft가 있으면 그 화면으로.
+  // 그룹/날짜를 명시한 진입(대시보드 hero·그룹 상세·캘린더 날짜·피커 제출)과
+  // 폼의 그룹 "변경"(fresh=1)은 의도된 타겟이므로 그대로 새 작성 흐름을 탄다.
+  // 모든 "수업 일지 작성하기" 버튼이 이 페이지를 가리키므로 여기 한 곳이 공용 정책이 된다.
+  if (params.groupId === undefined && params.date === undefined && params.fresh === undefined) {
+    const resumeHref = await getActiveDraftResumeTarget();
+    if (resumeHref) {
+      redirect(resumeHref);
+    }
+  }
+
   const requestedGroupId = params.groupId || null;
   const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : todayDateString();
 
@@ -154,6 +170,8 @@ export default async function NewDailyLogPage({
                   ? { id: draftRow.id, updatedAt: draftRow.updated_at, payload: draftRow.payload }
                   : null
               }
+              // resume 진입이면 10분 창과 무관하게 draft를 즉시 전체 복원
+              forceRestoreDraft={params.resume === "1" && Boolean(draftRow)}
               group={{ id: selectedGroup.id, name: selectedGroup.name, grade: selectedGroup.grade }}
               students={groupStudents.map((student) => ({
                 studentId: student.id,

@@ -359,6 +359,7 @@ export function DailyLogForm({
   students,
   scheduleDays = [],
   draft = null,
+  forceRestoreDraft = false,
   initial,
   previousReflection = null,
 }: {
@@ -370,6 +371,9 @@ export function DailyLogForm({
   scheduleDays?: number[];
   // 서버에서 발견한 자동 임시저장 draft (있으면 복구 배너 표시 — 자동 덮어쓰기 없음)
   draft?: { id: string; updatedAt: string; payload: unknown } | null;
+  // [수업 일지 작성하기] resume 진입: 10분 창과 무관하게 draft를 즉시 전체 복원
+  // (새 작성 화면 전용 — draft가 유일한 작성 내용이라 덮어쓸 원본이 없다)
+  forceRestoreDraft?: boolean;
   initial?: {
     title: string;
     defaultProgress: string;
@@ -388,8 +392,12 @@ export function DailyLogForm({
 }) {
   // 최근(10분 내) 임시저장 draft는 mount 시점에 자동 복원 — reload 복구가 목적이라
   // effect/remount 없이 초기 state로만 반영한다 (IME/입력에 영향 없음).
+  // resume 진입(forceRestoreDraft)은 시간 창과 무관하게 항상 복원한다.
   const [autoRestored] = useState(() =>
-    Boolean(draft && currentEpochMs() - Date.parse(draft.updatedAt) < AUTO_RESTORE_WINDOW_MS),
+    Boolean(
+      draft &&
+        (forceRestoreDraft || currentEpochMs() - Date.parse(draft.updatedAt) < AUTO_RESTORE_WINDOW_MS),
+    ),
   );
   const [restored] = useState<Partial<DraftPayload> | null>(() =>
     autoRestored && draft && draft.payload && typeof draft.payload === "object"
@@ -988,8 +996,9 @@ export function DailyLogForm({
               <div className="flex min-h-[46px] min-w-0 items-center justify-between gap-2 rounded-2xl border border-[#ece0db] bg-[#f8f3ef] px-3 py-2.5 text-sm text-[#2b2323]">
                 <span className="min-w-0 truncate font-medium">{group.name}</span>
                 {!dailyLogId ? (
+                  // fresh=1: 그룹을 바꾸려는 의도된 이동이라 draft resume redirect를 우회
                   <Link
-                    href="/daily-logs/new"
+                    href="/daily-logs/new?fresh=1"
                     className="shrink-0 text-xs text-[#5c4ca8] hover:underline"
                   >
                     변경
