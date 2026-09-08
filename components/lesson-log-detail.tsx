@@ -6,6 +6,7 @@ import { AttendanceBadge, DailyLogStatusBadge, MakeupStatusBadge } from "@/compo
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate } from "@/lib/dates";
+import { buildHomeworkMirror } from "@/lib/homework-assignments";
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import {
   effortLevelLabels,
@@ -134,12 +135,47 @@ export function LessonLogDetail({
           </div>
         </div>
 
-        {detail.homework || detail.next_lesson_plan ? (
+        {detail.homework || detail.next_lesson_plan || detail.homeworkAssignments.length > 0 ? (
           <div className="mt-3 grid gap-3 md:grid-cols-2">
-            {detail.homework ? (
+            {detail.homeworkAssignments.length > 0 ? (
+              // 오늘 숙제(구조화) — 완료일 오름차순, 원문 전체(줄바꿈 보존, truncate 없음)
               <div className="rounded-2xl bg-[#fdf6ec] p-3.5">
                 <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#94702f]">
                   <NotebookTabs className="h-3.5 w-3.5" aria-hidden /> 오늘 숙제
+                  <span className="normal-case tracking-normal text-[#ad8c53]">
+                    · {detail.homeworkAssignments.length}개
+                  </span>
+                </div>
+                <ul className="mt-1.5 space-y-2.5">
+                  {detail.homeworkAssignments.map((hw) => (
+                    <li key={hw.id} className="min-w-0">
+                      <div className="text-xs font-semibold text-[#ad8c53]">
+                        {formatKoreanDate(hw.due_date)}까지
+                      </div>
+                      <div className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-6 text-[#5c4a2e]">
+                        {hw.content}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {detail.homework &&
+            // 구조화 숙제의 파생 mirror 텍스트는 중복이라 숨긴다 (진짜 legacy 메모만 표시)
+            !(
+              detail.homeworkAssignments.length > 0 &&
+              detail.homework ===
+                buildHomeworkMirror(
+                  detail.homeworkAssignments.map((hw) => ({
+                    content: hw.content,
+                    dueDate: hw.due_date,
+                  })),
+                )
+            ) ? (
+              <div className="rounded-2xl bg-[#fdf6ec] p-3.5">
+                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#94702f]">
+                  <NotebookTabs className="h-3.5 w-3.5" aria-hidden />
+                  {detail.homeworkAssignments.length > 0 ? "숙제 메모" : "오늘 숙제"}
                   {detail.homework_due_date ? (
                     <span className="normal-case tracking-normal text-[#ad8c53]">· {formatKoreanDate(detail.homework_due_date)}</span>
                   ) : null}

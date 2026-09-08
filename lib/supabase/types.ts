@@ -138,6 +138,19 @@ export type DailyLogRecord = {
   updated_at: string;
 };
 
+// 오늘 숙제(구조화): 한 수업에서 내준 숙제 여러 개 — 각각 독립적인 완료일.
+// Teacher Todo/calendar와 무관한 학생 대상 assignment 기록 (자동 Todo/이벤트 생성 없음).
+export type DailyLogHomeworkAssignmentRecord = {
+  id: string;
+  user_id: string;
+  daily_log_id: string;
+  content: string; // 여러 줄 가능 (내부 \n 보존)
+  due_date: string; // "YYYY-MM-DD" (KST date-only)
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type StudentLessonLogRecord = {
   id: string;
   user_id: string;

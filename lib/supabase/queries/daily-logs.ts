@@ -1,4 +1,5 @@
 import { formatKoreanDateFull } from "@/lib/dates";
+import { buildHomeworkMirror } from "@/lib/homework-assignments";
 import { sortByKoreanName } from "@/lib/korean-sort";
 import { dedupeVocabWords } from "@/lib/vocab";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
@@ -6,6 +7,7 @@ import type {
   AttendanceStatus,
   PreparationItem,
   ClassGroupRecord,
+  DailyLogHomeworkAssignmentRecord,
   DailyLogRecord,
   DailyLogStatus,
   MakeupLessonRecord,
@@ -151,6 +153,8 @@ export type DailyLogDetail = DailyLogRecord & {
   group: Pick<ClassGroupRecord, "id" | "name" | "grade"> | null;
   lessonLogs: StudentLessonLogWithStudent[];
   makeups: MakeupLessonRecord[];
+  // 오늘 숙제(구조화) — 완료일 ASC. migration 미적용/조회 실패 시 [] (화면은 항상 뜬다)
+  homeworkAssignments: DailyLogHomeworkAssignmentRecord[];
 };
 
 // options.withMakeups=false: 보충 정보가 필요 없는 소비처(이전 기록 패널의 학생 기록 lazy 조회)가
@@ -210,11 +214,33 @@ export async function getDailyLogDetailForCurrentUser(
     }
   }
 
+  // 오늘 숙제(구조화) — 일지당 batch 1쿼리 (항목별 반복 쿼리 없음), 미적용/실패 시 []
+  let homeworkAssignments: DailyLogHomeworkAssignmentRecord[] = [];
+  const { data: hwRows, error: hwError } = await supabase
+    .from("daily_log_homework_assignments")
+    .select("id, user_id, daily_log_id, content, due_date, sort_order, created_at, updated_at")
+    .eq("user_id", user.id)
+    .eq("daily_log_id", dailyLogId)
+    .order("due_date", { ascending: true })
+    .order("sort_order", { ascending: true });
+
+  if (hwError) {
+    if (!["42P01", "PGRST205"].includes(hwError.code ?? "")) {
+      console.error("getDailyLogDetailForCurrentUser homework error", {
+        code: hwError.code,
+        message: hwError.message,
+      });
+    }
+  } else {
+    homeworkAssignments = (hwRows ?? []) as DailyLogHomeworkAssignmentRecord[];
+  }
+
   return {
     ...(data as unknown as DailyLogRecord),
     group: pickOne<Pick<ClassGroupRecord, "id" | "name" | "grade">>(data.class_groups),
     lessonLogs,
     makeups,
+    homeworkAssignments,
   } as DailyLogDetail;
 }
 
@@ -297,6 +323,128 @@ async function syncLinkedPreparation(
       .eq("user_id", userId);
     if (writeError) {
       console.error("syncLinkedPreparation write error", writeError);
+    }
+  }
+}
+
+// ── 오늘 숙제(구조화) ─────────────────────────────────────────────
+// migration 미적용(테이블 없음) 코드: 42P01 undefined table / PGRST205 schema cache 없음
+const HW_MISSING_TABLE_CODES = new Set(["42P01", "PGRST205"]);
+const HW_MIGRATION_MESSAGE =
+  "오늘 숙제 기능의 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20260909_create_daily_log_homework_assignments.sql을 실행한 뒤 다시 시도해주세요.";
+
+// 일지의 구조화 숙제 조회 (완료일 ASC → 등록 순). 실패/미적용 시 [] — 화면은 항상 뜬다.
+export async function getHomeworkAssignmentsForDailyLog(dailyLogId: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as DailyLogHomeworkAssignmentRecord[];
+  }
+
+  const { data, error } = await supabase
+    .from("daily_log_homework_assignments")
+    .select("id, user_id, daily_log_id, content, due_date, sort_order, created_at, updated_at")
+    .eq("user_id", user.id)
+    .eq("daily_log_id", dailyLogId)
+    .order("due_date", { ascending: true })
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    if (!HW_MISSING_TABLE_CODES.has(error.code ?? "")) {
+      console.error("getHomeworkAssignmentsForDailyLog error", { code: error.code, message: error.message });
+    }
+    return [] as DailyLogHomeworkAssignmentRecord[];
+  }
+
+  return (data ?? []) as DailyLogHomeworkAssignmentRecord[];
+}
+
+// 구조화 숙제 sync — id 기반 idempotent 교체 (문자열 비교 없음):
+// 기존 row 조회 → 제출된 id는 update(upsert), 새 항목은 새 uuid insert, 빠진 id는 delete.
+// autosave(draft payload)에서는 절대 호출되지 않는다 — saveDailyLog(수동 임시저장/완료)에서만.
+async function syncHomeworkAssignments(
+  supabase: NonNullable<Awaited<ReturnType<typeof createServerSupabaseClient>>>,
+  userId: string,
+  dailyLogId: string,
+  items: { id?: string | null; content: string; dueDate: string }[],
+) {
+  const { data: existingRows, error: readError } = await supabase
+    .from("daily_log_homework_assignments")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("daily_log_id", dailyLogId);
+
+  if (readError) {
+    if (HW_MISSING_TABLE_CODES.has(readError.code ?? "")) {
+      // migration 미적용: 숙제가 없으면 조용히 통과, 있으면 안내와 함께 실패
+      if (items.length === 0) {
+        return;
+      }
+      throw new Error(HW_MIGRATION_MESSAGE);
+    }
+    console.error("syncHomeworkAssignments read error", readError);
+    throw new Error("오늘 숙제를 저장하지 못했어요. 다시 시도해주세요.");
+  }
+
+  const existingIds = new Set((existingRows ?? []).map((row) => row.id as string));
+
+  // 새 항목 id는 폼이 추가 시점에 발급한다 (저장 후에도 같은 id 유지 — idempotent).
+  // 단, 같은 사용자의 "다른 일지" row id를 보내 upsert로 가로채는 것만 막는다:
+  // 이 일지의 기존 id도 아니고 내 다른 row로 존재하는 id면 새 id로 재발급.
+  const unknownIds = items
+    .map((item) => item.id)
+    .filter((id): id is string => Boolean(id) && !existingIds.has(id!));
+  const foreignIds = new Set<string>();
+
+  if (unknownIds.length > 0) {
+    const { data: otherRows } = await supabase
+      .from("daily_log_homework_assignments")
+      .select("id")
+      .eq("user_id", userId)
+      .in("id", unknownIds);
+    for (const row of otherRows ?? []) {
+      foreignIds.add(row.id as string);
+    }
+  }
+
+  const rows = items.map((item, index) => ({
+    id: item.id && !foreignIds.has(item.id) ? item.id : globalThis.crypto.randomUUID(),
+    user_id: userId,
+    daily_log_id: dailyLogId,
+    content: item.content.trim(),
+    due_date: item.dueDate,
+    sort_order: index,
+  }));
+
+  if (rows.length > 0) {
+    const { error: upsertError } = await supabase
+      .from("daily_log_homework_assignments")
+      .upsert(rows, { onConflict: "id" });
+
+    if (upsertError) {
+      console.error("syncHomeworkAssignments upsert error", upsertError);
+      throw new Error(
+        HW_MISSING_TABLE_CODES.has(upsertError.code ?? "")
+          ? HW_MIGRATION_MESSAGE
+          : "오늘 숙제를 저장하지 못했어요. 다시 시도해주세요.",
+      );
+    }
+  }
+
+  const keptIds = new Set(rows.map((row) => row.id));
+  const toDelete = [...existingIds].filter((id) => !keptIds.has(id));
+
+  if (toDelete.length > 0) {
+    const { error: deleteError } = await supabase
+      .from("daily_log_homework_assignments")
+      .delete()
+      .eq("user_id", userId)
+      .in("id", toDelete);
+
+    if (deleteError) {
+      console.error("syncHomeworkAssignments delete error", deleteError);
+      throw new Error("오늘 숙제를 저장하지 못했어요. 다시 시도해주세요.");
     }
   }
 }
@@ -388,6 +536,15 @@ export async function saveDailyLog(input: DailyLogFormInput) {
 
   const vocabTotal = input.vocabTotal ? Number(input.vocabTotal) : null;
 
+  // 오늘 숙제(구조화): legacy free-text가 비어 있으면 homework 필드에 파생 mirror 텍스트를
+  // 기록한다 — 지난 숙제 카드/브리핑/그룹 요약 등 기존 소비처가 코드 변경 없이 계속 동작.
+  // homework_due_date는 legacy 입력이 있을 때만 유지 → mirror는 Todo 연동을 발동시키지 않는다.
+  const homeworkAssignments = input.homeworkAssignments ?? [];
+  const legacyHomework = input.homework?.trim() || "";
+  const homeworkText =
+    legacyHomework || (homeworkAssignments.length > 0 ? buildHomeworkMirror(homeworkAssignments) : "");
+  const homeworkDueDate = legacyHomework ? input.homeworkDueDate || null : null;
+
   // lesson_content(legacy 수업 내용)는 payload에서 제외 — 기존 값을 덮어쓰지 않고 보존하며,
   // 신규 저장의 canonical field는 default_progress(공통 진도) 하나다.
   const headerPayload = {
@@ -397,8 +554,8 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     title: input.title?.trim() || null,
     default_progress: input.defaultProgress?.trim() || null,
     memo: input.memo?.trim() || null,
-    homework: input.homework?.trim() || null,
-    homework_due_date: input.homework?.trim() ? input.homeworkDueDate || null : null,
+    homework: homeworkText || null,
+    homework_due_date: homeworkDueDate,
     next_lesson_plan: input.nextLessonPlan?.trim() || null,
     next_plan_date: input.nextPlanDate || null,
     vocab_total: vocabTotal,
@@ -474,9 +631,12 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     input.groupId,
     dailyLogId!,
     "daily_log_homework",
-    input.homework?.trim() ?? "",
-    input.homework?.trim() ? input.homeworkDueDate || null : null,
+    homeworkText,
+    homeworkDueDate,
   );
+
+  // 오늘 숙제(구조화) row sync — id 기반 idempotent (재시도/저장 버튼 중복에도 안전)
+  await syncHomeworkAssignments(supabase, user.id, dailyLogId!, homeworkAssignments);
 
   // 학부모 전달 상태 보존: 이미 "전달 완료"한 기록을 일지 재저장이 pending으로
   // 되돌리지 않도록, 내용이 그대로면 completed 상태를 유지한다.

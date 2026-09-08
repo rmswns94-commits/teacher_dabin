@@ -136,6 +136,12 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
               ? { id: draftRow.id, updatedAt: draftRow.updated_at, payload: draftRow.payload }
               : null
           }
+          // 오늘 숙제(구조화) — id 기반 sync를 위해 row id까지 전달
+          initialAssignments={log.homeworkAssignments.map((hw) => ({
+            id: hw.id,
+            content: hw.content,
+            dueDate: hw.due_date,
+          }))}
           initial={{
             title: log.title ?? "",
             // migration 미적용 legacy row도 수업 내용을 잃지 않게 병합해 편집한다

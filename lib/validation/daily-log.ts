@@ -46,6 +46,17 @@ export const studentLessonEntrySchema = z.object({
   effortLevel: z.enum(["high", "normal", "low"]).optional().or(z.literal("")),
 });
 
+// 오늘 숙제(구조화) — 항목마다 내용+완료일 필수, 내용은 여러 줄 가능(trim은 가장자리만)
+export const homeworkAssignmentSchema = z.object({
+  id: z.string().uuid().nullable().optional(),
+  content: z
+    .string()
+    .trim()
+    .min(1, "숙제 내용을 입력해주세요.")
+    .max(500, "숙제 내용은 500자 이내로 입력해주세요."),
+  dueDate: dateString,
+});
+
 export const dailyLogSchema = z
   .object({
     dailyLogId: z.string().uuid().optional(),
@@ -65,9 +76,24 @@ export const dailyLogSchema = z
     reflectionHard: shortText(1000, "아쉬웠던 점"),
     reflectionNext: shortText(1000, "다음에 다르게 해볼 것"),
     status: z.enum(["draft", "completed"], { message: "저장 상태를 확인해주세요." }),
+    // 오늘 숙제(구조화) — 숙제 N개, 각각 독립 완료일
+    homeworkAssignments: z
+      .array(homeworkAssignmentSchema)
+      .max(20, "숙제는 한 수업에 20개까지 기록할 수 있어요.")
+      .optional(),
     students: z.array(studentLessonEntrySchema).min(1, "학생 기록이 필요합니다."),
   })
   .superRefine((value, ctx) => {
+    // 구조화 숙제 완료일은 기존 숙제 날짜와 같은 규칙: 수업일 이후
+    for (const [index, assignment] of (value.homeworkAssignments ?? []).entries()) {
+      if (assignment.dueDate <= value.classDate) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["homeworkAssignments", index, "dueDate"],
+          message: "숙제 완료일은 수업일 이후로 선택해주세요.",
+        });
+      }
+    }
     // 다음 수업 계획은 내용+날짜 한 쌍으로 관리한다
     if ((value.nextLessonPlan ?? "").trim() && !value.nextPlanDate) {
       ctx.addIssue({ code: "custom", path: ["nextPlanDate"], message: "다음 수업 계획 날짜를 선택해주세요." });

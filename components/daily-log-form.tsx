@@ -17,7 +17,9 @@ import {
   Clock3,
   NotebookPen,
   NotebookTabs,
+  Plus,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -163,6 +165,8 @@ type DraftPayload = {
   memo: string;
   homework: string;
   homeworkDueDate: string;
+  // 오늘 숙제(구조화) — draft 단계에서는 payload에만 유지 (row 생성 없음)
+  homeworkAssignments: { id: string | null; content: string; dueDate: string }[];
   nextLessonPlan: string;
   nextPlanDate: string;
   vocabTotal: string;
@@ -171,6 +175,29 @@ type DraftPayload = {
   reflectionNext: string;
   entries: Record<string, EntryState>;
 };
+
+// 오늘 숙제 폼 항목 — key는 React 렌더용 안정 identity (삭제/재정렬에도 값이 섞이지 않게),
+// id는 저장된 row id (수정 sync용, 새 항목은 null). 저장/스냅샷에는 key를 싣지 않는다.
+type AssignmentItem = { key: string; id: string | null; content: string; dueDate: string };
+
+function restoredAssignments(value: unknown): AssignmentItem[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  return value
+    .filter(
+      (item): item is { id?: unknown; content: string; dueDate: string } =>
+        Boolean(item) &&
+        typeof (item as { content?: unknown }).content === "string" &&
+        typeof (item as { dueDate?: unknown }).dueDate === "string",
+    )
+    .map((item) => ({
+      key: globalThis.crypto.randomUUID(),
+      id: typeof item.id === "string" ? item.id : null,
+      content: item.content,
+      dueDate: item.dueDate,
+    }));
+}
 
 function restoredText(value: unknown, fallback: string) {
   return typeof value === "string" ? value : fallback;
@@ -361,6 +388,7 @@ export function DailyLogForm({
   draft = null,
   forceRestoreDraft = false,
   initial,
+  initialAssignments = [],
   previousReflection = null,
 }: {
   dailyLogId?: string;
@@ -387,6 +415,8 @@ export function DailyLogForm({
     reflectionHard?: string;
     reflectionNext?: string;
   };
+  // 오늘 숙제(구조화) — 수정 화면에서 기존 row 복원용 (id 기반 sync)
+  initialAssignments?: { id: string; content: string; dueDate: string }[];
   // 같은 그룹 직전 completed 일지의 "다음에 다르게 해볼 것" — 회고 카드에 리마인드로 표시
   previousReflection?: { classDate: string; reflectionNext: string } | null;
 }) {
@@ -413,8 +443,26 @@ export function DailyLogForm({
     restoredText(restored?.defaultProgress, initial?.defaultProgress ?? ""),
   );
   const [memo, setMemo] = useState(restoredText(restored?.memo, initial?.memo ?? ""));
+  // 오늘 숙제(구조화): draft 복원 → 저장된 row 순
+  const [assignments, setAssignments] = useState<AssignmentItem[]>(
+    () =>
+      restoredAssignments(restored?.homeworkAssignments) ??
+      initialAssignments.map((item) => ({
+        key: globalThis.crypto.randomUUID(),
+        id: item.id,
+        content: item.content,
+        dueDate: item.dueDate,
+      })),
+  );
+  // legacy free-text 숙제: 구조화 row가 있는 일지는 homework 필드가 파생 mirror라 폼에 싣지 않는다
+  // (legacy 일지는 기존처럼 편집 — 데이터/Todo 연동 동작 그대로)
+  const legacyHomeworkFallback = initialAssignments.length > 0 ? "" : initial?.homework ?? "";
   const [homework, setHomework] = useState(
-    restoredText(restored?.homework, initial?.homework ?? ""),
+    restoredText(restored?.homework, legacyHomeworkFallback),
+  );
+  // legacy 입력칸 표시는 mount 시점에 고정 (지우는 중에 칸이 사라지지 않게)
+  const [showLegacyHomework] = useState(() =>
+    Boolean(restoredText(restored?.homework, legacyHomeworkFallback).trim()),
   );
   // 숙제 날짜(선택): 고르면 그 날짜의 To Do로 숙제가 노출된다 — 기본값 없음(옵트인)
   const [homeworkDueDate, setHomeworkDueDate] = useState(
@@ -514,6 +562,8 @@ export function DailyLogForm({
       memo,
       homework,
       homeworkDueDate,
+      // key(렌더용)는 제외 — draft payload/스냅샷에는 저장 데이터만
+      homeworkAssignments: assignments.map(({ id, content, dueDate }) => ({ id, content, dueDate })),
       nextLessonPlan,
       nextPlanDate,
       vocabTotal,
@@ -525,7 +575,7 @@ export function DailyLogForm({
     if (initialSnapshotRef.current === null) {
       initialSnapshotRef.current = JSON.stringify(formStateRef.current);
     }
-  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, nextLessonPlan, nextPlanDate, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries]);
+  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries]);
   useEffect(
     () =>
       registerDirtyCheck(
@@ -644,6 +694,7 @@ export function DailyLogForm({
       memo: string;
       homework: string;
       homeworkDueDate: string;
+      homeworkAssignments: unknown;
       nextLessonPlan: string;
       nextPlanDate: string;
       vocabTotal: string;
@@ -658,6 +709,10 @@ export function DailyLogForm({
     if (typeof data.memo === "string") setMemo(data.memo);
     if (typeof data.homework === "string") setHomework(data.homework);
     if (typeof data.homeworkDueDate === "string") setHomeworkDueDate(data.homeworkDueDate);
+    {
+      const restoredHw = restoredAssignments(data.homeworkAssignments);
+      if (restoredHw) setAssignments(restoredHw);
+    }
     if (typeof data.nextLessonPlan === "string") setNextLessonPlan(data.nextLessonPlan);
     if (typeof data.nextPlanDate === "string") {
       setNextPlanDate(data.nextPlanDate);
@@ -808,6 +863,24 @@ export function DailyLogForm({
       failValidation("숙제 날짜는 수업일 이후로 선택해주세요.");
       return;
     }
+    // 오늘 숙제(구조화): 완전히 빈 행은 조용히 제외, 일부만 채운 행은 안내
+    const cleanedAssignments = assignments.filter(
+      (item) => item.content.trim() || item.dueDate,
+    );
+    for (const item of cleanedAssignments) {
+      if (!item.content.trim()) {
+        failValidation("숙제 내용을 입력해주세요.");
+        return;
+      }
+      if (!item.dueDate) {
+        failValidation("숙제 완료일을 선택해주세요.");
+        return;
+      }
+      if (classDate && item.dueDate <= classDate) {
+        failValidation("숙제 완료일은 수업일 이후로 선택해주세요.");
+        return;
+      }
+    }
     finalSavingRef.current = true; // final 저장 중 autosave tick 중단
     startTransition(async () => {
       const result = await saveDailyLogAction({
@@ -820,6 +893,11 @@ export function DailyLogForm({
         memo,
         homework,
         homeworkDueDate: homework.trim() ? homeworkDueDate : "",
+        homeworkAssignments: cleanedAssignments.map(({ id, content, dueDate }) => ({
+          id,
+          content,
+          dueDate,
+        })),
         nextLessonPlan,
         nextPlanDate: nextLessonPlan.trim() ? nextPlanDate : "",
         vocabTotal,
@@ -1043,37 +1121,125 @@ export function DailyLogForm({
               <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
                 <NotebookTabs className="h-3.5 w-3.5 text-[#6652b9]" /> 오늘 숙제
               </span>
-              <textarea
-                value={homework}
-                onChange={(event) => setHomework(event.target.value)}
-                rows={3}
-                className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
-                placeholder={"Workbook p.24~27 / Unit 3 단어 1~30"}
-              />
-              {/* 숙제 날짜(선택) — 계획 날짜와 같은 패턴으로 textarea 아래 전용 줄.
-                  고르면 그 날짜의 To Do로 숙제가 뜨고, 비워두면 일지에만 남는다 */}
-              <span className="mt-2 flex min-h-[38px] w-fit max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-xs font-medium text-[#6652b9]">
-                <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                <span className="shrink-0">숙제 날짜</span>
-                <input
-                  type="date"
-                  aria-label="숙제 표시 날짜 선택 (선택 사항)"
-                  value={homeworkDueDate}
-                  min={addDaysStr(classDate, 1)}
-                  onChange={(event) => setHomeworkDueDate(event.target.value)}
-                  className="min-w-0 max-w-[140px] bg-transparent text-xs font-medium text-[#6652b9] outline-none"
-                />
-                {homeworkDueDate ? (
-                  <button
-                    type="button"
-                    onClick={() => setHomeworkDueDate("")}
-                    aria-label="숙제 날짜 지우기"
-                    className="shrink-0 rounded-lg px-1 text-[#9b8bc9] transition hover:text-[#6652b9]"
+
+              {/* 오늘 새로 내주는 숙제 — 숙제 N개, 각각 독립 완료일.
+                  (지난 숙제를 해왔는지는 위 학생별 "숙제" 평가에서 — 서로 다른 기능)
+                  Teacher Todo/캘린더 자동 생성 없음. draft 단계에서는 payload로만 유지. */}
+              <div className="space-y-2">
+                {assignments.map((item, index) => (
+                  <div
+                    key={item.key}
+                    className="min-w-0 rounded-2xl border border-[#ece0db] bg-[#fffdfb] p-2.5"
                   >
-                    ×
-                  </button>
-                ) : null}
-              </span>
+                    <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start">
+                      <textarea
+                        value={item.content}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setAssignments((prev) =>
+                            prev.map((it) => (it.key === item.key ? { ...it, content: value } : it)),
+                          );
+                        }}
+                        rows={2}
+                        maxLength={500}
+                        aria-label={`숙제 ${index + 1} 내용`}
+                        placeholder={"백발백중 5과 문법 문제\n(여러 줄로 적을 수 있어요)"}
+                        className="min-h-[58px] w-full min-w-0 flex-1 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                      />
+                      <div className="flex min-w-0 items-center gap-1.5 sm:shrink-0">
+                        <span className="flex min-h-[38px] min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-xs font-medium text-[#6652b9]">
+                          <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                          <input
+                            type="date"
+                            aria-label={`숙제 ${index + 1} 완료일`}
+                            value={item.dueDate}
+                            min={addDaysStr(classDate, 1)}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setAssignments((prev) =>
+                                prev.map((it) => (it.key === item.key ? { ...it, dueDate: value } : it)),
+                              );
+                            }}
+                            className="w-full min-w-0 max-w-[140px] bg-transparent text-xs font-medium text-[#6652b9] outline-none"
+                          />
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAssignments((prev) => prev.filter((it) => it.key !== item.key))
+                          }
+                          aria-label={`숙제 ${index + 1} 삭제`}
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#b5a29e] transition hover:bg-[#fdf4f1] hover:text-[#8f625f]"
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAssignments((prev) => [
+                      ...prev,
+                      {
+                        key: globalThis.crypto.randomUUID(),
+                        // id를 추가 시점에 발급 — 첫 저장부터 이 id로 insert되므로
+                        // 재저장/수정에도 row id가 안정적으로 유지된다 (idempotent sync)
+                        id: globalThis.crypto.randomUUID(),
+                        content: "",
+                        // 기본 완료일 = 이 그룹의 다음 실제 수업일 (시간표 없으면 빈 값 — 직접 선택)
+                        dueDate: nextClassDateAfter(scheduleDays, classDate) ?? "",
+                      },
+                    ])
+                  }
+                  className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#d9c8f0] bg-white text-sm font-medium text-[#6652b9] transition hover:bg-[#faf7ff]"
+                >
+                  <Plus className="h-4 w-4" aria-hidden /> 숙제 추가
+                </button>
+                <p className="text-[11px] text-[#a79996]">
+                  숙제마다 완료일을 다르게 정할 수 있어요. 기본값은 다음 수업일이에요.
+                </p>
+              </div>
+
+              {/* legacy free-text 숙제 (이전 방식으로 저장된 일지만) — 데이터/Todo 연동 그대로 편집 */}
+              {showLegacyHomework ? (
+                <div className="mt-3">
+                  <span className="mb-1.5 block text-xs font-medium text-[#8a7b77]">
+                    기존 숙제 메모 (이전 방식)
+                  </span>
+                  <textarea
+                    value={homework}
+                    onChange={(event) => setHomework(event.target.value)}
+                    rows={3}
+                    className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                    placeholder={"Workbook p.24~27 / Unit 3 단어 1~30"}
+                  />
+                  <span className="mt-2 flex min-h-[38px] w-fit max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-xs font-medium text-[#6652b9]">
+                    <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span className="shrink-0">숙제 날짜</span>
+                    <input
+                      type="date"
+                      aria-label="숙제 표시 날짜 선택 (선택 사항)"
+                      value={homeworkDueDate}
+                      min={addDaysStr(classDate, 1)}
+                      onChange={(event) => setHomeworkDueDate(event.target.value)}
+                      className="min-w-0 max-w-[140px] bg-transparent text-xs font-medium text-[#6652b9] outline-none"
+                    />
+                    {homeworkDueDate ? (
+                      <button
+                        type="button"
+                        onClick={() => setHomeworkDueDate("")}
+                        aria-label="숙제 날짜 지우기"
+                        className="shrink-0 rounded-lg px-1 text-[#9b8bc9] transition hover:text-[#6652b9]"
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </span>
+                </div>
+              ) : null}
             </div>
 
             <div className="block min-w-0">
