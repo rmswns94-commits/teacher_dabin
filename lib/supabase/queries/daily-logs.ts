@@ -155,6 +155,9 @@ export type DailyLogDetail = DailyLogRecord & {
   makeups: MakeupLessonRecord[];
   // 오늘 숙제(구조화) — 완료일 ASC. migration 미적용/조회 실패 시 [] (화면은 항상 뜬다)
   homeworkAssignments: DailyLogHomeworkAssignmentRecord[];
+  // 이 일지의 "해야 할 일" linked Todo (공용 preparation 항목 — 복제 아님, 같은 row 상태).
+  // 삭제(dismissed)됐거나 없으면 null. 조회 실패 시에도 null (화면은 항상 뜬다)
+  linkedTask: { text: string; dueDate: string | null; completed: boolean } | null;
 };
 
 // options.withMakeups=false: 보충 정보가 필요 없는 소비처(이전 기록 패널의 학생 기록 lazy 조회)가
@@ -235,12 +238,40 @@ export async function getDailyLogDetailForCurrentUser(
     homeworkAssignments = (hwRows ?? []) as DailyLogHomeworkAssignmentRecord[];
   }
 
+  // 해야 할 일 linked Todo — 그룹 preparation_items에서 이 일지 identity로 1건 조회 (batch jsonb 1쿼리)
+  let linkedTask: DailyLogDetail["linkedTask"] = null;
+  const { data: prepGroup, error: prepError } = await supabase
+    .from("class_groups")
+    .select("preparation_items")
+    .eq("id", (data as { group_id: string }).group_id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (prepError) {
+    console.error("getDailyLogDetailForCurrentUser task error", {
+      code: prepError.code,
+      message: prepError.message,
+    });
+  } else {
+    const taskItem = ((prepGroup?.preparation_items ?? []) as PreparationItem[]).find(
+      (item) => item.id === taskPreparationItemId(dailyLogId) && !item.dismissed,
+    );
+    if (taskItem) {
+      linkedTask = {
+        text: taskItem.text,
+        dueDate: taskItem.dueDate ?? null,
+        completed: taskItem.completed,
+      };
+    }
+  }
+
   return {
     ...(data as unknown as DailyLogRecord),
     group: pickOne<Pick<ClassGroupRecord, "id" | "name" | "grade">>(data.class_groups),
     lessonLogs,
     makeups,
     homeworkAssignments,
+    linkedTask,
   } as DailyLogDetail;
 }
 
@@ -251,8 +282,17 @@ export async function getDailyLogDetailForCurrentUser(
 const LINKED_ID_PREFIX = {
   daily_log_next_plan: "nlp",
   daily_log_homework: "hw",
+  daily_log_task: "task",
 } as const;
 
+// 일지의 "해야 할 일" linked Todo id — Edit/Detail에서 같은 항목을 안정적으로 찾는 identity
+export function taskPreparationItemId(dailyLogId: string) {
+  return `${LINKED_ID_PREFIX.daily_log_task}-${dailyLogId}`;
+}
+
+// createIfMissing=false: 기존 linked 항목이 있을 때만 갱신/제거하고, 없으면 새로 만들지 않는다.
+// (다음 수업 계획은 이제 "계획 데이터"이고 Todo는 "해야 할 일"이 담당 — legacy nlp 항목이
+// 이미 있는 일지는 기존 동작대로 계속 갱신하되, 새 일지부터는 nlp Todo를 만들지 않는다)
 async function syncLinkedPreparation(
   supabase: NonNullable<Awaited<ReturnType<typeof createServerSupabaseClient>>>,
   userId: string,
@@ -261,6 +301,7 @@ async function syncLinkedPreparation(
   source: keyof typeof LINKED_ID_PREFIX,
   planText: string,
   planDate: string | null,
+  createIfMissing = true,
 ) {
   const { data: groupRow, error: readError } = await supabase
     .from("class_groups")
@@ -285,7 +326,10 @@ async function syncLinkedPreparation(
   let next: PreparationItem[] | null = null;
 
   if (planText && planDate) {
-    if (existing?.dismissed && existing.text === planText && existing.dueDate === planDate) {
+    if (!existing && !createIfMissing) {
+      // 기존 항목이 없고 신규 생성이 금지된 source(예: 다음 수업 계획) → 아무것도 하지 않음
+      next = null;
+    } else if (existing?.dismissed && existing.text === planText && existing.dueDate === planDate) {
       // Teacher가 삭제한 linked 항목: 계획이 그대로면 단순 재저장으로 부활시키지 않는다
       next = null;
     } else {
@@ -558,6 +602,9 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     homework_due_date: homeworkDueDate,
     next_lesson_plan: input.nextLessonPlan?.trim() || null,
     next_plan_date: input.nextPlanDate || null,
+    // 해야 할 일 — 일지 row가 폼 복원의 source (Todo는 완료 시에만 sync)
+    task_content: input.taskContent?.trim() || null,
+    task_due_date: input.taskContent?.trim() ? input.taskDate || null : null,
     vocab_total: vocabTotal,
     reflection_good: input.reflectionGood?.trim() || null,
     reflection_hard: input.reflectionHard?.trim() || null,
@@ -615,7 +662,9 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     dailyLogId = created.id;
   }
 
-  // 다음 수업 계획/숙제 → 그룹 준비 항목(To Do) 동기화 (일지당 source별 1개 upsert — 중복/재시도 안전)
+  // linked 준비 항목(To Do) 동기화 (일지당 source별 1개 upsert — 중복/재시도 안전).
+  // 다음 수업 계획은 이제 "계획 데이터" — legacy nlp Todo가 이미 있는 일지만 계속 갱신/제거하고
+  // 새로 만들지 않는다 (Todo 생성은 아래 "해야 할 일"이 담당).
   await syncLinkedPreparation(
     supabase,
     user.id,
@@ -624,6 +673,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     "daily_log_next_plan",
     input.nextLessonPlan?.trim() ?? "",
     input.nextPlanDate || null,
+    false,
   );
   await syncLinkedPreparation(
     supabase,
@@ -634,6 +684,22 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     homeworkText,
     homeworkDueDate,
   );
+
+  // 해야 할 일 → 공용 Todo. [수업 기록 완료]에서만 생성/갱신한다 —
+  // 임시저장(draft)은 Todo side effect 없이 일지 데이터만 저장 (autosave는 애초에 이 경로를 안 탐).
+  // 삭제된 항목은 dismissed tombstone이라 내용/날짜가 그대로면 단순 재저장으로 부활하지 않는다.
+  if (input.status === "completed") {
+    const taskText = input.taskContent?.trim() ?? "";
+    await syncLinkedPreparation(
+      supabase,
+      user.id,
+      input.groupId,
+      dailyLogId!,
+      "daily_log_task",
+      taskText,
+      taskText ? input.taskDate || null : null,
+    );
+  }
 
   // 오늘 숙제(구조화) row sync — id 기반 idempotent (재시도/저장 버튼 중복에도 안전)
   await syncHomeworkAssignments(supabase, user.id, dailyLogId!, homeworkAssignments);
@@ -978,6 +1044,15 @@ export async function deleteDailyLog(dailyLogId: string) {
     "",
     null,
   );
+  await syncLinkedPreparation(
+    supabase,
+    user.id,
+    existing.group_id as string,
+    dailyLogId,
+    "daily_log_task",
+    "",
+    null,
+  );
 
   return existing.class_date as string;
 }
@@ -1280,7 +1355,7 @@ export async function updateDailyLogFields(input: {
     throw new Error("이전 수업 기록을 저장하지 못했어요. 다시 시도해주세요.");
   }
 
-  // linked 준비 항목도 동일 identity로 갱신/제거
+  // linked 준비 항목도 동일 identity로 갱신/제거 (nlp는 기존 항목이 있을 때만 — 신규 생성 없음)
   await syncLinkedPreparation(
     supabase,
     user.id,
@@ -1289,6 +1364,7 @@ export async function updateDailyLogFields(input: {
     "daily_log_next_plan",
     planText,
     planDate,
+    false,
   );
   await syncLinkedPreparation(
     supabase,

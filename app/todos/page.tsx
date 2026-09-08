@@ -188,7 +188,9 @@ export default async function TodayTodosPage() {
                                     ? "다음 수업 계획"
                                     : item.source === "daily_log_homework"
                                       ? "숙제"
-                                      : "직접 등록"}
+                                      : item.source === "daily_log_task"
+                                        ? "해야 할 일"
+                                        : "직접 등록"}
                                   {item.dueDate
                                     ? isPastDue
                                       ? ` · ${formatKoreanDate(item.dueDate)} · 미완료`
@@ -230,7 +232,9 @@ export default async function TodayTodosPage() {
                                     ? "다음 수업 계획"
                                     : item.source === "daily_log_homework"
                                       ? "숙제"
-                                      : "직접 등록"}
+                                      : item.source === "daily_log_task"
+                                        ? "해야 할 일"
+                                        : "직접 등록"}
                                   {" · 완료"}
                                 </span>
                               </span>

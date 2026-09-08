@@ -70,6 +70,9 @@ export const dailyLogSchema = z
     homeworkDueDate: dateString.optional().or(z.literal("")),
     nextLessonPlan: shortText(1000, "다음 수업 계획"),
     nextPlanDate: dateString.optional().or(z.literal("")),
+    // 해야 할 일 — 다음 수업 계획과 별개인 Teacher 작업 (final 완료 시 공용 Todo 1개로 연결)
+    taskContent: shortText(1000, "해야 할 일"),
+    taskDate: dateString.optional().or(z.literal("")),
     vocabTotal: numberString.optional().or(z.literal("")),
     // 수업 회고 (강사 자기 성찰) — 전부 선택 입력
     reflectionGood: shortText(1000, "잘된 점"),
@@ -104,6 +107,13 @@ export const dailyLogSchema = z
     // 숙제 날짜는 선택 사항 — 골랐다면 수업일 이후여야 그 날 To Do로 뜬다
     if (value.homeworkDueDate && value.homeworkDueDate <= value.classDate) {
       ctx.addIssue({ code: "custom", path: ["homeworkDueDate"], message: "숙제 날짜는 수업일 이후로 선택해주세요." });
+    }
+    // 해야 할 일은 내용+날짜 한 쌍 (당일 준비도 가능하므로 수업일 당일부터 허용)
+    if ((value.taskContent ?? "").trim() && !value.taskDate) {
+      ctx.addIssue({ code: "custom", path: ["taskDate"], message: "해야 할 일 날짜를 선택해주세요." });
+    }
+    if (value.taskDate && value.taskDate < value.classDate) {
+      ctx.addIssue({ code: "custom", path: ["taskDate"], message: "해야 할 일 날짜는 수업일부터 선택할 수 있어요." });
     }
 
     const total = value.vocabTotal ? Number(value.vocabTotal) : null;

@@ -152,6 +152,9 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
             homeworkDueDate: log.homework_due_date ?? "",
             nextLessonPlan: log.next_lesson_plan ?? "",
             nextPlanDate: log.next_plan_date ?? "",
+            // 해야 할 일 — 일지 row가 source (Todo 삭제/완료와 무관하게 폼 복원)
+            taskContent: log.task_content ?? "",
+            taskDate: log.task_due_date ?? "",
             vocabTotal: log.vocab_total === null ? "" : String(log.vocab_total),
             reflectionGood: log.reflection_good ?? "",
             reflectionHard: log.reflection_hard ?? "",

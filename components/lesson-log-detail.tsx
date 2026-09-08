@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, CircleArrowRight, NotebookTabs, PencilLine } from "lucide-react";
+import { BookOpen, CheckCheck, CircleArrowRight, NotebookTabs, PencilLine } from "lucide-react";
 
 import { DailyLogDeleteButton } from "@/components/daily-log-delete-button";
 import { AttendanceBadge, DailyLogStatusBadge, MakeupStatusBadge } from "@/components/status-badge";
@@ -135,7 +135,7 @@ export function LessonLogDetail({
           </div>
         </div>
 
-        {detail.homework || detail.next_lesson_plan || detail.homeworkAssignments.length > 0 ? (
+        {detail.homework || detail.next_lesson_plan || detail.homeworkAssignments.length > 0 || detail.linkedTask ? (
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             {detail.homeworkAssignments.length > 0 ? (
               // 오늘 숙제(구조화) — 완료일 오름차순, 원문 전체(줄바꿈 보존, truncate 없음)
@@ -195,6 +195,31 @@ export function LessonLogDetail({
                 </div>
                 <div className="mt-1.5 whitespace-pre-line text-sm leading-6 text-[#33473f]">
                   {detail.next_lesson_plan}
+                </div>
+              </div>
+            ) : null}
+            {detail.linkedTask ? (
+              // 해야 할 일 — 공용 Todo와 같은 linked 항목의 read-only 상태 (복제 아님)
+              <div className="rounded-2xl bg-[#f5f1fb] p-3.5">
+                <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#5d4ba5]">
+                  <CheckCheck className="h-3.5 w-3.5" aria-hidden /> 해야 할 일
+                  {detail.linkedTask.dueDate ? (
+                    <span className="normal-case tracking-normal text-[#8a7ba8]">
+                      · {formatKoreanDate(detail.linkedTask.dueDate)}
+                    </span>
+                  ) : null}
+                  <span
+                    className={
+                      detail.linkedTask.completed
+                        ? "rounded-full bg-[#e4f4ec] px-2 py-0.5 normal-case tracking-normal text-[#3d7f64]"
+                        : "rounded-full bg-[#f0eae4] px-2 py-0.5 normal-case tracking-normal text-[#8a7b77]"
+                    }
+                  >
+                    {detail.linkedTask.completed ? "완료됨" : "미완료"}
+                  </span>
+                </div>
+                <div className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-6 text-[#4a4160]">
+                  {detail.linkedTask.text}
                 </div>
               </div>
             ) : null}

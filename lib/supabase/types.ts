@@ -32,7 +32,7 @@ export type PreparationItem = {
   // 날짜 있는 항목(다음 수업 계획/숙제 연동)용 optional 필드 — 기존 수동 항목은 필드 없음.
   // source가 daily_log_*인 항목은 해당 일지 저장 시에만 생성/갱신/제거된다.
   dueDate?: string | null; // "YYYY-MM-DD"
-  source?: "daily_log_next_plan" | "daily_log_homework";
+  source?: "daily_log_next_plan" | "daily_log_homework" | "daily_log_task";
   sourceDailyLogId?: string;
   // linked 항목을 Teacher가 삭제하면 tombstone(dismissed)으로 남긴다 — 화면에는 안 보이지만
   // 일지 단순 재저장으로 부활하지 않게 억제하고, 계획 내용/날짜가 실제 바뀌면 되살린다.
@@ -129,6 +129,8 @@ export type DailyLogRecord = {
   homework_due_date: string | null; // 숙제 표시 날짜 (선택 — 있으면 그 날 To Do로 노출)
   next_lesson_plan: string | null;
   next_plan_date: string | null; // 다음 수업 계획의 계획 날짜 (To Do 연동 기준)
+  task_content: string | null; // 해야 할 일 (완료 시 공용 Todo source='daily_log_task'로 연결)
+  task_due_date: string | null; // 해야 할 일 날짜 "YYYY-MM-DD"
   reflection_good: string | null; // 수업 회고: 잘된 점 (강사 전용 — 학생/성장노트 노출 금지)
   reflection_hard: string | null; // 수업 회고: 아쉬웠던 점
   reflection_next: string | null; // 수업 회고: 다음에 다르게 해볼 것 (다음 일지 작성 화면에 리마인드)

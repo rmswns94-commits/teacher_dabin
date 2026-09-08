@@ -169,6 +169,9 @@ type DraftPayload = {
   homeworkAssignments: { id: string | null; content: string; dueDate: string }[];
   nextLessonPlan: string;
   nextPlanDate: string;
+  // 해야 할 일 (공용 Todo 연결) — draft 단계에서는 payload에만 유지 (Todo 생성 없음)
+  taskContent: string;
+  taskDate: string;
   vocabTotal: string;
   reflectionGood: string;
   reflectionHard: string;
@@ -410,6 +413,8 @@ export function DailyLogForm({
     homeworkDueDate?: string;
     nextLessonPlan: string;
     nextPlanDate?: string;
+    taskContent?: string;
+    taskDate?: string;
     vocabTotal?: string;
     reflectionGood?: string;
     reflectionHard?: string;
@@ -500,6 +505,21 @@ export function DailyLogForm({
   const [planDateTouched, setPlanDateTouched] = useState(
     Boolean(restoredText(restored?.nextPlanDate, "") || initial?.nextPlanDate),
   );
+  // 해야 할 일 — 다음 수업 계획(수업 내용)과 별개인 Teacher 작업.
+  // [수업 기록 완료] 시에만 공용 Todo 1개로 연결된다 (draft/autosave는 payload에만).
+  const [taskContent, setTaskContent] = useState(
+    restoredText(restored?.taskContent, initial?.taskContent ?? ""),
+  );
+  const [taskDate, setTaskDate] = useState(
+    () =>
+      restoredText(restored?.taskDate, "") ||
+      initial?.taskDate ||
+      nextClassDateAfter(scheduleDays, initialClassDate) ||
+      "",
+  );
+  const [taskDateTouched, setTaskDateTouched] = useState(
+    Boolean(restoredText(restored?.taskDate, "") || initial?.taskDate),
+  );
   // 학생 평가 UI는 초등/중등/고등 모든 학년 공통으로 사용한다.
   const [vocabTotal, setVocabTotal] = useState(
     restoredText(restored?.vocabTotal, initial?.vocabTotal ?? ""),
@@ -566,6 +586,8 @@ export function DailyLogForm({
       homeworkAssignments: assignments.map(({ id, content, dueDate }) => ({ id, content, dueDate })),
       nextLessonPlan,
       nextPlanDate,
+      taskContent,
+      taskDate,
       vocabTotal,
       reflectionGood,
       reflectionHard,
@@ -575,7 +597,7 @@ export function DailyLogForm({
     if (initialSnapshotRef.current === null) {
       initialSnapshotRef.current = JSON.stringify(formStateRef.current);
     }
-  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries]);
+  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, taskContent, taskDate, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries]);
   useEffect(
     () =>
       registerDirtyCheck(
@@ -695,6 +717,8 @@ export function DailyLogForm({
       homework: string;
       homeworkDueDate: string;
       homeworkAssignments: unknown;
+      taskContent: string;
+      taskDate: string;
       nextLessonPlan: string;
       nextPlanDate: string;
       vocabTotal: string;
@@ -717,6 +741,11 @@ export function DailyLogForm({
     if (typeof data.nextPlanDate === "string") {
       setNextPlanDate(data.nextPlanDate);
       if (data.nextPlanDate) setPlanDateTouched(true);
+    }
+    if (typeof data.taskContent === "string") setTaskContent(data.taskContent);
+    if (typeof data.taskDate === "string") {
+      setTaskDate(data.taskDate);
+      if (data.taskDate) setTaskDateTouched(true);
     }
     if (typeof data.vocabTotal === "string") setVocabTotal(data.vocabTotal);
     if (typeof data.reflectionGood === "string") setReflectionGood(data.reflectionGood);
@@ -863,6 +892,15 @@ export function DailyLogForm({
       failValidation("숙제 날짜는 수업일 이후로 선택해주세요.");
       return;
     }
+    // 해야 할 일은 내용+날짜 한 쌍 (수업일 당일부터 허용 — 당일 준비 작업 가능)
+    if (taskContent.trim() && !taskDate) {
+      failValidation("해야 할 일 날짜를 선택해주세요.");
+      return;
+    }
+    if (taskContent.trim() && taskDate && classDate && taskDate < classDate) {
+      failValidation("해야 할 일 날짜는 수업일부터 선택할 수 있어요.");
+      return;
+    }
     // 오늘 숙제(구조화): 완전히 빈 행은 조용히 제외, 일부만 채운 행은 안내
     const cleanedAssignments = assignments.filter(
       (item) => item.content.trim() || item.dueDate,
@@ -900,6 +938,8 @@ export function DailyLogForm({
         })),
         nextLessonPlan,
         nextPlanDate: nextLessonPlan.trim() ? nextPlanDate : "",
+        taskContent,
+        taskDate: taskContent.trim() ? taskDate : "",
         vocabTotal,
         reflectionGood,
         reflectionHard,
@@ -1062,6 +1102,9 @@ export function DailyLogForm({
                   setClassDate(value);
                   if (!planDateTouched && value) {
                     setNextPlanDate(nextClassDateAfter(scheduleDays, value) ?? "");
+                  }
+                  if (!taskDateTouched && value) {
+                    setTaskDate(nextClassDateAfter(scheduleDays, value) ?? "");
                   }
                 }}
                 className="min-h-[46px] w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8]"
@@ -1270,6 +1313,42 @@ export function DailyLogForm({
                   className="min-w-0 max-w-[140px] bg-transparent text-xs font-medium text-[#3e7d6b] outline-none"
                 />
               </span>
+
+              {/* 해야 할 일 — 다음 수업 계획(수업 내용)과 별개인 Teacher 작업.
+                  [수업 기록 완료] 시 공용 Todo 1개로 연결 (임시저장/autosave는 Todo 생성 없음,
+                  여러 줄을 적어도 하나의 할 일 — 줄 수만큼 쪼개지 않는다) */}
+              <div className="mt-4 min-w-0">
+                <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
+                  <CheckCheck className="h-3.5 w-3.5 text-[#5d4ba5]" /> 해야 할 일
+                </span>
+                <textarea
+                  value={taskContent}
+                  onChange={(event) => setTaskContent(event.target.value)}
+                  rows={3}
+                  className="w-full min-w-0 rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                  placeholder={"백발백중 프린트 출력\n단어 시험지 준비"}
+                />
+                <span className="mt-2 flex min-h-[38px] w-fit max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-xs font-medium text-[#5d4ba5]">
+                  <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span className="shrink-0">날짜</span>
+                  <input
+                    type="date"
+                    aria-label="해야 할 일 날짜 선택"
+                    value={taskDate}
+                    min={classDate || undefined}
+                    onChange={(event) => {
+                      setTaskDate(event.target.value);
+                      if (event.target.value) {
+                        setTaskDateTouched(true);
+                      }
+                    }}
+                    className="w-full min-w-0 max-w-[140px] bg-transparent text-xs font-medium text-[#5d4ba5] outline-none"
+                  />
+                </span>
+                <p className="mt-1 text-[11px] text-[#a79996]">
+                  수업 기록을 완료하면 오늘 할 일에 하나의 할 일로 등록돼요.
+                </p>
+              </div>
             </div>
           </div>
 
