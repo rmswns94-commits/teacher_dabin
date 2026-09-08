@@ -33,7 +33,23 @@ import { cn } from "@/lib/utils";
 // - 캘린더 marker/상세 모두 이미 fetch한 preparation_items를 JS에서 접는다 (추가 쿼리 0, N+1 없음).
 // - 날짜는 항상 Todo.due_date 기준 (created_at/completed_at 아님), URL ?month&date로 상태 유지.
 
-const WEEKDAY_HEADERS = ["일", "월", "화", "수", "목", "금", "토"];
+// 스프링 노트 달력 디자인 (시험 대비 플래너와 동일 계열): 일요일 시작 SUN~SAT, 주말 웜 레드
+const WEEKDAY_HEADERS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const WEEKEND_TEXT = "text-[#d95f4c]";
+
+// 상단 스프링 코일 장식 (시험 대비 플래너와 동일 — 순수 decoration)
+function SpringCoils() {
+  return (
+    <div aria-hidden className="pointer-events-none absolute -top-3.5 left-0 right-0 flex justify-around px-5">
+      {Array.from({ length: 11 }, (_, i) => (
+        <span
+          key={i}
+          className="h-7 w-2.5 rounded-full border border-[#a9c8e4] bg-gradient-to-b from-[#dcecf9] to-[#aecde9] shadow-[0_1px_2px_rgba(120,150,180,0.35)]"
+        />
+      ))}
+    </div>
+  );
+}
 
 type TodayTodoItem = {
   item: PreparationItem;
@@ -229,7 +245,7 @@ export default async function TodayTodosPage({
   // month만 이동하면 선택은 해제되고 아래는 오늘 상세로 복귀 (임의 날짜 자동 open 없음)
   const monthHref = (value: string) => `/todos?month=${value}`;
   const navButton =
-    "flex h-9 min-w-9 items-center justify-center rounded-xl border border-[#e2d8f3] bg-white px-2 text-sm font-medium text-[#5c4ca8] transition hover:bg-[#faf7ff]";
+    "flex h-9 min-w-9 items-center justify-center rounded-xl border border-[#c9dcee] bg-white px-2 text-sm font-medium text-[#4a6f96] transition hover:bg-[#f3f8fd]";
 
   const groupHeader = (group: { id: string; name: string; icon?: string | null }, time: { start: string; end: string } | null, timeLabel: string) => (
     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-dashed border-[#f0e3dc] pb-2.5">
@@ -269,10 +285,13 @@ export default async function TodayTodosPage({
             }
           />
 
-          {/* ── 월간 캘린더 (수업 일지 캘린더 가족 스타일) — 날짜는 due_date 기준 ── */}
-          <Card className="mb-5 overflow-hidden p-0">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f0ecf6] px-4 py-3">
-              <h2 className="font-display text-base font-semibold text-[#2b2323]">
+          {/* ── 월간 캘린더 (시험 대비 플래너와 동일한 스프링 노트 디자인) — 날짜는 due_date 기준 ── */}
+          <section
+            aria-label="할 일 월간 캘린더"
+            className="mb-5 rounded-3xl border border-[#d5e6f3] bg-gradient-to-b from-[#e2f0fa] via-[#edf5fb] to-[#eef6ef] p-3 shadow-sm sm:p-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1 pb-1">
+              <h2 className="font-display text-xl font-semibold tracking-[-0.01em] text-[#2b2323]">
                 {monthLabel(month)}
               </h2>
               <div className="flex items-center gap-1">
@@ -288,14 +307,18 @@ export default async function TodayTodosPage({
               </div>
             </div>
 
-            <div className="px-2.5 pb-3 pt-2 sm:px-4">
-              <div className="grid grid-cols-7 text-center text-[11px] font-semibold">
+            {/* 스프링 노트 sheet — 코일 장식이 상단에 걸리도록 위 여백 확보 */}
+            <div className="relative mt-4 rounded-2xl border border-[#dfe7ef] bg-white px-1.5 pb-2 pt-6 shadow-[0_12px_28px_rgba(120,150,180,0.14)] sm:px-2">
+              <SpringCoils />
+
+              {/* 요일 헤더 (일요일 시작 — SUN/SAT 웜 레드) */}
+              <div className="grid grid-cols-7 border-b-2 border-[#eef1f5] pb-2">
                 {WEEKDAY_HEADERS.map((label, index) => (
                   <div
                     key={label}
                     className={cn(
-                      "py-1",
-                      index === 0 ? "text-[#c97a7a]" : index === 6 ? "text-[#7a8fc9]" : "text-[#8a8a93]",
+                      "px-1 text-center text-[10px] font-bold tracking-[0.08em] sm:text-[11px]",
+                      index === 0 || index === 6 ? WEEKEND_TEXT : "text-[#4a4a55]",
                     )}
                   >
                     {label}
@@ -310,7 +333,7 @@ export default async function TodayTodosPage({
                       return (
                         <div
                           key={`empty-${dayIndex}`}
-                          className="min-h-[64px] border-b border-r border-[#f0ecf6] bg-[#fbfafd] first:border-l sm:min-h-[76px]"
+                          className="min-h-[64px] border-b border-r border-[#eef1f5] bg-[#f8fafc]/70 first:border-l sm:min-h-[76px]"
                         />
                       );
                     }
@@ -319,7 +342,7 @@ export default async function TodayTodosPage({
                     const allDone = Boolean(marker && marker.done === marker.total);
                     const isToday = date === today;
                     const isSelected = date === selectedDate;
-                    const columnIndex = dayIndex;
+                    const isWeekend = dayIndex === 0 || dayIndex === 6;
 
                     return (
                       <Link
@@ -328,36 +351,34 @@ export default async function TodayTodosPage({
                         aria-label={`${formatKoreanDate(date, true)} 할 일 ${marker?.total ?? 0}개`}
                         aria-current={isSelected ? "date" : undefined}
                         className={cn(
-                          "min-h-[64px] min-w-0 border-b border-r border-[#f0ecf6] px-1 py-1 transition first:border-l sm:min-h-[76px]",
-                          columnIndex === 0 && !isSelected ? "bg-[#faf7f4]" : "bg-white",
-                          isSelected
-                            ? "bg-[#f5f1fb] shadow-[inset_0_0_0_2px_#cfc4f0]"
-                            : "hover:bg-[#faf8ff]",
+                          "min-h-[64px] min-w-0 border-b border-r border-[#eef1f5] px-1 py-1 transition first:border-l sm:min-h-[76px]",
+                          "bg-white hover:bg-[#f7fafd]",
+                          isSelected && "ring-1 ring-inset ring-[#a9c8e8]",
                         )}
                       >
+                        {/* 날짜 숫자 가운데 정렬 — 플래너와 동일 */}
                         <div className="flex min-w-0 flex-col items-center gap-0.5">
                           <span
                             className={cn(
-                              "flex h-6 w-6 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums",
+                              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums",
                               isToday
                                 ? "bg-[#8b7ae6] text-white"
-                                : columnIndex === 0
-                                  ? "text-[#c97a7a]"
-                                  : columnIndex === 6
-                                    ? "text-[#7a8fc9]"
-                                    : "text-[#4a423f]",
+                                : isWeekend
+                                  ? WEEKEND_TEXT
+                                  : "text-[#3f3f49]",
                             )}
                           >
                             {Number(date.slice(8))}
                           </span>
                           {marker ? (
-                            // 전부 완료된 날은 muted + ✓ (기록은 유지 — history 성격)
+                            // 전부 완료된 날은 muted + ✓ (기록은 유지 — history 성격),
+                            // 나머지는 플래너의 민트 oval marker와 동일 계열
                             <span
                               className={cn(
                                 "inline-flex max-w-full items-center gap-0.5 truncate rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
                                 allDone
                                   ? "bg-[#f0eae4] text-[#8a7b77]"
-                                  : "bg-[#efe8fb] text-[#5d4ba5]",
+                                  : "bg-[#d9efe3] text-[#3d7f64]",
                               )}
                             >
                               {allDone ? "✓ " : null}
@@ -371,8 +392,15 @@ export default async function TodayTodosPage({
                   })}
                 </div>
               ))}
+
+              {/* 하단 꽃 장식 (플래너와 동일한 마무리) */}
+              <div aria-hidden className="flex items-center justify-center gap-2 pt-2 text-sm">
+                <span>🌼</span>
+                <span>🌿</span>
+                <span>🌼</span>
+              </div>
             </div>
-          </Card>
+          </section>
 
           {/* ── 선택 날짜 상세 ── */}
           <h2 className="mb-3 text-base font-bold text-[#2b2323]">
