@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, ListChecks } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ListChecks } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
@@ -8,7 +8,14 @@ import { TodoCreateDialog } from "@/components/todo-create-dialog";
 import { TodoDeleteButton } from "@/components/todo-delete-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { togglePreparationItemAction } from "@/app/groups/actions";
-import { dayOfWeekOf } from "@/lib/calendar";
+import {
+  addMonths,
+  buildMonthGrid,
+  dayOfWeekOf,
+  monthLabel,
+  monthRange,
+  parseMonthParam,
+} from "@/lib/calendar";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { groupIconOf } from "@/lib/group-icons";
 import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
@@ -18,41 +25,150 @@ import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedul
 import type { PreparationItem } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
-// 오늘 할 일 = "완료할 때까지 놓치지 않는 작업함".
-// Dashboard(수업 시간 20분 전~종료의 실시간 상황판)와 같은 preparation row를 쓰고
-// 필터만 다르다: 미완료 + (무날짜 수동 항목 또는 due가 오늘 이하). 미래 항목은 그 날짜부터.
-// 수업이 끝나 Dashboard에서 숨어도, 날짜가 지나도, 완료/삭제 전까지 여기 남는다.
+// 오늘 할 일 = "완료할 때까지 놓치지 않는 작업함" + 월간 캘린더 탐색.
+// Todo data model은 그대로 (class_groups.preparation_items 공용 — Dashboard/그룹 상세와 같은 row).
+// - 오늘 선택(기본): 기존 정책 그대로 — 미완료 + (무날짜 수동 항목 또는 due<=오늘 carry-over)
+//   + 오늘(KST) 완료한 항목은 취소선으로 유지.
+// - 다른 날짜 선택: 그 날짜에 due_date가 지정된 Todo의 historical/미리보기 (완료 포함).
+// - 캘린더 marker/상세 모두 이미 fetch한 preparation_items를 JS에서 접는다 (추가 쿼리 0, N+1 없음).
+// - 날짜는 항상 Todo.due_date 기준 (created_at/completed_at 아님), URL ?month&date로 상태 유지.
+
+const WEEKDAY_HEADERS = ["일", "월", "화", "수", "목", "금", "토"];
 
 type TodayTodoItem = {
   item: PreparationItem;
   isPastDue: boolean;
 };
 
-export default async function TodayTodosPage() {
-  const today = todayDateString();
-  const todayDow = dayOfWeekOf(today);
+function sourceLabelOf(item: PreparationItem) {
+  return item.source === "daily_log_next_plan"
+    ? "다음 수업 계획"
+    : item.source === "daily_log_homework"
+      ? "숙제"
+      : item.source === "daily_log_task"
+        ? "해야 할 일"
+        : "직접 등록";
+}
 
-  // 그룹(준비 항목/아이콘)+시간표 — 2쿼리 batch, 항목별 반복 쿼리 없음
+// 공용 Todo row — 오늘/과거/미래 상세가 같은 markup을 쓴다 (완료=체크+취소선, 전체 multiline)
+function TodoItemRow({
+  groupId,
+  item,
+  checked,
+  meta,
+  metaClass,
+}: {
+  groupId: string;
+  item: PreparationItem;
+  checked: boolean;
+  meta: string;
+  metaClass: string;
+}) {
+  return (
+    <li className="flex items-center gap-1">
+      {/* 완료 toggle = completed 저장 (row 유지) — Dashboard/그룹 상세와 같은 항목이 함께 바뀐다 */}
+      <form
+        action={togglePreparationItemAction.bind(null, groupId, item.id)}
+        className="min-w-0 flex-1"
+      >
+        <button
+          type="submit"
+          aria-pressed={checked}
+          className={cn(
+            "flex min-h-11 w-full items-start gap-2.5 rounded-xl px-2 py-1.5 text-left transition",
+            checked ? "hover:bg-[#f4f9f6]" : "hover:bg-[#f8f3fb]",
+          )}
+        >
+          {checked ? (
+            <span
+              aria-hidden
+              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#8fc7ab]"
+            >
+              <Check className="h-3 w-3 text-white" strokeWidth={3} />
+            </span>
+          ) : (
+            <span
+              aria-hidden
+              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-[#d9c8f0] bg-white"
+            >
+              <Check className="h-3 w-3 text-transparent" strokeWidth={3} />
+            </span>
+          )}
+          <span className={cn("min-w-0 flex-1", checked && "opacity-75")}>
+            <span
+              className={cn(
+                "block whitespace-pre-wrap break-words text-sm",
+                checked ? "text-[#8a7b77] [text-decoration:line-through]" : "text-[#2d2928]",
+              )}
+            >
+              {item.text}
+            </span>
+            <span className={cn("mt-0.5 block text-[11px]", metaClass)}>{meta}</span>
+          </span>
+        </button>
+      </form>
+      <TodoDeleteButton groupId={groupId} itemId={item.id} text={item.text} />
+    </li>
+  );
+}
+
+export default async function TodayTodosPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ month?: string; date?: string }>;
+}) {
+  const params = (await searchParams) ?? {};
+  const today = todayDateString();
+  // 기본 선택 = 오늘 (기존 UX: 진입하자마자 오늘 할 일 표시). URL date는 reload/PWA 복구용
+  const selectedDate = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : today;
+  const month = parseMonthParam(params.month, selectedDate.slice(0, 7));
+  const range = monthRange(month);
+  const isTodaySelected = selectedDate === today;
+
+  // 그룹(준비 항목/아이콘)+시간표 — 2쿼리 batch, 항목/날짜별 반복 쿼리 없음
   const [groups, schedules] = await Promise.all([
     getCurrentUserGroups(),
     getCurrentUserSchedulesWithGroup(),
   ]);
+  const activeGroups = groups.filter((group) => !group.archived);
 
-  // 그룹별 오늘 수업 시간 (표시/정렬용 — 노출 제한에는 쓰지 않는다)
-  const todayTimeByGroup = new Map<string, { start: string; end: string }>();
-  for (const row of schedules) {
-    if (row.day_of_week !== todayDow) {
-      continue;
+  // 요일별 그룹 수업 시간 (표시/정렬용) — 오늘·선택 날짜에서 공유
+  const timeByGroupForDow = (dow: number) => {
+    const map = new Map<string, { start: string; end: string }>();
+    for (const row of schedules) {
+      if (row.day_of_week !== dow) {
+        continue;
+      }
+      const current = map.get(row.group_id);
+      map.set(row.group_id, {
+        start: !current || row.start_time < current.start ? row.start_time : current.start,
+        end: !current || row.end_time > current.end ? row.end_time : current.end,
+      });
     }
-    const current = todayTimeByGroup.get(row.group_id);
-    todayTimeByGroup.set(row.group_id, {
-      start: !current || row.start_time < current.start ? row.start_time : current.start,
-      end: !current || row.end_time > current.end ? row.end_time : current.end,
-    });
-  }
+    return map;
+  };
 
-  const sections = groups
-    .filter((group) => !group.archived)
+  // ── 캘린더 marker: 표시 월의 due_date별 Todo 수 (완료 포함 — 그 날짜에 있었던 기록 유지,
+  //    dismissed 삭제 항목 제외). 이미 받은 preparation_items를 접을 뿐 추가 쿼리 없음 ──
+  const markerByDate = new Map<string, { total: number; done: number }>();
+  for (const group of activeGroups) {
+    for (const item of activePreparationItems(group.preparation_items)) {
+      if (!item.dueDate || item.dueDate < range.start || item.dueDate > range.end) {
+        continue;
+      }
+      const marker = markerByDate.get(item.dueDate) ?? { total: 0, done: 0 };
+      marker.total += 1;
+      if (item.completed) {
+        marker.done += 1;
+      }
+      markerByDate.set(item.dueDate, marker);
+    }
+  }
+  const weeks = buildMonthGrid(month);
+
+  // ── 오늘 상세 (기존 정책 그대로) ──
+  const todayTimeByGroup = timeByGroupForDow(dayOfWeekOf(today));
+  const sections = activeGroups
     .map((group) => {
       const visible = activePreparationItems(group.preparation_items);
       const items: TodayTodoItem[] = visible
@@ -90,158 +206,270 @@ export default async function TodayTodosPage() {
   );
   const doneTodayCount = sections.reduce((sum, section) => sum + section.doneToday.length, 0);
 
+  // ── 과거/미래 선택 날짜 상세: "그 날짜로 예정했던 Todo" (due_date=선택일, 완료 포함) ──
+  const selectedTimeByGroup = timeByGroupForDow(dayOfWeekOf(selectedDate));
+  const dateSections = isTodaySelected
+    ? []
+    : activeGroups
+        .map((group) => {
+          const items = activePreparationItems(group.preparation_items).filter(
+            (item) => item.dueDate === selectedDate,
+          );
+          return { group, items, time: selectedTimeByGroup.get(group.id) ?? null };
+        })
+        .filter((section) => section.items.length > 0)
+        .sort((a, b) => {
+          const timeA = a.time?.start ?? "99:99";
+          const timeB = b.time?.start ?? "99:99";
+          return timeA.localeCompare(timeB) || a.group.name.localeCompare(b.group.name, "ko");
+        });
+  const dateTotal = dateSections.reduce((sum, section) => sum + section.items.length, 0);
+
+  const dateHref = (date: string) => `/todos?month=${date.slice(0, 7)}&date=${date}`;
+  // month만 이동하면 선택은 해제되고 아래는 오늘 상세로 복귀 (임의 날짜 자동 open 없음)
+  const monthHref = (value: string) => `/todos?month=${value}`;
+  const navButton =
+    "flex h-9 min-w-9 items-center justify-center rounded-xl border border-[#e2d8f3] bg-white px-2 text-sm font-medium text-[#5c4ca8] transition hover:bg-[#faf7ff]";
+
+  const groupHeader = (group: { id: string; name: string; icon?: string | null }, time: { start: string; end: string } | null, timeLabel: string) => (
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-dashed border-[#f0e3dc] pb-2.5">
+      <Link
+        href={`/groups/${group.id}`}
+        className="flex min-w-0 items-center gap-1.5 font-semibold text-[#2d2928] hover:underline"
+      >
+        <span aria-hidden className="shrink-0">
+          {groupIconOf(group.icon ?? null)}
+        </span>
+        <span className="min-w-0 truncate">{group.name}</span>
+      </Link>
+      {time ? (
+        <span className="text-xs tabular-nums text-[#8a7b77]">
+          {timeLabel} {formatTimeRange(time.start, time.end)}
+        </span>
+      ) : null}
+    </div>
+  );
+
   return (
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
-        <div className="mx-auto w-full max-w-3xl">
+        <div className="mx-auto w-full max-w-[1000px]">
           <TodayRefresher />
           <PageHeader
             title="오늘 할 일"
-            description={`${formatKoreanDate(today, true)} · 오늘 해야 할 일과 아직 완료하지 않은 할 일을 확인해요.`}
+            description={`${formatKoreanDate(today, true)} · 캘린더에서 날짜를 고르면 그날의 할 일을 볼 수 있어요.`}
             action={
               <TodoCreateDialog
-                groups={groups
-                  .filter((group) => !group.archived)
-                  .map((group) => ({ id: group.id, name: group.name, icon: group.icon ?? null }))}
-                defaultDate={today}
+                // key: 날짜 선택(soft nav) 시 기본 날짜가 새 선택을 따르도록 remount
+                key={selectedDate}
+                groups={activeGroups.map((group) => ({ id: group.id, name: group.name, icon: group.icon ?? null }))}
+                // 선택한 날짜가 새 할 일의 기본 날짜 (오늘 선택이면 기존처럼 오늘)
+                defaultDate={selectedDate}
               />
             }
           />
 
-          {totalCount > 0 || doneTodayCount > 0 ? (
-            <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-[#655d5d]">
-              <span className="rounded-full bg-[#efe8fb] px-2.5 py-1 text-xs font-medium tabular-nums text-[#5d4ba5]">
-                남은 할 일 {totalCount}개
-              </span>
-              {pastDueCount > 0 ? (
-                <span className="rounded-full bg-[#fdf3e4] px-2.5 py-1 text-xs font-medium tabular-nums text-[#94702f]">
-                  지난 할 일 {pastDueCount}개
-                </span>
-              ) : null}
-              {doneTodayCount > 0 ? (
-                <span className="rounded-full bg-[#e4f4ec] px-2.5 py-1 text-xs font-medium tabular-nums text-[#3d7f64]">
-                  오늘 완료 {doneTodayCount}개
-                </span>
-              ) : null}
+          {/* ── 월간 캘린더 (수업 일지 캘린더 가족 스타일) — 날짜는 due_date 기준 ── */}
+          <Card className="mb-5 overflow-hidden p-0">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f0ecf6] px-4 py-3">
+              <h2 className="font-display text-base font-semibold text-[#2b2323]">
+                {monthLabel(month)}
+              </h2>
+              <div className="flex items-center gap-1">
+                <Link href={monthHref(addMonths(month, -1))} aria-label="이전 달" className={navButton}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Link>
+                <Link href={dateHref(today)} className={navButton}>
+                  오늘
+                </Link>
+                <Link href={monthHref(addMonths(month, 1))} aria-label="다음 달" className={navButton}>
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+              </div>
             </div>
-          ) : null}
 
-          {sections.length === 0 ? (
+            <div className="px-2.5 pb-3 pt-2 sm:px-4">
+              <div className="grid grid-cols-7 text-center text-[11px] font-semibold">
+                {WEEKDAY_HEADERS.map((label, index) => (
+                  <div
+                    key={label}
+                    className={cn(
+                      "py-1",
+                      index === 0 ? "text-[#c97a7a]" : index === 6 ? "text-[#7a8fc9]" : "text-[#8a8a93]",
+                    )}
+                  >
+                    {label}
+                  </div>
+                ))}
+              </div>
+
+              {weeks.map((week, weekIndex) => (
+                <div key={weekIndex} className="grid grid-cols-7">
+                  {week.map((date, dayIndex) => {
+                    if (!date) {
+                      return (
+                        <div
+                          key={`empty-${dayIndex}`}
+                          className="min-h-[64px] border-b border-r border-[#f0ecf6] bg-[#fbfafd] first:border-l sm:min-h-[76px]"
+                        />
+                      );
+                    }
+
+                    const marker = markerByDate.get(date) ?? null;
+                    const allDone = Boolean(marker && marker.done === marker.total);
+                    const isToday = date === today;
+                    const isSelected = date === selectedDate;
+                    const columnIndex = dayIndex;
+
+                    return (
+                      <Link
+                        key={date}
+                        href={dateHref(date)}
+                        aria-label={`${formatKoreanDate(date, true)} 할 일 ${marker?.total ?? 0}개`}
+                        aria-current={isSelected ? "date" : undefined}
+                        className={cn(
+                          "min-h-[64px] min-w-0 border-b border-r border-[#f0ecf6] px-1 py-1 transition first:border-l sm:min-h-[76px]",
+                          columnIndex === 0 && !isSelected ? "bg-[#faf7f4]" : "bg-white",
+                          isSelected
+                            ? "bg-[#f5f1fb] shadow-[inset_0_0_0_2px_#cfc4f0]"
+                            : "hover:bg-[#faf8ff]",
+                        )}
+                      >
+                        <div className="flex min-w-0 flex-col items-center gap-0.5">
+                          <span
+                            className={cn(
+                              "flex h-6 w-6 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums",
+                              isToday
+                                ? "bg-[#8b7ae6] text-white"
+                                : columnIndex === 0
+                                  ? "text-[#c97a7a]"
+                                  : columnIndex === 6
+                                    ? "text-[#7a8fc9]"
+                                    : "text-[#4a423f]",
+                            )}
+                          >
+                            {Number(date.slice(8))}
+                          </span>
+                          {marker ? (
+                            // 전부 완료된 날은 muted + ✓ (기록은 유지 — history 성격)
+                            <span
+                              className={cn(
+                                "inline-flex max-w-full items-center gap-0.5 truncate rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+                                allDone
+                                  ? "bg-[#f0eae4] text-[#8a7b77]"
+                                  : "bg-[#efe8fb] text-[#5d4ba5]",
+                              )}
+                            >
+                              {allDone ? "✓ " : null}
+                              <span className="hidden sm:inline">할 일 </span>
+                              {marker.total}
+                            </span>
+                          ) : null}
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* ── 선택 날짜 상세 ── */}
+          <h2 className="mb-3 text-base font-bold text-[#2b2323]">
+            {isTodaySelected
+              ? `오늘 할 일 · ${formatKoreanDate(today, true)}`
+              : `${formatKoreanDate(selectedDate, true)} · 할 일 ${dateTotal}개`}
+          </h2>
+
+          {isTodaySelected ? (
+            <>
+              {totalCount > 0 || doneTodayCount > 0 ? (
+                <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-[#655d5d]">
+                  <span className="rounded-full bg-[#efe8fb] px-2.5 py-1 text-xs font-medium tabular-nums text-[#5d4ba5]">
+                    남은 할 일 {totalCount}개
+                  </span>
+                  {pastDueCount > 0 ? (
+                    <span className="rounded-full bg-[#fdf3e4] px-2.5 py-1 text-xs font-medium tabular-nums text-[#94702f]">
+                      지난 할 일 {pastDueCount}개
+                    </span>
+                  ) : null}
+                  {doneTodayCount > 0 ? (
+                    <span className="rounded-full bg-[#e4f4ec] px-2.5 py-1 text-xs font-medium tabular-nums text-[#3d7f64]">
+                      오늘 완료 {doneTodayCount}개
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {sections.length === 0 ? (
+                <Card>
+                  <CardContent className="p-6 text-sm text-[#655d5d]">
+                    오늘 할 일을 모두 마쳤어요 ✨
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  {sections.map(({ group, items, doneToday, time }) => (
+                    <Card key={group.id}>
+                      <CardContent className="p-4">
+                        {groupHeader(group, time, "오늘 수업")}
+                        <ul className="mt-1 divide-y divide-dashed divide-[#f4e2e8]">
+                          {items.map(({ item, isPastDue }) => (
+                            <TodoItemRow
+                              key={item.id}
+                              groupId={group.id}
+                              item={item}
+                              checked={false}
+                              meta={`${sourceLabelOf(item)}${
+                                item.dueDate
+                                  ? isPastDue
+                                    ? ` · ${formatKoreanDate(item.dueDate)} · 미완료`
+                                    : " · 오늘"
+                                  : ""
+                              }`}
+                              metaClass={isPastDue ? "text-[#a5854a]" : "text-[#a79996]"}
+                            />
+                          ))}
+                          {doneToday.map((item) => (
+                            <TodoItemRow
+                              key={item.id}
+                              groupId={group.id}
+                              item={item}
+                              checked={true}
+                              meta={`${sourceLabelOf(item)} · 완료`}
+                              metaClass="text-[#b0a39f]"
+                            />
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : dateSections.length === 0 ? (
             <Card>
               <CardContent className="p-6 text-sm text-[#655d5d]">
-                오늘 할 일을 모두 마쳤어요 ✨
+                이날 예정된 할 일이 없어요.
               </CardContent>
             </Card>
           ) : (
+            // historical/미래 미리보기: 그 날짜로 예정했던 Todo (완료 포함 — carry-over 재구성 없음)
             <div className="space-y-4">
-              {sections.map(({ group, items, doneToday, time }) => (
+              {dateSections.map(({ group, items, time }) => (
                 <Card key={group.id}>
                   <CardContent className="p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-dashed border-[#f0e3dc] pb-2.5">
-                      <Link
-                        href={`/groups/${group.id}`}
-                        className="flex min-w-0 items-center gap-1.5 font-semibold text-[#2d2928] hover:underline"
-                      >
-                        <span aria-hidden className="shrink-0">
-                          {groupIconOf(group.icon)}
-                        </span>
-                        <span className="min-w-0 truncate">{group.name}</span>
-                      </Link>
-                      {time ? (
-                        <span className="text-xs tabular-nums text-[#8a7b77]">
-                          오늘 수업 {formatTimeRange(time.start, time.end)}
-                        </span>
-                      ) : null}
-                    </div>
-
+                    {groupHeader(group, time, "이날 수업")}
                     <ul className="mt-1 divide-y divide-dashed divide-[#f4e2e8]">
-                      {items.map(({ item, isPastDue }) => (
-                        <li key={item.id} className="flex items-center gap-1">
-                          {/* 완료 = completed 저장 후 active 목록에서만 제외 (row 유지) */}
-                          <form
-                            action={togglePreparationItemAction.bind(null, group.id, item.id)}
-                            className="min-w-0 flex-1"
-                          >
-                            <button
-                              type="submit"
-                              aria-pressed={false}
-                              className="flex min-h-11 w-full items-start gap-2.5 rounded-xl px-2 py-1.5 text-left transition hover:bg-[#f8f3fb]"
-                            >
-                              {/* 여러 줄 할 일: checkbox는 첫 줄 높이에 정렬 (items-start + mt) */}
-                              <span
-                                aria-hidden
-                                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-[#d9c8f0] bg-white"
-                              >
-                                <Check className="h-3 w-3 text-transparent" strokeWidth={3} />
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="block whitespace-pre-wrap break-words text-sm text-[#2d2928]">
-                                  {item.text}
-                                </span>
-                                <span
-                                  className={cn(
-                                    "mt-0.5 block text-[11px]",
-                                    isPastDue ? "text-[#a5854a]" : "text-[#a79996]",
-                                  )}
-                                >
-                                  {item.source === "daily_log_next_plan"
-                                    ? "다음 수업 계획"
-                                    : item.source === "daily_log_homework"
-                                      ? "숙제"
-                                      : item.source === "daily_log_task"
-                                        ? "해야 할 일"
-                                        : "직접 등록"}
-                                  {item.dueDate
-                                    ? isPastDue
-                                      ? ` · ${formatKoreanDate(item.dueDate)} · 미완료`
-                                      : " · 오늘"
-                                    : ""}
-                                </span>
-                              </span>
-                            </button>
-                          </form>
-                          <TodoDeleteButton groupId={group.id} itemId={item.id} text={item.text} />
-                        </li>
-                      ))}
-
-                      {/* 오늘 완료한 항목 — 당일에는 취소선으로 유지, 다시 누르면 즉시 원복.
-                          완료는 삭제가 아니며 내일부터는 이 목록에서 사라진다 (row 보존). */}
-                      {doneToday.map((item) => (
-                        <li key={item.id} className="flex items-center gap-1">
-                          <form
-                            action={togglePreparationItemAction.bind(null, group.id, item.id)}
-                            className="min-w-0 flex-1"
-                          >
-                            <button
-                              type="submit"
-                              aria-pressed={true}
-                              className="flex min-h-11 w-full items-start gap-2.5 rounded-xl px-2 py-1.5 text-left transition hover:bg-[#f4f9f6]"
-                            >
-                              <span
-                                aria-hidden
-                                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#8fc7ab]"
-                              >
-                                <Check className="h-3 w-3 text-white" strokeWidth={3} />
-                              </span>
-                              <span className="min-w-0 flex-1 opacity-75">
-                                <span className="block whitespace-pre-wrap break-words text-sm text-[#8a7b77] [text-decoration:line-through]">
-                                  {item.text}
-                                </span>
-                                <span className="mt-0.5 block text-[11px] text-[#b0a39f]">
-                                  {item.source === "daily_log_next_plan"
-                                    ? "다음 수업 계획"
-                                    : item.source === "daily_log_homework"
-                                      ? "숙제"
-                                      : item.source === "daily_log_task"
-                                        ? "해야 할 일"
-                                        : "직접 등록"}
-                                  {" · 완료"}
-                                </span>
-                              </span>
-                            </button>
-                          </form>
-                          <TodoDeleteButton groupId={group.id} itemId={item.id} text={item.text} />
-                        </li>
+                      {items.map((item) => (
+                        <TodoItemRow
+                          key={item.id}
+                          groupId={group.id}
+                          item={item}
+                          checked={item.completed}
+                          meta={`${sourceLabelOf(item)}${item.completed ? " · 완료" : ""}`}
+                          metaClass={item.completed ? "text-[#b0a39f]" : "text-[#a79996]"}
+                        />
                       ))}
                     </ul>
                   </CardContent>
