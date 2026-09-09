@@ -180,6 +180,11 @@ export default async function NewDailyLogPage({
               key={`${selectedGroup.id}:${date}`}
               classDate={date}
               scheduleDays={groupSchedules.map((slot) => slot.day_of_week)}
+              // 수업 제목 옆 교재 LIST — 이 그룹의 교재 목록 (그룹 상세와 같은 줄바꿈 포맷)
+              textbooks={(selectedGroup.textbook ?? "")
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean)}
               draft={
                 draftRow
                   ? { id: draftRow.id, updatedAt: draftRow.updated_at, payload: draftRow.payload }

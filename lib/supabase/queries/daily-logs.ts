@@ -156,7 +156,8 @@ export type StudentLessonLogWithStudent = StudentLessonLogRecord & {
 };
 
 export type DailyLogDetail = DailyLogRecord & {
-  group: Pick<ClassGroupRecord, "id" | "name" | "grade"> | null;
+  // textbook: 수업 제목 옆 "교재 LIST" 보조 버튼용 (줄바꿈 구분 여러 권 — 그룹 상세와 동일 포맷)
+  group: Pick<ClassGroupRecord, "id" | "name" | "grade" | "textbook"> | null;
   lessonLogs: StudentLessonLogWithStudent[];
   makeups: MakeupLessonRecord[];
   // 오늘 숙제(구조화) — 완료일 ASC. migration 미적용/조회 실패 시 [] (화면은 항상 뜬다)
@@ -181,7 +182,7 @@ export async function getDailyLogDetailForCurrentUser(
 
   const { data, error } = await supabase
     .from("daily_logs")
-    .select("*, class_groups(id, name, grade), student_lesson_logs(*, students(id, name, grade))")
+    .select("*, class_groups(id, name, grade, textbook), student_lesson_logs(*, students(id, name, grade))")
     .eq("id", dailyLogId)
     .eq("user_id", user.id)
     .maybeSingle();

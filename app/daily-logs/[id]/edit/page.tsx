@@ -161,6 +161,11 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           group={{ id: log.group_id, name: log.group?.name ?? "수업 그룹", grade: log.group?.grade }}
           students={sortedStudents}
           scheduleDays={groupSchedules.map((slot) => slot.day_of_week)}
+          // 수업 제목 옆 교재 LIST (제목 삽입 보조 — 저장된 제목을 자동 변경하지 않는다)
+          textbooks={(log.group?.textbook ?? "")
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)}
           draft={
             effectiveDraftRow
               ? {

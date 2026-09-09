@@ -395,6 +395,7 @@ export function DailyLogForm({
   initial,
   initialAssignments = [],
   previousReflection = null,
+  textbooks = [],
 }: {
   dailyLogId?: string;
   classDate: string;
@@ -402,6 +403,9 @@ export function DailyLogForm({
   students: DailyLogFormStudent[];
   // 그룹 시간표 요일 (다음 수업 계획 기본 날짜 계산용 — 없으면 날짜 직접 선택)
   scheduleDays?: number[];
+  // 이 그룹의 교재 목록 (class_groups.textbook 줄바꿈 구분 — 수업 제목 옆 "교재 LIST" 보조 버튼용.
+  // 제목에 텍스트를 한 번 삽입할 뿐, 교재 상태/관계를 만들거나 제목과 동기화하지 않는다)
+  textbooks?: string[];
   // 서버에서 발견한 자동 임시저장 draft (있으면 복구 배너 표시 — 자동 덮어쓰기 없음)
   draft?: { id: string; updatedAt: string; payload: unknown } | null;
   // [수업 일지 작성하기] resume 진입: 10분 창과 무관하게 draft를 즉시 전체 복원
@@ -451,6 +455,21 @@ export function DailyLogForm({
     restoredText(restored?.classDate, "") || initialClassDate,
   );
   const [title, setTitle] = useState(restoredText(restored?.title, initial?.title ?? ""));
+  // 교재 LIST 드롭다운 — 제목 입력을 돕는 보조 도구일 뿐, 선택값을 따로 저장하지 않는다
+  const [textbookListOpen, setTextbookListOpen] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const insertTextbookIntoTitle = (book: string) => {
+    setTextbookListOpen(false);
+    setTitle((current) => {
+      // 이미 제목에 들어 있으면 중복 삽입하지 않는다
+      if (current.includes(book)) {
+        return current;
+      }
+      return current.trim() ? `${book} - ${current}` : book;
+    });
+    // 이어서 바로 수정할 수 있게 제목 입력으로 focus 반환
+    titleInputRef.current?.focus();
+  };
   const [defaultProgress, setDefaultProgress] = useState(
     restoredText(restored?.defaultProgress, initial?.defaultProgress ?? ""),
   );
@@ -1146,15 +1165,63 @@ export function DailyLogForm({
             </div>
           </div>
 
-          <label className="block">
+          <div>
             <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">수업 제목 (선택)</span>
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
-              placeholder="Unit 3 본문 독해"
-            />
-          </label>
+            {/* 제목은 자유 입력이 source of truth. 교재 LIST는 그룹 교재명을 제목에
+                한 번 삽입해주는 보조 버튼 — 이후 동기화/강제 변경 없음 (자유 수정 가능) */}
+            <div className="flex flex-wrap items-start gap-2">
+              <input
+                ref={titleInputRef}
+                aria-label="수업 제목"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                className="min-w-0 flex-1 basis-56 rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                placeholder="Unit 3 본문 독해"
+              />
+              {textbooks.length > 0 ? (
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setTextbookListOpen((open) => !open)}
+                    aria-haspopup="listbox"
+                    aria-expanded={textbookListOpen}
+                    className="flex min-h-[42px] items-center gap-1.5 rounded-2xl border border-[#e2d8f3] bg-[#f8f5fd] px-3 py-2 text-sm font-medium text-[#6652b9] transition hover:bg-[#f1ecfa]"
+                  >
+                    <BookOpen className="h-3.5 w-3.5" aria-hidden /> 교재 LIST
+                    <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                  {textbookListOpen ? (
+                    <>
+                      {/* 바깥 클릭으로 닫기 */}
+                      <div
+                        aria-hidden
+                        className="fixed inset-0 z-30"
+                        onClick={() => setTextbookListOpen(false)}
+                      />
+                      <div
+                        role="listbox"
+                        aria-label="교재 목록"
+                        className="absolute right-0 z-40 mt-1 max-h-64 w-64 overflow-y-auto rounded-2xl border border-[#e8ddf3] bg-white p-1.5 shadow-[0_12px_32px_rgba(60,48,90,0.18)]"
+                      >
+                        {textbooks.map((book) => (
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={false}
+                            key={book}
+                            onClick={() => insertTextbookIntoTitle(book)}
+                            className="block w-full truncate rounded-xl px-3 py-2 text-left text-sm text-[#3d3450] transition hover:bg-[#f5f1fb]"
+                          >
+                            {book}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
 
           <div className="rounded-2xl bg-[#f5f2ff] p-3">
             <label className="block">
