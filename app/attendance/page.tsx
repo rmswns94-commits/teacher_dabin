@@ -156,7 +156,7 @@ export default async function AttendancePage({
             className="mb-5 rounded-3xl border border-[#d5e6f3] bg-gradient-to-b from-[#e2f0fa] via-[#edf5fb] to-[#eef6ef] p-3 shadow-sm sm:p-4"
           >
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1 pb-1">
-              <h2 className="font-display text-xl font-semibold tracking-[-0.01em] text-[#2b2323]">
+              <h2 className="text-xl font-semibold tracking-[-0.01em] text-[#2b2323]">
                 {monthLabel(month)}
               </h2>
               <div className="flex items-center gap-1">
@@ -300,7 +300,7 @@ export default async function AttendancePage({
           {selectedDate ? (
             <div className="mt-6">
               <div className="flex flex-wrap items-baseline gap-2">
-                <h2 className="font-display text-xl font-semibold text-[#2d2928]">
+                <h2 className="text-xl font-semibold text-[#2d2928]">
                   {formatKoreanDate(selectedDate, true)}
                 </h2>
                 {selectedEntries.length > 0 ? (

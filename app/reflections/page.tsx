@@ -183,7 +183,7 @@ export default async function ReflectionsPage({
                 <span>🌲</span>
               </div>
               <div className="mx-auto -mb-px flex h-14 w-44 items-center justify-center rounded-t-[70px] bg-white sm:h-16">
-                <span className="font-display text-4xl font-bold tracking-[0.06em] text-[#3f7d54]">
+                <span className="text-4xl font-bold tracking-[0.06em] text-[#3f7d54]">
                   {month.slice(5, 7)}
                 </span>
               </div>

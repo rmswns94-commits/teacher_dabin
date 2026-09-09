@@ -363,7 +363,7 @@ export default async function DailyLogsPage({
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-end gap-3">
-                    <span className="font-display text-5xl font-bold leading-none tracking-tight text-[#6d5aa8] md:text-6xl">
+                    <span className="text-5xl font-bold leading-none tracking-tight text-[#6d5aa8] md:text-6xl">
                       {month.slice(5)}
                     </span>
                     <div className="pb-0.5 leading-snug">
@@ -595,7 +595,7 @@ export default async function DailyLogsPage({
           {selectedDate ? (
             <div className="mt-6">
               <div className="flex flex-wrap items-baseline gap-2">
-                <h2 className="font-display text-xl font-semibold text-[#2d2928]">
+                <h2 className="text-xl font-semibold text-[#2d2928]">
                   {formatKoreanDate(selectedDate, true)}
                 </h2>
                 <span className="text-sm text-[#8a7b77]">

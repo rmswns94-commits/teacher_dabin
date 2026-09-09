@@ -337,7 +337,7 @@ export function ExamPlanner({
       {/* ── compact header: 월 + 이동 + D-Day + 진행률 + 계획 추가 (별도 대형 카드 금지) ── */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 pb-3">
         <div className="flex items-center gap-2">
-          <h2 className="font-display text-xl font-semibold tracking-[-0.01em] text-[#2b2323]">
+          <h2 className="text-xl font-semibold tracking-[-0.01em] text-[#2b2323]">
             {monthLabel(month)}
           </h2>
           <span
