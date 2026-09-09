@@ -20,6 +20,7 @@ import {
   addMonths,
   buildMonthGrid,
   dayOfWeekOf,
+  monthLabel,
   monthRange,
   parseMonthParam,
 } from "@/lib/calendar";
@@ -32,22 +33,25 @@ import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedul
 import type { AttendanceStatus } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
-const WEEKDAY_HEADERS = ["일", "월", "화", "수", "목", "금", "토"];
-const WEEKDAY_HEADERS_FULL = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
-const MONTH_NAMES_EN = [
-  "JANUARY",
-  "FEBRUARY",
-  "MARCH",
-  "APRIL",
-  "MAY",
-  "JUNE",
-  "JULY",
-  "AUGUST",
-  "SEPTEMBER",
-  "OCTOBER",
-  "NOVEMBER",
-  "DECEMBER",
-];
+// 스프링 노트 달력 디자인 (오늘 할 일/시험 대비 플래너와 동일 계열): 일요일 시작 SUN~SAT, 주말 웜 레드
+const WEEKDAY_HEADERS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const WEEKEND_TEXT = "text-[#d95f4c]";
+const NAV_BUTTON =
+  "flex h-9 min-w-9 items-center justify-center rounded-xl border border-[#c9dcee] bg-white px-2 text-sm font-medium text-[#4a6f96] transition hover:bg-[#f3f8fd]";
+
+// 상단 스프링 코일 장식 (오늘 할 일 캘린더와 동일 — 순수 decoration)
+function SpringCoils() {
+  return (
+    <div aria-hidden className="pointer-events-none absolute -top-3.5 left-0 right-0 flex justify-around px-5">
+      {Array.from({ length: 11 }, (_, i) => (
+        <span
+          key={i}
+          className="h-7 w-2.5 rounded-full border border-[#a9c8e4] bg-gradient-to-b from-[#dcecf9] to-[#aecde9] shadow-[0_1px_2px_rgba(120,150,180,0.35)]"
+        />
+      ))}
+    </div>
+  );
+}
 
 // 달력 셀의 상태별 표시 색 (배지/칩과 같은 계열)
 const countTextColors: Record<AttendanceStatus, string> = {
@@ -146,167 +150,152 @@ export default async function AttendancePage({
             action={<AttendanceExcelButton month={month} hasData={entries.length > 0} />}
           />
 
-          <Card>
-            <CardContent className="p-4 md:p-6">
-              {/* 플래너 스타일 헤더 (수업 일지 달력과 동일 계열) */}
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-end gap-3">
-                    <span className="font-display text-5xl font-bold leading-none tracking-tight text-[#6d5aa8] md:text-6xl">
-                      {month.slice(5)}
-                    </span>
-                    <div className="pb-0.5 leading-snug">
-                      <div className="text-sm font-bold tracking-[0.14em] text-[#2d2928] md:text-base">
-                        / {MONTH_NAMES_EN[Number(month.slice(5)) - 1]}
-                      </div>
-                      <div className="text-xs font-semibold tracking-[0.1em] text-[#a08d97] md:text-sm">
-                        / {month.slice(0, 4)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2.5 flex items-center gap-1">
-                    <Link
-                      href={buildQuery({ month: addMonths(month, -1) })}
-                      aria-label="이전 달"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#eee9f6] text-[#8a7b77] transition hover:bg-[#faf8ff]"
-                    >
-                      <ChevronLeft className="h-4 w-4" aria-hidden />
-                    </Link>
-                    <Link
-                      href={buildQuery({ month: addMonths(month, 1) })}
-                      aria-label="다음 달"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#eee9f6] text-[#8a7b77] transition hover:bg-[#faf8ff]"
-                    >
-                      <ChevronRight className="h-4 w-4" aria-hidden />
-                    </Link>
-                    <Link
-                      href={buildQuery({ month: currentMonth, date: today })}
-                      className="rounded-xl border border-[#eee9f6] px-2.5 py-1.5 text-xs text-[#8a7b77] transition hover:bg-[#faf8ff] hover:text-[#564d4d]"
-                    >
-                      오늘
-                    </Link>
-                  </div>
-                </div>
+          {/* ── 월간 캘린더 (오늘 할 일/시험 대비 플래너와 동일한 스프링 노트 디자인) ── */}
+          <section
+            aria-label="출결 월간 캘린더"
+            className="mb-5 rounded-3xl border border-[#d5e6f3] bg-gradient-to-b from-[#e2f0fa] via-[#edf5fb] to-[#eef6ef] p-3 shadow-sm sm:p-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1 pb-1">
+              <h2 className="font-display text-xl font-semibold tracking-[-0.01em] text-[#2b2323]">
+                {monthLabel(month)}
+              </h2>
+              <div className="flex items-center gap-1">
+                <Link
+                  href={buildQuery({ month: addMonths(month, -1) })}
+                  aria-label="이전 달"
+                  className={NAV_BUTTON}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Link>
+                <Link href={buildQuery({ month: currentMonth, date: today })} className={NAV_BUTTON}>
+                  오늘
+                </Link>
+                <Link
+                  href={buildQuery({ month: addMonths(month, 1) })}
+                  aria-label="다음 달"
+                  className={NAV_BUTTON}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
               </div>
+            </div>
 
-              {/* 요일 헤더 */}
-              <div className="mt-4 grid grid-cols-7 overflow-hidden rounded-t-2xl border border-b-0 border-[#e3ddf1] bg-[#f7f4fd] text-center text-[11px] font-semibold md:text-xs">
-                {WEEKDAY_HEADERS.map((day, headerIndex) => (
+            {/* 스프링 노트 sheet — 코일 장식이 상단에 걸리도록 위 여백 확보 */}
+            <div className="relative mt-4 rounded-2xl border border-[#dfe7ef] bg-white px-1.5 pb-2 pt-6 shadow-[0_12px_28px_rgba(120,150,180,0.14)] sm:px-2">
+              <SpringCoils />
+
+              {/* 요일 헤더 (일요일 시작 — SUN/SAT 웜 레드) */}
+              <div className="grid grid-cols-7 border-b-2 border-[#eef1f5] pb-2">
+                {WEEKDAY_HEADERS.map((label, index) => (
                   <div
-                    key={day}
+                    key={label}
                     className={cn(
-                      "border-l border-[#eee9f6] py-2 first:border-l-0",
-                      headerIndex === 0
-                        ? "text-[#c97a7a]"
-                        : headerIndex === 6
-                          ? "text-[#7a8fc9]"
-                          : "text-[#6b6b74]",
+                      "px-1 text-center text-[10px] font-bold tracking-[0.08em] sm:text-[11px]",
+                      index === 0 || index === 6 ? WEEKEND_TEXT : "text-[#4a4a55]",
                     )}
                   >
-                    <span className="md:hidden">{day}</span>
-                    <span className="max-md:hidden">{WEEKDAY_HEADERS_FULL[headerIndex]}</span>
+                    {label}
                   </div>
                 ))}
               </div>
 
-              <div className="grid grid-cols-7 overflow-hidden rounded-b-2xl border border-[#e3ddf1] bg-white">
-                {weeks.flat().map((date, index) => {
-                  if (!date) {
+              {weeks.map((week, weekIndex) => (
+                <div key={weekIndex} className="grid grid-cols-7">
+                  {week.map((date, dayIndex) => {
+                    if (!date) {
+                      return (
+                        <div
+                          key={`empty-${dayIndex}`}
+                          className="min-h-[76px] border-b border-r border-[#eef1f5] bg-[#f8fafc]/70 first:border-l sm:min-h-[92px]"
+                        />
+                      );
+                    }
+
+                    const counts = countsByDate.get(date);
+                    const isSelected = date === selectedDate;
+                    const isToday = date === today;
+                    const isWeekend = dayIndex === 0 || dayIndex === 6;
+
+                    const countParts = counts
+                      ? ATTENDANCE_ORDER.filter((status) => counts[status] > 0).map(
+                          (status) => `${attendanceLabels[status]} ${counts[status]}명`,
+                        )
+                      : [];
+                    const label = [
+                      formatKoreanDate(date),
+                      countParts.length > 0 ? countParts.join(", ") : "출결 기록 없음",
+                    ].join(", ");
+
                     return (
-                      <div
-                        key={`empty-${index}`}
+                      <Link
+                        key={date}
+                        href={buildQuery({ month, date })}
+                        aria-label={label}
+                        aria-current={isSelected ? "date" : undefined}
                         className={cn(
-                          "min-h-[84px] border-l border-t border-[#eee9f6] bg-[#fbfafd] md:min-h-[118px]",
-                          index % 7 === 0 && "border-l-0",
-                          index < 7 && "border-t-0",
-                        )}
-                      />
-                    );
-                  }
-
-                  const counts = countsByDate.get(date);
-                  const isSelected = date === selectedDate;
-                  const isToday = date === today;
-                  const dayNumber = Number(date.slice(8));
-                  const columnIndex = index % 7;
-                  const isSunday = columnIndex === 0;
-                  const isSaturday = columnIndex === 6;
-
-                  const countParts = counts
-                    ? ATTENDANCE_ORDER.filter((status) => counts[status] > 0).map(
-                        (status) => `${attendanceLabels[status]} ${counts[status]}명`,
-                      )
-                    : [];
-                  const label = [
-                    formatKoreanDate(date),
-                    countParts.length > 0 ? countParts.join(", ") : "출결 기록 없음",
-                  ].join(", ");
-
-                  return (
-                    <Link
-                      key={date}
-                      href={buildQuery({ month, date })}
-                      aria-label={label}
-                      aria-current={isSelected ? "date" : undefined}
-                      className={cn(
-                        "flex min-h-[84px] flex-col border-l border-t border-[#eee9f6] p-1 pb-1.5 transition md:min-h-[118px] md:p-1.5",
-                        columnIndex === 0 && "border-l-0",
-                        index < 7 && "border-t-0",
-                        isSunday && !isSelected && "bg-[#faf7f4]",
-                        isSelected
-                          ? "bg-[#f5f1fb] shadow-[inset_0_0_0_2px_#cfc4f0]"
-                          : "hover:bg-[#faf8ff]",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums md:h-6 md:w-6 md:text-xs",
-                          isSunday
-                            ? "text-[#c97a7a]"
-                            : isSaturday
-                              ? "text-[#7a8fc9]"
-                              : "text-[#4a423f]",
-                          isToday && "bg-[#8b7ae6] font-bold text-white",
+                          "min-h-[76px] min-w-0 border-b border-r border-[#eef1f5] px-0.5 py-1 transition first:border-l sm:min-h-[92px]",
+                          "bg-white hover:bg-[#f7fafd]",
+                          isSelected && "ring-1 ring-inset ring-[#a9c8e8]",
                         )}
                       >
-                        {dayNumber}
-                      </span>
-
-                      {counts ? (
-                        <span aria-hidden className="mt-0.5 flex flex-col gap-px px-0.5 md:mt-1">
-                          {ATTENDANCE_ORDER.filter((status) => counts[status] > 0).map(
-                            (status) => (
-                              <span
-                                key={status}
-                                className={cn(
-                                  "text-[10px] font-medium leading-[15px] tabular-nums md:text-[11px] md:leading-4",
-                                  countTextColors[status],
-                                )}
-                              >
-                                <span className="md:hidden">
-                                  {shortLabels[status]} {counts[status]}
-                                </span>
-                                <span className="max-md:hidden">
-                                  {attendanceLabels[status]} {counts[status]}
-                                </span>
-                              </span>
-                            ),
-                          )}
-                        </span>
-                      ) : null}
-                    </Link>
-                  );
-                })}
-              </div>
-
-              {entries.length === 0 ? (
-                <div className="mt-3 flex items-center justify-center gap-2 rounded-2xl bg-[#faf4ef] px-3 py-2.5 text-center text-xs text-[#8a7b77]">
-                  <ClipboardCheck className="h-3.5 w-3.5 text-[#b9a2a8]" aria-hidden />
-                  이번 달에는 아직 출결 기록이 없어요. 수업일지를 작성 완료하면 여기에 반영돼요.
+                        {/* 날짜 숫자 가운데 정렬 — 플래너/오늘 할 일과 동일 */}
+                        <div className="flex min-w-0 flex-col items-center gap-0.5">
+                          <span
+                            className={cn(
+                              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums",
+                              isToday
+                                ? "bg-[#8b7ae6] text-white"
+                                : isWeekend
+                                  ? WEEKEND_TEXT
+                                  : "text-[#3f3f49]",
+                            )}
+                          >
+                            {Number(date.slice(8))}
+                          </span>
+                          {counts ? (
+                            <span aria-hidden className="flex w-full min-w-0 flex-col items-center gap-px">
+                              {ATTENDANCE_ORDER.filter((status) => counts[status] > 0).map(
+                                (status) => (
+                                  <span
+                                    key={status}
+                                    className={cn(
+                                      "max-w-full truncate text-[10px] font-semibold leading-[14px] tabular-nums sm:text-[11px] sm:leading-4",
+                                      countTextColors[status],
+                                    )}
+                                  >
+                                    <span className="sm:hidden">
+                                      {shortLabels[status]} {counts[status]}
+                                    </span>
+                                    <span className="hidden sm:inline">
+                                      {attendanceLabels[status]} {counts[status]}
+                                    </span>
+                                  </span>
+                                ),
+                              )}
+                            </span>
+                          ) : null}
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
-              ) : null}
-            </CardContent>
-          </Card>
+              ))}
+
+              {/* 하단 꽃 장식 (오늘 할 일 캘린더와 동일한 마무리) */}
+              <div aria-hidden className="flex items-center justify-center gap-2 pt-2 text-sm">
+                <span>🌼</span>
+                <span>🌿</span>
+                <span>🌼</span>
+              </div>
+            </div>
+
+            {entries.length === 0 ? (
+              <div className="mt-3 flex items-center justify-center gap-2 rounded-2xl bg-white/70 px-3 py-2.5 text-center text-xs text-[#6c7f92]">
+                <ClipboardCheck className="h-3.5 w-3.5 text-[#8fabc6]" aria-hidden />
+                이번 달에는 아직 출결 기록이 없어요. 수업일지를 작성 완료하면 여기에 반영돼요.
+              </div>
+            ) : null}
+          </section>
 
           {selectedDate ? (
             <div className="mt-6">
