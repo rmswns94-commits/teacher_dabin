@@ -1258,7 +1258,8 @@ export function DailyLogForm({
                     key={item.key}
                     className="min-w-0 rounded-2xl border border-[#ece0db] bg-[#fffdfb] p-2.5"
                   >
-                    <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start">
+                    {/* 내용 칸 아래에 완료일 카드가 오는 세로 배치 (화면 폭과 무관) */}
+                    <div className="flex min-w-0 flex-col gap-2">
                       <textarea
                         value={item.content}
                         onChange={(event) => {
@@ -1271,9 +1272,9 @@ export function DailyLogForm({
                         maxLength={500}
                         aria-label={`숙제 ${index + 1} 내용`}
                         placeholder={"백발백중 5과 문법 문제\n(여러 줄로 적을 수 있어요)"}
-                        className="min-h-[58px] w-full min-w-0 flex-1 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                        className="min-h-[58px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                       />
-                      <div className="flex min-w-0 items-center gap-1.5 sm:shrink-0">
+                      <div className="flex min-w-0 items-center justify-between gap-1.5">
                         <span className="flex min-h-[38px] min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-xs font-medium text-[#6652b9]">
                           <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
                           <input
