@@ -493,6 +493,32 @@ async function syncHomeworkAssignments(
   }
 }
 
+// 진입점 통합용: canonical identity(user+group+class_date)의 일지 row 조회 — draft/completed 불문.
+// DB unique(user,group,class_date)가 identity당 1개를 보장하므로 maybeSingle. 조회만, write 없음.
+export async function getDailyLogByIdentity(groupId: string, classDate: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("daily_logs")
+    .select("id, status")
+    .eq("user_id", user.id)
+    .eq("group_id", groupId)
+    .eq("class_date", classDate)
+    .maybeSingle();
+
+  if (error) {
+    console.error("getDailyLogByIdentity error", { code: error.code, message: error.message });
+    return null;
+  }
+
+  return (data ?? null) as { id: string; status: DailyLogStatus } | null;
+}
+
 // 같은 Teacher + 같은 날짜 + 같은 그룹의 수업일지는 최대 1개.
 // typed error로 구분해 UI가 전용 경고 dialog를 띄울 수 있게 한다.
 // 기준은 항상 "선택한 수업 날짜" — 오늘이 아닐 수 있으므로 문구에 날짜를 명시한다.

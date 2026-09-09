@@ -15,7 +15,11 @@ import {
   getActiveDraftResumeTarget,
   getDailyLogDraft,
 } from "@/lib/supabase/queries/daily-log-drafts";
-import { getGroupHistoryLogs, getPreviousReflectionNext } from "@/lib/supabase/queries/daily-logs";
+import {
+  getDailyLogByIdentity,
+  getGroupHistoryLogs,
+  getPreviousReflectionNext,
+} from "@/lib/supabase/queries/daily-logs";
 import {
   getCurrentUserGroups,
   getGroupLatestProgress,
@@ -43,6 +47,17 @@ export default async function NewDailyLogPage({
 
   const requestedGroupId = params.groupId || null;
   const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : todayDateString();
+
+  // 특정 group(+date) 진입(오늘 수업 카드/그룹 상세/피커/직접 URL): 같은 canonical identity
+  // (user+group+lesson_date)의 일지 row가 이미 있으면 그 수정 화면으로 — draft면 이어쓰기,
+  // completed면 기존 기록 수정 (대시보드가 이미 쓰는 정책과 동일). "Today Draft"와
+  // "수업일지 Draft"는 별개가 아니다: 어떤 버튼으로 들어와도 identity당 일지/Draft는 하나.
+  if (requestedGroupId) {
+    const existingLog = await getDailyLogByIdentity(requestedGroupId, date);
+    if (existingLog) {
+      redirect(`/daily-logs/${existingLog.id}/edit`);
+    }
+  }
 
   // 그룹 목록과 (선택된 그룹의) 학생/직전 수업/이전 기록을 한 번에 병렬 조회한다.
   // 이전 기록은 lightweight 첫 페이지만 — 실패해도 작성 화면은 그대로 동작해야 한다.
@@ -170,8 +185,10 @@ export default async function NewDailyLogPage({
                   ? { id: draftRow.id, updatedAt: draftRow.updated_at, payload: draftRow.payload }
                   : null
               }
-              // resume 진입이면 10분 창과 무관하게 draft를 즉시 전체 복원
-              forceRestoreDraft={params.resume === "1" && Boolean(draftRow)}
+              // group+date를 명시한 진입에서 같은 identity의 autosave draft가 있으면
+              // 시간 창과 무관하게 즉시 전체 복원 — 어느 버튼으로 들어와도 같은 Draft 하나
+              // (이 화면은 항상 group이 선택된 상태에서만 폼을 렌더하므로 = identity 확정)
+              forceRestoreDraft={Boolean(draftRow)}
               group={{ id: selectedGroup.id, name: selectedGroup.name, grade: selectedGroup.grade }}
               students={groupStudents.map((student) => ({
                 studentId: student.id,
