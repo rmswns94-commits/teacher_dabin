@@ -334,7 +334,7 @@ export function LessonLogDetail({
                 ) : (
                   <div className="mt-1 space-y-0.5 text-xs leading-5">
                     {lessonLog.progress ? (
-                      <div className="text-[#564d4d]">진도 · {lessonLog.progress}</div>
+                      <div className="whitespace-pre-line break-words text-[#564d4d]">진도 · {lessonLog.progress}</div>
                     ) : null}
                     {lessonLog.homework_status ||
                     lessonLog.vocab_correct !== null ||

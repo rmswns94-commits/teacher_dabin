@@ -402,8 +402,9 @@ export default async function StudentDetailPage({
                           <AttendanceBadge status={lesson.attendance} />
                         </div>
                         {lesson.progress ? (
-                          <div className="mt-1.5 flex items-center gap-1.5 text-xs text-[#564d4d]">
-                            <BookOpen className="h-3 w-3 text-[#7c6d69]" /> {lesson.progress}
+                          <div className="mt-1.5 flex items-start gap-1.5 text-xs text-[#564d4d]">
+                            <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-[#7c6d69]" />
+                            <span className="min-w-0 whitespace-pre-line break-words">{lesson.progress}</span>
                           </div>
                         ) : null}
                         {lesson.homework_status ||

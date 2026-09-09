@@ -1394,13 +1394,12 @@ export function DailyLogForm({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* iPad Safari date input은 intrinsic min-width가 커서, grid 자식과 input에
-              min-w-0/max-w-full이 없으면 옆 칸(수업 그룹)을 침범한다 — 학생 폼과 동일 패턴 */}
-          {/* 날짜는 날짜 문자열+Safari native control이 들어갈 만큼만(고정 180px 트랙),
-              수업 그룹이 남은 폭(minmax(0,1fr))을 사용한다. lg 미만은 1열 stack —
-              겹침이 구조적으로 불가능하고, 두 컨트롤은 min-h로 높이를 정확히 맞춘다. */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[180px_minmax(0,1fr)]">
-            <label className="block min-w-0">
+          {/* 날짜는 왼쪽 compact(180px — iPad Safari date input intrinsic width 커버),
+              수업 그룹은 오른쪽(ml-auto)으로 내용 크기(w-fit)만 차지한다. 폭이 부족하면
+              flex-wrap이 그룹 블록을 다음 줄로 내려 stack — 겹침/가로 overflow가 구조적으로
+              불가능하고, 같은 컴포넌트 트리 그대로라 responsive 전환에도 remount가 없다. */}
+          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+            <label className="block w-[180px] max-w-full">
               <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">날짜</span>
               <input
                 type="date"
@@ -1417,15 +1416,17 @@ export function DailyLogForm({
               />
             </label>
 
-            <div className="block min-w-0">
-              <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">수업 그룹</span>
-              <div className="flex min-h-[46px] min-w-0 items-center justify-between gap-2 rounded-2xl border border-[#ece0db] bg-[#f8f3ef] px-3 py-2.5 text-sm text-[#2b2323]">
-                <span className="min-w-0 truncate font-medium">{group.name}</span>
+            {/* 긴 그룹 이름은 max-w + truncate로 날짜 영역을 침범하지 않는다 */}
+            <div className="ml-auto w-fit min-w-0 max-w-full">
+              <span className="mb-2 block text-right text-sm font-medium text-[#4d3a3a]">수업 그룹</span>
+              <div className="flex min-h-[46px] min-w-0 items-center gap-3 rounded-2xl border border-[#ece0db] bg-[#f8f3ef] px-4 py-2.5 text-sm text-[#2b2323]">
+                <span className="min-w-0 max-w-[420px] truncate font-medium">{group.name}</span>
                 {!dailyLogId ? (
                   // fresh=1: 그룹을 바꾸려는 의도된 이동이라 draft resume redirect를 우회
+                  // (-my-2로 시각 크기는 compact하게 두고 터치 영역만 44px 수준 확보)
                   <Link
                     href="/daily-logs/new?fresh=1"
-                    className="shrink-0 text-xs text-[#5c4ca8] hover:underline"
+                    className="-my-2 -mr-2 flex min-h-[44px] shrink-0 items-center px-2 text-xs text-[#5c4ca8] hover:underline"
                   >
                     변경
                   </Link>
@@ -2455,14 +2456,17 @@ export function DailyLogForm({
                       ) : null}
                   </div>
 
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <label className="flex flex-1 items-center gap-2 rounded-xl border border-[#efe4dd] bg-[#fdfaf8] px-3 py-2">
-                      <BookOpen className="h-3.5 w-3.5 shrink-0 text-[#7c6d69]" />
-                      <input
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                    <label className="flex flex-1 items-start gap-2 rounded-xl border border-[#efe4dd] bg-[#fdfaf8] px-3 py-2">
+                      <BookOpen className="mt-1 h-3.5 w-3.5 shrink-0 text-[#7c6d69]" />
+                      {/* 학생별 진도 — 여러 줄 입력 (Enter=줄바꿈, IME-safe: onChange raw 저장).
+                          student_id 기준 updateEntry라 정렬 변경과 무관하게 정확히 연결된다. */}
+                      <textarea
                         value={entry.progress}
                         onChange={(event) => updateEntry(student.studentId, { progress: event.target.value })}
-                        className="w-full bg-transparent text-sm outline-none placeholder:text-[#a79996]"
-                        placeholder="진도"
+                        rows={2}
+                        className="min-h-[40px] w-full resize-y bg-transparent text-sm leading-5 outline-none placeholder:text-[#a79996]"
+                        placeholder="진도 (여러 줄 입력 가능)"
                         aria-label={`${student.name} 진도`}
                       />
                     </label>
