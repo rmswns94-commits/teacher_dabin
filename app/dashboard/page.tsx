@@ -27,7 +27,14 @@ import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
 import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
 import { currentEpochMs } from "@/lib/todo-window";
 import { getUpcomingExamEvents } from "@/lib/supabase/queries/calendar-events";
-import { DAY_LABELS, formatTimeHM, formatTimeRange, getScheduleOverview, type ClassOccurrence } from "@/lib/schedule";
+import {
+  DAY_LABELS,
+  formatTimeHM,
+  formatTimeRange,
+  getScheduleOverview,
+  previousLessonSourceCutoff,
+  type ClassOccurrence,
+} from "@/lib/schedule";
 import { getDisplayName } from "@/lib/supabase/auth";
 import { getDashboardOverview, getDashboardStats } from "@/lib/supabase/queries/dashboard";
 import { getCurrentUserGroups, getGroupLatestProgress } from "@/lib/supabase/queries/groups";
@@ -124,7 +131,17 @@ export default async function DashboardPage() {
   // 같은 페이지에서 이미 받은 allGroups에서 찾는다 — schedules embed로 preparation_items
   // jsonb를 중복 전송하지 않기 위해 (스케줄 쿼리는 모든 페이지의 AppShell에서도 돈다)
   const focusGroup = hero ? allGroups.find((group) => group.id === hero.group.id) ?? null : null;
-  const latestProgress = focusGroup ? await getGroupLatestProgress(focusGroup.id) : null;
+
+  // 직전 수업 데이터(오늘 수업 계획/지난 숙제/브리핑) source cutoff — Final Save 시점이 아니라
+  // "hero occurrence가 끝났는가" 기준. 오늘 일지를 수업 전에 미리 완료해도 이 그룹의 오늘
+  // 수업 종료시각 전에는 직전 수업이 그대로 고정된다 (요일별 schedule로 계산된 endEpoch 기준,
+  // 그룹/occurrence별 독립 — 수업 종료 후에는 hero가 다음 occurrence로 넘어가며 오늘 일지가
+  // lesson_date < cutoff 를 만족해 새 previous source가 된다). status 조작/데이터 복제 없음.
+  const previousBefore = hero ? previousLessonSourceCutoff(hero, currentEpochMs()) : null;
+  const latestProgress =
+    focusGroup && previousBefore
+      ? await getGroupLatestProgress(focusGroup.id, previousBefore)
+      : null;
 
   // To do list는 read-only summary: 수업 그룹 상세에서 Teacher가 실제 등록한
   // preparation_items만 보여준다 (Dashboard 직접 입력/추천 생성 없음).
@@ -382,13 +399,14 @@ export default async function DashboardPage() {
 
           {/* 수업 전 반 브리핑 — 오늘 수업(진행 중 포함)인 hero 그룹 하나만, 기존 데이터 정리(AI 없음).
               Suspense로 감싸 hero 첫 렌더를 막지 않는다 (브리핑 쿼리는 스트리밍으로 뒤에 채워짐). */}
-          {hero && hero.daysFromNow === 0 && focusGroup ? (
+          {hero && hero.daysFromNow === 0 && focusGroup && previousBefore ? (
             <Suspense fallback={<ClassBriefingSkeleton />}>
               <ClassBriefing
                 group={{ id: focusGroup.id, name: focusGroup.name, icon: focusGroup.icon ?? null }}
                 isNow={isCurrentClass}
                 startTime={formatTimeHM(hero.schedule.start_time)}
                 today={today}
+                previousBefore={previousBefore}
                 exams={upcomingExams
                   .filter((exam) => exam.groupId === focusGroup.id)
                   .map((exam) => ({ id: exam.id, title: exam.title, badge: exam.badge }))}

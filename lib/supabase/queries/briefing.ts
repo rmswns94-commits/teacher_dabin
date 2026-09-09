@@ -62,6 +62,10 @@ export async function getGroupBriefingData(
   groupId: string,
   today: string, // KST "YYYY-MM-DD" — 복습 필요(due) 판정 기준
   mistakesSince: string, // 반복 오답 집계 창 시작 (YYYY-MM-DD)
+  // 직전 수업 cutoff (exclusive) — 이 그룹의 lesson_date가 이 날짜 이전인 일지만
+  // "마지막 수업" source로 쓴다. 오늘 일지를 수업 전에 미리 Final Save해도
+  // 수업 종료 전 브리핑에 조기 반영되지 않게 한다 (previousLessonSourceCutoff 참고).
+  previousBefore: string,
 ): Promise<GroupBriefingData> {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
@@ -108,6 +112,7 @@ export async function getGroupBriefingData(
       .eq("user_id", user.id)
       .eq("group_id", groupId)
       .eq("status", "completed")
+      .lt("class_date", previousBefore)
       .order("class_date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(1)
@@ -123,7 +128,8 @@ export async function getGroupBriefingData(
       .order("created_at", { ascending: true }),
     supabase
       .from("vocab_mistakes")
-      .select("student_id, word, created_at")
+      // daily_log embed는 "이 그룹의 아직 안 끝난 수업" 오답을 걸러내기 위한 것 (아래 JS 필터)
+      .select("student_id, word, created_at, daily_log:daily_logs(group_id, class_date)")
       .eq("user_id", user.id)
       .gte("created_at", mistakesSince)
       .in("student_id", memberIds)
@@ -164,6 +170,16 @@ export async function getGroupBriefingData(
         }
       : null,
     dueWeaknesses: (weaknessResult.data ?? []) as BriefingWeakness[],
-    recentMistakes: (mistakeResult.data ?? []) as BriefingMistake[],
+    // 이 그룹의 cutoff 이후(오늘 등 아직 안 끝난 occurrence) 일지에서 나온 오답은 제외 —
+    // 오늘 단어시험을 미리 기록해도 수업 종료 전 "반복 오답"에 조기 집계되지 않는다.
+    // 다른 그룹 수업의 오답(학생 기준 history)은 기존 의미 그대로 유지한다.
+    recentMistakes: ((mistakeResult.data ?? []) as (BriefingMistake & {
+      daily_log: { group_id: string; class_date: string } | { group_id: string; class_date: string }[] | null;
+    })[])
+      .filter((mistake) => {
+        const log = pickOne<{ group_id: string; class_date: string }>(mistake.daily_log);
+        return !(log && log.group_id === groupId && log.class_date >= previousBefore);
+      })
+      .map(({ student_id, word, created_at }) => ({ student_id, word, created_at })),
   };
 }

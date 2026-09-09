@@ -239,6 +239,19 @@ export function getGroupNextOccurrences(
   return result;
 }
 
+// Dashboard "직전 수업" source의 exclusive cutoff 날짜 — lesson_date < 반환값 인 finalized
+// 일지만 직전 수업 데이터(오늘 수업 계획/지난 숙제/브리핑)의 후보가 된다.
+// 핵심: Final Save 시점이 아니라 "그 수업 occurrence가 실제로 끝났는가"가 기준이라,
+// 오늘 일지를 수업 전에 미리 완료해도 해당 그룹의 오늘 수업 종료시각(endEpoch, 요일별
+// schedule 매칭으로 계산된 KST epoch) 전에는 occurrence 당일이 후보에서 제외된다.
+// 종료 후에는 당일 일지가 다음 수업을 위한 새 previous source로 허용된다.
+export function previousLessonSourceCutoff(
+  occurrence: Pick<ClassOccurrence<unknown>, "date" | "endEpoch">,
+  nowEpoch: number,
+): string {
+  return nowEpoch >= occurrence.endEpoch ? addDays(occurrence.date, 1) : occurrence.date;
+}
+
 // True when two time ranges on the same weekday overlap.
 export function slotsOverlap(
   a: Pick<ScheduleSlot, "day_of_week" | "start_time" | "end_time">,

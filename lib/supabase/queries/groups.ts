@@ -425,7 +425,10 @@ export async function getGroupRecentLogs(groupId: string, limit = 5) {
   return (data ?? []) as GroupRecentLog[];
 }
 
-export async function getGroupLatestProgress(groupId: string) {
+// beforeDate(exclusive, YYYY-MM-DD)를 주면 lesson_date가 그 이전인 completed 일지만 —
+// Dashboard가 "아직 끝나지 않은 오늘 수업 occurrence"를 직전 수업 source에서 제외할 때 쓴다
+// (previousLessonSourceCutoff 참고). 생략하면 기존 그대로 최신 completed 일지.
+export async function getGroupLatestProgress(groupId: string, beforeDate?: string) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
@@ -433,12 +436,18 @@ export async function getGroupLatestProgress(groupId: string) {
     return null;
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("daily_logs")
     .select("id, class_date, default_progress, title, homework, next_lesson_plan")
     .eq("user_id", user.id)
     .eq("group_id", groupId)
-    .eq("status", "completed")
+    .eq("status", "completed");
+
+  if (beforeDate) {
+    query = query.lt("class_date", beforeDate);
+  }
+
+  const { data, error } = await query
     .order("class_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(1)

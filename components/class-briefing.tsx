@@ -78,6 +78,7 @@ export async function ClassBriefing({
   isNow,
   startTime,
   today,
+  previousBefore,
   exams,
   prepTexts,
 }: {
@@ -85,6 +86,9 @@ export async function ClassBriefing({
   isNow: boolean;
   startTime: string; // "HH:MM"
   today: string;
+  // 직전 수업 source cutoff (exclusive) — 오늘 수업 종료 전에는 오늘 일지를
+  // 미리 완료했어도 브리핑 source에서 제외한다 (Dashboard가 occurrence 기준으로 계산)
+  previousBefore: string;
   // 이 그룹에 연결된 시험 일정 (Dashboard에서 이미 조회한 D-30 창 재사용 — 추가 쿼리 없음)
   exams: { id: string; title: string; badge: string }[];
   // 이 그룹의 미완료 준비 항목 (기존 shared To Do — 브리핑 전용 Todo 생성 없음)
@@ -94,6 +98,7 @@ export async function ClassBriefing({
     group.id,
     today,
     addDaysStr(today, -MISTAKE_WINDOW_DAYS),
+    previousBefore,
   );
   const nameById = new Map(data.members.map((member) => [member.id, member.name]));
   const lastLog = data.lastLog;
