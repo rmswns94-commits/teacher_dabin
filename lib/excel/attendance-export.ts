@@ -7,6 +7,8 @@
 // 원본 구조: 24행 "밴드"(=인쇄 1페이지) × 4개, 밴드마다 10명짜리 반 블록 2개.
 // 밴드 = [제목행 | 여백 | 열머리글(No./수업시간/이름/학년/수강료납부일/1~31) | 블록×2 | 범례]
 // 범례(출석 O · 지각 △ · 조퇴 Φ · 결석 X)와 "담당교사 : 김다빈 (Harvard)"는 template 고정값.
+// 원본 파일처럼 4페이지 전부 유지한다 — 데이터 없는 페이지에도 제목/열머리글/범례가
+// 그대로 인쇄되고, 학생 칸만 비어 있다 (미사용 밴드 숨김/제거 없음).
 //
 // exceljs는 서버(route handler)에서만 import한다.
 import ExcelJS from "exceljs";
@@ -15,14 +17,8 @@ import { attendanceTemplateBase64 } from "./attendance-template-data";
 
 export const ATTENDANCE_TEMPLATE = {
   sheetName: "출석부",
-  // 각 밴드의 제목행 (병합 A:C — "YYYY 년       MM 월"을 채운다)
+  // 각 밴드(=인쇄 페이지)의 제목행 (병합 A:C — 4페이지 전부 "YYYY 년       MM 월"을 채운다)
   bandHeaderRows: [1, 25, 49, 74],
-  // 각 밴드의 마지막 행(범례) — 사용한 밴드까지의 인쇄 영역 계산용
-  bandLastRows: [24, 48, 72, 97],
-  // 밴드 1/2/3의 시작 행 (뒤쪽 미사용 밴드 제거용 — 밴드3은 r73 여백행 포함)
-  bandTrimStartRows: [25, 49, 73],
-  lastRow: 97,
-  lastColumn: 36, // AJ
   // 반 블록의 첫 행 (블록당 10행, No. 1~10은 template에 고정)
   blockStartRows: [4, 14, 28, 38, 52, 62, 77, 87],
   blockSize: 10,
@@ -123,11 +119,12 @@ export async function fillAttendanceTemplate({
     }
   }
 
-  const bandsUsed = Math.max(1, Math.ceil(blocks.length / 2));
+  // 원본 파일과 동일하게 4페이지 전부 유지 — 데이터가 없는 페이지에도 제목
+  // ("YYYY 년 MM 월 / 출  석  부 / 담당교사")과 범례가 그대로 인쇄된다.
   const monthText = `${year} 년       ${String(month).padStart(2, "0")} 월`;
 
-  for (let band = 0; band < bandsUsed; band += 1) {
-    sheet.getCell(ATTENDANCE_TEMPLATE.bandHeaderRows[band], 1).value = monthText;
+  for (const headerRow of ATTENDANCE_TEMPLATE.bandHeaderRows) {
+    sheet.getCell(headerRow, 1).value = monthText;
   }
 
   blocks.forEach((block, blockIndex) => {
@@ -146,33 +143,6 @@ export async function fillAttendanceTemplate({
       }
     });
   });
-
-  // 미사용 밴드 정리: 병합 해제 → 값/스타일 제거 → 행 숨김.
-  // (exceljs spliceRows는 병합·행높이를 함께 옮기지 못해 파일이 애매하게 남는다 —
-  //  숨김 + printArea 제한으로 화면/인쇄 모두에서 미사용 밴드가 보이지 않게 한다)
-  if (bandsUsed < ATTENDANCE_TEMPLATE.bandHeaderRows.length) {
-    const fromRow = ATTENDANCE_TEMPLATE.bandTrimStartRows[bandsUsed - 1];
-    const merges = [...((sheet.model.merges ?? []) as string[])];
-
-    for (const merge of merges) {
-      const topRow = Number(/^[A-Z]+(\d+):/.exec(merge)?.[1] ?? 0);
-      if (topRow >= fromRow) {
-        sheet.unMergeCells(merge);
-      }
-    }
-
-    for (let rowNumber = fromRow; rowNumber <= ATTENDANCE_TEMPLATE.lastRow; rowNumber += 1) {
-      const row = sheet.getRow(rowNumber);
-      for (let column = 1; column <= ATTENDANCE_TEMPLATE.lastColumn; column += 1) {
-        const cell = row.getCell(column);
-        cell.value = null;
-        cell.style = {};
-      }
-      row.hidden = true;
-    }
-
-    sheet.pageSetup.printArea = `A1:AJ${ATTENDANCE_TEMPLATE.bandLastRows[bandsUsed - 1]}`;
-  }
 
   // 인쇄 배율을 원본과 동일하게 유지 — 원본 pageSetup은
   // <pageSetup paperSize="9" scale="85" orientation="landscape"/> 뿐인데,
