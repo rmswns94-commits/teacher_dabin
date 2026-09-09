@@ -174,6 +174,25 @@ export async function fillAttendanceTemplate({
     sheet.pageSetup.printArea = `A1:AJ${ATTENDANCE_TEMPLATE.bandLastRows[bandsUsed - 1]}`;
   }
 
+  // 인쇄 배율을 원본과 동일하게 유지 — 원본 pageSetup은
+  // <pageSetup paperSize="9" scale="85" orientation="landscape"/> 뿐인데,
+  // exceljs는 load 시 기본값(fitToWidth/fitToHeight 1 등)을 model에 merge해 저장 때
+  // 원본에 없던 attribute를 함께 쓴다. 일부 뷰어는 fitToWidth/fitToHeight가 존재하면
+  // 배율(85%) 대신 "1페이지 맞춤"으로 해석하므로, 원본에 없는 key는 제거한다.
+  const pageSetup = sheet.pageSetup as unknown as Record<string, unknown>;
+  for (const key of [
+    "fitToPage",
+    "fitToWidth",
+    "fitToHeight",
+    "firstPageNumber",
+    "useFirstPageNumber",
+    "copies",
+    "horizontalDpi",
+    "verticalDpi",
+  ]) {
+    delete pageSetup[key];
+  }
+
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
 }
