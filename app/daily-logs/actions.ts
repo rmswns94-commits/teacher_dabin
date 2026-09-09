@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import {
   deleteDailyLog,
+  deleteDraftDailyLog,
   DuplicateDailyLogError,
   getDailyLogDetailForCurrentUser,
   getGroupHistoryLogs,
@@ -14,6 +15,7 @@ import {
 import {
   deleteDailyLogDraftById,
   deleteDailyLogDraftsForIdentity,
+  deleteOwnedDailyLogDraft,
   upsertDailyLogDraft,
 } from "@/lib/supabase/queries/daily-log-drafts";
 import {
@@ -81,6 +83,48 @@ export async function saveDailyLogAction(input: DailyLogFormInput & { draftId?: 
 
 // 수업일지 삭제 (destructive — client에서 확인 dialog를 거친 뒤 호출).
 // 성공 시 class_date를 돌려줘 삭제 후에도 같은 날짜 목록으로 돌아갈 수 있게 한다.
+// [임시저장 삭제] — "작성 중인 일지" 목록의 특정 draft 하나를 버린다.
+// kind=log: status='draft' 일지 row (서버에서 status 재검증 — 완료 일지는 거부)
+// kind=autosave: daily_log_drafts row (JSON snapshot 하나 — child 없음)
+// 항상 id 단건 기준. group/date 조건의 broad delete는 하지 않는다 (중복 draft 개별 정리).
+export async function deleteWritingDraftAction(input: { kind: "log" | "autosave"; id: string }) {
+  if (
+    !input ||
+    (input.kind !== "log" && input.kind !== "autosave") ||
+    typeof input.id !== "string" ||
+    input.id.length === 0
+  ) {
+    return { error: "임시저장을 삭제하지 못했어요. 다시 시도해주세요." };
+  }
+
+  try {
+    if (input.kind === "log") {
+      await deleteDraftDailyLog(input.id);
+    } else {
+      await deleteOwnedDailyLogDraft(input.id);
+    }
+  } catch (error) {
+    console.error("deleteWritingDraftAction error", error);
+    return {
+      error:
+        error instanceof Error && error.message
+          ? error.message
+          : "임시저장을 삭제하지 못했어요. 다시 시도해주세요.",
+    };
+  }
+
+  revalidatePath("/daily-logs");
+  revalidatePath("/dashboard");
+  if (input.kind === "log") {
+    // draft 일지 row는 출결/미처리 보충/칭찬 정리를 동반하므로 관련 화면도 갱신
+    revalidatePath("/makeups");
+    revalidatePath("/students");
+    revalidatePath("/groups");
+  }
+
+  return { success: true as const };
+}
+
 export async function deleteDailyLogAction(dailyLogId: string) {
   let classDate: string;
 

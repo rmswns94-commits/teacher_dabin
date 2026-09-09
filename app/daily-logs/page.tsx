@@ -5,6 +5,7 @@ import { BookOpen, ChevronLeft, ChevronRight, NotebookPen, PencilLine, Plus } fr
 import { AppShell } from "@/components/app-shell";
 import { CalendarEventItem, EventCreateButton } from "@/components/calendar-events";
 import { DailyLogsFilter } from "@/components/daily-logs-filter";
+import { DraftDeleteButton } from "@/components/draft-delete-button";
 import { ExcelExportButton } from "@/components/excel-export";
 import { LessonLogDetail } from "@/components/lesson-log-detail";
 import { ScrollToSavedLog } from "@/components/scroll-to-saved-log";
@@ -302,10 +303,10 @@ export default async function DailyLogsPage({
               </div>
               <ul className="mt-1.5 space-y-0.5">
                 {writingDrafts.map((draft) => (
-                  <li key={draft.href}>
+                  <li key={`${draft.kind}-${draft.deleteId}`} className="flex items-center gap-1">
                     <Link
                       href={draft.href}
-                      className="flex min-h-10 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-xl px-2 py-1.5 text-sm transition hover:bg-[#f3ecfb]"
+                      className="flex min-h-10 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-xl px-2 py-1.5 text-sm transition hover:bg-[#f3ecfb]"
                     >
                       <span className="font-medium text-[#2d2928]">
                         {formatKoreanDate(draft.classDate, true)}
@@ -331,6 +332,14 @@ export default async function DailyLogsPage({
                         이어쓰기 →
                       </span>
                     </Link>
+                    {/* 특정 임시저장 하나만 버리기 — id 단건, 완료 일지 삭제와 별개 */}
+                    <DraftDeleteButton
+                      kind={draft.kind}
+                      deleteId={draft.deleteId}
+                      groupName={draft.groupName}
+                      groupIcon={groupIconOf(draft.groupIcon)}
+                      dateLabel={formatKoreanDate(draft.classDate, true)}
+                    />
                   </li>
                 ))}
               </ul>

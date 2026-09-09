@@ -502,6 +502,9 @@ async function syncHomeworkAssignments(
 export type WritingDraftItem = {
   kind: "log" | "autosave"; // log=수동 임시저장된 일지 row, autosave=아직 일지가 없는 자동 임시저장
   href: string;
+  // [임시저장 삭제]용 id — kind=log면 daily_logs.id, kind=autosave면 daily_log_drafts.id.
+  // 삭제는 항상 이 id 단건 기준 (group/date 조건의 broad delete 금지 — 중복 draft 개별 정리).
+  deleteId: string;
   classDate: string;
   groupName: string;
   groupIcon: string | null;
@@ -530,7 +533,7 @@ export async function getWritingDrafts() {
       .limit(10),
     supabase
       .from("daily_log_drafts")
-      .select("group_id, class_date, updated_at, class_groups(name, icon)")
+      .select("id, group_id, class_date, updated_at, class_groups(name, icon)")
       .eq("user_id", user.id)
       .is("daily_log_id", null)
       .order("updated_at", { ascending: false })
@@ -556,6 +559,7 @@ export async function getWritingDrafts() {
     items.push({
       kind: "log",
       href: `/daily-logs/${row.id}/edit`,
+      deleteId: row.id,
       classDate: row.class_date,
       groupName: group?.name ?? "수업 그룹",
       groupIcon: group?.icon ?? null,
@@ -564,6 +568,7 @@ export async function getWritingDrafts() {
   }
 
   for (const row of (draftsRes.data ?? []) as unknown as {
+    id: string;
     group_id: string;
     class_date: string;
     updated_at: string;
@@ -574,6 +579,7 @@ export async function getWritingDrafts() {
       kind: "autosave",
       // create 화면이 같은 identity의 autosave를 즉시 전체 복원한다
       href: `/daily-logs/new?groupId=${row.group_id}&date=${row.class_date}`,
+      deleteId: row.id,
       classDate: row.class_date,
       groupName: group?.name ?? "수업 그룹",
       groupIcon: group?.icon ?? null,
@@ -1075,6 +1081,39 @@ export async function saveDailyLog(input: DailyLogFormInput) {
 // - makeup_lessons.student_lesson_log_id = ON DELETE SET NULL → 미처리(required/scheduled)
 //   보충만 함께 삭제하고, 완료/취소된 보충 이력은 링크만 해제된 채 보존한다
 // 학생/그룹/스케줄/교재/캘린더 일정은 건드리지 않는다.
+// [임시저장 삭제] 전용: status='draft'인 일지 row만 삭제한다.
+// 완료(completed)된 수업일지는 이 경로로 절대 삭제 불가 — UI에서 버튼을 숨기는 것과 별개로
+// 서버에서 status를 재검증한다 (버튼을 누르는 사이 다른 탭에서 완료된 경우 포함).
+// child 정리는 검증된 기존 deleteDailyLog 경로 재사용 (미처리 보충만 삭제, 완료 이력 보존).
+export async function deleteDraftDailyLog(dailyLogId: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  const { data: existing, error } = await supabase
+    .from("daily_logs")
+    .select("id, status")
+    .eq("id", dailyLogId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("deleteDraftDailyLog read error", { code: error.code, message: error.message });
+    throw new Error("임시저장을 삭제하지 못했어요. 다시 시도해주세요.");
+  }
+  if (!existing) {
+    throw new Error("임시저장을 찾을 수 없어요.");
+  }
+  if (existing.status !== "draft") {
+    throw new Error("이미 완료된 수업일지는 임시저장 삭제로 지울 수 없어요.");
+  }
+
+  return deleteDailyLog(dailyLogId);
+}
+
 export async function deleteDailyLog(dailyLogId: string) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();

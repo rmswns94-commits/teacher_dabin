@@ -221,6 +221,47 @@ export async function upsertDailyLogDraft(input: {
   throw new Error("임시저장하지 못했어요.");
 }
 
+// [임시저장 삭제] 버튼용: id 단건 삭제 + 존재/소유를 명시 검증한다.
+// (deleteDailyLogDraftById는 내부 cleanup용이라 실패를 조용히 넘기지만,
+//  사용자 버튼은 "찾을 수 없음/실패"를 구분해 알려야 한다. broad delete 금지 — id 기준만.)
+export async function deleteOwnedDailyLogDraft(draftId: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  const { data: existing, error: readError } = await supabase
+    .from("daily_log_drafts")
+    .select("id")
+    .eq("id", draftId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (readError) {
+    console.error("deleteOwnedDailyLogDraft read error", {
+      code: readError.code,
+      message: readError.message,
+    });
+    throw new Error("임시저장을 삭제하지 못했어요. 다시 시도해주세요.");
+  }
+  if (!existing) {
+    throw new Error("임시저장을 찾을 수 없어요.");
+  }
+
+  const { error } = await supabase
+    .from("daily_log_drafts")
+    .delete()
+    .eq("id", draftId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("deleteOwnedDailyLogDraft error", { code: error.code, message: error.message });
+    throw new Error("임시저장을 삭제하지 못했어요. 다시 시도해주세요.");
+  }
+}
+
 export async function deleteDailyLogDraftById(draftId: string) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
