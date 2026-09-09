@@ -282,9 +282,11 @@ export default async function DailyLogsPage({
               <div className="flex flex-wrap gap-2">
                 <ExcelExportButton date={selectedDate} />
                 <Button className="gap-2" asChild>
+                  {/* generic 진입(bare): 작성 중 draft가 있으면 그 날짜로 resume되므로
+                      "오늘"이 아닌 generic 라벨을 쓴다 — 오늘 고정 진입은 오늘 탭 CTA가 담당 */}
                   <Link href="/daily-logs/new">
                     <Plus className="h-4 w-4" />
-                    오늘 수업 기록하기
+                    수업 일지 작성하기
                   </Link>
                 </Button>
               </div>

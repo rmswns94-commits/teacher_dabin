@@ -31,7 +31,7 @@ import { PendingButton } from "@/components/pending-button";
 import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatKoreanDate } from "@/lib/dates";
+import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import {
   getAvailableStudentsForGroup,
   getGroupByIdForCurrentUser,
@@ -455,7 +455,8 @@ export default async function GroupDetailPage({
 
                 <div className="border-t border-[#f0e7e2] pt-3">
                   <Button className="gap-2" asChild>
-                    <Link href={`/daily-logs/new?groupId=${group.id}`}>
+                    {/* "오늘" 라벨 그대로 — 이 그룹 + 오늘(KST) identity를 명시한다 */}
+                    <Link href={`/daily-logs/new?groupId=${group.id}&date=${todayDateString()}`}>
                       <NotebookPen className="h-4 w-4" /> 오늘 수업 기록하기
                     </Link>
                   </Button>

@@ -12,6 +12,7 @@ import {
 
 import { AppShell } from "@/components/app-shell";
 import { ClassBriefing, ClassBriefingSkeleton } from "@/components/class-briefing";
+import { TodayRefresher } from "@/components/today-refresher";
 import { Doodle, Tape } from "@/components/doodle";
 import { EncouragementCard } from "@/components/encouragement-card";
 import { ClassStatusPanel } from "@/components/current-class-remaining";
@@ -210,6 +211,9 @@ export default async function DashboardPage() {
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
         <div className="mx-auto w-full max-w-[1150px]">
+          {/* 자정이 지나거나 PWA가 복귀하면 새 날짜 기준으로 갱신 — CTA의 date=오늘 링크가
+              어제 날짜로 남지 않게 한다 (오늘 할 일 페이지와 같은 공용 컴포넌트) */}
+          <TodayRefresher />
           <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
             <div className="flex items-end gap-3">
               <div>
@@ -225,7 +229,10 @@ export default async function DashboardPage() {
               </div>
             </div>
             <Button className="gap-2" asChild>
-              <Link href="/daily-logs/new">
+              {/* 오늘 탭의 CTA는 항상 "오늘(KST)" 일지 작성으로 — date를 명시해
+                  bare 진입의 최신 draft resume(다른 날짜일 수 있음)을 타지 않는다.
+                  오늘 identity의 draft/일지는 그룹 선택 시 그대로 이어쓰기 된다. */}
+              <Link href={`/daily-logs/new?date=${today}`}>
                 <NotebookPen className="h-4 w-4" />
                 오늘 수업 기록하기
               </Link>
@@ -324,10 +331,12 @@ export default async function DashboardPage() {
                       {isCurrentClass ? (
                         <Button className="gap-2" asChild>
                           <Link
+                            // 오늘 수업 카드의 일지 identity = user + 이 그룹 + 오늘(KST).
+                            // date를 명시해 서버 fallback에 의존하지 않는다.
                             href={
                               heroTodayLog
                                 ? `/daily-logs/${heroTodayLog.id}/edit`
-                                : `/daily-logs/new?groupId=${hero.group.id}`
+                                : `/daily-logs/new?groupId=${hero.group.id}&date=${today}`
                             }
                           >
                             <NotebookPen className="h-4 w-4" /> 수업일지 열기 →
@@ -400,7 +409,7 @@ export default async function DashboardPage() {
                     href={
                       endedGroupLog
                         ? `/daily-logs/${endedGroupLog.id}/edit`
-                        : `/daily-logs/new?groupId=${lastEnded.group.id}`
+                        : `/daily-logs/new?groupId=${lastEnded.group.id}&date=${today}`
                     }
                   >
                     <NotebookPen className="h-3.5 w-3.5" /> 수업일지 작성하기
