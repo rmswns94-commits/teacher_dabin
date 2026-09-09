@@ -67,6 +67,18 @@ export const textbookSectionSchema = z.object({
   text: z.string().trim().max(2000, "내용은 2000자 이내로 입력해주세요."),
 });
 
+// 해야 할 일 항목 — stable id + 교재/날짜 optional, 내용 필수(빈 항목은 폼에서 제외)
+export const dailyLogTaskSchema = z.object({
+  id: z.string().min(1),
+  textbook: shortText(100, "해야 할 일 교재"),
+  content: z
+    .string()
+    .trim()
+    .min(1, "해야 할 일 내용을 입력해주세요.")
+    .max(1000, "해야 할 일은 1000자 이내로 입력해주세요."),
+  dueDate: dateString.optional().or(z.literal("")),
+});
+
 export const dailyLogSchema = z
   .object({
     dailyLogId: z.string().uuid().optional(),
@@ -85,6 +97,8 @@ export const dailyLogSchema = z
     taskContent: shortText(1000, "해야 할 일"),
     taskDate: dateString.optional().or(z.literal("")),
     taskTextbook: shortText(100, "해야 할 일 교재"),
+    // 해야 할 일 다중 항목 (개수 제한은 Todo 상한 정책과 별개 — 넉넉히)
+    tasks: z.array(dailyLogTaskSchema).max(50, "해야 할 일은 50개까지 기록할 수 있어요.").optional(),
     // 교재별 진도/다음 수업 계획 스냅샷 (내용이 있는 교재만 전송)
     textbookProgress: z.array(textbookSectionSchema).max(20).optional(),
     textbookPlans: z.array(textbookSectionSchema).max(20).optional(),
@@ -129,6 +143,16 @@ export const dailyLogSchema = z
     }
     if (value.taskDate && value.taskDate < value.classDate) {
       ctx.addIssue({ code: "custom", path: ["taskDate"], message: "해야 할 일 날짜는 수업일부터 선택할 수 있어요." });
+    }
+    // 다중 해야 할 일: 날짜는 선택 사항 — 골랐다면 수업일 당일부터 (비우면 수업일+1)
+    for (const [index, task] of (value.tasks ?? []).entries()) {
+      if (task.dueDate && task.dueDate < value.classDate) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["tasks", index, "dueDate"],
+          message: "해야 할 일 날짜는 수업일부터 선택할 수 있어요.",
+        });
+      }
     }
 
     const total = value.vocabTotal ? Number(value.vocabTotal) : null;

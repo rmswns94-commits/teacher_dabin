@@ -205,7 +205,9 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
             // 교재별 진도/계획 스냅샷 복원
             textbookProgress: log.textbook_progress ?? [],
             textbookPlans: log.textbook_plans ?? [],
-            // 해야 할 일 — 일지 row가 source (Todo 삭제/완료와 무관하게 폼 복원)
+            // 해야 할 일 — 일지 row가 source (Todo 삭제/완료와 무관하게 폼 복원).
+            // 다중 항목(tasks)이 있으면 그것, 없으면 legacy 단일 필드를 폼이 항목 1개로 변환
+            tasks: log.tasks ?? undefined,
             taskContent: log.task_content ?? "",
             taskDate: log.task_due_date ?? "",
             taskTextbook: log.task_textbook ?? "",

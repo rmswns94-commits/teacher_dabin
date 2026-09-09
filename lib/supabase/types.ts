@@ -134,6 +134,8 @@ export type DailyLogRecord = {
   task_content: string | null; // 해야 할 일 (완료 시 공용 Todo source='daily_log_task'로 연결)
   task_due_date: string | null; // 해야 할 일 날짜 "YYYY-MM-DD"
   task_textbook: string | null; // 해야 할 일에 연결한 교재 이름 스냅샷 (표시: "교재명 - 내용")
+  // 해야 할 일 다중 항목 — stable id 기반. null이면 legacy 단일 task_* 컬럼이 source.
+  tasks: { id: string; textbook?: string | null; content: string; dueDate?: string | null }[] | null;
   // 교재별 진도/다음 수업 계획 — [{ name, text }] 스냅샷. default_progress/next_lesson_plan은
   // 이 구조에서 파생된 "교재명 - 내용" mirror(+기타 메모)로 기록된다 (legacy 소비처 호환).
   textbook_progress: { name: string; text: string }[] | null;

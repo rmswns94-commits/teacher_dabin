@@ -1,4 +1,10 @@
 import { formatKoreanDateFull } from "@/lib/dates";
+import {
+  dailyLogTaskTodoId,
+  isDailyLogTaskTodoId,
+  meaningfulDailyLogTasks,
+  resolveDailyLogTaskDueDate,
+} from "@/lib/daily-log-tasks";
 import { buildHomeworkMirror } from "@/lib/homework-assignments";
 import { sortByKoreanName } from "@/lib/korean-sort";
 import { dedupeVocabWords } from "@/lib/vocab";
@@ -162,9 +168,9 @@ export type DailyLogDetail = DailyLogRecord & {
   makeups: MakeupLessonRecord[];
   // 오늘 숙제(구조화) — 완료일 ASC. migration 미적용/조회 실패 시 [] (화면은 항상 뜬다)
   homeworkAssignments: DailyLogHomeworkAssignmentRecord[];
-  // 이 일지의 "해야 할 일" linked Todo (공용 preparation 항목 — 복제 아님, 같은 row 상태).
-  // 삭제(dismissed)됐거나 없으면 null. 조회 실패 시에도 null (화면은 항상 뜬다)
-  linkedTask: { text: string; dueDate: string | null; completed: boolean } | null;
+  // 이 일지의 "해야 할 일" linked Todo들 (공용 preparation 항목 — 복제 아님, 같은 row 상태).
+  // 삭제(dismissed)된 항목은 제외. 조회 실패 시 [] (화면은 항상 뜬다)
+  linkedTasks: { id: string; text: string; textbook: string | null; dueDate: string | null; completed: boolean }[];
 };
 
 // options.withMakeups=false: 보충 정보가 필요 없는 소비처(이전 기록 패널의 학생 기록 lazy 조회)가
@@ -245,8 +251,8 @@ export async function getDailyLogDetailForCurrentUser(
     homeworkAssignments = (hwRows ?? []) as DailyLogHomeworkAssignmentRecord[];
   }
 
-  // 해야 할 일 linked Todo — 그룹 preparation_items에서 이 일지 identity로 1건 조회 (batch jsonb 1쿼리)
-  let linkedTask: DailyLogDetail["linkedTask"] = null;
+  // 해야 할 일 linked Todo들 — 그룹 preparation_items에서 이 일지 소유 항목 조회 (batch jsonb 1쿼리)
+  let linkedTasks: DailyLogDetail["linkedTasks"] = [];
   const { data: prepGroup, error: prepError } = await supabase
     .from("class_groups")
     .select("preparation_items")
@@ -260,16 +266,15 @@ export async function getDailyLogDetailForCurrentUser(
       message: prepError.message,
     });
   } else {
-    const taskItem = ((prepGroup?.preparation_items ?? []) as PreparationItem[]).find(
-      (item) => item.id === taskPreparationItemId(dailyLogId) && !item.dismissed,
-    );
-    if (taskItem) {
-      linkedTask = {
-        text: taskItem.text,
-        dueDate: taskItem.dueDate ?? null,
-        completed: taskItem.completed,
-      };
-    }
+    linkedTasks = ((prepGroup?.preparation_items ?? []) as PreparationItem[])
+      .filter((item) => isDailyLogTaskTodoId(item.id, dailyLogId) && !item.dismissed)
+      .map((item) => ({
+        id: item.id,
+        text: item.text,
+        textbook: item.textbook ?? null,
+        dueDate: item.dueDate ?? null,
+        completed: item.completed,
+      }));
   }
 
   return {
@@ -278,7 +283,7 @@ export async function getDailyLogDetailForCurrentUser(
     lessonLogs,
     makeups,
     homeworkAssignments,
-    linkedTask,
+    linkedTasks,
   } as DailyLogDetail;
 }
 
@@ -383,6 +388,102 @@ async function syncLinkedPreparation(
       .eq("user_id", userId);
     if (writeError) {
       console.error("syncLinkedPreparation write error", writeError);
+    }
+  }
+}
+
+// ── 해야 할 일(다중 항목) ↔ 공용 Todo 동기화 ─────────────────────────
+// 항목당 Todo 최대 1개 (id = dailyLogTaskTodoId — stable task id 기반, index 아님).
+// meaningful(내용 있는) 항목만 대상이고, 폼에서 사라진 항목의 Todo는 제거한다.
+// 수동 Todo/다른 일지의 Todo는 id prefix가 다르므로 절대 건드리지 않는다.
+// read 1회 + (변경 시) write 1회 — 항목 수만큼 반복 쿼리하지 않는다.
+async function syncDailyLogTaskTodos(
+  supabase: NonNullable<Awaited<ReturnType<typeof createServerSupabaseClient>>>,
+  userId: string,
+  groupId: string,
+  dailyLogId: string,
+  lessonDate: string,
+  tasks: { id: string; textbook?: string | null; content: string; dueDate?: string | null }[],
+) {
+  const { data: groupRow, error: readError } = await supabase
+    .from("class_groups")
+    .select("preparation_items")
+    .eq("id", groupId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (readError || !groupRow) {
+    console.error("syncDailyLogTaskTodos read error", readError);
+    return;
+  }
+
+  const items = (groupRow.preparation_items ?? []) as PreparationItem[];
+  const expected = meaningfulDailyLogTasks(tasks).map((task) => ({
+    todoId: dailyLogTaskTodoId(dailyLogId, task.id),
+    text: task.content.trim(),
+    dueDate: resolveDailyLogTaskDueDate(task.dueDate || null, lessonDate),
+    textbook: task.textbook?.trim() || null,
+  }));
+  const expectedById = new Map(expected.map((task) => [task.todoId, task]));
+
+  let changed = false;
+  const next: PreparationItem[] = [];
+
+  for (const item of items) {
+    if (!isDailyLogTaskTodoId(item.id, dailyLogId)) {
+      next.push(item); // 수동/다른 source/다른 일지 항목은 그대로
+      continue;
+    }
+    const target = expectedById.get(item.id);
+    if (!target) {
+      changed = true; // 폼에서 삭제되었거나 내용이 비워진 항목 → Todo 제거 (tombstone 포함)
+      continue;
+    }
+    expectedById.delete(item.id);
+    const unchanged =
+      item.text === target.text &&
+      (item.dueDate ?? null) === target.dueDate &&
+      (item.textbook ?? null) === target.textbook;
+    if (unchanged) {
+      next.push(item); // dismissed tombstone도 내용이 그대로면 부활시키지 않는다
+      continue;
+    }
+    // 실제 변경 → live 항목으로 갱신 (완료 상태는 dismissed가 아니었을 때만 보존)
+    changed = true;
+    next.push({
+      id: item.id,
+      text: target.text,
+      completed: !item.dismissed ? item.completed : false,
+      completedAt: !item.dismissed ? item.completedAt ?? null : null,
+      dueDate: target.dueDate,
+      source: "daily_log_task",
+      sourceDailyLogId: dailyLogId,
+      ...(target.textbook ? { textbook: target.textbook } : {}),
+    });
+  }
+
+  // 새 항목 생성 (기존에 없던 task)
+  for (const target of expectedById.values()) {
+    changed = true;
+    next.push({
+      id: target.todoId,
+      text: target.text,
+      completed: false,
+      dueDate: target.dueDate,
+      source: "daily_log_task",
+      sourceDailyLogId: dailyLogId,
+      ...(target.textbook ? { textbook: target.textbook } : {}),
+    });
+  }
+
+  if (changed) {
+    const { error: writeError } = await supabase
+      .from("class_groups")
+      .update({ preparation_items: next })
+      .eq("id", groupId)
+      .eq("user_id", userId);
+    if (writeError) {
+      console.error("syncDailyLogTaskTodos write error", writeError);
     }
   }
 }
@@ -724,6 +825,14 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   // homework_due_date는 legacy 입력이 있을 때만 유지 → mirror는 Todo 연동을 발동시키지 않는다.
   const homeworkAssignments = input.homeworkAssignments ?? [];
   const legacyHomework = input.homework?.trim() || "";
+
+  // 해야 할 일 다중 항목 정규화 — 내용 없는 항목(교재/날짜만)은 저장/Todo 대상이 아니다
+  const taskItems = meaningfulDailyLogTasks(input.tasks ?? []).map((task) => ({
+    id: task.id,
+    textbook: task.textbook?.trim() || null,
+    content: task.content.trim(),
+    dueDate: task.dueDate || null,
+  }));
   const homeworkText =
     legacyHomework || (homeworkAssignments.length > 0 ? buildHomeworkMirror(homeworkAssignments) : "");
   const homeworkDueDate = legacyHomework ? input.homeworkDueDate || null : null;
@@ -741,10 +850,25 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     homework_due_date: homeworkDueDate,
     next_lesson_plan: input.nextLessonPlan?.trim() || null,
     next_plan_date: input.nextPlanDate || null,
-    // 해야 할 일 — 일지 row가 폼 복원의 source (Todo는 완료 시에만 sync)
-    task_content: input.taskContent?.trim() || null,
-    task_due_date: input.taskContent?.trim() ? input.taskDate || null : null,
-    task_textbook: input.taskContent?.trim() ? input.taskTextbook?.trim() || null : null,
+    // 해야 할 일 — 일지 row가 폼 복원의 source (Todo는 완료 시에만 sync).
+    // 다중 항목(tasks jsonb)이 canonical이고, legacy task_* 컬럼에는 첫 항목을 미러한다
+    // (tasks 미전송 legacy 경로에서는 기존 단일 필드 동작 그대로).
+    tasks: taskItems.length > 0 ? taskItems : null,
+    task_content: input.tasks
+      ? taskItems[0]?.content ?? null
+      : input.taskContent?.trim() || null,
+    task_due_date: input.tasks
+      ? taskItems[0]
+        ? resolveDailyLogTaskDueDate(taskItems[0].dueDate, input.classDate)
+        : null
+      : input.taskContent?.trim()
+        ? input.taskDate || null
+        : null,
+    task_textbook: input.tasks
+      ? taskItems[0]?.textbook ?? null
+      : input.taskContent?.trim()
+        ? input.taskTextbook?.trim() || null
+        : null,
     // 교재별 진도/계획 스냅샷 — default_progress/next_lesson_plan에는 폼이 합성한
     // "교재명 - 내용" mirror(+기타 메모)가 담겨 legacy 소비처와 호환된다
     textbook_progress: (input.textbookProgress ?? []).length > 0 ? input.textbookProgress : null,
@@ -833,18 +957,31 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   // 임시저장(draft)은 Todo side effect 없이 일지 데이터만 저장 (autosave는 애초에 이 경로를 안 탐).
   // 삭제된 항목은 dismissed tombstone이라 내용/날짜가 그대로면 단순 재저장으로 부활하지 않는다.
   if (input.status === "completed") {
-    const taskText = input.taskContent?.trim() ?? "";
-    await syncLinkedPreparation(
-      supabase,
-      user.id,
-      input.groupId,
-      dailyLogId!,
-      "daily_log_task",
-      taskText,
-      taskText ? input.taskDate || null : null,
-      true,
-      taskText ? input.taskTextbook?.trim() || null : null,
-    );
+    if (input.tasks) {
+      // 다중 항목 경로: meaningful 항목당 Todo 1개 (stable id — Final Save에서만, idempotent)
+      await syncDailyLogTaskTodos(
+        supabase,
+        user.id,
+        input.groupId,
+        dailyLogId!,
+        input.classDate,
+        taskItems,
+      );
+    } else {
+      // legacy 단일 경로 (tasks 미전송 소비처 호환 — 기존 동작 그대로)
+      const taskText = input.taskContent?.trim() ?? "";
+      await syncLinkedPreparation(
+        supabase,
+        user.id,
+        input.groupId,
+        dailyLogId!,
+        "daily_log_task",
+        taskText,
+        taskText ? input.taskDate || null : null,
+        true,
+        taskText ? input.taskTextbook?.trim() || null : null,
+      );
+    }
   }
 
   // 오늘 숙제(구조화) row sync — id 기반 idempotent (재시도/저장 버튼 중복에도 안전)
@@ -1223,14 +1360,14 @@ export async function deleteDailyLog(dailyLogId: string) {
     "",
     null,
   );
-  await syncLinkedPreparation(
+  // 이 일지가 소유한 해야 할 일 Todo 전부 제거 (legacy 단일 + 다중 항목 — 수동 Todo는 불변)
+  await syncDailyLogTaskTodos(
     supabase,
     user.id,
     existing.group_id as string,
     dailyLogId,
-    "daily_log_task",
-    "",
-    null,
+    existing.class_date as string,
+    [],
   );
 
   return existing.class_date as string;
