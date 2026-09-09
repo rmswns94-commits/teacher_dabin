@@ -469,7 +469,7 @@ export function DailyLogForm({
   previousReflection = null,
   textbooks = [],
   examPeriod = false,
-  school = null,
+  schools = [],
 }: {
   dailyLogId?: string;
   classDate: string;
@@ -483,8 +483,10 @@ export function DailyLogForm({
   // 시험 기간(그룹 상태): ON이면 새 숙제/다음 계획/해야 할 일이 학교 context를 쓴다.
   // 이미 작성된 항목의 context(저장 필드)는 바꾸지 않는다 — 새 항목에만 적용.
   examPeriod?: boolean;
-  // 그룹 학교 이름 (없으면 학교 미등록 안내 — 가짜 값 생성 없이 content만 저장)
-  school?: string | null;
+  // 선택 가능한 학교 목록 — source는 "이 그룹 소속 학생들의 students.school"
+  // (null/빈 값 제외, 중복 제거, 가나다순 — 페이지가 uniqueSchoolList로 만들어 전달).
+  // 비어 있으면 "등록된 학교가 없어요" 안내만 — 작성/저장은 그대로 가능(가짜 값 생성 없음).
+  schools?: string[];
   // 서버에서 발견한 자동 임시저장 draft (있으면 복구 배너 표시 — 자동 덮어쓰기 없음)
   draft?: { id: string; updatedAt: string; payload: unknown } | null;
   // [수업 일지 작성하기] resume 진입: 10분 창과 무관하게 draft를 즉시 전체 복원
@@ -1063,11 +1065,10 @@ export function DailyLogForm({
 
   // 항목의 context 판별 — 저장된 필드가 identity: school이 있으면 학교 context(과거 ON 기록 보존),
   // 없고 시험 기간 ON+교재도 없으면(신규 ON 항목) 학교 context. 그 외에는 교재 context.
-  const schoolName = school?.trim() ?? "";
   const isSchoolContextItem = (item: { textbook: string; school: string }) =>
     Boolean(item.school) || (examPeriod && !item.textbook);
 
-  // 다음 수업 계획 편집기 구성 — 시험 기간 ON이면 학교 편집기가 기본이고,
+  // 다음 수업 계획 편집기 구성 — 시험 기간 ON이면 학교별(학생 학교 목록) 편집기가 기본이고,
   // 이미 내용이 있는 교재 계획은 데이터 보존을 위해 함께 표시한다 (자동 변환/삭제 없음).
   // OFF이면 교재 편집기가 기본, 내용 있는 학교 계획(과거 ON draft)은 함께 표시.
   const planTextbookNames = examPeriod
@@ -1075,22 +1076,56 @@ export function DailyLogForm({
     : textbooks;
   const planSchoolNames = (() => {
     const names = Object.keys(schoolPlanMap).filter((name) => (schoolPlanMap[name] ?? "").trim());
-    if (examPeriod && schoolName && !names.includes(schoolName)) {
-      names.push(schoolName);
+    if (examPeriod) {
+      for (const name of schools) {
+        if (!names.includes(name)) {
+          names.push(name);
+        }
+      }
     }
     return names;
   })();
   const showStructuredPlans = planTextbookNames.length > 0 || planSchoolNames.length > 0;
 
-  // 학교 context chip (읽기 전용 — 학교 미등록이면 안내만, 가짜 값 저장 없음)
-  const schoolContextChip = (label: string) => (
-    <div className="flex items-center gap-2 text-xs font-medium text-[#7c6d69]">
-      <span className="shrink-0">학교</span>
-      <span className="flex min-h-[36px] w-full min-w-0 items-center truncate rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-2.5 text-xs font-medium text-[#a2643c]">
-        {label || "학교 미등록 — 수업 그룹에서 학교를 먼저 등록해주세요."}
-      </span>
-    </div>
-  );
+  // 학교 context 컨트롤: 학생 학교가 여러 개면 Select(ON에서만), 1개면 자동 chip,
+  // 0개면 안내 chip (작성/저장은 가능 — 가짜 값 저장 없음). 과거 스냅샷 school은
+  // 목록에 없어도 값을 보존해 표시한다 (학생 학교가 나중에 바뀌어도 기록 불변).
+  const schoolContextControl = (
+    value: string,
+    onChange: (next: string) => void,
+    ariaLabel: string,
+  ) => {
+    if (examPeriod && schools.length > 1) {
+      const options = value && !schools.includes(value) ? [value, ...schools] : schools;
+      return (
+        <label className="flex items-center gap-2 text-xs font-medium text-[#7c6d69]">
+          <span className="shrink-0">학교</span>
+          <select
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            aria-label={ariaLabel}
+            className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-2.5 py-1.5 text-xs font-medium text-[#a2643c] outline-none"
+          >
+            <option value="">학교 선택</option>
+            {options.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+      );
+    }
+    const label = value || schools[0] || "";
+    return (
+      <div className="flex items-center gap-2 text-xs font-medium text-[#7c6d69]">
+        <span className="shrink-0">학교</span>
+        <span className="flex min-h-[36px] w-full min-w-0 items-center truncate rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-2.5 text-xs font-medium text-[#a2643c]">
+          {label || "등록된 학교가 없어요 — 학생 정보에 학교를 등록해주세요."}
+        </span>
+      </div>
+    );
+  };
 
   // [전체 학생에게 적용] — 버튼 한 번으로 모든 교재 진도(+기타 메모)를 전 학생에게.
   // 결석 학생은 기존 정책대로 놓친 진도 기본값으로만 채운다.
@@ -1545,8 +1580,15 @@ export function DailyLogForm({
                     {/* 내용 칸 아래에 완료일 카드가 오는 세로 배치 (화면 폭과 무관) */}
                     <div className="flex min-w-0 flex-col gap-2">
                       {isSchoolContextItem(item) ? (
-                        // 시험 기간 학교 context (저장된 school 또는 신규 ON 항목) — 읽기 전용 chip
-                        schoolContextChip(item.school || schoolName)
+                        // 시험 기간 학교 context — 학생 학교가 여러 개면 Select, 1개면 자동
+                        schoolContextControl(
+                          item.school,
+                          (next) =>
+                            setAssignments((prev) =>
+                              prev.map((it) => (it.key === item.key ? { ...it, school: next } : it)),
+                            ),
+                          `숙제 ${index + 1} 학교 선택`,
+                        )
                       ) : textbooks.length > 0 ? (
                         // 숙제별 교재 연결(선택) — 같은 교재로 여러 숙제 가능, 자동 생성 없음
                         <label className="flex items-center gap-2 text-xs font-medium text-[#7c6d69]">
@@ -1630,9 +1672,9 @@ export function DailyLogForm({
                         content: "",
                         // 기본 완료일 = 이 그룹의 다음 실제 수업일 (시간표 없으면 빈 값 — 직접 선택)
                         dueDate: nextClassDateAfter(scheduleDays, classDate) ?? "",
-                        // 시험 기간 ON: 학교 context / OFF: 교재 1개면 기본값, 여러 개면 직접 선택
+                        // 시험 기간 ON: 학교 context(학생 학교 1개면 자동) / OFF: 교재 context
                         textbook: examPeriod ? "" : textbooks.length === 1 ? textbooks[0] : "",
-                        school: examPeriod ? schoolName : "",
+                        school: examPeriod && schools.length === 1 ? schools[0] : "",
                       },
                     ])
                   }
@@ -1787,7 +1829,14 @@ export function DailyLogForm({
                     >
                       <div className="flex min-w-0 flex-col gap-2">
                         {isSchoolContextItem(task) ? (
-                          schoolContextChip(task.school || schoolName)
+                          schoolContextControl(
+                            task.school,
+                            (next) =>
+                              setTasks((prev) =>
+                                prev.map((it) => (it.key === task.key ? { ...it, school: next } : it)),
+                              ),
+                            `할 일 ${index + 1} 학교 선택`,
+                          )
                         ) : textbooks.length > 0 ? (
                           <label className="flex items-center gap-2 text-xs font-medium text-[#7c6d69]">
                             <span className="shrink-0">교재</span>
@@ -1864,9 +1913,9 @@ export function DailyLogForm({
                           key: globalThis.crypto.randomUUID(),
                           // stable id를 추가 시점에 발급 — Todo 소유 identity (삭제/재정렬에도 안정)
                           id: globalThis.crypto.randomUUID(),
-                          // 시험 기간 ON: 새 항목은 학교 context (기존 항목은 그대로)
+                          // 시험 기간 ON: 새 항목은 학교 context (학생 학교 1개면 자동)
                           textbook: "",
-                          school: examPeriod ? schoolName : "",
+                          school: examPeriod && schools.length === 1 ? schools[0] : "",
                           content: "",
                           dueDate: "",
                         },

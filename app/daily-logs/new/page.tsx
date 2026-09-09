@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { sortByKoreanName } from "@/lib/korean-sort";
+import { uniqueSchoolList } from "@/lib/textbooks";
 import {
   getActiveDraftResumeTarget,
   getDailyLogDraft,
@@ -185,9 +186,12 @@ export default async function NewDailyLogPage({
                 .split("\n")
                 .map((line) => line.trim())
                 .filter(Boolean)}
-              // 시험 기간 ON이면 숙제/다음 계획/해야 할 일이 학교 context를 쓴다
+              // 시험 기간 ON이면 숙제/다음 계획/해야 할 일이 학교 context를 쓴다.
+              // 학교 목록 source = 이 그룹 소속 학생들의 students.school (추가 쿼리 0)
               examPeriod={selectedGroup.is_exam_period}
-              school={selectedGroup.school}
+              schools={uniqueSchoolList(
+                groupStudentsRaw.filter((student) => !student.archived).map((student) => student.school),
+              )}
               draft={
                 draftRow
                   ? { id: draftRow.id, updatedAt: draftRow.updated_at, payload: draftRow.payload }

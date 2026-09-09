@@ -61,15 +61,6 @@ export function GroupCreateForm({
           </div>
 
           <label className="block md:col-span-2">
-            <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">학교 (선택)</span>
-            <input
-              name="school"
-              className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
-              placeholder="다빈중학교"
-            />
-          </label>
-
-          <label className="block md:col-span-2">
             <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">메모 (선택)</span>
             <input
               name="memo"

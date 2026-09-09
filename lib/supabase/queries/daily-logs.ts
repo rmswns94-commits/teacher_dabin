@@ -163,8 +163,9 @@ export type StudentLessonLogWithStudent = StudentLessonLogRecord & {
 
 export type DailyLogDetail = DailyLogRecord & {
   // textbook: 수업 제목 옆 "교재 LIST" 보조 버튼용 (줄바꿈 구분 여러 권 — 그룹 상세와 동일 포맷)
-  // school/is_exam_period: 시험 기간 context용 (edit 화면의 새 항목 기본 context 결정)
-  group: Pick<ClassGroupRecord, "id" | "name" | "grade" | "textbook" | "school" | "is_exam_period"> | null;
+  // is_exam_period: 시험 기간 context용 (edit 화면의 새 항목 기본 context 결정 —
+  // 학교 목록은 그룹 컬럼이 아니라 그룹 소속 학생들의 students.school에서 유도한다)
+  group: Pick<ClassGroupRecord, "id" | "name" | "grade" | "textbook" | "is_exam_period"> | null;
   lessonLogs: StudentLessonLogWithStudent[];
   makeups: MakeupLessonRecord[];
   // 오늘 숙제(구조화) — 완료일 ASC. migration 미적용/조회 실패 시 [] (화면은 항상 뜬다)
@@ -189,7 +190,7 @@ export async function getDailyLogDetailForCurrentUser(
 
   const { data, error } = await supabase
     .from("daily_logs")
-    .select("*, class_groups(id, name, grade, textbook, school, is_exam_period), student_lesson_logs(*, students(id, name, grade))")
+    .select("*, class_groups(id, name, grade, textbook, is_exam_period), student_lesson_logs(*, students(id, name, grade))")
     .eq("id", dailyLogId)
     .eq("user_id", user.id)
     .maybeSingle();

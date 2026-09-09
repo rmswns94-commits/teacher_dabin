@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate } from "@/lib/dates";
 import { sortByKoreanName } from "@/lib/korean-sort";
 import { mergeLegacyLessonContent } from "@/lib/progress";
-import { buildTextbookSectionsText, stripDerivedPrefix } from "@/lib/textbooks";
+import { buildTextbookSectionsText, stripDerivedPrefix, uniqueSchoolList } from "@/lib/textbooks";
 import { getDailyLogDraft } from "@/lib/supabase/queries/daily-log-drafts";
 import {
   getDailyLogDetailForCurrentUser,
@@ -185,9 +185,12 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
             textbook: hw.textbook ?? "",
             school: hw.school ?? "",
           }))}
-          // 시험 기간 context — 새 항목의 기본 context 결정용 (기존 항목은 저장 필드 보존)
+          // 시험 기간 context — 새 항목의 기본 context 결정용 (기존 항목은 저장 필드 보존).
+          // 학교 목록 source = 이 그룹 소속 학생들의 students.school (이미 조회한 멤버 재사용)
           examPeriod={log.group?.is_exam_period ?? false}
-          school={log.group?.school ?? null}
+          schools={uniqueSchoolList(
+            currentMembers.filter((member) => !member.archived).map((member) => member.school),
+          )}
           initial={{
             title: log.title ?? "",
             // migration 미적용 legacy row도 수업 내용을 잃지 않게 병합해 편집한다

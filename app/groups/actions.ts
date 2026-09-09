@@ -137,7 +137,6 @@ export async function createGroupAction(_prevState: GroupCreateState, formData: 
     grade: String(formData.get("grade") ?? ""),
     memo: String(formData.get("memo") ?? ""),
     textbook: parseTextbooks(formData),
-    school: String(formData.get("school") ?? ""),
   };
 
   const parsed = classGroupSchema.safeParse(payload);
@@ -176,7 +175,6 @@ export async function createGroupAction(_prevState: GroupCreateState, formData: 
       grade: parsed.data.grade,
       memo: parsed.data.memo || null,
       textbook: parsed.data.textbook || null,
-      school: parsed.data.school || null,
       icon: parseGroupIcon(formData),
       schedules: scheduleResult.rows,
     });
@@ -198,7 +196,6 @@ export async function updateGroupAction(groupId: string, formData: FormData) {
     grade: String(formData.get("grade") ?? ""),
     memo: String(formData.get("memo") ?? ""),
     textbook: parseTextbooks(formData),
-    school: String(formData.get("school") ?? ""),
     highlightMemo: String(formData.get("highlightMemo") ?? ""),
   };
 
@@ -218,7 +215,6 @@ export async function updateGroupAction(groupId: string, formData: FormData) {
     grade: parsed.data.grade,
     memo: parsed.data.memo || null,
     textbook: parsed.data.textbook || null,
-    school: parsed.data.school || null,
     highlightMemo: parsed.data.highlightMemo || null,
     icon: parseGroupIcon(formData),
   });

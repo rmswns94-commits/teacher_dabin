@@ -7,8 +7,6 @@ export const classGroupSchema = z.object({
   grade: z.enum(gradeValues, { message: "학년을 선택해주세요." }),
   memo: z.string().trim().max(500, "메모는 500자 이내로 입력해주세요.").optional().or(z.literal("")),
   textbook: z.string().trim().max(1000, "교재 정보가 너무 길어요.").optional().or(z.literal("")),
-  // 학교 이름 (선택) — 시험 기간 ON일 때 숙제/다음 계획/해야 할 일의 context로 사용
-  school: z.string().trim().max(100, "학교 이름은 100자 이내로 입력해주세요.").optional().or(z.literal("")),
   highlightMemo: z.string().trim().max(500, "하이라이트 메모는 500자 이내로 입력해주세요.").optional().or(z.literal("")),
 });
 

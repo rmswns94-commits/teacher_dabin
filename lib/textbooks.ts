@@ -27,6 +27,23 @@ export function formatTextbookLinked(name: string | null | undefined, content: s
   return trimmedName ? `${trimmedName} - ${content}` : content;
 }
 
+// 시험 기간 ON에서 선택 가능한 학교 목록 — source는 "현재 그룹 소속 학생들의 students.school".
+// null/빈 값/공백 제외, trim 기준 중복 제거(첫 등장 표기 유지 — 저장값은 변경하지 않음), 가나다 정렬.
+const koreanCollator = new Intl.Collator("ko-KR", { sensitivity: "base", numeric: true });
+
+export function uniqueSchoolList(values: (string | null | undefined)[]): string[] {
+  const seen = new Set<string>();
+  const schools: string[] = [];
+  for (const value of values) {
+    const name = value?.trim();
+    if (name && !seen.has(name)) {
+      seen.add(name);
+      schools.push(name);
+    }
+  }
+  return schools.sort((a, b) => koreanCollator.compare(a, b));
+}
+
 // 항목의 연결 context label — 교재(textbook) 또는 학교(school, 시험 기간 기록) 이름 스냅샷.
 // 학교를 교재 필드에 넣지 않고 별도 필드로 저장하므로, 저장된 필드 자체가 context identity다
 // (현재 그룹의 시험 기간 상태와 무관하게 historical 표시가 보존된다). 둘 다 없으면 null.

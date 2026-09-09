@@ -141,7 +141,6 @@ export async function createGroup(input: {
   grade: StudentGrade;
   memo?: string | null;
   textbook?: string | null;
-  school?: string | null;
   icon?: string | null;
 }) {
   const supabase = await createServerSupabaseClient();
@@ -159,7 +158,6 @@ export async function createGroup(input: {
       grade: input.grade,
       memo: input.memo?.trim() || null,
       textbook: input.textbook?.trim() || null,
-      school: input.school?.trim() || null,
       icon: input.icon || null,
     })
     .select()
@@ -181,7 +179,6 @@ export async function createGroupWithDetails(input: {
   grade: StudentGrade;
   memo?: string | null;
   textbook?: string | null;
-  school?: string | null;
   icon?: string | null;
   schedules: { dayOfWeek: number; startTime: string; endTime: string }[];
 }) {
@@ -242,7 +239,6 @@ export async function updateGroup(groupId: string, input: {
   grade: StudentGrade;
   memo?: string | null;
   textbook?: string | null;
-  school?: string | null;
   highlightMemo?: string | null;
   icon?: string | null;
 }) {
@@ -260,7 +256,6 @@ export async function updateGroup(groupId: string, input: {
       grade: input.grade,
       memo: input.memo?.trim() || null,
       textbook: input.textbook?.trim() || null,
-      school: input.school?.trim() || null,
       highlight_memo: input.highlightMemo?.trim() || null,
       icon: input.icon || null,
     })

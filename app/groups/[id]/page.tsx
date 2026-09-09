@@ -137,7 +137,7 @@ export default async function GroupDetailPage({
         <PageHeader
           backHref="/groups"
           title={`${groupIconOf(group.icon)} ${group.name}`}
-          description={`${gradeDisplay[group.grade]} · 학생 ${members.length}명${group.school ? ` · ${group.school}` : ""}${group.memo ? ` · ${group.memo}` : ""}`}
+          description={`${gradeDisplay[group.grade]} · 학생 ${members.length}명${group.memo ? ` · ${group.memo}` : ""}`}
           // 시험 기간 ON이면 새 수업일지의 숙제/다음 계획/해야 할 일이 학교 context를 쓴다
           action={<ExamPeriodToggle groupId={group.id} isOn={group.is_exam_period} />}
         />
@@ -250,18 +250,6 @@ export default async function GroupDetailPage({
                     </select>
                   </label>
 
-                  <label className="block md:col-span-2">
-                    <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">학교 (선택)</span>
-                    <input
-                      name="school"
-                      defaultValue={group.school ?? ""}
-                      placeholder="다빈중학교"
-                      className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
-                    />
-                    <span className="mt-1 block text-[11px] text-[#a79996]">
-                      시험 기간 ON일 때 숙제·다음 수업 계획·해야 할 일이 이 학교 기준으로 기록돼요.
-                    </span>
-                  </label>
                 </div>
 
                 <div>
