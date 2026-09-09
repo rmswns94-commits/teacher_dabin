@@ -40,7 +40,7 @@ export function LessonLogDetail({
   timeRange: string | null;
   praises?: { student_id: string; category: string; comment?: string | null }[];
 }) {
-  const counts = { present: 0, late: 0, absent: 0 };
+  const counts = { present: 0, late: 0, early_leave: 0, absent: 0 };
   for (const log of detail.lessonLogs) {
     counts[log.attendance] += 1;
   }
@@ -263,9 +263,10 @@ export function LessonLogDetail({
 
         {/* 출결 + 학생별 기록 */}
         <SectionHeading>출결 · 학생 기록</SectionHeading>
-        <div className="mt-2 flex items-center gap-1.5 text-xs">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
           <span className="rounded-full bg-[#e4f4ec] px-2 py-1 tabular-nums text-[#3d7f64]">출석 {counts.present}</span>
           <span className="rounded-full bg-[#fdf3e4] px-2 py-1 tabular-nums text-[#94702f]">지각 {counts.late}</span>
+          <span className="rounded-full bg-[#f3eefc] px-2 py-1 tabular-nums text-[#614ea7]">조퇴 {counts.early_leave}</span>
           <span className="rounded-full bg-[#f9e7e5] px-2 py-1 tabular-nums text-[#a26660]">결석 {counts.absent}</span>
         </div>
 

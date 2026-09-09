@@ -8,6 +8,7 @@ import {
   CalendarCheck,
   ChevronDown,
   ChevronRight,
+  ClipboardCheck,
   FileText,
   FolderKanban,
   Heart,
@@ -107,6 +108,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
     label: "학생 관리",
     items: [
       { label: "학생", href: "/students", icon: Users },
+      { label: "출결 현황", href: "/attendance", icon: ClipboardCheck },
       { label: "성장노트", href: "/growth-notes", icon: Sprout },
     ],
   },

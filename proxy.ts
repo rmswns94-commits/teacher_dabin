@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 const protectedRoutes = [
   "/dashboard",
   "/students",
+  "/attendance",
   "/daily-logs",
   "/todos",
   "/makeups",
@@ -93,6 +94,7 @@ export const config = {
     "/signup",
     "/dashboard/:path*",
     "/students/:path*",
+    "/attendance/:path*",
     "/daily-logs/:path*",
     "/todos/:path*",
     "/makeups/:path*",

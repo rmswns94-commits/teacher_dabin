@@ -369,6 +369,9 @@ export default async function StudentDetailPage({
                       <span className="rounded-full bg-[#fdf3e4] px-2 py-1 text-[#94702f]">
                         지각 {attendanceSummary.late}
                       </span>
+                      <span className="rounded-full bg-[#f3eefc] px-2 py-1 text-[#614ea7]">
+                        조퇴 {attendanceSummary.early_leave}
+                      </span>
                       <span className="rounded-full bg-[#fff0ef] px-2 py-1 text-[#a26660]">
                         결석 {attendanceSummary.absent}
                       </span>

@@ -515,7 +515,12 @@ export async function getLatestLogPerGroup(onlyCompleted = false) {
   return result;
 }
 
-export type AttendanceSummary = { present: number; late: number; absent: number };
+export type AttendanceSummary = {
+  present: number;
+  late: number;
+  early_leave: number;
+  absent: number;
+};
 
 // 주어진 일지들의 출결 집계를 쿼리 1번으로 계산한다 (일지당 쿼리 금지).
 export async function getAttendanceSummaryForLogs(logIds: string[]) {
@@ -539,10 +544,12 @@ export async function getAttendanceSummaryForLogs(logIds: string[]) {
   }
 
   for (const row of data ?? []) {
-    const summary = result.get(row.daily_log_id) ?? { present: 0, late: 0, absent: 0 };
+    const summary =
+      result.get(row.daily_log_id) ?? { present: 0, late: 0, early_leave: 0, absent: 0 };
 
     if (row.attendance === "present") summary.present += 1;
     else if (row.attendance === "late") summary.late += 1;
+    else if (row.attendance === "early_leave") summary.early_leave += 1;
     else if (row.attendance === "absent") summary.absent += 1;
 
     result.set(row.daily_log_id, summary);

@@ -133,6 +133,7 @@ export default async function GroupsPage() {
       ? [
           `출석 ${attendance.present}`,
           attendance.late > 0 ? `지각 ${attendance.late}` : null,
+          attendance.early_leave > 0 ? `조퇴 ${attendance.early_leave}` : null,
           attendance.absent > 0 ? `결석 ${attendance.absent}` : null,
         ].filter(Boolean)
       : [];

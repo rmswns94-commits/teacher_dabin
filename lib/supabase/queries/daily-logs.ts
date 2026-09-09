@@ -26,7 +26,13 @@ function pickOne<T>(value: unknown): T | null {
 
 export type DailyLogListItem = DailyLogRecord & {
   group: Pick<ClassGroupRecord, "id" | "name" | "grade"> | null;
-  attendanceCounts: { present: number; late: number; absent: number; total: number };
+  attendanceCounts: {
+    present: number;
+    late: number;
+    early_leave: number;
+    absent: number;
+    total: number;
+  };
 };
 
 export async function getCurrentUserDailyLogs(filters?: {
@@ -69,7 +75,7 @@ export async function getCurrentUserDailyLogs(filters?: {
 
   return (data ?? []).map((row) => {
     const lessonLogs = (row.student_lesson_logs ?? []) as { attendance: AttendanceStatus }[];
-    const counts = { present: 0, late: 0, absent: 0, total: lessonLogs.length };
+    const counts = { present: 0, late: 0, early_leave: 0, absent: 0, total: lessonLogs.length };
 
     for (const log of lessonLogs) {
       counts[log.attendance] += 1;

@@ -15,6 +15,7 @@ import {
   CircleX,
   Cloud,
   Clock3,
+  DoorOpen,
   NotebookPen,
   NotebookTabs,
   Plus,
@@ -1459,6 +1460,18 @@ export function DailyLogForm({
                   </button>
                   <button
                     type="button"
+                    onClick={() => updateEntry(student.studentId, { attendance: "early_leave" })}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition",
+                      entry.attendance === "early_leave"
+                        ? "border-[#d8cdf0] bg-[#f3eefc] text-[#5d4ba5]"
+                        : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
+                    )}
+                  >
+                    <DoorOpen className="h-3.5 w-3.5" /> 조퇴
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => updateEntry(student.studentId, { attendance: "absent" })}
                     className={cn(
                       "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition",
@@ -2200,7 +2213,7 @@ function CompletionSummary({
   onBack: () => void;
   onComplete: () => void;
 }) {
-  const counts = { present: 0, late: 0, absent: 0 };
+  const counts = { present: 0, late: 0, early_leave: 0, absent: 0 };
 
   // 오늘 체크할 학생: 실제 attention 항목이 있는 학생만 (정상 학생은 나열하지 않음)
   const checkStudents: { name: string; items: string[] }[] = [];
@@ -2213,6 +2226,9 @@ function CompletionSummary({
 
     if (entry.attendance === "absent") {
       items.push(entry.needsMakeup ? "결석 · 보충 필요" : "결석");
+    }
+    if (entry.attendance === "early_leave") {
+      items.push("조퇴");
     }
     if (entry.homeworkStatus === "missing") {
       items.push("숙제 미제출");
@@ -2261,9 +2277,10 @@ function CompletionSummary({
 
           <div className="rounded-2xl bg-[#f5f2ff] p-3">
             <div className="text-[11px] uppercase tracking-[0.12em] text-[#8b7b77]">출결</div>
-            <div className="mt-1 flex gap-2 text-xs">
+            <div className="mt-1 flex flex-wrap gap-2 text-xs">
               <span className="rounded-full bg-[#edf9f3] px-2 py-1 text-[#3d7f64]">출석 {counts.present}명</span>
               <span className="rounded-full bg-[#fdf3e4] px-2 py-1 text-[#94702f]">지각 {counts.late}명</span>
+              <span className="rounded-full bg-[#f3eefc] px-2 py-1 text-[#614ea7]">조퇴 {counts.early_leave}명</span>
               <span className="rounded-full bg-[#fff0ef] px-2 py-1 text-[#a26660]">결석 {counts.absent}명</span>
             </div>
           </div>

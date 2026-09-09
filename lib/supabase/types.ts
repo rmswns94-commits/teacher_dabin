@@ -98,7 +98,7 @@ export type PrettyWordRecord = {
   updated_at: string;
 };
 
-export type AttendanceStatus = "present" | "late" | "absent";
+export type AttendanceStatus = "present" | "late" | "absent" | "early_leave";
 export type DailyLogStatus = "draft" | "completed";
 export type MakeupStatus = "required" | "scheduled" | "completed" | "cancelled";
 export type HomeworkStatus = "completed" | "partial" | "missing";

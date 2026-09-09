@@ -156,7 +156,8 @@ export function calculateMakeupStat(weekMakeups: MakeupLike[]): GrowthStat {
 export type WeeklyGrowthInput = {
   // 이번 주 학생별 수업 기록 (미입력 field는 null)
   weekRecords: {
-    attendance: "present" | "late" | "absent";
+    // 개근 판정은 아래에서 전원 "present"인지로만 본다 — 조퇴(early_leave)도 자동으로 개근 실패.
+    attendance: "present" | "late" | "absent" | "early_leave";
     homeworkStatus: "completed" | "partial" | "missing" | null;
     focusLevel: "good" | "normal" | "distracted" | null;
     participationLevel: "active" | "normal" | "passive" | null;

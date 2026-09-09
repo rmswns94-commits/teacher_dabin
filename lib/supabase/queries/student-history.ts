@@ -70,7 +70,7 @@ export async function getStudentLessonHistory(studentId: string, sinceDate?: str
 }
 
 export function summarizeAttendance(history: StudentLessonHistoryItem[]) {
-  const summary = { present: 0, late: 0, absent: 0, total: history.length };
+  const summary = { present: 0, late: 0, early_leave: 0, absent: 0, total: history.length };
 
   for (const item of history) {
     summary[item.attendance] += 1;
@@ -82,7 +82,7 @@ export function summarizeAttendance(history: StudentLessonHistoryItem[]) {
 // 학생 목록용: 최근 N일의 모든 학생 수업 기록을 한 번에 가져온다 (N+1 방지).
 export type RecentLessonRecord = {
   student_id: string;
-  attendance: "present" | "late" | "absent";
+  attendance: "present" | "late" | "absent" | "early_leave";
   progress: string | null;
   memo: string | null;
   strengths: string | null;

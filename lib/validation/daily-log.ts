@@ -14,7 +14,9 @@ const numberString = z
 
 export const studentLessonEntrySchema = z.object({
   studentId: z.string().uuid(),
-  attendance: z.enum(["present", "late", "absent"], { message: "출결 상태를 확인해주세요." }),
+  attendance: z.enum(["present", "late", "absent", "early_leave"], {
+    message: "출결 상태를 확인해주세요.",
+  }),
   progress: shortText(300, "진도"),
   strengths: shortText(1000, "잘한 부분"),
   improvements: shortText(1000, "보완할 부분"),

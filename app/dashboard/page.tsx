@@ -544,6 +544,11 @@ export default async function DashboardPage() {
                               <span className="rounded-full bg-[#e4f4ec] px-2 py-0.5 tabular-nums text-[#3d7f64]">
                                 출석 {log.attendanceCounts.present}
                               </span>
+                              {log.attendanceCounts.early_leave > 0 ? (
+                                <span className="rounded-full bg-[#f3eefc] px-2 py-0.5 tabular-nums text-[#614ea7]">
+                                  조퇴 {log.attendanceCounts.early_leave}
+                                </span>
+                              ) : null}
                               {log.attendanceCounts.absent > 0 ? (
                                 <span className="rounded-full bg-[#f9e7e5] px-2 py-0.5 tabular-nums text-[#a26660]">
                                   결석 {log.attendanceCounts.absent}

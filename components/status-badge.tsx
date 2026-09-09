@@ -9,6 +9,7 @@ const styles: Record<string, { label: string; className: string }> = {
   present: { label: "출석", className: "bg-[#edf9f3] text-[#3d7f64]" },
   late: { label: "지각", className: "bg-[#fdf3e4] text-[#94702f]" },
   absent: { label: "결석", className: "bg-[#fff0ef] text-[#a26660]" },
+  early_leave: { label: "조퇴", className: "bg-[#f3eefc] text-[#614ea7]" },
   // makeup status
   required: { label: "보충 필요", className: "bg-[#fff0ef] text-[#a26660]" },
   scheduled: { label: "예정", className: "bg-[#f3eefc] text-[#614ea7]" },

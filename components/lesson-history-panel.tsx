@@ -76,6 +76,7 @@ type RecordsData = { records: StudentLessonLogWithStudent[]; praises: DailyLogPr
 const attendanceLabels: Record<string, string> = {
   present: "출석",
   late: "지각",
+  early_leave: "조퇴",
   absent: "결석",
 };
 
