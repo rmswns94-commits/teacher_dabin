@@ -493,6 +493,91 @@ async function syncHomeworkAssignments(
   }
 }
 
+export type WritingDraftItem = {
+  kind: "log" | "autosave"; // log=수동 임시저장된 일지 row, autosave=아직 일지가 없는 자동 임시저장
+  href: string;
+  classDate: string;
+  groupName: string;
+  groupIcon: string | null;
+  updatedAt: string;
+};
+
+// "작성 중인 일지" 목록 — 어느 달/필터를 보고 있든 항상 보이게 (draft를 못 찾아 헤매는 문제 해결).
+// ① status='draft' 일지 row(수동 임시저장) ② 아직 일지 row가 없는 자동 임시저장(create draft).
+// 같은 identity에 둘 다 있으면 둘 다 보여준다 — 내용이 서로 다를 수 있으므로 자동 merge/삭제 없이
+// 사용자가 각각 열어 확인하는 것이 복구 UX다. 조회 실패 시 [] (페이지는 항상 뜬다).
+export async function getWritingDrafts() {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as WritingDraftItem[];
+  }
+
+  const [logsRes, draftsRes] = await Promise.all([
+    supabase
+      .from("daily_logs")
+      .select("id, class_date, updated_at, class_groups(name, icon)")
+      .eq("user_id", user.id)
+      .eq("status", "draft")
+      .order("updated_at", { ascending: false })
+      .limit(10),
+    supabase
+      .from("daily_log_drafts")
+      .select("group_id, class_date, updated_at, class_groups(name, icon)")
+      .eq("user_id", user.id)
+      .is("daily_log_id", null)
+      .order("updated_at", { ascending: false })
+      .limit(10),
+  ]);
+
+  if (logsRes.error) {
+    console.error("getWritingDrafts logs error", { code: logsRes.error.code, message: logsRes.error.message });
+  }
+  if (draftsRes.error) {
+    console.error("getWritingDrafts drafts error", { code: draftsRes.error.code, message: draftsRes.error.message });
+  }
+
+  const items: WritingDraftItem[] = [];
+
+  for (const row of (logsRes.data ?? []) as unknown as {
+    id: string;
+    class_date: string;
+    updated_at: string;
+    class_groups: { name?: string; icon?: string | null } | { name?: string; icon?: string | null }[] | null;
+  }[]) {
+    const group = pickOne<{ name?: string; icon?: string | null }>(row.class_groups);
+    items.push({
+      kind: "log",
+      href: `/daily-logs/${row.id}/edit`,
+      classDate: row.class_date,
+      groupName: group?.name ?? "수업 그룹",
+      groupIcon: group?.icon ?? null,
+      updatedAt: row.updated_at,
+    });
+  }
+
+  for (const row of (draftsRes.data ?? []) as unknown as {
+    group_id: string;
+    class_date: string;
+    updated_at: string;
+    class_groups: { name?: string; icon?: string | null } | { name?: string; icon?: string | null }[] | null;
+  }[]) {
+    const group = pickOne<{ name?: string; icon?: string | null }>(row.class_groups);
+    items.push({
+      kind: "autosave",
+      // create 화면이 같은 identity의 autosave를 즉시 전체 복원한다
+      href: `/daily-logs/new?groupId=${row.group_id}&date=${row.class_date}`,
+      classDate: row.class_date,
+      groupName: group?.name ?? "수업 그룹",
+      groupIcon: group?.icon ?? null,
+      updatedAt: row.updated_at,
+    });
+  }
+
+  return items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 10);
+}
+
 // 진입점 통합용: canonical identity(user+group+class_date)의 일지 row 조회 — draft/completed 불문.
 // DB unique(user,group,class_date)가 identity당 1개를 보장하므로 maybeSingle. 조회만, write 없음.
 export async function getDailyLogByIdentity(groupId: string, classDate: string) {
@@ -523,12 +608,16 @@ export async function getDailyLogByIdentity(groupId: string, classDate: string) 
 // typed error로 구분해 UI가 전용 경고 dialog를 띄울 수 있게 한다.
 // 기준은 항상 "선택한 수업 날짜" — 오늘이 아닐 수 있으므로 문구에 날짜를 명시한다.
 export class DuplicateDailyLogError extends Error {
-  constructor(classDate?: string) {
+  // 기존 일지 id — UI가 "삭제 후 재작성"이 아니라 "기존 일지 이어쓰기"로 안내할 수 있게
+  existingLogId: string | null;
+
+  constructor(classDate?: string, existingLogId?: string | null) {
     const dateLabel = classDate ? `${formatKoreanDateFull(classDate)}에` : "선택한 날짜에";
     super(
-      `${dateLabel} 이미 등록된 수업 일지가 있어요.\n같은 반의 수업 일지는 하루에 한 번만 등록할 수 있어요.\n기존 수업 일지를 수정하거나 삭제 후 다시 등록해주세요.`,
+      `${dateLabel} 이미 등록된 수업 일지가 있어요.\n같은 반의 수업 일지는 하루에 한 번만 등록할 수 있어요.\n기존 일지를 이어서 작성해주세요.`,
     );
     this.name = "DuplicateDailyLogError";
+    this.existingLogId = existingLogId ?? null;
   }
 }
 
@@ -590,7 +679,8 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   }
 
   if ((duplicateRows ?? []).length > 0) {
-    throw new DuplicateDailyLogError(input.classDate);
+    // 기존 row id를 실어 UI가 이어쓰기 링크를 제공한다 (사용자를 막지 않는 복구 UX)
+    throw new DuplicateDailyLogError(input.classDate, (duplicateRows![0] as { id: string }).id);
   }
 
   const studentIds = input.students.map((entry) => entry.studentId);

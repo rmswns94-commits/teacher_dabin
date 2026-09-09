@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import Link from "next/link";
-import { BookOpen, ChevronLeft, ChevronRight, NotebookPen, Plus } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, NotebookPen, PencilLine, Plus } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { CalendarEventItem, EventCreateButton } from "@/components/calendar-events";
@@ -32,6 +32,7 @@ import {
   getDailyLogDetailForCurrentUser,
   getMonthlyLogMarkers,
   getPraisesForDailyLog,
+  getWritingDrafts,
   type MonthlyLogMarker,
 } from "@/lib/supabase/queries/daily-logs";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
@@ -43,6 +44,12 @@ import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedul
 import { eventMetaOf } from "@/lib/validation/calendar-event";
 import { cn } from "@/lib/utils";
 import type { DailyLogStatus } from "@/lib/supabase/types";
+
+// 임시저장 시각(UTC ISO) → KST "M/D HH:MM" (작성 중인 일지 스트립용)
+function kstStamp(iso: string) {
+  const kst = new Date(Date.parse(iso) + 9 * 3_600_000);
+  return `${kst.getUTCMonth() + 1}/${kst.getUTCDate()} ${String(kst.getUTCHours()).padStart(2, "0")}:${String(kst.getUTCMinutes()).padStart(2, "0")}`;
+}
 
 const WEEKDAY_HEADERS = ["일", "월", "화", "수", "목", "금", "토"];
 const WEEKDAY_HEADERS_FULL = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
@@ -249,6 +256,9 @@ export default async function DailyLogsPage({
 
   const weeks = buildMonthGrid(month);
 
+  // 작성 중인 일지(수동 임시저장 + 자동 임시저장) — 어느 달/필터에서도 항상 보이게
+  const writingDrafts = await getWritingDrafts();
+
   return (
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
@@ -280,6 +290,50 @@ export default async function DailyLogsPage({
               </div>
             }
           />
+
+          {/* 작성 중인 일지 — 임시저장/자동 저장을 어느 화면에서도 놓치지 않게.
+              같은 수업에 둘 다 있으면 각각 표시 (자동 merge/삭제 없음 — 열어서 확인하는 복구 UX) */}
+          {writingDrafts.length > 0 ? (
+            <div className="mb-4 rounded-2xl border border-[#e8ddf3] bg-[#fbf8ff] px-4 py-3">
+              <div className="flex items-center gap-1.5 text-sm font-semibold text-[#5c4ca8]">
+                <PencilLine className="h-4 w-4" aria-hidden /> 작성 중인 일지 {writingDrafts.length}개
+              </div>
+              <ul className="mt-1.5 space-y-0.5">
+                {writingDrafts.map((draft) => (
+                  <li key={draft.href}>
+                    <Link
+                      href={draft.href}
+                      className="flex min-h-10 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-xl px-2 py-1.5 text-sm transition hover:bg-[#f3ecfb]"
+                    >
+                      <span className="font-medium text-[#2d2928]">
+                        {formatKoreanDate(draft.classDate, true)}
+                      </span>
+                      <span className="flex min-w-0 items-center gap-1 text-[#564d4d]">
+                        <span aria-hidden>{groupIconOf(draft.groupIcon)}</span>
+                        <span className="min-w-0 truncate">{draft.groupName}</span>
+                      </span>
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                          draft.kind === "log"
+                            ? "bg-[#efe8fb] text-[#5d4ba5]"
+                            : "bg-[#e4f4ec] text-[#3d7f64]",
+                        )}
+                      >
+                        {draft.kind === "log" ? "임시저장" : "자동 저장"}
+                      </span>
+                      <span className="text-[11px] tabular-nums text-[#a79996]">
+                        마지막 저장 {kstStamp(draft.updatedAt)}
+                      </span>
+                      <span className="ml-auto shrink-0 text-xs font-medium text-[#5c4ca8]">
+                        이어쓰기 →
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <DailyLogsFilter

@@ -31,6 +31,14 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
     notFound();
   }
 
+  // 이 일지의 수정 draft가 없으면, 같은 identity(group+date)의 "새 작성" 자동 임시저장을
+  // fallback으로 보여준다 (중복 안내에서 이어쓰기로 넘어온 경우 등 — 보관된 내용의 유실 방지).
+  // fallback은 자동 적용하지 않고 배너로만 안내한다 (일지 row 내용을 덮어쓰지 않게).
+  const fallbackDraftRow = draftRow
+    ? null
+    : await getDailyLogDraft({ groupId: log.group_id, classDate: log.class_date });
+  const effectiveDraftRow = draftRow ?? fallbackDraftRow;
+
   // 칭찬 한표 복원: comment가 있는 manual praise 전부 폼에서 편집한다 (입력 순서 유지).
   // legacy category 칭찬(comment null)은 폼에 싣지 않고 그대로 보존된다.
   const praiseCommentsByStudent = new Map<string, string[]>();
@@ -132,10 +140,15 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           students={sortedStudents}
           scheduleDays={groupSchedules.map((slot) => slot.day_of_week)}
           draft={
-            draftRow
-              ? { id: draftRow.id, updatedAt: draftRow.updated_at, payload: draftRow.payload }
+            effectiveDraftRow
+              ? {
+                  id: effectiveDraftRow.id,
+                  updatedAt: effectiveDraftRow.updated_at,
+                  payload: effectiveDraftRow.payload,
+                }
               : null
           }
+          draftPromptOnly={Boolean(fallbackDraftRow)}
           // 오늘 숙제(구조화) — id 기반 sync를 위해 row id까지 전달
           initialAssignments={log.homeworkAssignments.map((hw) => ({
             id: hw.id,

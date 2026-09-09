@@ -390,6 +390,7 @@ export function DailyLogForm({
   scheduleDays = [],
   draft = null,
   forceRestoreDraft = false,
+  draftPromptOnly = false,
   initial,
   initialAssignments = [],
   previousReflection = null,
@@ -405,6 +406,10 @@ export function DailyLogForm({
   // [수업 일지 작성하기] resume 진입: 10분 창과 무관하게 draft를 즉시 전체 복원
   // (새 작성 화면 전용 — draft가 유일한 작성 내용이라 덮어쓸 원본이 없다)
   forceRestoreDraft?: boolean;
+  // 수정 화면에서 같은 identity의 "새 작성" 자동 임시저장을 fallback으로 받은 경우:
+  // 자동 적용하면 일지 row 내용을 덮어쓰므로, 배너로만 안내하고 사용자가 [불러오기]를 선택한다.
+  // autosave도 이 draft id를 이어받지 않는다 (수정 세션은 자기 identity로 새로 저장).
+  draftPromptOnly?: boolean;
   initial?: {
     title: string;
     defaultProgress: string;
@@ -431,6 +436,7 @@ export function DailyLogForm({
   const [autoRestored] = useState(() =>
     Boolean(
       draft &&
+        !draftPromptOnly &&
         (forceRestoreDraft || currentEpochMs() - Date.parse(draft.updatedAt) < AUTO_RESTORE_WINDOW_MS),
     ),
   );
@@ -548,8 +554,10 @@ export function DailyLogForm({
     ),
   );
   const [error, setError] = useState("");
-  // 같은 날짜+같은 반 일지가 이미 있을 때 전용 경고 dialog (form 내용은 보존)
+  // 같은 날짜+같은 반 일지가 이미 있을 때 전용 경고 dialog (form 내용은 보존).
+  // 기존 일지 id가 있으면 "이어쓰기" 링크를 제공한다 — 삭제/재작성 강요 없이 복구.
   const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [duplicateExistingId, setDuplicateExistingId] = useState<string | null>(null);
 
   // 이전 수업 기록 패널의 [현재 일지에 참고하기] — provider가 없으면 no-op.
   // 패널 버튼 클릭(이벤트 핸들러)에서만 handler가 호출된다: 값이 비어 있으면
@@ -631,7 +639,8 @@ export function DailyLogForm({
       : { status: "idle" },
   );
   const [draftPrompt, setDraftPrompt] = useState(Boolean(draft) && !autoRestored);
-  const draftIdRef = useRef<string | null>(draft?.id ?? null);
+  // promptOnly(다른 identity의 fallback draft)면 autosave가 그 id를 이어받지 않는다
+  const draftIdRef = useRef<string | null>(draftPromptOnly ? null : draft?.id ?? null);
   const lastSavedSnapshotRef = useRef<string | null>(null);
   const autosaveInFlightRef = useRef(false);
   const composingRef = useRef(false);
@@ -766,7 +775,9 @@ export function DailyLogForm({
         return next;
       });
     }
-    draftIdRef.current = draft.id;
+    if (!draftPromptOnly) {
+      draftIdRef.current = draft.id;
+    }
     lastSavedSnapshotRef.current = null;
     setDraftPrompt(false);
     setAutosave({ status: "saved", savedAtLabel: kstTimeLabel(draft.updatedAt) });
@@ -976,6 +987,11 @@ export function DailyLogForm({
       if (result && "duplicate" in result && result.duplicate) {
         finalSavingRef.current = false;
         setShowSummary(false);
+        setDuplicateExistingId(
+          "existingLogId" in result && typeof result.existingLogId === "string"
+            ? result.existingLogId
+            : null,
+        );
         setDuplicateOpen(true);
         return;
       }
@@ -2095,12 +2111,47 @@ export function DailyLogForm({
           <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
             <div className="text-lg font-semibold text-[#2a2323]">수업일지가 이미 있어요</div>
             <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[#564d4d]">
-              {`${formatKoreanDate(classDate)}에 이미 등록된 수업 일지가 있어요.\n같은 반의 수업 일지는 하루에 한 번만 등록할 수 있어요.\n기존 수업 일지를 수정하거나 삭제 후 다시 등록해주세요.`}
+              {`${formatKoreanDate(classDate)}에 이미 등록된 수업 일지가 있어요.\n같은 반의 수업 일지는 하루에 한 번만 등록할 수 있어요.${
+                duplicateExistingId
+                  ? "\n기존 일지를 이어서 작성해주세요 — 지금 화면의 내용은 자동 임시저장으로 보관해둘게요."
+                  : ""
+              }`}
             </p>
-            <div className="mt-4 flex justify-end">
-              <Button type="button" size="sm" onClick={() => setDuplicateOpen(false)}>
-                확인
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setDuplicateOpen(false)}
+              >
+                닫기
               </Button>
+              {duplicateExistingId ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={async () => {
+                    // 지금 화면 내용을 자동 임시저장으로 보관해 유실을 막은 뒤 기존 일지로 이동
+                    // (자동 merge는 하지 않는다 — 두 내용은 각각 확인 가능)
+                    try {
+                      await autosaveDailyLogDraftAction({
+                        draftId: draftIdRef.current,
+                        dailyLogId: persistedLogIdRef.current,
+                        groupId: group.id,
+                        classDate,
+                        payload: formStateRef.current,
+                      });
+                    } catch {
+                      // 보관 실패 시에도 이동은 진행 — unsaved guard가 한 번 더 확인해준다
+                    }
+                    initialSnapshotRef.current = JSON.stringify(formStateRef.current);
+                    setDuplicateOpen(false);
+                    router.push(`/daily-logs/${duplicateExistingId}/edit`);
+                  }}
+                >
+                  기존 일지 이어쓰기 →
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>

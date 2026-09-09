@@ -35,9 +35,10 @@ export async function saveDailyLogAction(input: DailyLogFormInput & { draftId?: 
   try {
     dailyLogId = await saveDailyLog(parsed.data);
   } catch (error) {
-    // 중복은 일반 오류가 아니라 전용 경고 dialog로 안내한다 (form 내용은 보존)
+    // 중복은 일반 오류가 아니라 전용 경고 dialog로 안내한다 (form 내용은 보존).
+    // 기존 일지 id를 함께 내려 "이어쓰기" 링크를 제공한다 — "삭제 후 재작성" 강요 금지.
     if (error instanceof DuplicateDailyLogError) {
-      return { error: error.message, duplicate: true as const };
+      return { error: error.message, duplicate: true as const, existingLogId: error.existingLogId };
     }
 
     console.error("saveDailyLogAction error", error);
