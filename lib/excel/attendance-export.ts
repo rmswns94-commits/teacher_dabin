@@ -19,6 +19,8 @@ export const ATTENDANCE_TEMPLATE = {
   sheetName: "출석부",
   // 각 밴드(=인쇄 페이지)의 제목행 (병합 A:C — 4페이지 전부 "YYYY 년       MM 월"을 채운다)
   bandHeaderRows: [1, 25, 49, 74],
+  // 밴드 경계의 수동 페이지 나누기 (원본 rowBreaks 24/48/72 — 페이지당 정확히 한 밴드)
+  pageBreakRows: [24, 48, 72],
   // 반 블록의 첫 행 (블록당 10행, No. 1~10은 template에 고정)
   blockStartRows: [4, 14, 28, 38, 52, 62, 77, 87],
   blockSize: 10,
@@ -143,6 +145,13 @@ export async function fillAttendanceTemplate({
       }
     });
   });
+
+  // 원본의 수동 페이지 나누기 복원 — 원본은 24/48/72행 뒤에서 나눠 페이지당 정확히
+  // 한 밴드(제목+학생 20행+범례)가 인쇄되는데, exceljs가 template load 때 rowBreaks를
+  // 읽지 못해 사라진다. 없으면 Excel이 임의 위치에서 자동 분할해 밴드가 페이지에 걸친다.
+  for (const breakRow of ATTENDANCE_TEMPLATE.pageBreakRows) {
+    sheet.getRow(breakRow).addPageBreak(0, 16384);
+  }
 
   // 인쇄 배율을 원본과 동일하게 유지 — 원본 pageSetup은
   // <pageSetup paperSize="9" scale="85" orientation="landscape"/> 뿐인데,
