@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { ExamPeriodToggle } from "@/components/exam-period-toggle";
 import { GroupIconPicker } from "@/components/group-icon-picker";
 import { GroupStudentList } from "@/components/group-student-list";
 import { HighlightCard } from "@/components/highlight-card";
@@ -32,7 +33,7 @@ import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
-import { formatTextbookLinked } from "@/lib/textbooks";
+import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
 import {
   getAvailableStudentsForGroup,
   getGroupByIdForCurrentUser,
@@ -136,7 +137,9 @@ export default async function GroupDetailPage({
         <PageHeader
           backHref="/groups"
           title={`${groupIconOf(group.icon)} ${group.name}`}
-          description={`${gradeDisplay[group.grade]} · 학생 ${members.length}명${group.memo ? ` · ${group.memo}` : ""}`}
+          description={`${gradeDisplay[group.grade]} · 학생 ${members.length}명${group.school ? ` · ${group.school}` : ""}${group.memo ? ` · ${group.memo}` : ""}`}
+          // 시험 기간 ON이면 새 수업일지의 숙제/다음 계획/해야 할 일이 학교 context를 쓴다
+          action={<ExamPeriodToggle groupId={group.id} isOn={group.is_exam_period} />}
         />
 
         {saved ? (
@@ -245,6 +248,19 @@ export default async function GroupDetailPage({
                         <option key={option.value} value={option.value}>{option.label}</option>
                       ))}
                     </select>
+                  </label>
+
+                  <label className="block md:col-span-2">
+                    <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">학교 (선택)</span>
+                    <input
+                      name="school"
+                      defaultValue={group.school ?? ""}
+                      placeholder="다빈중학교"
+                      className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                    />
+                    <span className="mt-1 block text-[11px] text-[#a79996]">
+                      시험 기간 ON일 때 숙제·다음 수업 계획·해야 할 일이 이 학교 기준으로 기록돼요.
+                    </span>
                   </label>
                 </div>
 
@@ -398,7 +414,7 @@ export default async function GroupDetailPage({
                                 item.completed ? "line-through opacity-60" : "",
                               ].join(" ")}
                             >
-                              {formatTextbookLinked(item.textbook, item.text)}
+                              {formatTextbookLinked(linkedContextLabel(item), item.text)}
                             </span>
                             {item.dueDate ? (
                               <span className="ml-auto shrink-0 rounded-full bg-[#eef2fb] px-2 py-0.5 text-[10px] font-medium text-[#5b6fae]">

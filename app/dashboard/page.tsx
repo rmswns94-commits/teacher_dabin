@@ -24,7 +24,7 @@ import { addDaysStr, dayOfWeekOf, daysBetween } from "@/lib/calendar";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { DashboardTodoCard } from "@/components/dashboard-todo-card";
 import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
-import { formatTextbookLinked } from "@/lib/textbooks";
+import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
 import { currentEpochMs } from "@/lib/todo-window";
 import { getUpcomingExamEvents } from "@/lib/supabase/queries/calendar-events";
 import { DAY_LABELS, formatTimeHM, formatTimeRange, getScheduleOverview, type ClassOccurrence } from "@/lib/schedule";
@@ -394,7 +394,7 @@ export default async function DashboardPage() {
                   .map((exam) => ({ id: exam.id, title: exam.title, badge: exam.badge }))}
                 prepTexts={activePreparationItems(focusGroup.preparation_items)
                   .filter((item) => !item.completed && (!item.dueDate || item.dueDate <= today))
-                  .map((item) => formatTextbookLinked(item.textbook, item.text))}
+                  .map((item) => formatTextbookLinked(linkedContextLabel(item), item.text))}
               />
             </Suspense>
           ) : null}
@@ -427,8 +427,8 @@ export default async function DashboardPage() {
                 focusGroup={focusGroup ? { id: focusGroup.id, name: focusGroup.name } : null}
                 checklistItems={prepItems.map((item) => ({
                   id: item.id,
-                  // 교재 연결 할 일은 "교재명 - 내용"으로 (표시 시점 합성 — 저장은 분리)
-                  text: formatTextbookLinked(item.textbook, item.text),
+                  // 교재/학교 연결 할 일은 "이름 - 내용"으로 (표시 시점 합성 — 저장은 분리)
+                  text: formatTextbookLinked(linkedContextLabel(item), item.text),
                   completed: item.completed,
                 }))}
                 checklistWindow={focusGroup ? (todayWindowByGroup.get(focusGroup.id) ?? null) : null}
@@ -437,7 +437,7 @@ export default async function DashboardPage() {
                   groupName: planGroup.name,
                   groupIcon: planGroup.icon ?? null,
                   id: item.id,
-                  text: formatTextbookLinked(item.textbook, item.text),
+                  text: formatTextbookLinked(linkedContextLabel(item), item.text),
                   completed: item.completed,
                   dueDate: item.dueDate!,
                   window: todayWindowByGroup.get(planGroup.id) ?? null,

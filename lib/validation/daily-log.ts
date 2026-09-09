@@ -59,6 +59,8 @@ export const homeworkAssignmentSchema = z.object({
     .max(500, "숙제 내용은 500자 이내로 입력해주세요."),
   dueDate: dateString,
   textbook: shortText(100, "숙제 교재"),
+  // 시험 기간 ON 당시 학교 context (textbook과 배타적 — 폼이 한쪽만 채운다)
+  school: shortText(100, "숙제 학교"),
 });
 
 // 교재별 섹션(진도/다음 수업 계획) — 작성 시점 교재 이름 스냅샷 + 여러 줄 내용
@@ -71,6 +73,7 @@ export const textbookSectionSchema = z.object({
 export const dailyLogTaskSchema = z.object({
   id: z.string().min(1),
   textbook: shortText(100, "해야 할 일 교재"),
+  school: shortText(100, "해야 할 일 학교"),
   content: z
     .string()
     .trim()
@@ -102,6 +105,8 @@ export const dailyLogSchema = z
     // 교재별 진도/다음 수업 계획 스냅샷 (내용이 있는 교재만 전송)
     textbookProgress: z.array(textbookSectionSchema).max(20).optional(),
     textbookPlans: z.array(textbookSectionSchema).max(20).optional(),
+    // 학교 context 다음 수업 계획 (시험 기간 ON — name=학교명)
+    schoolPlans: z.array(textbookSectionSchema).max(20).optional(),
     vocabTotal: numberString.optional().or(z.literal("")),
     // 수업 회고 (강사 자기 성찰) — 전부 선택 입력
     reflectionGood: shortText(1000, "잘된 점"),

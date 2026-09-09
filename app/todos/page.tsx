@@ -19,7 +19,7 @@ import {
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { groupIconOf } from "@/lib/group-icons";
 import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
-import { formatTextbookLinked } from "@/lib/textbooks";
+import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
 import { formatTimeRange } from "@/lib/schedule";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
@@ -118,13 +118,13 @@ function TodoItemRow({
                 checked ? "text-[#8a7b77] [text-decoration:line-through]" : "text-[#2d2928]",
               )}
             >
-              {formatTextbookLinked(item.textbook, item.text)}
+              {formatTextbookLinked(linkedContextLabel(item), item.text)}
             </span>
             <span className={cn("mt-0.5 block text-[11px]", metaClass)}>{meta}</span>
           </span>
         </button>
       </form>
-      <TodoDeleteButton groupId={groupId} itemId={item.id} text={formatTextbookLinked(item.textbook, item.text)} />
+      <TodoDeleteButton groupId={groupId} itemId={item.id} text={formatTextbookLinked(linkedContextLabel(item), item.text)} />
     </li>
   );
 }

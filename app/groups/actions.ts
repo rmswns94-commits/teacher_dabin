@@ -10,6 +10,7 @@ import {
   getGroupByIdForCurrentUser,
   removeStudentFromGroup,
   restoreGroup,
+  setGroupExamPeriod,
   updateGroup,
   updateGroupHighlight,
   updateGroupPreparationItems,
@@ -104,6 +105,30 @@ function parseGroupIcon(formData: FormData) {
   return value && (groupIconPresets as readonly string[]).includes(value) ? value : null;
 }
 
+// 시험 기간 ON/OFF toggle — 상태 변경뿐, Todo/플래너/일정 side effect 없음.
+// 새 일지 작성 화면과 Excel export가 최신 상태를 쓰도록 관련 경로만 revalidate.
+export async function setExamPeriodAction(groupId: string, isExamPeriod: boolean) {
+  if (typeof groupId !== "string" || !groupId || typeof isExamPeriod !== "boolean") {
+    return { error: "시험 기간 상태를 저장하지 못했어요. 다시 시도해주세요." };
+  }
+
+  try {
+    await setGroupExamPeriod(groupId, isExamPeriod);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error && error.message
+          ? error.message
+          : "시험 기간 상태를 저장하지 못했어요. 다시 시도해주세요.",
+    };
+  }
+
+  revalidatePath(`/groups/${groupId}`);
+  revalidatePath("/groups");
+  revalidatePath("/daily-logs");
+  return { success: true as const };
+}
+
 export type GroupCreateState = { error?: string } | undefined;
 
 export async function createGroupAction(_prevState: GroupCreateState, formData: FormData): Promise<GroupCreateState> {
@@ -112,6 +137,7 @@ export async function createGroupAction(_prevState: GroupCreateState, formData: 
     grade: String(formData.get("grade") ?? ""),
     memo: String(formData.get("memo") ?? ""),
     textbook: parseTextbooks(formData),
+    school: String(formData.get("school") ?? ""),
   };
 
   const parsed = classGroupSchema.safeParse(payload);
@@ -150,6 +176,7 @@ export async function createGroupAction(_prevState: GroupCreateState, formData: 
       grade: parsed.data.grade,
       memo: parsed.data.memo || null,
       textbook: parsed.data.textbook || null,
+      school: parsed.data.school || null,
       icon: parseGroupIcon(formData),
       schedules: scheduleResult.rows,
     });
@@ -171,6 +198,7 @@ export async function updateGroupAction(groupId: string, formData: FormData) {
     grade: String(formData.get("grade") ?? ""),
     memo: String(formData.get("memo") ?? ""),
     textbook: parseTextbooks(formData),
+    school: String(formData.get("school") ?? ""),
     highlightMemo: String(formData.get("highlightMemo") ?? ""),
   };
 
@@ -190,6 +218,7 @@ export async function updateGroupAction(groupId: string, formData: FormData) {
     grade: parsed.data.grade,
     memo: parsed.data.memo || null,
     textbook: parsed.data.textbook || null,
+    school: parsed.data.school || null,
     highlightMemo: parsed.data.highlightMemo || null,
     icon: parseGroupIcon(formData),
   });

@@ -183,7 +183,11 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
             content: hw.content,
             dueDate: hw.due_date,
             textbook: hw.textbook ?? "",
+            school: hw.school ?? "",
           }))}
+          // 시험 기간 context — 새 항목의 기본 context 결정용 (기존 항목은 저장 필드 보존)
+          examPeriod={log.group?.is_exam_period ?? false}
+          school={log.group?.school ?? null}
           initial={{
             title: log.title ?? "",
             // migration 미적용 legacy row도 수업 내용을 잃지 않게 병합해 편집한다
@@ -199,12 +203,19 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
             homeworkDueDate: log.homework_due_date ?? "",
             nextLessonPlan: stripDerivedPrefix(
               log.next_lesson_plan ?? "",
-              buildTextbookSectionsText(log.textbook_plans ?? []),
+              // mirror 순서: 교재 계획 → 학교 계획 (폼 합성과 동일 — 결정적 왕복)
+              [
+                buildTextbookSectionsText(log.textbook_plans ?? []),
+                buildTextbookSectionsText(log.school_plans ?? []),
+              ]
+                .filter(Boolean)
+                .join("\n\n"),
             ),
             nextPlanDate: log.next_plan_date ?? "",
-            // 교재별 진도/계획 스냅샷 복원
+            // 교재별 진도/계획 + 학교 계획 스냅샷 복원
             textbookProgress: log.textbook_progress ?? [],
             textbookPlans: log.textbook_plans ?? [],
+            schoolPlans: log.school_plans ?? [],
             // 해야 할 일 — 일지 row가 source (Todo 삭제/완료와 무관하게 폼 복원).
             // 다중 항목(tasks)이 있으면 그것, 없으면 legacy 단일 필드를 폼이 항목 1개로 변환
             tasks: log.tasks ?? undefined,

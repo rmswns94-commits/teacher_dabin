@@ -141,6 +141,7 @@ export async function createGroup(input: {
   grade: StudentGrade;
   memo?: string | null;
   textbook?: string | null;
+  school?: string | null;
   icon?: string | null;
 }) {
   const supabase = await createServerSupabaseClient();
@@ -158,6 +159,7 @@ export async function createGroup(input: {
       grade: input.grade,
       memo: input.memo?.trim() || null,
       textbook: input.textbook?.trim() || null,
+      school: input.school?.trim() || null,
       icon: input.icon || null,
     })
     .select()
@@ -179,6 +181,7 @@ export async function createGroupWithDetails(input: {
   grade: StudentGrade;
   memo?: string | null;
   textbook?: string | null;
+  school?: string | null;
   icon?: string | null;
   schedules: { dayOfWeek: number; startTime: string; endTime: string }[];
 }) {
@@ -239,6 +242,7 @@ export async function updateGroup(groupId: string, input: {
   grade: StudentGrade;
   memo?: string | null;
   textbook?: string | null;
+  school?: string | null;
   highlightMemo?: string | null;
   icon?: string | null;
 }) {
@@ -256,6 +260,7 @@ export async function updateGroup(groupId: string, input: {
       grade: input.grade,
       memo: input.memo?.trim() || null,
       textbook: input.textbook?.trim() || null,
+      school: input.school?.trim() || null,
       highlight_memo: input.highlightMemo?.trim() || null,
       icon: input.icon || null,
     })
@@ -265,6 +270,30 @@ export async function updateGroup(groupId: string, input: {
   if (error) {
     console.error("updateGroup error", error);
     throw new Error("수업 그룹 정보를 저장하지 못했어요.");
+  }
+
+  return true;
+}
+
+// 시험 기간 ON/OFF — Teacher가 직접 해제할 때까지 유지 (자동 종료 없음).
+// 상태 변경만 하며 Todo/플래너/일정 등 side effect는 일절 만들지 않는다.
+export async function setGroupExamPeriod(groupId: string, isExamPeriod: boolean) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  const { error } = await supabase
+    .from("class_groups")
+    .update({ is_exam_period: isExamPeriod })
+    .eq("id", groupId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("setGroupExamPeriod error", { code: error.code, message: error.message });
+    throw new Error("시험 기간 상태를 저장하지 못했어요. 다시 시도해주세요.");
   }
 
   return true;

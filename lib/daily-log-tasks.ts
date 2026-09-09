@@ -10,6 +10,7 @@ import { addDaysStr } from "@/lib/calendar";
 export type DailyLogTaskItem = {
   id: string; // stable task id ("legacy" = 기존 단일 해야 할 일에서 온 항목)
   textbook?: string | null; // 연결 교재 이름 스냅샷 (없으면 내용만 표시)
+  school?: string | null; // 시험 기간 ON 당시 학교 context (textbook과 배타적)
   content: string; // 여러 줄 가능 — 전체가 Todo 하나 (줄 수만큼 쪼개지 않는다)
   dueDate?: string | null; // 명시 날짜 — 비우면 수업일 + 1일
 };

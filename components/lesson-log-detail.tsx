@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate } from "@/lib/dates";
 import { buildHomeworkMirror } from "@/lib/homework-assignments";
-import { formatTextbookLinked } from "@/lib/textbooks";
+import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import {
   effortLevelLabels,
@@ -153,9 +153,9 @@ export function LessonLogDetail({
                       <div className="text-xs font-semibold text-[#ad8c53]">
                         {formatKoreanDate(hw.due_date)}까지
                       </div>
-                      {/* 교재가 연결된 숙제는 "교재명 - 내용" (없으면 내용만) */}
+                      {/* 교재/학교 context가 연결된 숙제는 "이름 - 내용" (없으면 내용만) */}
                       <div className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-6 text-[#5c4a2e]">
-                        {formatTextbookLinked(hw.textbook, hw.content)}
+                        {formatTextbookLinked(linkedContextLabel(hw), hw.content)}
                       </div>
                     </li>
                   ))}
@@ -172,6 +172,7 @@ export function LessonLogDetail({
                     content: hw.content,
                     dueDate: hw.due_date,
                     textbook: hw.textbook,
+                    school: hw.school,
                   })),
                 )
             ) ? (
@@ -228,7 +229,7 @@ export function LessonLogDetail({
                         </span>
                       </div>
                       <div className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-6 text-[#4a4160]">
-                        {formatTextbookLinked(task.textbook, task.text)}
+                        {formatTextbookLinked(linkedContextLabel(task), task.text)}
                       </div>
                     </li>
                   ))}

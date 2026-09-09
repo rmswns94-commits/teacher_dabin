@@ -185,6 +185,9 @@ export default async function NewDailyLogPage({
                 .split("\n")
                 .map((line) => line.trim())
                 .filter(Boolean)}
+              // 시험 기간 ON이면 숙제/다음 계획/해야 할 일이 학교 context를 쓴다
+              examPeriod={selectedGroup.is_exam_period}
+              school={selectedGroup.school}
               draft={
                 draftRow
                   ? { id: draftRow.id, updatedAt: draftRow.updated_at, payload: draftRow.payload }

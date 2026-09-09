@@ -168,15 +168,17 @@ type DraftPayload = {
   homework: string;
   homeworkDueDate: string;
   // 오늘 숙제(구조화) — draft 단계에서는 payload에만 유지 (row 생성 없음)
-  homeworkAssignments: { id: string | null; content: string; dueDate: string; textbook: string }[];
+  homeworkAssignments: { id: string | null; content: string; dueDate: string; textbook: string; school: string }[];
   nextLessonPlan: string;
   nextPlanDate: string;
   // 교재별 진도/다음 수업 계획 — [{ name, text }] (내용 있는 교재만)
   textbookProgress: { name: string; text: string }[];
   textbookPlans: { name: string; text: string }[];
+  // 학교 context 다음 수업 계획 (시험 기간 ON — name=학교명)
+  schoolPlans: { name: string; text: string }[];
   // 해야 할 일 다중 항목 (공용 Todo 연결) — draft 단계에서는 payload에만 유지 (Todo 생성 없음).
   // 이전 draft의 단일 taskContent/taskDate/taskTextbook은 복원 시 항목 1개로 변환된다.
-  tasks: { id: string; textbook: string; content: string; dueDate: string }[];
+  tasks: { id: string; textbook: string; school: string; content: string; dueDate: string }[];
   vocabTotal: string;
   reflectionGood: string;
   reflectionHard: string;
@@ -186,8 +188,15 @@ type DraftPayload = {
 
 // 오늘 숙제 폼 항목 — key는 React 렌더용 안정 identity (삭제/재정렬에도 값이 섞이지 않게),
 // id는 저장된 row id (수정 sync용, 새 항목은 null). 저장/스냅샷에는 key를 싣지 않는다.
-// textbook: 연결 교재 이름 (""=교재 없음/기타)
-type AssignmentItem = { key: string; id: string | null; content: string; dueDate: string; textbook: string };
+// textbook: 연결 교재 이름 (""=없음) / school: 시험 기간 ON 당시 학교 context (배타적)
+type AssignmentItem = {
+  key: string;
+  id: string | null;
+  content: string;
+  dueDate: string;
+  textbook: string;
+  school: string;
+};
 
 function restoredAssignments(value: unknown): AssignmentItem[] | null {
   if (!Array.isArray(value)) {
@@ -195,7 +204,7 @@ function restoredAssignments(value: unknown): AssignmentItem[] | null {
   }
   return value
     .filter(
-      (item): item is { id?: unknown; content: string; dueDate: string; textbook?: unknown } =>
+      (item): item is { id?: unknown; content: string; dueDate: string; textbook?: unknown; school?: unknown } =>
         Boolean(item) &&
         typeof (item as { content?: unknown }).content === "string" &&
         typeof (item as { dueDate?: unknown }).dueDate === "string",
@@ -206,11 +215,19 @@ function restoredAssignments(value: unknown): AssignmentItem[] | null {
       content: item.content,
       dueDate: item.dueDate,
       textbook: typeof item.textbook === "string" ? item.textbook : "",
+      school: typeof item.school === "string" ? item.school : "",
     }));
 }
 
 // 해야 할 일 폼 항목 — key는 렌더용, id는 stable task id (Todo 소유 identity — index 아님)
-type TaskFormItem = { key: string; id: string; textbook: string; content: string; dueDate: string };
+type TaskFormItem = {
+  key: string;
+  id: string;
+  textbook: string;
+  school: string;
+  content: string;
+  dueDate: string;
+};
 
 function restoredTasks(value: unknown): TaskFormItem[] | null {
   if (!Array.isArray(value)) {
@@ -218,7 +235,7 @@ function restoredTasks(value: unknown): TaskFormItem[] | null {
   }
   return value
     .filter(
-      (item): item is { id: string; textbook?: unknown; content: string; dueDate?: unknown } =>
+      (item): item is { id: string; textbook?: unknown; school?: unknown; content: string; dueDate?: unknown } =>
         Boolean(item) &&
         typeof (item as { id?: unknown }).id === "string" &&
         typeof (item as { content?: unknown }).content === "string",
@@ -227,6 +244,7 @@ function restoredTasks(value: unknown): TaskFormItem[] | null {
       key: globalThis.crypto.randomUUID(),
       id: item.id,
       textbook: typeof item.textbook === "string" ? item.textbook : "",
+      school: typeof item.school === "string" ? item.school : "",
       content: item.content,
       dueDate: typeof item.dueDate === "string" ? item.dueDate : "",
     }));
@@ -235,7 +253,7 @@ function restoredTasks(value: unknown): TaskFormItem[] | null {
 // legacy 단일 해야 할 일 → 항목 1개 (id "legacy" — 기존 Todo id를 계승해 duplicate 방지)
 function legacyTaskItem(content: string, dueDate: string, textbook: string): TaskFormItem[] {
   return content.trim()
-    ? [{ key: globalThis.crypto.randomUUID(), id: "legacy", textbook, content, dueDate }]
+    ? [{ key: globalThis.crypto.randomUUID(), id: "legacy", textbook, school: "", content, dueDate }]
     : [];
 }
 
@@ -450,6 +468,8 @@ export function DailyLogForm({
   initialAssignments = [],
   previousReflection = null,
   textbooks = [],
+  examPeriod = false,
+  school = null,
 }: {
   dailyLogId?: string;
   classDate: string;
@@ -460,6 +480,11 @@ export function DailyLogForm({
   // 이 그룹의 교재 목록 (class_groups.textbook 줄바꿈 구분 — 수업 제목 옆 "교재 LIST" 보조 버튼용.
   // 제목에 텍스트를 한 번 삽입할 뿐, 교재 상태/관계를 만들거나 제목과 동기화하지 않는다)
   textbooks?: string[];
+  // 시험 기간(그룹 상태): ON이면 새 숙제/다음 계획/해야 할 일이 학교 context를 쓴다.
+  // 이미 작성된 항목의 context(저장 필드)는 바꾸지 않는다 — 새 항목에만 적용.
+  examPeriod?: boolean;
+  // 그룹 학교 이름 (없으면 학교 미등록 안내 — 가짜 값 생성 없이 content만 저장)
+  school?: string | null;
   // 서버에서 발견한 자동 임시저장 draft (있으면 복구 배너 표시 — 자동 덮어쓰기 없음)
   draft?: { id: string; updatedAt: string; payload: unknown } | null;
   // [수업 일지 작성하기] resume 진입: 10분 창과 무관하게 draft를 즉시 전체 복원
@@ -482,17 +507,19 @@ export function DailyLogForm({
     taskDate?: string;
     taskTextbook?: string;
     // 해야 할 일 다중 항목 (수정 화면 복원용 — 없으면 legacy 단일 필드를 항목 1개로 변환)
-    tasks?: { id: string; textbook?: string | null; content: string; dueDate?: string | null }[];
+    tasks?: { id: string; textbook?: string | null; school?: string | null; content: string; dueDate?: string | null }[];
     // 교재별 진도/다음 수업 계획 스냅샷 (수정 화면 복원용)
     textbookProgress?: { name: string; text: string }[];
     textbookPlans?: { name: string; text: string }[];
+    // 학교 context 다음 수업 계획 (시험 기간 ON 당시 기록 복원용)
+    schoolPlans?: { name: string; text: string }[];
     vocabTotal?: string;
     reflectionGood?: string;
     reflectionHard?: string;
     reflectionNext?: string;
   };
   // 오늘 숙제(구조화) — 수정 화면에서 기존 row 복원용 (id 기반 sync)
-  initialAssignments?: { id: string; content: string; dueDate: string; textbook?: string | null }[];
+  initialAssignments?: { id: string; content: string; dueDate: string; textbook?: string | null; school?: string | null }[];
   // 같은 그룹 직전 completed 일지의 "다음에 다르게 해볼 것" — 회고 카드에 리마인드로 표시
   previousReflection?: { classDate: string; reflectionNext: string } | null;
 }) {
@@ -548,6 +575,12 @@ export function DailyLogForm({
       restoredSections(restored?.textbookPlans) ??
       Object.fromEntries((initial?.textbookPlans ?? []).map((s) => [s.name, s.text])),
   );
+  // 학교 context 다음 수업 계획 (시험 기간 ON) — name=학교명 키 (교재 map과 대칭 구조)
+  const [schoolPlanMap, setSchoolPlanMap] = useState<Record<string, string>>(
+    () =>
+      restoredSections((restored as { schoolPlans?: unknown } | null)?.schoolPlans) ??
+      Object.fromEntries((initial?.schoolPlans ?? []).map((s) => [s.name, s.text])),
+  );
   // 오늘 숙제(구조화): draft 복원 → 저장된 row 순
   const [assignments, setAssignments] = useState<AssignmentItem[]>(
     () =>
@@ -558,6 +591,7 @@ export function DailyLogForm({
         content: item.content,
         dueDate: item.dueDate,
         textbook: item.textbook ?? "",
+        school: item.school ?? "",
       })),
   );
   // legacy free-text 숙제: 구조화 row가 있는 일지는 homework 필드가 파생 mirror라 폼에 싣지 않는다
@@ -630,6 +664,7 @@ export function DailyLogForm({
         key: globalThis.crypto.randomUUID(),
         id: task.id,
         textbook: task.textbook ?? "",
+        school: task.school ?? "",
         content: task.content,
         dueDate: task.dueDate ?? "",
       }));
@@ -701,11 +736,12 @@ export function DailyLogForm({
       homework,
       homeworkDueDate,
       // key(렌더용)는 제외 — draft payload/스냅샷에는 저장 데이터만
-      homeworkAssignments: assignments.map(({ id, content, dueDate, textbook }) => ({
+      homeworkAssignments: assignments.map(({ id, content, dueDate, textbook, school: hwSchool }) => ({
         id,
         content,
         dueDate,
         textbook,
+        school: hwSchool,
       })),
       nextLessonPlan,
       nextPlanDate,
@@ -716,8 +752,17 @@ export function DailyLogForm({
       textbookPlans: textbooks
         .filter((name) => (textbookPlanMap[name] ?? "").trim())
         .map((name) => ({ name, text: textbookPlanMap[name] })),
+      schoolPlans: Object.keys(schoolPlanMap)
+        .filter((name) => (schoolPlanMap[name] ?? "").trim())
+        .map((name) => ({ name, text: schoolPlanMap[name] })),
       // 해야 할 일 다중 항목 (key 제외 — stable id만)
-      tasks: tasks.map(({ id, textbook, content, dueDate }) => ({ id, textbook, content, dueDate })),
+      tasks: tasks.map(({ id, textbook, school: taskSchool, content, dueDate }) => ({
+        id,
+        textbook,
+        school: taskSchool,
+        content,
+        dueDate,
+      })),
       vocabTotal,
       reflectionGood,
       reflectionHard,
@@ -727,7 +772,7 @@ export function DailyLogForm({
     if (initialSnapshotRef.current === null) {
       initialSnapshotRef.current = JSON.stringify(formStateRef.current);
     }
-  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, tasks, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries]);
+  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, schoolPlanMap, tasks, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries]);
   useEffect(
     () =>
       registerDirtyCheck(
@@ -875,6 +920,8 @@ export function DailyLogForm({
       if (restoredProgress) setTextbookProgressMap(restoredProgress);
       const restoredPlans = restoredSections(data.textbookPlans);
       if (restoredPlans) setTextbookPlanMap(restoredPlans);
+      const restoredSchoolPlans = restoredSections((data as { schoolPlans?: unknown }).schoolPlans);
+      if (restoredSchoolPlans) setSchoolPlanMap(restoredSchoolPlans);
     }
     {
       // 다중 항목 우선, 없으면 legacy 단일 필드를 항목 1개로 변환
@@ -997,13 +1044,52 @@ export function DailyLogForm({
   const planSections = textbooks
     .filter((name) => (textbookPlanMap[name] ?? "").trim())
     .map((name) => ({ name, text: textbookPlanMap[name].trim() }));
+  // 학교 context 계획 섹션 — map에 있는 모든 키(과거 draft의 다른 학교명 포함) 중 내용 있는 것
+  const schoolPlanSections = Object.keys(schoolPlanMap)
+    .filter((name) => (schoolPlanMap[name] ?? "").trim())
+    .map((name) => ({ name, text: schoolPlanMap[name].trim() }));
   const derivedDefaultProgress = joinDerivedText(
     buildTextbookSectionsText(progressSections),
     defaultProgress,
   );
+  // mirror 순서 고정: 교재 계획 → 학교 계획 → 기타 메모 (strip 왕복이 결정적이어야 함)
   const derivedNextLessonPlan = joinDerivedText(
-    buildTextbookSectionsText(planSections),
+    joinDerivedText(
+      buildTextbookSectionsText(planSections),
+      buildTextbookSectionsText(schoolPlanSections),
+    ),
     nextLessonPlan,
+  );
+
+  // 항목의 context 판별 — 저장된 필드가 identity: school이 있으면 학교 context(과거 ON 기록 보존),
+  // 없고 시험 기간 ON+교재도 없으면(신규 ON 항목) 학교 context. 그 외에는 교재 context.
+  const schoolName = school?.trim() ?? "";
+  const isSchoolContextItem = (item: { textbook: string; school: string }) =>
+    Boolean(item.school) || (examPeriod && !item.textbook);
+
+  // 다음 수업 계획 편집기 구성 — 시험 기간 ON이면 학교 편집기가 기본이고,
+  // 이미 내용이 있는 교재 계획은 데이터 보존을 위해 함께 표시한다 (자동 변환/삭제 없음).
+  // OFF이면 교재 편집기가 기본, 내용 있는 학교 계획(과거 ON draft)은 함께 표시.
+  const planTextbookNames = examPeriod
+    ? textbooks.filter((name) => (textbookPlanMap[name] ?? "").trim())
+    : textbooks;
+  const planSchoolNames = (() => {
+    const names = Object.keys(schoolPlanMap).filter((name) => (schoolPlanMap[name] ?? "").trim());
+    if (examPeriod && schoolName && !names.includes(schoolName)) {
+      names.push(schoolName);
+    }
+    return names;
+  })();
+  const showStructuredPlans = planTextbookNames.length > 0 || planSchoolNames.length > 0;
+
+  // 학교 context chip (읽기 전용 — 학교 미등록이면 안내만, 가짜 값 저장 없음)
+  const schoolContextChip = (label: string) => (
+    <div className="flex items-center gap-2 text-xs font-medium text-[#7c6d69]">
+      <span className="shrink-0">학교</span>
+      <span className="flex min-h-[36px] w-full min-w-0 items-center truncate rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-2.5 text-xs font-medium text-[#a2643c]">
+        {label || "학교 미등록 — 수업 그룹에서 학교를 먼저 등록해주세요."}
+      </span>
+    </div>
   );
 
   // [전체 학생에게 적용] — 버튼 한 번으로 모든 교재 진도(+기타 메모)를 전 학생에게.
@@ -1100,20 +1186,28 @@ export function DailyLogForm({
         memo,
         homework,
         homeworkDueDate: homework.trim() ? homeworkDueDate : "",
-        homeworkAssignments: cleanedAssignments.map(({ id, content, dueDate, textbook }) => ({
+        homeworkAssignments: cleanedAssignments.map(({ id, content, dueDate, textbook, school: hwSchool }) => ({
           id,
           content,
           dueDate,
           textbook,
+          school: hwSchool,
         })),
         nextLessonPlan: derivedNextLessonPlan,
         nextPlanDate: derivedNextLessonPlan.trim() ? nextPlanDate : "",
         textbookProgress: progressSections,
         textbookPlans: planSections,
+        schoolPlans: schoolPlanSections,
         // 해야 할 일 다중 항목 — 내용 없는 항목은 조용히 제외 (Todo 등록 조건: 내용 존재)
         tasks: tasks
           .filter((task) => task.content.trim())
-          .map(({ id, textbook, content, dueDate }) => ({ id, textbook, content, dueDate })),
+          .map(({ id, textbook, school: taskSchool, content, dueDate }) => ({
+            id,
+            textbook,
+            school: taskSchool,
+            content,
+            dueDate,
+          })),
         vocabTotal,
         reflectionGood,
         reflectionHard,
@@ -1450,7 +1544,10 @@ export function DailyLogForm({
                   >
                     {/* 내용 칸 아래에 완료일 카드가 오는 세로 배치 (화면 폭과 무관) */}
                     <div className="flex min-w-0 flex-col gap-2">
-                      {textbooks.length > 0 ? (
+                      {isSchoolContextItem(item) ? (
+                        // 시험 기간 학교 context (저장된 school 또는 신규 ON 항목) — 읽기 전용 chip
+                        schoolContextChip(item.school || schoolName)
+                      ) : textbooks.length > 0 ? (
                         // 숙제별 교재 연결(선택) — 같은 교재로 여러 숙제 가능, 자동 생성 없음
                         <label className="flex items-center gap-2 text-xs font-medium text-[#7c6d69]">
                           <span className="shrink-0">교재</span>
@@ -1533,8 +1630,9 @@ export function DailyLogForm({
                         content: "",
                         // 기본 완료일 = 이 그룹의 다음 실제 수업일 (시간표 없으면 빈 값 — 직접 선택)
                         dueDate: nextClassDateAfter(scheduleDays, classDate) ?? "",
-                        // 교재가 정확히 1개면 그 교재를 기본값으로, 여러 개면 직접 선택
-                        textbook: textbooks.length === 1 ? textbooks[0] : "",
+                        // 시험 기간 ON: 학교 context / OFF: 교재 1개면 기본값, 여러 개면 직접 선택
+                        textbook: examPeriod ? "" : textbooks.length === 1 ? textbooks[0] : "",
+                        school: examPeriod ? schoolName : "",
                       },
                     ])
                   }
@@ -1590,11 +1688,12 @@ export function DailyLogForm({
               <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
                 <CircleArrowRight className="h-3.5 w-3.5 text-[#3e7d6b]" /> 다음 수업 계획
               </span>
-              {textbooks.length > 0 ? (
-                // 교재별 다음 수업 계획 — 진도와 같은 name 키 구조 (계획은 Todo가 아니다)
+              {showStructuredPlans ? (
+                // 교재/학교별 다음 수업 계획 — name 키 구조 (계획은 Todo가 아니다).
+                // 시험 기간 ON이면 학교 편집기가 기본, 기존 교재 계획 내용은 보존 표시.
                 <div className="space-y-2.5">
-                  {textbooks.map((name) => (
-                    <label key={name} className="block min-w-0">
+                  {planTextbookNames.map((name) => (
+                    <label key={`tb-${name}`} className="block min-w-0">
                       <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-[#3e7d6b]">
                         <span aria-hidden>📘</span>
                         <span className="min-w-0 truncate">{name}</span>
@@ -1612,9 +1711,28 @@ export function DailyLogForm({
                       />
                     </label>
                   ))}
+                  {planSchoolNames.map((name) => (
+                    <label key={`sc-${name}`} className="block min-w-0">
+                      <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-[#a2643c]">
+                        <span aria-hidden>🏫</span>
+                        <span className="min-w-0 truncate">{name}</span>
+                      </span>
+                      <textarea
+                        value={schoolPlanMap[name] ?? ""}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setSchoolPlanMap((prev) => ({ ...prev, [name]: value }));
+                        }}
+                        rows={2}
+                        aria-label={`${name} 다음 수업 계획`}
+                        className="w-full rounded-2xl border border-[#e8c9b0] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#e0b28c] placeholder:text-[#a79996]"
+                        placeholder={"중간고사 서술형 대비\n(시험 기간 계획)"}
+                      />
+                    </label>
+                  ))}
                   <label className="block">
                     <span className="mb-1 block text-xs font-medium text-[#7c6d69]">
-                      기타 계획 메모 (선택 — 교재 외 내용)
+                      기타 계획 메모 (선택)
                     </span>
                     <textarea
                       value={nextLessonPlan}
@@ -1622,7 +1740,7 @@ export function DailyLogForm({
                       rows={2}
                       aria-label="기타 계획 메모"
                       className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
-                      placeholder="교재와 무관한 계획이 있으면 적어주세요."
+                      placeholder="교재/학교와 무관한 계획이 있으면 적어주세요."
                     />
                   </label>
                 </div>
@@ -1668,7 +1786,9 @@ export function DailyLogForm({
                       className="min-w-0 rounded-2xl border border-[#e2d8f3] bg-[#fbf9ff] p-2.5"
                     >
                       <div className="flex min-w-0 flex-col gap-2">
-                        {textbooks.length > 0 ? (
+                        {isSchoolContextItem(task) ? (
+                          schoolContextChip(task.school || schoolName)
+                        ) : textbooks.length > 0 ? (
                           <label className="flex items-center gap-2 text-xs font-medium text-[#7c6d69]">
                             <span className="shrink-0">교재</span>
                             <select
@@ -1744,7 +1864,9 @@ export function DailyLogForm({
                           key: globalThis.crypto.randomUUID(),
                           // stable id를 추가 시점에 발급 — Todo 소유 identity (삭제/재정렬에도 안정)
                           id: globalThis.crypto.randomUUID(),
+                          // 시험 기간 ON: 새 항목은 학교 context (기존 항목은 그대로)
                           textbook: "",
+                          school: examPeriod ? schoolName : "",
                           content: "",
                           dueDate: "",
                         },

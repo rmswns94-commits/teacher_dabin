@@ -56,7 +56,7 @@ export async function GET(request: Request) {
   // 선택 날짜의 Daily Log만 조회 (전체 기간 조회 금지)
   const { data: logRows, error: logError } = await supabase
     .from("daily_logs")
-    .select("id, group_id, status, default_progress, lesson_content, class_groups(id, name, textbook)")
+    .select("id, group_id, status, default_progress, lesson_content, class_groups(id, name, textbook, is_exam_period)")
     .eq("user_id", user.id)
     .eq("class_date", date);
 
@@ -76,7 +76,7 @@ export async function GET(request: Request) {
   const logs: LogRow[] = (logRows ?? []).map((row) => {
     const groups = row.class_groups as unknown;
     const group = (Array.isArray(groups) ? groups[0] : groups) as
-      | { id: string; name: string; textbook: string | null }
+      | { id: string; name: string; textbook: string | null; is_exam_period: boolean | null }
       | null;
 
     return {
@@ -84,7 +84,9 @@ export async function GET(request: Request) {
       status: row.status,
       progress: mergeLegacyLessonContent(row.default_progress, row.lesson_content),
       groupName: group?.name ?? "수업 그룹",
-      textbook: group?.textbook?.trim() ?? "",
+      // 시험 기간 ON인 그룹은 교재 셀에 정확히 "시험 대비" (학교명 아님 — export 시점의
+      // 현재 그룹 상태 기준: historical snapshot이 아니라 의도된 동작). OFF면 기존 교재 그대로.
+      textbook: group?.is_exam_period ? "시험 대비" : group?.textbook?.trim() ?? "",
     };
   });
 

@@ -163,14 +163,15 @@ export type StudentLessonLogWithStudent = StudentLessonLogRecord & {
 
 export type DailyLogDetail = DailyLogRecord & {
   // textbook: 수업 제목 옆 "교재 LIST" 보조 버튼용 (줄바꿈 구분 여러 권 — 그룹 상세와 동일 포맷)
-  group: Pick<ClassGroupRecord, "id" | "name" | "grade" | "textbook"> | null;
+  // school/is_exam_period: 시험 기간 context용 (edit 화면의 새 항목 기본 context 결정)
+  group: Pick<ClassGroupRecord, "id" | "name" | "grade" | "textbook" | "school" | "is_exam_period"> | null;
   lessonLogs: StudentLessonLogWithStudent[];
   makeups: MakeupLessonRecord[];
   // 오늘 숙제(구조화) — 완료일 ASC. migration 미적용/조회 실패 시 [] (화면은 항상 뜬다)
   homeworkAssignments: DailyLogHomeworkAssignmentRecord[];
   // 이 일지의 "해야 할 일" linked Todo들 (공용 preparation 항목 — 복제 아님, 같은 row 상태).
   // 삭제(dismissed)된 항목은 제외. 조회 실패 시 [] (화면은 항상 뜬다)
-  linkedTasks: { id: string; text: string; textbook: string | null; dueDate: string | null; completed: boolean }[];
+  linkedTasks: { id: string; text: string; textbook: string | null; school: string | null; dueDate: string | null; completed: boolean }[];
 };
 
 // options.withMakeups=false: 보충 정보가 필요 없는 소비처(이전 기록 패널의 학생 기록 lazy 조회)가
@@ -188,7 +189,7 @@ export async function getDailyLogDetailForCurrentUser(
 
   const { data, error } = await supabase
     .from("daily_logs")
-    .select("*, class_groups(id, name, grade, textbook), student_lesson_logs(*, students(id, name, grade))")
+    .select("*, class_groups(id, name, grade, textbook, school, is_exam_period), student_lesson_logs(*, students(id, name, grade))")
     .eq("id", dailyLogId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -234,7 +235,7 @@ export async function getDailyLogDetailForCurrentUser(
   let homeworkAssignments: DailyLogHomeworkAssignmentRecord[] = [];
   const { data: hwRows, error: hwError } = await supabase
     .from("daily_log_homework_assignments")
-    .select("id, user_id, daily_log_id, content, due_date, textbook, sort_order, created_at, updated_at")
+    .select("id, user_id, daily_log_id, content, due_date, textbook, school, sort_order, created_at, updated_at")
     .eq("user_id", user.id)
     .eq("daily_log_id", dailyLogId)
     .order("due_date", { ascending: true })
@@ -272,6 +273,7 @@ export async function getDailyLogDetailForCurrentUser(
         id: item.id,
         text: item.text,
         textbook: item.textbook ?? null,
+        school: item.school ?? null,
         dueDate: item.dueDate ?? null,
         completed: item.completed,
       }));
@@ -403,7 +405,7 @@ async function syncDailyLogTaskTodos(
   groupId: string,
   dailyLogId: string,
   lessonDate: string,
-  tasks: { id: string; textbook?: string | null; content: string; dueDate?: string | null }[],
+  tasks: { id: string; textbook?: string | null; school?: string | null; content: string; dueDate?: string | null }[],
 ) {
   const { data: groupRow, error: readError } = await supabase
     .from("class_groups")
@@ -423,6 +425,7 @@ async function syncDailyLogTaskTodos(
     text: task.content.trim(),
     dueDate: resolveDailyLogTaskDueDate(task.dueDate || null, lessonDate),
     textbook: task.textbook?.trim() || null,
+    school: task.school?.trim() || null,
   }));
   const expectedById = new Map(expected.map((task) => [task.todoId, task]));
 
@@ -443,7 +446,8 @@ async function syncDailyLogTaskTodos(
     const unchanged =
       item.text === target.text &&
       (item.dueDate ?? null) === target.dueDate &&
-      (item.textbook ?? null) === target.textbook;
+      (item.textbook ?? null) === target.textbook &&
+      (item.school ?? null) === target.school;
     if (unchanged) {
       next.push(item); // dismissed tombstone도 내용이 그대로면 부활시키지 않는다
       continue;
@@ -459,6 +463,7 @@ async function syncDailyLogTaskTodos(
       source: "daily_log_task",
       sourceDailyLogId: dailyLogId,
       ...(target.textbook ? { textbook: target.textbook } : {}),
+      ...(target.school ? { school: target.school } : {}),
     });
   }
 
@@ -473,6 +478,7 @@ async function syncDailyLogTaskTodos(
       source: "daily_log_task",
       sourceDailyLogId: dailyLogId,
       ...(target.textbook ? { textbook: target.textbook } : {}),
+      ...(target.school ? { school: target.school } : {}),
     });
   }
 
@@ -505,7 +511,7 @@ export async function getHomeworkAssignmentsForDailyLog(dailyLogId: string) {
 
   const { data, error } = await supabase
     .from("daily_log_homework_assignments")
-    .select("id, user_id, daily_log_id, content, due_date, textbook, sort_order, created_at, updated_at")
+    .select("id, user_id, daily_log_id, content, due_date, textbook, school, sort_order, created_at, updated_at")
     .eq("user_id", user.id)
     .eq("daily_log_id", dailyLogId)
     .order("due_date", { ascending: true })
@@ -528,7 +534,7 @@ async function syncHomeworkAssignments(
   supabase: NonNullable<Awaited<ReturnType<typeof createServerSupabaseClient>>>,
   userId: string,
   dailyLogId: string,
-  items: { id?: string | null; content: string; dueDate: string; textbook?: string | null }[],
+  items: { id?: string | null; content: string; dueDate: string; textbook?: string | null; school?: string | null }[],
 ) {
   const { data: existingRows, error: readError } = await supabase
     .from("daily_log_homework_assignments")
@@ -576,6 +582,7 @@ async function syncHomeworkAssignments(
     content: item.content.trim(),
     due_date: item.dueDate,
     textbook: item.textbook?.trim() || null,
+    school: item.school?.trim() || null,
     sort_order: index,
   }));
 
@@ -830,6 +837,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   const taskItems = meaningfulDailyLogTasks(input.tasks ?? []).map((task) => ({
     id: task.id,
     textbook: task.textbook?.trim() || null,
+    school: task.school?.trim() || null,
     content: task.content.trim(),
     dueDate: task.dueDate || null,
   }));
@@ -873,6 +881,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     // "교재명 - 내용" mirror(+기타 메모)가 담겨 legacy 소비처와 호환된다
     textbook_progress: (input.textbookProgress ?? []).length > 0 ? input.textbookProgress : null,
     textbook_plans: (input.textbookPlans ?? []).length > 0 ? input.textbookPlans : null,
+    school_plans: (input.schoolPlans ?? []).length > 0 ? input.schoolPlans : null,
     vocab_total: vocabTotal,
     reflection_good: input.reflectionGood?.trim() || null,
     reflection_hard: input.reflectionHard?.trim() || null,

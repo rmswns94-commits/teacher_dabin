@@ -27,6 +27,16 @@ export function formatTextbookLinked(name: string | null | undefined, content: s
   return trimmedName ? `${trimmedName} - ${content}` : content;
 }
 
+// 항목의 연결 context label — 교재(textbook) 또는 학교(school, 시험 기간 기록) 이름 스냅샷.
+// 학교를 교재 필드에 넣지 않고 별도 필드로 저장하므로, 저장된 필드 자체가 context identity다
+// (현재 그룹의 시험 기간 상태와 무관하게 historical 표시가 보존된다). 둘 다 없으면 null.
+export function linkedContextLabel(item: {
+  textbook?: string | null;
+  school?: string | null;
+}): string | null {
+  return item.textbook?.trim() || item.school?.trim() || null;
+}
+
 // 교재별 섹션들 → 파생 mirror 텍스트. 내용이 있는 교재만, 블록 사이 빈 줄 구분.
 //   Grammar Inside 2 - p.42~47
 //   관계대명사 주격
