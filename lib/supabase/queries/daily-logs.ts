@@ -228,7 +228,7 @@ export async function getDailyLogDetailForCurrentUser(
   let homeworkAssignments: DailyLogHomeworkAssignmentRecord[] = [];
   const { data: hwRows, error: hwError } = await supabase
     .from("daily_log_homework_assignments")
-    .select("id, user_id, daily_log_id, content, due_date, sort_order, created_at, updated_at")
+    .select("id, user_id, daily_log_id, content, due_date, textbook, sort_order, created_at, updated_at")
     .eq("user_id", user.id)
     .eq("daily_log_id", dailyLogId)
     .order("due_date", { ascending: true })
@@ -309,6 +309,8 @@ async function syncLinkedPreparation(
   planText: string,
   planDate: string | null,
   createIfMissing = true,
+  // 연결 교재 이름 스냅샷 (해야 할 일 전용) — text에는 내용만, 표시할 때 "교재명 - 내용" 합성
+  textbook: string | null = null,
 ) {
   const { data: groupRow, error: readError } = await supabase
     .from("class_groups")
@@ -336,7 +338,12 @@ async function syncLinkedPreparation(
     if (!existing && !createIfMissing) {
       // 기존 항목이 없고 신규 생성이 금지된 source(예: 다음 수업 계획) → 아무것도 하지 않음
       next = null;
-    } else if (existing?.dismissed && existing.text === planText && existing.dueDate === planDate) {
+    } else if (
+      existing?.dismissed &&
+      existing.text === planText &&
+      existing.dueDate === planDate &&
+      (existing.textbook ?? null) === (textbook ?? null)
+    ) {
       // Teacher가 삭제한 linked 항목: 계획이 그대로면 단순 재저장으로 부활시키지 않는다
       next = null;
     } else {
@@ -349,12 +356,14 @@ async function syncLinkedPreparation(
         dueDate: planDate,
         source,
         sourceDailyLogId: dailyLogId,
+        ...(textbook ? { textbook } : {}),
       };
       const unchanged =
         existing &&
         !existing.dismissed &&
         existing.text === linked.text &&
-        existing.dueDate === linked.dueDate;
+        existing.dueDate === linked.dueDate &&
+        (existing.textbook ?? null) === (textbook ?? null);
       if (!unchanged) {
         next = existing
           ? items.map((item, n) => (n === index ? linked : item))
@@ -395,7 +404,7 @@ export async function getHomeworkAssignmentsForDailyLog(dailyLogId: string) {
 
   const { data, error } = await supabase
     .from("daily_log_homework_assignments")
-    .select("id, user_id, daily_log_id, content, due_date, sort_order, created_at, updated_at")
+    .select("id, user_id, daily_log_id, content, due_date, textbook, sort_order, created_at, updated_at")
     .eq("user_id", user.id)
     .eq("daily_log_id", dailyLogId)
     .order("due_date", { ascending: true })
@@ -418,7 +427,7 @@ async function syncHomeworkAssignments(
   supabase: NonNullable<Awaited<ReturnType<typeof createServerSupabaseClient>>>,
   userId: string,
   dailyLogId: string,
-  items: { id?: string | null; content: string; dueDate: string }[],
+  items: { id?: string | null; content: string; dueDate: string; textbook?: string | null }[],
 ) {
   const { data: existingRows, error: readError } = await supabase
     .from("daily_log_homework_assignments")
@@ -465,6 +474,7 @@ async function syncHomeworkAssignments(
     daily_log_id: dailyLogId,
     content: item.content.trim(),
     due_date: item.dueDate,
+    textbook: item.textbook?.trim() || null,
     sort_order: index,
   }));
 
@@ -734,6 +744,11 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     // 해야 할 일 — 일지 row가 폼 복원의 source (Todo는 완료 시에만 sync)
     task_content: input.taskContent?.trim() || null,
     task_due_date: input.taskContent?.trim() ? input.taskDate || null : null,
+    task_textbook: input.taskContent?.trim() ? input.taskTextbook?.trim() || null : null,
+    // 교재별 진도/계획 스냅샷 — default_progress/next_lesson_plan에는 폼이 합성한
+    // "교재명 - 내용" mirror(+기타 메모)가 담겨 legacy 소비처와 호환된다
+    textbook_progress: (input.textbookProgress ?? []).length > 0 ? input.textbookProgress : null,
+    textbook_plans: (input.textbookPlans ?? []).length > 0 ? input.textbookPlans : null,
     vocab_total: vocabTotal,
     reflection_good: input.reflectionGood?.trim() || null,
     reflection_hard: input.reflectionHard?.trim() || null,
@@ -827,6 +842,8 @@ export async function saveDailyLog(input: DailyLogFormInput) {
       "daily_log_task",
       taskText,
       taskText ? input.taskDate || null : null,
+      true,
+      taskText ? input.taskTextbook?.trim() || null : null,
     );
   }
 

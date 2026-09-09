@@ -34,6 +34,8 @@ export type PreparationItem = {
   dueDate?: string | null; // "YYYY-MM-DD"
   source?: "daily_log_next_plan" | "daily_log_homework" | "daily_log_task";
   sourceDailyLogId?: string;
+  // 연결 교재 이름 스냅샷 — text에는 내용만 저장하고 표시할 때 "교재명 - 내용"으로 합성
+  textbook?: string | null;
   // linked 항목을 Teacher가 삭제하면 tombstone(dismissed)으로 남긴다 — 화면에는 안 보이지만
   // 일지 단순 재저장으로 부활하지 않게 억제하고, 계획 내용/날짜가 실제 바뀌면 되살린다.
   dismissed?: boolean;
@@ -131,6 +133,11 @@ export type DailyLogRecord = {
   next_plan_date: string | null; // 다음 수업 계획의 계획 날짜 (To Do 연동 기준)
   task_content: string | null; // 해야 할 일 (완료 시 공용 Todo source='daily_log_task'로 연결)
   task_due_date: string | null; // 해야 할 일 날짜 "YYYY-MM-DD"
+  task_textbook: string | null; // 해야 할 일에 연결한 교재 이름 스냅샷 (표시: "교재명 - 내용")
+  // 교재별 진도/다음 수업 계획 — [{ name, text }] 스냅샷. default_progress/next_lesson_plan은
+  // 이 구조에서 파생된 "교재명 - 내용" mirror(+기타 메모)로 기록된다 (legacy 소비처 호환).
+  textbook_progress: { name: string; text: string }[] | null;
+  textbook_plans: { name: string; text: string }[] | null;
   reflection_good: string | null; // 수업 회고: 잘된 점 (강사 전용 — 학생/성장노트 노출 금지)
   reflection_hard: string | null; // 수업 회고: 아쉬웠던 점
   reflection_next: string | null; // 수업 회고: 다음에 다르게 해볼 것 (다음 일지 작성 화면에 리마인드)
@@ -148,6 +155,7 @@ export type DailyLogHomeworkAssignmentRecord = {
   daily_log_id: string;
   content: string; // 여러 줄 가능 (내부 \n 보존)
   due_date: string; // "YYYY-MM-DD" (KST date-only)
+  textbook: string | null; // 연결 교재 이름 스냅샷 (없으면 null — content만 표시)
   sort_order: number;
   created_at: string;
   updated_at: string;

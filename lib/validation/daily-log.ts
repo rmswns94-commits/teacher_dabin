@@ -48,7 +48,8 @@ export const studentLessonEntrySchema = z.object({
   effortLevel: z.enum(["high", "normal", "low"]).optional().or(z.literal("")),
 });
 
-// 오늘 숙제(구조화) — 항목마다 내용+완료일 필수, 내용은 여러 줄 가능(trim은 가장자리만)
+// 오늘 숙제(구조화) — 항목마다 내용+완료일 필수, 내용은 여러 줄 가능(trim은 가장자리만).
+// textbook: 연결 교재 이름 스냅샷 (선택 — "교재 없음"은 빈 문자열)
 export const homeworkAssignmentSchema = z.object({
   id: z.string().uuid().nullable().optional(),
   content: z
@@ -57,6 +58,13 @@ export const homeworkAssignmentSchema = z.object({
     .min(1, "숙제 내용을 입력해주세요.")
     .max(500, "숙제 내용은 500자 이내로 입력해주세요."),
   dueDate: dateString,
+  textbook: shortText(100, "숙제 교재"),
+});
+
+// 교재별 섹션(진도/다음 수업 계획) — 작성 시점 교재 이름 스냅샷 + 여러 줄 내용
+export const textbookSectionSchema = z.object({
+  name: z.string().trim().min(1).max(100, "교재 이름이 너무 길어요."),
+  text: z.string().trim().max(2000, "내용은 2000자 이내로 입력해주세요."),
 });
 
 export const dailyLogSchema = z
@@ -70,11 +78,16 @@ export const dailyLogSchema = z
     memo: shortText(1000, "메모"),
     homework: shortText(1000, "오늘 숙제"),
     homeworkDueDate: dateString.optional().or(z.literal("")),
-    nextLessonPlan: shortText(1000, "다음 수업 계획"),
+    // 교재별 계획 mirror가 합성되므로 단일 필드보다 넉넉한 상한
+    nextLessonPlan: shortText(4000, "다음 수업 계획"),
     nextPlanDate: dateString.optional().or(z.literal("")),
     // 해야 할 일 — 다음 수업 계획과 별개인 Teacher 작업 (final 완료 시 공용 Todo 1개로 연결)
     taskContent: shortText(1000, "해야 할 일"),
     taskDate: dateString.optional().or(z.literal("")),
+    taskTextbook: shortText(100, "해야 할 일 교재"),
+    // 교재별 진도/다음 수업 계획 스냅샷 (내용이 있는 교재만 전송)
+    textbookProgress: z.array(textbookSectionSchema).max(20).optional(),
+    textbookPlans: z.array(textbookSectionSchema).max(20).optional(),
     vocabTotal: numberString.optional().or(z.literal("")),
     // 수업 회고 (강사 자기 성찰) — 전부 선택 입력
     reflectionGood: shortText(1000, "잘된 점"),

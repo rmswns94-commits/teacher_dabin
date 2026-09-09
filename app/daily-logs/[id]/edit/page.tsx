@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate } from "@/lib/dates";
 import { sortByKoreanName } from "@/lib/korean-sort";
 import { mergeLegacyLessonContent } from "@/lib/progress";
+import { buildTextbookSectionsText, stripDerivedPrefix } from "@/lib/textbooks";
 import { getDailyLogDraft } from "@/lib/supabase/queries/daily-log-drafts";
 import {
   getDailyLogDetailForCurrentUser,
@@ -181,20 +182,33 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
             id: hw.id,
             content: hw.content,
             dueDate: hw.due_date,
+            textbook: hw.textbook ?? "",
           }))}
           initial={{
             title: log.title ?? "",
             // migration 미적용 legacy row도 수업 내용을 잃지 않게 병합해 편집한다
-            // (이미 병합된 row는 그대로 — 중복 없음)
-            defaultProgress: mergeLegacyLessonContent(log.default_progress, log.lesson_content),
+            // (이미 병합된 row는 그대로 — 중복 없음).
+            // 교재별 진도가 있는 일지는 default_progress가 "교재명 - 내용" mirror 합성이므로
+            // mirror 부분을 떼고 "기타 메모"만 폼에 싣는다 (구조화는 textbookProgress로 복원).
+            defaultProgress: stripDerivedPrefix(
+              mergeLegacyLessonContent(log.default_progress, log.lesson_content),
+              buildTextbookSectionsText(log.textbook_progress ?? []),
+            ),
             memo: log.memo ?? "",
             homework: log.homework ?? "",
             homeworkDueDate: log.homework_due_date ?? "",
-            nextLessonPlan: log.next_lesson_plan ?? "",
+            nextLessonPlan: stripDerivedPrefix(
+              log.next_lesson_plan ?? "",
+              buildTextbookSectionsText(log.textbook_plans ?? []),
+            ),
             nextPlanDate: log.next_plan_date ?? "",
+            // 교재별 진도/계획 스냅샷 복원
+            textbookProgress: log.textbook_progress ?? [],
+            textbookPlans: log.textbook_plans ?? [],
             // 해야 할 일 — 일지 row가 source (Todo 삭제/완료와 무관하게 폼 복원)
             taskContent: log.task_content ?? "",
             taskDate: log.task_due_date ?? "",
+            taskTextbook: log.task_textbook ?? "",
             vocabTotal: log.vocab_total === null ? "" : String(log.vocab_total),
             reflectionGood: log.reflection_good ?? "",
             reflectionHard: log.reflection_hard ?? "",

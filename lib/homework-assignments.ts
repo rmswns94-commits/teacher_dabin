@@ -1,4 +1,5 @@
 import { formatKoreanDate } from "@/lib/dates";
+import { formatTextbookLinked } from "@/lib/textbooks";
 
 // 오늘 숙제(구조화) 공용 헬퍼.
 // mirror: 구조화 숙제를 daily_logs.homework 텍스트로도 파생 기록한다 —
@@ -9,6 +10,7 @@ export type HomeworkAssignmentInput = {
   id: string | null; // 기존 row id (수정 sync용) — 새 항목은 null
   content: string;
   dueDate: string; // "YYYY-MM-DD"
+  textbook?: string | null; // 연결 교재 이름 스냅샷 (없으면 content만 표시)
 };
 
 // due_date ASC(같으면 입력 순서) 정렬 사본
@@ -19,9 +21,14 @@ export function sortAssignments<T extends { dueDate: string }>(items: T[]): T[] 
     .map(({ item }) => item);
 }
 
-// 파생 텍스트: "9월 11일까지 · 내용" 줄들 (완료일 오름차순, 내용의 내부 \n 유지)
-export function buildHomeworkMirror(items: { content: string; dueDate: string }[]): string {
+// 파생 텍스트: "9월 11일까지 · [교재명 - ]내용" 줄들 (완료일 오름차순, 내용의 내부 \n 유지)
+export function buildHomeworkMirror(
+  items: { content: string; dueDate: string; textbook?: string | null }[],
+): string {
   return sortAssignments(items)
-    .map((item) => `${formatKoreanDate(item.dueDate)}까지 · ${item.content.trim()}`)
+    .map(
+      (item) =>
+        `${formatKoreanDate(item.dueDate)}까지 · ${formatTextbookLinked(item.textbook, item.content.trim())}`,
+    )
     .join("\n");
 }

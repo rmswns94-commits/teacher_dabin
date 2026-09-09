@@ -32,6 +32,7 @@ import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
+import { formatTextbookLinked } from "@/lib/textbooks";
 import {
   getAvailableStudentsForGroup,
   getGroupByIdForCurrentUser,
@@ -397,7 +398,7 @@ export default async function GroupDetailPage({
                                 item.completed ? "line-through opacity-60" : "",
                               ].join(" ")}
                             >
-                              {item.text}
+                              {formatTextbookLinked(item.textbook, item.text)}
                             </span>
                             {item.dueDate ? (
                               <span className="ml-auto shrink-0 rounded-full bg-[#eef2fb] px-2 py-0.5 text-[10px] font-medium text-[#5b6fae]">

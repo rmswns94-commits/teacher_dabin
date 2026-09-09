@@ -28,6 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MakeupStatusBadge } from "@/components/status-badge";
 import { useHistoryImport } from "@/components/lesson-history-panel";
 import { registerDirtyCheck } from "@/components/unsaved-guard";
+import { buildTextbookSectionsText, joinDerivedText } from "@/lib/textbooks";
 import {
   autosaveDailyLogDraftAction,
   discardDailyLogDraftAction,
@@ -167,12 +168,16 @@ type DraftPayload = {
   homework: string;
   homeworkDueDate: string;
   // 오늘 숙제(구조화) — draft 단계에서는 payload에만 유지 (row 생성 없음)
-  homeworkAssignments: { id: string | null; content: string; dueDate: string }[];
+  homeworkAssignments: { id: string | null; content: string; dueDate: string; textbook: string }[];
   nextLessonPlan: string;
   nextPlanDate: string;
+  // 교재별 진도/다음 수업 계획 — [{ name, text }] (내용 있는 교재만)
+  textbookProgress: { name: string; text: string }[];
+  textbookPlans: { name: string; text: string }[];
   // 해야 할 일 (공용 Todo 연결) — draft 단계에서는 payload에만 유지 (Todo 생성 없음)
   taskContent: string;
   taskDate: string;
+  taskTextbook: string;
   vocabTotal: string;
   reflectionGood: string;
   reflectionHard: string;
@@ -182,7 +187,8 @@ type DraftPayload = {
 
 // 오늘 숙제 폼 항목 — key는 React 렌더용 안정 identity (삭제/재정렬에도 값이 섞이지 않게),
 // id는 저장된 row id (수정 sync용, 새 항목은 null). 저장/스냅샷에는 key를 싣지 않는다.
-type AssignmentItem = { key: string; id: string | null; content: string; dueDate: string };
+// textbook: 연결 교재 이름 (""=교재 없음/기타)
+type AssignmentItem = { key: string; id: string | null; content: string; dueDate: string; textbook: string };
 
 function restoredAssignments(value: unknown): AssignmentItem[] | null {
   if (!Array.isArray(value)) {
@@ -190,7 +196,7 @@ function restoredAssignments(value: unknown): AssignmentItem[] | null {
   }
   return value
     .filter(
-      (item): item is { id?: unknown; content: string; dueDate: string } =>
+      (item): item is { id?: unknown; content: string; dueDate: string; textbook?: unknown } =>
         Boolean(item) &&
         typeof (item as { content?: unknown }).content === "string" &&
         typeof (item as { dueDate?: unknown }).dueDate === "string",
@@ -200,7 +206,26 @@ function restoredAssignments(value: unknown): AssignmentItem[] | null {
       id: typeof item.id === "string" ? item.id : null,
       content: item.content,
       dueDate: item.dueDate,
+      textbook: typeof item.textbook === "string" ? item.textbook : "",
     }));
+}
+
+// 교재별 섹션([{name,text}]) 복원 → name→text map (알 수 없는 형태는 null)
+function restoredSections(value: unknown): Record<string, string> | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const map: Record<string, string> = {};
+  for (const item of value) {
+    if (
+      item &&
+      typeof (item as { name?: unknown }).name === "string" &&
+      typeof (item as { text?: unknown }).text === "string"
+    ) {
+      map[(item as { name: string }).name] = (item as { text: string }).text;
+    }
+  }
+  return map;
 }
 
 function restoredText(value: unknown, fallback: string) {
@@ -417,6 +442,7 @@ export function DailyLogForm({
   draftPromptOnly?: boolean;
   initial?: {
     title: string;
+    // 교재별 진도가 있는 일지는 mirror를 뗀 "기타 메모"만 (edit 페이지가 stripDerivedPrefix로 분리)
     defaultProgress: string;
     memo: string;
     homework: string;
@@ -425,13 +451,17 @@ export function DailyLogForm({
     nextPlanDate?: string;
     taskContent?: string;
     taskDate?: string;
+    taskTextbook?: string;
+    // 교재별 진도/다음 수업 계획 스냅샷 (수정 화면 복원용)
+    textbookProgress?: { name: string; text: string }[];
+    textbookPlans?: { name: string; text: string }[];
     vocabTotal?: string;
     reflectionGood?: string;
     reflectionHard?: string;
     reflectionNext?: string;
   };
   // 오늘 숙제(구조화) — 수정 화면에서 기존 row 복원용 (id 기반 sync)
-  initialAssignments?: { id: string; content: string; dueDate: string }[];
+  initialAssignments?: { id: string; content: string; dueDate: string; textbook?: string | null }[];
   // 같은 그룹 직전 completed 일지의 "다음에 다르게 해볼 것" — 회고 카드에 리마인드로 표시
   previousReflection?: { classDate: string; reflectionNext: string } | null;
 }) {
@@ -474,6 +504,19 @@ export function DailyLogForm({
     restoredText(restored?.defaultProgress, initial?.defaultProgress ?? ""),
   );
   const [memo, setMemo] = useState(restoredText(restored?.memo, initial?.memo ?? ""));
+  // 교재별 진도/다음 수업 계획 — name→text map (교재 이름 스냅샷 기준, 순서/index와 무관).
+  // 저장 시 [{name,text}]로 직렬화되고 default_progress/next_lesson_plan에는
+  // "교재명 - 내용" mirror가 합성된다 (기존 전체 적용/Excel/브리핑 소비처 호환).
+  const [textbookProgressMap, setTextbookProgressMap] = useState<Record<string, string>>(
+    () =>
+      restoredSections(restored?.textbookProgress) ??
+      Object.fromEntries((initial?.textbookProgress ?? []).map((s) => [s.name, s.text])),
+  );
+  const [textbookPlanMap, setTextbookPlanMap] = useState<Record<string, string>>(
+    () =>
+      restoredSections(restored?.textbookPlans) ??
+      Object.fromEntries((initial?.textbookPlans ?? []).map((s) => [s.name, s.text])),
+  );
   // 오늘 숙제(구조화): draft 복원 → 저장된 row 순
   const [assignments, setAssignments] = useState<AssignmentItem[]>(
     () =>
@@ -483,6 +526,7 @@ export function DailyLogForm({
         id: item.id,
         content: item.content,
         dueDate: item.dueDate,
+        textbook: item.textbook ?? "",
       })),
   );
   // legacy free-text 숙제: 구조화 row가 있는 일지는 homework 필드가 파생 mirror라 폼에 싣지 않는다
@@ -545,6 +589,10 @@ export function DailyLogForm({
   );
   const [taskDateTouched, setTaskDateTouched] = useState(
     Boolean(restoredText(restored?.taskDate, "") || initial?.taskDate),
+  );
+  // 해야 할 일에 연결한 교재 (""=없음) — Todo 표시는 "교재명 - 내용"으로 합성
+  const [taskTextbook, setTaskTextbook] = useState(
+    restoredText(restored?.taskTextbook, initial?.taskTextbook ?? ""),
   );
   // 학생 평가 UI는 초등/중등/고등 모든 학년 공통으로 사용한다.
   const [vocabTotal, setVocabTotal] = useState(
@@ -611,11 +659,24 @@ export function DailyLogForm({
       homework,
       homeworkDueDate,
       // key(렌더용)는 제외 — draft payload/스냅샷에는 저장 데이터만
-      homeworkAssignments: assignments.map(({ id, content, dueDate }) => ({ id, content, dueDate })),
+      homeworkAssignments: assignments.map(({ id, content, dueDate, textbook }) => ({
+        id,
+        content,
+        dueDate,
+        textbook,
+      })),
       nextLessonPlan,
       nextPlanDate,
+      // 교재별 섹션 — 내용 있는 교재만 [{name,text}]로 (draft 복원 대칭)
+      textbookProgress: textbooks
+        .filter((name) => (textbookProgressMap[name] ?? "").trim())
+        .map((name) => ({ name, text: textbookProgressMap[name] })),
+      textbookPlans: textbooks
+        .filter((name) => (textbookPlanMap[name] ?? "").trim())
+        .map((name) => ({ name, text: textbookPlanMap[name] })),
       taskContent,
       taskDate,
+      taskTextbook,
       vocabTotal,
       reflectionGood,
       reflectionHard,
@@ -625,7 +686,7 @@ export function DailyLogForm({
     if (initialSnapshotRef.current === null) {
       initialSnapshotRef.current = JSON.stringify(formStateRef.current);
     }
-  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, taskContent, taskDate, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries]);
+  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, taskContent, taskDate, taskTextbook, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries]);
   useEffect(
     () =>
       registerDirtyCheck(
@@ -746,8 +807,11 @@ export function DailyLogForm({
       homework: string;
       homeworkDueDate: string;
       homeworkAssignments: unknown;
+      textbookProgress: unknown;
+      textbookPlans: unknown;
       taskContent: string;
       taskDate: string;
+      taskTextbook: string;
       nextLessonPlan: string;
       nextPlanDate: string;
       vocabTotal: string;
@@ -765,7 +829,12 @@ export function DailyLogForm({
     {
       const restoredHw = restoredAssignments(data.homeworkAssignments);
       if (restoredHw) setAssignments(restoredHw);
+      const restoredProgress = restoredSections(data.textbookProgress);
+      if (restoredProgress) setTextbookProgressMap(restoredProgress);
+      const restoredPlans = restoredSections(data.textbookPlans);
+      if (restoredPlans) setTextbookPlanMap(restoredPlans);
     }
+    if (typeof data.taskTextbook === "string") setTaskTextbook(data.taskTextbook);
     if (typeof data.nextLessonPlan === "string") setNextLessonPlan(data.nextLessonPlan);
     if (typeof data.nextPlanDate === "string") {
       setNextPlanDate(data.nextPlanDate);
@@ -871,8 +940,27 @@ export function DailyLogForm({
     );
   };
 
+  // 교재별 진도/계획 → [{name,text}] (그룹 교재 순서 기준, 내용 있는 교재만 — name 키라
+  // 표시 순서가 바뀌어도 다른 교재에 붙지 않는다). 파생 텍스트는 mirror+기타 메모 합성.
+  const progressSections = textbooks
+    .filter((name) => (textbookProgressMap[name] ?? "").trim())
+    .map((name) => ({ name, text: textbookProgressMap[name].trim() }));
+  const planSections = textbooks
+    .filter((name) => (textbookPlanMap[name] ?? "").trim())
+    .map((name) => ({ name, text: textbookPlanMap[name].trim() }));
+  const derivedDefaultProgress = joinDerivedText(
+    buildTextbookSectionsText(progressSections),
+    defaultProgress,
+  );
+  const derivedNextLessonPlan = joinDerivedText(
+    buildTextbookSectionsText(planSections),
+    nextLessonPlan,
+  );
+
+  // [전체 학생에게 적용] — 버튼 한 번으로 모든 교재 진도(+기타 메모)를 전 학생에게.
+  // 결석 학생은 기존 정책대로 놓친 진도 기본값으로만 채운다.
   const applyDefaultProgress = () => {
-    if (!defaultProgress.trim()) {
+    if (!derivedDefaultProgress.trim()) {
       return;
     }
 
@@ -881,8 +969,8 @@ export function DailyLogForm({
         Object.entries(prev).map(([studentId, entry]) => [
           studentId,
           entry.attendance === "absent"
-            ? { ...entry, missedProgress: entry.missedProgress || defaultProgress.trim() }
-            : { ...entry, progress: defaultProgress.trim() },
+            ? { ...entry, missedProgress: entry.missedProgress || derivedDefaultProgress.trim() }
+            : { ...entry, progress: derivedDefaultProgress.trim() },
         ]),
       ),
     );
@@ -909,8 +997,8 @@ export function DailyLogForm({
       setError(message);
     };
 
-    // 다음 수업 계획은 내용+날짜 한 쌍 (날짜는 수업일 이후)
-    if (nextLessonPlan.trim() && !nextPlanDate) {
+    // 다음 수업 계획은 내용+날짜 한 쌍 (날짜는 수업일 이후) — 교재별 계획 포함 판정
+    if (derivedNextLessonPlan.trim() && !nextPlanDate) {
       failValidation("다음 수업 계획 날짜를 선택해주세요.");
       return;
     }
@@ -958,19 +1046,25 @@ export function DailyLogForm({
         classDate,
         groupId: group.id,
         title,
-        defaultProgress,
+        // 파생 합성값(교재별 mirror + 기타 메모) — 서버는 이 값을 그대로 저장하고
+        // 구조화 스냅샷은 textbookProgress/textbookPlans로 별도 저장한다
+        defaultProgress: derivedDefaultProgress,
         memo,
         homework,
         homeworkDueDate: homework.trim() ? homeworkDueDate : "",
-        homeworkAssignments: cleanedAssignments.map(({ id, content, dueDate }) => ({
+        homeworkAssignments: cleanedAssignments.map(({ id, content, dueDate, textbook }) => ({
           id,
           content,
           dueDate,
+          textbook,
         })),
-        nextLessonPlan,
-        nextPlanDate: nextLessonPlan.trim() ? nextPlanDate : "",
+        nextLessonPlan: derivedNextLessonPlan,
+        nextPlanDate: derivedNextLessonPlan.trim() ? nextPlanDate : "",
+        textbookProgress: progressSections,
+        textbookPlans: planSections,
         taskContent,
         taskDate: taskContent.trim() ? taskDate : "",
+        taskTextbook: taskContent.trim() ? taskTextbook : "",
         vocabTotal,
         reflectionGood,
         reflectionHard,
@@ -1224,23 +1318,73 @@ export function DailyLogForm({
           </div>
 
           <div className="rounded-2xl bg-[#f5f2ff] p-3">
-            <label className="block">
-              <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
-                <BookOpen className="h-3.5 w-3.5" /> 공통 진도
-              </span>
-              <textarea
-                value={defaultProgress}
-                onChange={(event) => setDefaultProgress(event.target.value)}
-                rows={6}
-                className="min-h-[150px] w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996] max-md:min-h-[135px]"
-                placeholder={"오늘 진행한 공통 진도를 자유롭게 적어주세요.\n단원 · 페이지 · 본문 · 문법 · 워크북 등을 여러 줄로 쓸 수 있어요."}
-              />
-              <div className="mt-2 flex justify-end">
-                <Button type="button" variant="secondary" onClick={applyDefaultProgress}>
-                  전체 학생에게 적용
-                </Button>
+            {textbooks.length > 0 ? (
+              // 교재별 진도: 그룹 교재마다 독립 textarea (name 키 — 순서와 무관).
+              // 저장 시 "교재명 - 내용" mirror가 공통 진도로 합성되고,
+              // [전체 학생에게 적용] 버튼 한 번으로 모든 교재 진도가 전 학생에게 적용된다.
+              <div className="block">
+                <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
+                  <BookOpen className="h-3.5 w-3.5" /> 교재별 진도
+                </span>
+                <div className="space-y-2.5">
+                  {textbooks.map((name) => (
+                    <label key={name} className="block min-w-0">
+                      <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-[#6652b9]">
+                        <span aria-hidden>📘</span>
+                        <span className="min-w-0 truncate">{name}</span>
+                      </span>
+                      <textarea
+                        value={textbookProgressMap[name] ?? ""}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setTextbookProgressMap((prev) => ({ ...prev, [name]: value }));
+                        }}
+                        rows={3}
+                        aria-label={`${name} 진도`}
+                        className="min-h-[76px] w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                        placeholder={"p.42~47\n관계대명사 주격 (여러 줄로 쓸 수 있어요)"}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <label className="mt-3 block">
+                  <span className="mb-1 block text-xs font-medium text-[#7c6d69]">
+                    기타 진도 메모 (선택 — 교재 외 내용)
+                  </span>
+                  <textarea
+                    value={defaultProgress}
+                    onChange={(event) => setDefaultProgress(event.target.value)}
+                    rows={2}
+                    aria-label="기타 진도 메모"
+                    className="w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                    placeholder="교재와 무관한 진도/활동이 있으면 적어주세요."
+                  />
+                </label>
+                <div className="mt-2 flex justify-end">
+                  <Button type="button" variant="secondary" onClick={applyDefaultProgress}>
+                    전체 학생에게 적용
+                  </Button>
+                </div>
               </div>
-            </label>
+            ) : (
+              <label className="block">
+                <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
+                  <BookOpen className="h-3.5 w-3.5" /> 공통 진도
+                </span>
+                <textarea
+                  value={defaultProgress}
+                  onChange={(event) => setDefaultProgress(event.target.value)}
+                  rows={6}
+                  className="min-h-[150px] w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996] max-md:min-h-[135px]"
+                  placeholder={"오늘 진행한 공통 진도를 자유롭게 적어주세요.\n단원 · 페이지 · 본문 · 문법 · 워크북 등을 여러 줄로 쓸 수 있어요."}
+                />
+                <div className="mt-2 flex justify-end">
+                  <Button type="button" variant="secondary" onClick={applyDefaultProgress}>
+                    전체 학생에게 적용
+                  </Button>
+                </div>
+              </label>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -1260,6 +1404,30 @@ export function DailyLogForm({
                   >
                     {/* 내용 칸 아래에 완료일 카드가 오는 세로 배치 (화면 폭과 무관) */}
                     <div className="flex min-w-0 flex-col gap-2">
+                      {textbooks.length > 0 ? (
+                        // 숙제별 교재 연결(선택) — 같은 교재로 여러 숙제 가능, 자동 생성 없음
+                        <label className="flex items-center gap-2 text-xs font-medium text-[#7c6d69]">
+                          <span className="shrink-0">교재</span>
+                          <select
+                            value={item.textbook}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setAssignments((prev) =>
+                                prev.map((it) => (it.key === item.key ? { ...it, textbook: value } : it)),
+                              );
+                            }}
+                            aria-label={`숙제 ${index + 1} 교재 선택`}
+                            className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 py-1.5 text-xs font-medium text-[#6652b9] outline-none"
+                          >
+                            <option value="">교재 없음 / 기타</option>
+                            {textbooks.map((name) => (
+                              <option key={name} value={name}>
+                                {name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
                       <textarea
                         value={item.content}
                         onChange={(event) => {
@@ -1319,6 +1487,8 @@ export function DailyLogForm({
                         content: "",
                         // 기본 완료일 = 이 그룹의 다음 실제 수업일 (시간표 없으면 빈 값 — 직접 선택)
                         dueDate: nextClassDateAfter(scheduleDays, classDate) ?? "",
+                        // 교재가 정확히 1개면 그 교재를 기본값으로, 여러 개면 직접 선택
+                        textbook: textbooks.length === 1 ? textbooks[0] : "",
                       },
                     ])
                   }
@@ -1374,13 +1544,51 @@ export function DailyLogForm({
               <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
                 <CircleArrowRight className="h-3.5 w-3.5 text-[#3e7d6b]" /> 다음 수업 계획
               </span>
-              <textarea
-                value={nextLessonPlan}
-                onChange={(event) => setNextLessonPlan(event.target.value)}
-                rows={3}
-                className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
-                placeholder={"Unit 3 p.54~59 / 관계대명사 목적격 복습"}
-              />
+              {textbooks.length > 0 ? (
+                // 교재별 다음 수업 계획 — 진도와 같은 name 키 구조 (계획은 Todo가 아니다)
+                <div className="space-y-2.5">
+                  {textbooks.map((name) => (
+                    <label key={name} className="block min-w-0">
+                      <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-[#3e7d6b]">
+                        <span aria-hidden>📘</span>
+                        <span className="min-w-0 truncate">{name}</span>
+                      </span>
+                      <textarea
+                        value={textbookPlanMap[name] ?? ""}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setTextbookPlanMap((prev) => ({ ...prev, [name]: value }));
+                        }}
+                        rows={2}
+                        aria-label={`${name} 다음 수업 계획`}
+                        className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                        placeholder={"p.51~55\n관계대명사 목적격"}
+                      />
+                    </label>
+                  ))}
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-[#7c6d69]">
+                      기타 계획 메모 (선택 — 교재 외 내용)
+                    </span>
+                    <textarea
+                      value={nextLessonPlan}
+                      onChange={(event) => setNextLessonPlan(event.target.value)}
+                      rows={2}
+                      aria-label="기타 계획 메모"
+                      className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                      placeholder="교재와 무관한 계획이 있으면 적어주세요."
+                    />
+                  </label>
+                </div>
+              ) : (
+                <textarea
+                  value={nextLessonPlan}
+                  onChange={(event) => setNextLessonPlan(event.target.value)}
+                  rows={3}
+                  className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                  placeholder={"Unit 3 p.54~59 / 관계대명사 목적격 복습"}
+                />
+              )}
               {/* 계획 날짜 — header에 두면 iPad 가로(열폭 ~312px)에서 줄바꿈이 생겨
                   textarea 아래 전용 줄로 분리. 기본은 수업일 이후 실제 다음 수업일 */}
               <span className="mt-2 flex min-h-[38px] w-fit max-w-full items-center gap-1.5 rounded-xl border border-[#d8ebe0] bg-[#f4faf7] px-2.5 text-xs font-medium text-[#3e7d6b]">
@@ -1406,6 +1614,25 @@ export function DailyLogForm({
                 <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
                   <CheckCheck className="h-3.5 w-3.5 text-[#5d4ba5]" /> 해야 할 일
                 </span>
+                {textbooks.length > 0 ? (
+                  // 교재 연결(선택) — Todo에는 "교재명 - 내용"으로 표시된다 (내용/교재는 따로 저장)
+                  <label className="mb-2 flex items-center gap-2 text-xs font-medium text-[#7c6d69]">
+                    <span className="shrink-0">교재</span>
+                    <select
+                      value={taskTextbook}
+                      onChange={(event) => setTaskTextbook(event.target.value)}
+                      aria-label="해야 할 일 교재 선택"
+                      className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 py-1.5 text-xs font-medium text-[#5d4ba5] outline-none"
+                    >
+                      <option value="">교재 없음 / 기타</option>
+                      {textbooks.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <textarea
                   value={taskContent}
                   onChange={(event) => setTaskContent(event.target.value)}
@@ -1569,16 +1796,16 @@ export function DailyLogForm({
                       maxLength={1000}
                       className="min-h-[96px] w-full min-w-0 max-w-full rounded-xl border border-[#f0ddd8] bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-[#e3bcb4] placeholder:text-[#b5a29e]"
                       placeholder={
-                        defaultProgress.trim()
-                          ? `공통 진도: ${defaultProgress.trim()}`
+                        derivedDefaultProgress.trim()
+                          ? `공통 진도: ${derivedDefaultProgress.trim()}`
                           : "관계대명사 주격 개념\nGrammar Inside p.42~45\n5과 단어시험"
                       }
                     />
                     <span className="mt-1 block text-[11px] text-[#a68e88]">
-                      {entry.missedProgress && entry.missedProgress === defaultProgress.trim()
+                      {entry.missedProgress && entry.missedProgress === derivedDefaultProgress.trim()
                         ? "수업일지의 진도를 자동으로 가져왔어요. 필요하면 수정할 수 있어요."
                         : !entry.missedProgress
-                          ? defaultProgress.trim()
+                          ? derivedDefaultProgress.trim()
                             ? "비워두면 저장할 때 공통 진도가 자동으로 들어가요."
                             : "수업 진도가 아직 입력되지 않았어요. 직접 입력할 수 있어요."
                           : null}
@@ -1602,7 +1829,7 @@ export function DailyLogForm({
                               // 사용자가 이미 적어둔 값은 덮어쓰지 않는다.
                               updateEntry(student.studentId, {
                                 needsMakeup: true,
-                                missedProgress: entry.missedProgress || defaultProgress.trim(),
+                                missedProgress: entry.missedProgress || derivedDefaultProgress.trim(),
                               })
                             }
                             className={cn(
@@ -2241,7 +2468,7 @@ export function DailyLogForm({
       {showSummary ? (
         <CompletionSummary
           groupName={group.name}
-          defaultProgress={defaultProgress}
+          defaultProgress={derivedDefaultProgress}
           homework={homework}
           nextLessonPlan={nextLessonPlan}
           reflectionFilled={Boolean(
