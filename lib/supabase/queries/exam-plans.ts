@@ -27,6 +27,44 @@ function throwPlanError(error: { code?: string } | null, fallback: string): neve
   throw new Error(MISSING_TABLE_CODES.has(error?.code ?? "") ? MIGRATION_MESSAGE : fallback);
 }
 
+export type ExamPlanCounts = { total: number; done: number };
+
+// 시험 목록 카드의 진행률용: 여러 시험의 계획 완료/전체 개수를 1쿼리 batch (카드별 반복 쿼리 금지).
+// 최소 필드(school_exam_id, completed)만 조회한다. 실패/미적용 시 빈 Map — 목록은 항상 뜬다.
+export async function getExamPlanCountsByExamIds(examIds: string[]) {
+  const counts = new Map<string, ExamPlanCounts>();
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user || examIds.length === 0) {
+    return counts;
+  }
+
+  const { data, error } = await supabase
+    .from("exam_prep_plans")
+    .select("school_exam_id, completed")
+    .eq("user_id", user.id)
+    .in("school_exam_id", examIds);
+
+  if (error) {
+    if (!MISSING_TABLE_CODES.has(error.code ?? "")) {
+      logPlanError("getExamPlanCountsByExamIds", error);
+    }
+    return counts;
+  }
+
+  for (const row of (data ?? []) as { school_exam_id: string; completed: boolean }[]) {
+    const entry = counts.get(row.school_exam_id) ?? { total: 0, done: 0 };
+    entry.total += 1;
+    if (row.completed) {
+      entry.done += 1;
+    }
+    counts.set(row.school_exam_id, entry);
+  }
+
+  return counts;
+}
+
 // 계획 0개는 정상(empty)이고 error가 아니다. 진짜 쿼리 실패만 failed로 구분해
 // UI가 empty 상태로 위장하지 않고 안내를 보여줄 수 있게 한다.
 export async function getExamPrepPlans(

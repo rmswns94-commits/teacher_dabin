@@ -11,7 +11,7 @@ import {
 } from "@/app/exams/plan-actions";
 import { addMonths, buildMonthGrid, monthLabel } from "@/lib/calendar";
 import { formatKoreanDate } from "@/lib/dates";
-import { examDdayInfo } from "@/lib/school-exam-display";
+import { examDdayInfo, planProgressPercent } from "@/lib/school-exam-display";
 import type { ExamPrepPlanRecord } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
@@ -229,7 +229,8 @@ export function ExamPlanner({
   const weeks = useMemo(() => buildMonthGrid(month), [month]);
   const completedCount = plans.filter((plan) => plan.completed).length;
   const totalCount = plans.length;
-  const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  // 목록 카드와 같은 공용 공식 (상세/목록 진행률이 항상 일치)
+  const percent = planProgressPercent(completedCount, totalCount);
   const dday = examDdayInfo(today, examStart, examEnd);
 
   // 완료 toggle: local 즉시 반영(optimistic) + 서버는 절대값 set(멱등 — 더블탭 안전).

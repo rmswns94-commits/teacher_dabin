@@ -13,6 +13,12 @@ export type ExamDdayInfo = { label: string; className: string; ended: boolean };
 
 // D-Day는 시험 시작일 기준 (KST date-only, daysBetween 공통 유틸 재사용).
 // 가까워지면(D-7 이하) 살짝만 강조 — 빨간 경고판 금지. 지난 시험은 muted "종료".
+// 시험 준비 진행률 % — Planner completed 개수 기준 (목록 카드/상세 플래너가 같은 공식 공유).
+// 계획 0개면 0 (NaN/Infinity 금지). 준비 전/중/완료 같은 상태 단계는 더 이상 표시하지 않는다.
+export function planProgressPercent(completed: number, total: number) {
+  return total > 0 ? Math.round((completed / total) * 100) : 0;
+}
+
 export function examDdayInfo(today: string, startDate: string, endDate: string): ExamDdayInfo {
   if (startDate <= today && today <= endDate) {
     return { label: "시험 기간 중", className: "bg-[#fbeef3] text-[#a05a7c]", ended: false };

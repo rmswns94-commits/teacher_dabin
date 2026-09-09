@@ -11,14 +11,19 @@ import { SchoolExamFilters } from "@/components/school-exam-controls";
 import { Card, CardContent } from "@/components/ui/card";
 import { todayDateString } from "@/lib/dates";
 import { gradeDisplay } from "@/lib/grades";
-import { examDdayInfo, examTypeBadgeClass, formatExamPeriod } from "@/lib/school-exam-display";
+import {
+  examDdayInfo,
+  examTypeBadgeClass,
+  formatExamPeriod,
+  planProgressPercent,
+} from "@/lib/school-exam-display";
+import {
+  getExamPlanCountsByExamIds,
+  type ExamPlanCounts,
+} from "@/lib/supabase/queries/exam-plans";
 import { getSchoolExams, type SchoolExamListItem } from "@/lib/supabase/queries/school-exams";
 import { getCurrentUserStudents } from "@/lib/supabase/queries/students";
-import {
-  examTypeLabels,
-  prepStatusLabels,
-  semesterLabels,
-} from "@/lib/validation/school-exam";
+import { examTypeLabels, semesterLabels } from "@/lib/validation/school-exam";
 import type { SchoolExamType } from "@/lib/supabase/types";
 
 // 현재 날짜 기준 자연스러운 학기 기본값 (3~8월=1학기, 9~12월=그 해 2학기, 1~2월=전년도 2학기)
@@ -33,12 +38,24 @@ function currentTermDefaults(today: string) {
   return month >= 9 ? { year, semester: 2 as const } : { year: year - 1, semester: 2 as const };
 }
 
-function ExamCard({ exam, today }: { exam: SchoolExamListItem; today: string }) {
+function ExamCard({
+  exam,
+  today,
+  planCounts,
+}: {
+  exam: SchoolExamListItem;
+  today: string;
+  planCounts: ExamPlanCounts | null;
+}) {
   if (!exam.event) {
     return null;
   }
 
   const dday = examDdayInfo(today, exam.event.start_date, exam.event.end_date);
+  // 준비 상태(준비 전/중/완료) 단계 표시는 제거 — Planner 완료 개수가 준비 상태의 source of truth
+  const planTotal = planCounts?.total ?? 0;
+  const planDone = planCounts?.done ?? 0;
+  const percent = planProgressPercent(planDone, planTotal);
   const previewNames = exam.students.slice(0, 3).map((student) => student.name);
   const restCount = exam.students.length - previewNames.length;
   const scopeSummary = exam.scope_text?.split("\n").map((line) => line.trim()).filter(Boolean)[0];
@@ -93,21 +110,34 @@ function ExamCard({ exam, today }: { exam: SchoolExamListItem; today: string }) 
             ) : null}
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <span className="min-w-0 truncate text-[#786d6b]">
+          <div className="mt-2 text-xs">
+            <span className="block min-w-0 truncate text-[#786d6b]">
               {scopeSummary ? `범위 ${scopeSummary}` : "시험 범위 미등록"}
             </span>
-            <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                exam.prep_status === "ready"
-                  ? "bg-[#edf9f3] text-[#2f6d54]"
-                  : exam.prep_status === "preparing"
-                    ? "bg-[#fdf3e4] text-[#8a6828]"
-                    : "bg-[#f4f4f6] text-[#8a8a93]"
-              }`}
+          </div>
+
+          {/* 시험 준비 진행률 — Planner 완료 개수 기준 (상세 플래너와 같은 공식) */}
+          <div className="mt-3 border-t border-dashed border-[#f0e3dc] pt-2.5">
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="text-[#786d6b]">시험 준비 진행률</span>
+              <span className="font-semibold tabular-nums text-[#5c4ca8]">{percent}%</span>
+            </div>
+            <div
+              className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#f0eae4]"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={percent}
+              aria-label={`시험 준비 진행률 ${percent}%`}
             >
-              {prepStatusLabels[exam.prep_status]}
-            </span>
+              <div
+                className="h-full rounded-full bg-[#b3a5ec]"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+            <div className="mt-1 text-[11px] tabular-nums text-[#a79996]">
+              {planTotal > 0 ? `${planDone} / ${planTotal} 완료` : "아직 등록된 준비 계획이 없어요"}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -146,6 +176,9 @@ export default async function SchoolExamsPage({
     // 등록 다이얼로그의 학생 selector + 학교 suggestion용 (이름/학교/학년만 사용)
     getCurrentUserStudents(),
   ]);
+
+  // 카드 진행률: 표시되는 모든 시험의 계획 개수를 1쿼리 batch (카드별 쿼리 N+1 금지)
+  const planCountsByExam = await getExamPlanCountsByExamIds(exams.rows.map((exam) => exam.id));
 
   // 다가오는 시험(시작일 ASC) 먼저, 끝난 시험은 그 아래(최근 종료 순)
   const upcoming = exams.rows
@@ -227,7 +260,12 @@ export default async function SchoolExamsPage({
             {upcoming.length > 0 ? (
               <div className="grid gap-4 lg:grid-cols-2">
                 {upcoming.map((exam) => (
-                  <ExamCard key={exam.id} exam={exam} today={today} />
+                  <ExamCard
+                    key={exam.id}
+                    exam={exam}
+                    today={today}
+                    planCounts={planCountsByExam.get(exam.id) ?? null}
+                  />
                 ))}
               </div>
             ) : null}
@@ -239,7 +277,12 @@ export default async function SchoolExamsPage({
                 </div>
                 <div className="grid gap-4 lg:grid-cols-2">
                   {past.map((exam) => (
-                    <ExamCard key={exam.id} exam={exam} today={today} />
+                    <ExamCard
+                      key={exam.id}
+                      exam={exam}
+                      today={today}
+                      planCounts={planCountsByExam.get(exam.id) ?? null}
+                    />
                   ))}
                 </div>
               </div>

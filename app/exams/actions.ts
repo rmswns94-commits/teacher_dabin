@@ -7,7 +7,6 @@ import {
   createSchoolExam,
   deleteSchoolExam,
   updateSchoolExam,
-  updateSchoolExamPrepStatus,
 } from "@/lib/supabase/queries/school-exams";
 import { schoolExamSchema, type SchoolExamFormInput } from "@/lib/validation/school-exam";
 
@@ -76,26 +75,8 @@ export async function updateSchoolExamAction(examId: string, values: unknown): P
   return { success: true };
 }
 
-export async function updateSchoolExamPrepStatusAction(
-  examId: string,
-  prepStatus: string,
-): Promise<ActionResult> {
-  if (!["not_started", "preparing", "ready"].includes(prepStatus)) {
-    return { error: "준비 상태 값을 확인해주세요." };
-  }
-
-  try {
-    await updateSchoolExamPrepStatus(examId, prepStatus as "not_started" | "preparing" | "ready");
-  } catch (error) {
-    return {
-      error:
-        error instanceof Error && error.message ? error.message : "준비 상태를 바꾸지 못했어요.",
-    };
-  }
-
-  revalidateExamViews(examId);
-  return { success: true };
-}
+// 준비 상태(준비 전/중/완료) 수동 선택 action은 제거됨 — 준비 상태는 Planner 완료 개수(진행률)가
+// 자동으로 보여준다. DB의 prep_status 컬럼은 legacy 데이터 보존을 위해 그대로 남겨둔다.
 
 // 삭제는 underlying calendar event까지 함께 (client에서 confirm을 거친 뒤 호출)
 export async function deleteSchoolExamAction(examId: string): Promise<{ error: string } | never> {

@@ -343,30 +343,8 @@ export async function updateSchoolExam(examId: string, input: SchoolExamWriteInp
   return true;
 }
 
-export async function updateSchoolExamPrepStatus(
-  examId: string,
-  prepStatus: "not_started" | "preparing" | "ready",
-) {
-  const supabase = await createServerSupabaseClient();
-  const user = await getServerUser();
-
-  if (!supabase || !user) {
-    throw new Error("로그인이 필요합니다.");
-  }
-
-  const { error } = await supabase
-    .from("school_exam_details")
-    .update({ prep_status: prepStatus })
-    .eq("id", examId)
-    .eq("user_id", user.id);
-
-  if (error) {
-    console.error("updateSchoolExamPrepStatus error", error);
-    throw new Error("준비 상태를 바꾸지 못했어요. 다시 시도해주세요.");
-  }
-
-  return true;
-}
+// 준비 상태(prep_status) 수동 갱신 쿼리는 제거됨 — 준비 상태는 Planner 완료 개수(진행률)가
+// 자동으로 보여준다. school_exam_details.prep_status 컬럼 자체는 legacy 데이터 보존을 위해 유지.
 
 // 시험 삭제 = underlying calendar event 삭제 (single source — Calendar/Dashboard에서도 함께 사라진다).
 // metadata/학생 relation은 FK cascade가 정리한다. 다른 시험/학생/일지에는 영향 없음.

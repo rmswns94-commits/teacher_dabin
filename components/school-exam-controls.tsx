@@ -4,14 +4,8 @@ import { Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import {
-  deleteSchoolExamAction,
-  updateSchoolExamPrepStatusAction,
-} from "@/app/exams/actions";
+import { deleteSchoolExamAction } from "@/app/exams/actions";
 import { Button } from "@/components/ui/button";
-import type { SchoolExamPrepStatus } from "@/lib/supabase/types";
-import { prepStatusLabels, prepStatusValues } from "@/lib/validation/school-exam";
-import { cn } from "@/lib/utils";
 
 // 상단 compact 필터 — 연도/학기/시험 종류만 (대형 필터 시스템 금지). GET 파라미터로 서버 필터.
 export function SchoolExamFilters({
@@ -80,65 +74,8 @@ export function SchoolExamFilters({
   );
 }
 
-// Teacher 준비 상태 (준비 전/중/완료) — Todo가 아니며 자동 생성과 무관한 단순 상태값
-export function SchoolExamPrepStatusControl({
-  examId,
-  value,
-}: {
-  examId: string;
-  value: SchoolExamPrepStatus;
-}) {
-  const [error, setError] = useState("");
-  const [isPending, startTransition] = useTransition();
-  const router = useRouter();
-
-  const set = (next: SchoolExamPrepStatus) => {
-    if (next === value) {
-      return;
-    }
-
-    setError("");
-    startTransition(async () => {
-      const result = await updateSchoolExamPrepStatusAction(examId, next);
-
-      if ("error" in result) {
-        setError(result.error);
-        return;
-      }
-
-      router.refresh();
-    });
-  };
-
-  return (
-    <div>
-      <div className="flex gap-1.5" role="group" aria-label="시험 준비 상태">
-        {prepStatusValues.map((status) => (
-          <button
-            key={status}
-            type="button"
-            disabled={isPending}
-            aria-pressed={value === status}
-            onClick={() => set(status)}
-            className={cn(
-              "min-h-[38px] rounded-xl border px-3 py-1.5 text-xs font-medium transition disabled:opacity-60",
-              value === status
-                ? status === "ready"
-                  ? "border-[#bfe3d2] bg-[#edf9f3] text-[#2f6d54]"
-                  : status === "preparing"
-                    ? "border-[#ecd9b4] bg-[#fdf3e4] text-[#8a6828]"
-                    : "border-[#dcdce2] bg-[#f4f4f6] text-[#6b6b74]"
-                : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
-            )}
-          >
-            {prepStatusLabels[status]}
-          </button>
-        ))}
-      </div>
-      {error ? <p className="mt-1.5 text-xs text-[#a2665f]">{error}</p> : null}
-    </div>
-  );
-}
+// 준비 상태(준비 전/중/완료) segmented control은 제거됨 — 준비 상태는
+// Planner의 완료 개수(진행률)가 자동으로 보여준다 (DB prep_status 컬럼은 legacy 보존).
 
 // 시험 삭제 — underlying calendar exam event까지 함께 삭제된다 (캘린더/대시보드에서도 사라짐)
 export function SchoolExamDeleteButton({

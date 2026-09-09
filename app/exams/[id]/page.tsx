@@ -5,10 +5,7 @@ import { CalendarRange, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { ExamPlanner } from "@/components/exam-planner";
 import { PageHeader } from "@/components/page-header";
-import {
-  SchoolExamDeleteButton,
-  SchoolExamPrepStatusControl,
-} from "@/components/school-exam-controls";
+import { SchoolExamDeleteButton } from "@/components/school-exam-controls";
 import { SchoolExamEditButton, type ExamStudentOption } from "@/components/school-exam-dialog";
 import { WeaknessCategoryBadge } from "@/components/student-weaknesses-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -137,13 +134,11 @@ export default async function SchoolExamDetailPage({
                   <CardTitle>시험 정보</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* 준비 상태(준비 전/중/완료) 선택은 제거 — 준비 상태는 위 Planner의
+                      완료 개수(진행률)가 자동으로 보여준다 */}
                   <div className="flex items-center gap-2 rounded-2xl bg-[#faf7f3] px-3.5 py-2.5 text-sm tabular-nums text-[#564d4d]">
                     <CalendarRange className="h-4 w-4 shrink-0 text-[#7c6d69]" />
                     {formatExamPeriod(exam.event.start_date, exam.event.end_date)}
-                  </div>
-                  <div>
-                    <div className="mb-1.5 text-xs font-semibold text-[#8a7b77]">준비 상태</div>
-                    <SchoolExamPrepStatusControl examId={exam.id} value={exam.prep_status} />
                   </div>
                 </CardContent>
               </Card>
