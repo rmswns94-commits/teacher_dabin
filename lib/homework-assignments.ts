@@ -85,6 +85,18 @@ function buildLegacyHomeworkMirror(
     .join("\n");
 }
 
+// mirror 줄 앞의 "9월 11일까지 · " 완료일 접두만 떼어낸다 — 브리핑처럼 날짜가 이미
+// 자명한 자리에서 쓴다. 우리가 만든 형식과 정확히 맞는 줄만 건드리고, legacy free-text
+// 숙제 줄은 원문 그대로 둔다 (문자열에서 정보를 추론하지 않는다 — 표시용 접두 제거뿐).
+const MIRROR_DUE_PREFIX = /^\d{1,2}월 \d{1,2}일까지 · /;
+
+export function stripHomeworkDuePrefix(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => line.replace(MIRROR_DUE_PREFIX, ""))
+    .join("\n");
+}
+
 // 저장된 homework 텍스트가 구조화 숙제에서 파생된 mirror인지 (상세 화면에서 중복 숨김용).
 // 새 형식과 옛 형식 둘 다 인정한다 — 예전에 저장한 일지도 계속 mirror로 인식되어야 한다.
 export function isDerivedHomeworkMirror(

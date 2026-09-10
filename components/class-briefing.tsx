@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate } from "@/lib/dates";
+import { stripHomeworkDuePrefix } from "@/lib/homework-assignments";
 import { vocabPercent } from "@/lib/elementary";
 import { getGroupBriefingData } from "@/lib/supabase/queries/briefing";
 import { weaknessCategoryLabels } from "@/lib/validation/weakness";
@@ -131,7 +132,9 @@ export async function ClassBriefing({
   // 수업 전에 미리 완료해도 수업 종료 전에는 여기 반영되지 않는다 (기존 lock 그대로).
   // homework 텍스트는 저장 당시의 mirror(여러 건은 줄바꿈, "교재/학교 - 내용" 포함)라
   // 과거 context가 그대로 남는다 — 현재 시험 모드/교재로 다시 계산하지 않는다.
-  const previousHomework = lastLog?.homework?.trim() ?? "";
+  // 브리핑의 "지난 숙제"는 완료일이 곧 오늘 수업이라 날짜가 자명하다 — 접두만 떼고 보여준다
+  // (저장된 mirror 원문은 그대로 두고 표시에서만 생략).
+  const previousHomework = stripHomeworkDuePrefix(lastLog?.homework?.trim() ?? "");
 
   // 지난 숙제를 얼마나 해왔는지 (제출 현황) — 숙제 내용 아래 보조 줄
   const missingNames = (lastLog?.rows ?? [])
