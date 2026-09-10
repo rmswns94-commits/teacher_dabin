@@ -25,6 +25,7 @@ export type PendingMakeupRowLike = {
   groupId: string | null;
   groupName: string | null;
   studentName: string;
+  missedProgress: string | null;
 };
 
 export type PendingMakeupGroupSection<T> = {
@@ -32,6 +33,9 @@ export type PendingMakeupGroupSection<T> = {
   groupName: string | null;
   // 결석일 요일과 일치하는 그 그룹의 수업시간 ("17:00 ~ 18:30", 복수면 ", " 연결, 미상 "")
   timeLabel: string;
+  // 이 (결석일, 반)의 학생들이 모두 같은 놓친 진도를 가질 때만 그 값 (헤더에 한 번만 표시).
+  // 값이 서로 다르면 null — 그때는 카드마다 자기 진도를 보여줘야 정보가 사라지지 않는다.
+  commonMissedProgress: string | null;
   rows: T[];
 };
 
@@ -42,6 +46,20 @@ export type PendingMakeupDateSection<T> = {
 };
 
 const koreanCollator = new Intl.Collator("ko-KR", { sensitivity: "base", numeric: true });
+
+// 한 (결석일, 반)의 학생들이 전부 같은 놓친 진도를 적어둔 경우에만 그 값을 돌려준다
+// (그 반의 공통 진도 → 헤더에 한 번만 표시). 학생마다 다르게 적혀 있으면 null이라
+// 카드가 각자 값을 계속 보여준다 — 첫 학생 값을 대표로 삼아 나머지를 숨기지 않는다.
+// 비어 있는 값은 비교에서 빼고, 모두 비어 있으면 null.
+function commonMissedProgressOf(rows: PendingMakeupRowLike[]): string | null {
+  const values = rows.map((row) => row.missedProgress?.trim() ?? "").filter(Boolean);
+
+  if (values.length === 0 || values.length !== rows.length) {
+    return null; // 일부만 적혀 있으면 공통값으로 볼 수 없다
+  }
+
+  return values.every((value) => value === values[0]) ? values[0] : null;
+}
 
 // map 키 sentinel — 실제 날짜(YYYY-MM-DD)/그룹 id(uuid)와 절대 충돌하지 않는 값
 const UNKNOWN_DATE_KEY = "__unknown-absence-date__";
@@ -65,7 +83,13 @@ export function groupPendingMakeups<T extends PendingMakeupRowLike>(
     byDate.set(dateKey, groups);
     const section =
       groups.get(groupKey) ??
-      ({ groupId: row.groupId, groupName: row.groupName, timeLabel: "", rows: [] } as PendingMakeupGroupSection<T>);
+      ({
+        groupId: row.groupId,
+        groupName: row.groupName,
+        timeLabel: "",
+        commonMissedProgress: null,
+        rows: [],
+      } as PendingMakeupGroupSection<T>);
     groups.set(groupKey, section);
     section.rows.push(row);
   }
@@ -95,6 +119,7 @@ export function groupPendingMakeups<T extends PendingMakeupRowLike>(
     const groupSections = [...byDate.get(dateKey)!.values()].map((section) => {
       const time = timeInfoOf(section.groupId, dateKey);
       section.timeLabel = time.label;
+      section.commonMissedProgress = commonMissedProgressOf(section.rows);
       section.rows.sort(
         (a, b) => koreanCollator.compare(a.studentName, b.studentName) || a.id.localeCompare(b.id),
       );

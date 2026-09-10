@@ -595,6 +595,7 @@ function statusChip(text: string, tone: "peach" | "lavender" | "mint" | "rose" |
 function MakeupCard({
   row,
   today,
+  hideMissedProgress = false,
   onSchedule,
   onComplete,
   onCancel,
@@ -603,6 +604,8 @@ function MakeupCard({
 }: {
   row: MakeupRow;
   today: string;
+  // 같은 반 헤더에 공통 놓친 진도를 이미 표시한 경우 카드에서는 생략 (데이터는 그대로)
+  hideMissedProgress?: boolean;
   onSchedule: () => void;
   onComplete: () => void;
   onCancel: () => void;
@@ -676,7 +679,7 @@ function MakeupCard({
         ) : null}
       </div>
 
-      {row.missedProgress ? (
+      {row.missedProgress && !hideMissedProgress ? (
         <div className="mt-1.5 whitespace-pre-line break-words text-sm text-[#33333b]">
           놓친 진도 · {row.missedProgress}
         </div>
@@ -835,11 +838,14 @@ export function MakeupsBoard({
     });
   };
 
-  const cardOf = (row: MakeupRow) => (
+  // hideMissedProgress: 같은 반 헤더에 공통 진도를 이미 보여준 경우에만 카드에서 생략한다.
+  // cardOf는 인자를 하나만 받는다 — .map(cardOf)에 index가 두 번째로 넘어오는 걸 막기 위해.
+  const renderCard = (row: MakeupRow, hideMissedProgress: boolean) => (
     <MakeupCard
       key={row.id}
       row={row}
       today={today}
+      hideMissedProgress={hideMissedProgress}
       onSchedule={() => setDialog({ kind: "schedule", id: row.id })}
       onComplete={() => setDialog({ kind: "complete", id: row.id })}
       onCancel={() => cancel(row)}
@@ -847,6 +853,7 @@ export function MakeupsBoard({
       onDelete={() => removeManual(row)}
     />
   );
+  const cardOf = (row: MakeupRow) => renderCard(row, false);
 
   // 직접 등록 중복 soft warning용 (예정된 보충의 학생+날짜)
   const scheduledKeys = makeups
@@ -947,16 +954,30 @@ export function MakeupsBoard({
                   <div className="mt-2 space-y-4">
                     {section.groups.map((group) => (
                       <div key={group.groupId ?? "no-group"}>
-                        <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 pl-0.5 text-xs text-[#655d5d]">
-                          <span className="font-medium text-[#4c4c55]">
-                            {group.groupName ?? "반 정보 없음"}
-                          </span>
-                          {group.timeLabel ? (
-                            <span className="tabular-nums text-[#8a8a93]">· {group.timeLabel}</span>
+                        <div className="mb-1.5 pl-0.5">
+                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-[#655d5d]">
+                            <span className="min-w-0 font-medium text-[#4c4c55]">
+                              {group.groupName ?? "반 정보 없음"}
+                            </span>
+                            {group.timeLabel ? (
+                              <span className="tabular-nums text-[#8a8a93]">· {group.timeLabel}</span>
+                            ) : null}
+                            <span className="tabular-nums text-[#a79996]">· {group.rows.length}명</span>
+                          </div>
+                          {/* 이 반의 학생들이 같은 진도를 놓쳤으면 여기 한 번만 (카드에서는 숨김).
+                              학생마다 다르면 null이라 각 카드가 자기 진도를 그대로 보여준다. */}
+                          {group.commonMissedProgress ? (
+                            <div className="mt-1 flex flex-wrap gap-x-1.5 text-xs text-[#655d5d]">
+                              <span className="shrink-0 font-medium text-[#8a7b77]">놓친 진도</span>
+                              <span className="min-w-0 whitespace-pre-line break-words text-[#33333b]">
+                                {group.commonMissedProgress}
+                              </span>
+                            </div>
                           ) : null}
-                          <span className="tabular-nums text-[#a79996]">· {group.rows.length}명</span>
                         </div>
-                        <div className="grid gap-3 lg:grid-cols-2">{group.rows.map(cardOf)}</div>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          {group.rows.map((row) => renderCard(row, Boolean(group.commonMissedProgress)))}
+                        </div>
                       </div>
                     ))}
                   </div>
