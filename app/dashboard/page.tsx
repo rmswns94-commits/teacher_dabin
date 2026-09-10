@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDaysStr, dayOfWeekOf, daysBetween } from "@/lib/calendar";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { DashboardTodoCard } from "@/components/dashboard-todo-card";
+import { ExamPeriodMark } from "@/components/exam-period-mark";
 import { ExpandableList } from "@/components/expandable-list";
 import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
 import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
@@ -132,6 +133,12 @@ export default async function DashboardPage() {
   // 같은 페이지에서 이미 받은 allGroups에서 찾는다 — schedules embed로 preparation_items
   // jsonb를 중복 전송하지 않기 위해 (스케줄 쿼리는 모든 페이지의 AppShell에서도 돈다)
   const focusGroup = hero ? allGroups.find((group) => group.id === hero.group.id) ?? null : null;
+
+  // 수업 카드의 "(시험)" 표시 — 이미 받은 allGroups의 is_exam_period를 그대로 본다
+  // (그룹 metadata라 시각과 무관, 추가 쿼리/타이머 없음). occurrence마다 자기 그룹을
+  // 조회하므로 수업이 바뀌면 이전 그룹의 상태가 남지 않는다.
+  const examPeriodByGroupId = new Map(allGroups.map((group) => [group.id, group.is_exam_period]));
+  const isExamPeriodGroup = (groupId: string) => examPeriodByGroupId.get(groupId) ?? false;
 
   // 직전 수업 데이터(오늘 수업 계획/지난 숙제/브리핑) source cutoff — Final Save 시점이 아니라
   // "hero occurrence가 끝났는가" 기준. 오늘 일지를 수업 전에 미리 완료해도 이 그룹의 오늘
@@ -314,12 +321,16 @@ export default async function DashboardPage() {
                 <div className="mt-3 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
                   <div className="min-w-[230px] max-w-full flex-shrink-0">
                     <div className="flex flex-wrap items-center gap-3">
-                      <Link
-                        href={`/groups/${hero.group.id}`}
-                        className="text-2xl font-semibold tracking-[-0.02em] text-[#2d2928] hover:underline"
-                      >
-                        {hero.group.name}
-                      </Link>
+                      {/* 반 이름 + 시험 기간 표시 — Current/Next 어느 상태든 같은 그룹이면 유지 */}
+                      <span className="flex min-w-0 items-baseline gap-1.5">
+                        <Link
+                          href={`/groups/${hero.group.id}`}
+                          className="min-w-0 truncate text-2xl font-semibold tracking-[-0.02em] text-[#2d2928] hover:underline"
+                        >
+                          {hero.group.name}
+                        </Link>
+                        <ExamPeriodMark show={isExamPeriodGroup(hero.group.id)} className="text-xs" />
+                      </span>
                       <NextClassCountdown
                         startEpoch={hero.startEpoch}
                         endEpoch={hero.endEpoch}
@@ -635,9 +646,10 @@ export default async function DashboardPage() {
                       <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a8968f]">
                         그 다음
                       </span>
-                      <Link href={`/groups/${followUp.group.id}`} className="font-medium text-[#2b2323] hover:underline">
+                      <Link href={`/groups/${followUp.group.id}`} className="min-w-0 truncate font-medium text-[#2b2323] hover:underline">
                         {followUp.group.name}
                       </Link>
+                      <ExamPeriodMark show={isExamPeriodGroup(followUp.group.id)} />
                     </div>
                     <span className="tabular-nums text-[#665b5a]">
                       {occurrenceDateLabel(followUp)} · {formatTimeRange(followUp.schedule.start_time, followUp.schedule.end_time)}

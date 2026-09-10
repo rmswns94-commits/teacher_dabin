@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 
+import { ExamPeriodMark } from "@/components/exam-period-mark";
 import { groupIconOf } from "@/lib/group-icons";
 import { cn } from "@/lib/utils";
 
@@ -277,11 +278,8 @@ export function Sidebar({
                     {groupIconOf(group.icon)}
                   </span>
                   <span className="min-w-0 truncate">{group.name}</span>
-                  {group.isExamPeriod ? (
-                    // 텍스트로 상태 표시 (색만으로 구분하지 않는다) — 긴 이름이 truncate돼도
-                    // shrink-0이라 "(시험)"은 항상 보인다. active styling과는 독립.
-                    <span className="shrink-0 text-[11px] font-semibold text-[#6d5aa8]">(시험)</span>
-                  ) : null}
+                  {/* 대시보드 수업 카드와 같은 공용 표시 (조건/스타일 한 벌) */}
+                  <ExamPeriodMark show={group.isExamPeriod} />
                 </Link>
               </li>
             );
