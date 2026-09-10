@@ -23,6 +23,7 @@ import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
 import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
 import { formatTimeRange } from "@/lib/schedule";
 import { formatHomeworkDisplay, homeworkAudienceLabel } from "@/lib/homework-assignments";
+import { toggleHomeworkCompletionAction } from "@/app/daily-logs/actions";
 import { getDueHomeworkForCurrentUser, type DueHomeworkItem } from "@/lib/supabase/queries/daily-logs";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
@@ -136,28 +137,68 @@ function TodoItemRow({
 // 체크박스/삭제 버튼이 없다: 숙제에는 완료 상태가 없고, Todo의 완료/삭제 핸들러를
 // 숙제에 연결하지 않는다 (숙제 수정/삭제는 수업 일지 편집에서).
 function HomeworkItemRow({ homework }: { homework: DueHomeworkItem }) {
+  const checked = homework.completed;
+  const label = formatHomeworkDisplay({
+    audienceLabel: homeworkAudienceLabel(homework.assignedStudentName),
+    contextLabel: linkedContextLabel(homework),
+    content: homework.content,
+  });
+
   return (
-    <Link
-      href={`/daily-logs/${homework.dailyLogId}`}
-      className="flex min-h-11 w-full items-start gap-2.5 rounded-xl px-2 py-1.5 text-left transition hover:bg-[#fdf6ec]"
-    >
-      <span
-        aria-hidden
-        className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#fdf3e4]"
+    <div className="flex items-center gap-1">
+      {/* 완료 toggle은 숙제 row 자체(completed)를 바꾼다 — Todo 액션과 다른 경로.
+          완료해도 목록에서 사라지지 않고 그 자리에 취소선으로 남는다 (잘못 눌러도 바로 원복). */}
+      <form
+        action={toggleHomeworkCompletionAction.bind(null, homework.id)}
+        className="min-w-0 flex-1"
       >
-        <NotebookTabs className="h-3 w-3 text-[#94702f]" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="body-text block whitespace-pre-wrap break-words text-[#2d2928]">
-          {formatHomeworkDisplay({
-            audienceLabel: homeworkAudienceLabel(homework.assignedStudentName),
-            contextLabel: linkedContextLabel(homework),
-            content: homework.content,
-          })}
-        </span>
-        <span className="secondary-text mt-0.5 block text-[#a5854a]">숙제</span>
-      </span>
-    </Link>
+        <button
+          type="submit"
+          aria-pressed={checked}
+          className={cn(
+            "flex min-h-11 w-full items-start gap-2.5 rounded-xl px-2 py-1.5 text-left transition",
+            checked ? "hover:bg-[#f4f9f6]" : "hover:bg-[#fdf6ec]",
+          )}
+        >
+          {checked ? (
+            <span
+              aria-hidden
+              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#8fc7ab]"
+            >
+              <Check className="h-3 w-3 text-white" strokeWidth={3} />
+            </span>
+          ) : (
+            <span
+              aria-hidden
+              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-[#e8c9b0] bg-white"
+            >
+              <Check className="h-3 w-3 text-transparent" strokeWidth={3} />
+            </span>
+          )}
+          <span className={cn("min-w-0 flex-1", checked && "opacity-75")}>
+            <span
+              className={cn(
+                "body-text block whitespace-pre-wrap break-words",
+                checked ? "text-[#8a7b77] [text-decoration:line-through]" : "text-[#2d2928]",
+              )}
+            >
+              {label}
+            </span>
+            <span className={cn("secondary-text mt-0.5 block", checked ? "text-[#b0a39f]" : "text-[#a5854a]")}>
+              숙제{checked ? " · 완료" : ""}
+            </span>
+          </span>
+        </button>
+      </form>
+      {/* 숙제 삭제는 수업 일지 편집에서 — 여기서는 원본 일지로 가는 링크만 둔다 */}
+      <Link
+        href={`/daily-logs/${homework.dailyLogId}`}
+        aria-label={`${label} 수업 일지 열기`}
+        className="flex h-11 w-9 shrink-0 items-center justify-center rounded-xl text-[#c3b09a] transition hover:bg-[#fdf6ec] hover:text-[#94702f]"
+      >
+        <NotebookTabs className="h-4 w-4" aria-hidden />
+      </Link>
+    </div>
   );
 }
 
@@ -191,14 +232,20 @@ export default async function TodayTodosPage({
   // (날짜, 그룹)별 숙제 — 보관된 그룹의 숙제는 Todo와 같은 기준으로 제외한다.
   // 저장된 sort_order 순서를 그대로 유지한다 (학생 이름으로 재정렬하지 않는다).
   const homeworkByDateGroup = new Map<string, DueHomeworkItem[]>();
-  const homeworkCountByDate = new Map<string, number>();
+  const homeworkCountByDate = new Map<string, { total: number; done: number }>();
   for (const homework of dueHomework) {
     if (!homework.groupId || !activeGroupIds.has(homework.groupId)) {
       continue;
     }
     const key = `${homework.dueDate}|${homework.groupId}`;
     homeworkByDateGroup.set(key, [...(homeworkByDateGroup.get(key) ?? []), homework]);
-    homeworkCountByDate.set(homework.dueDate, (homeworkCountByDate.get(homework.dueDate) ?? 0) + 1);
+    // 완료해도 그 날짜에 있던 숙제이므로 total에서 빠지지 않는다
+    const count = homeworkCountByDate.get(homework.dueDate) ?? { total: 0, done: 0 };
+    count.total += 1;
+    if (homework.completed) {
+      count.done += 1;
+    }
+    homeworkCountByDate.set(homework.dueDate, count);
   }
   const homeworkOf = (date: string, groupId: string) => homeworkByDateGroup.get(`${date}|${groupId}`) ?? [];
 
@@ -220,14 +267,13 @@ export default async function TodayTodosPage({
 
   // ── 캘린더 marker: 표시 월의 due_date별 Todo 수 (완료 포함 — 그 날짜에 있었던 기록 유지,
   //    dismissed 삭제 항목 제외). 이미 받은 preparation_items를 접을 뿐 추가 쿼리 없음 ──
-  // 숙제도 그날 이 페이지에 뜨는 항목이므로 total에 함께 센다.
-  // done은 완료 개념이 있는 Todo만 — 숙제에는 완료 상태가 없다(새로 만들지도 않는다).
+  // 숙제도 그날 이 페이지에 뜨는 항목이므로 Todo와 함께 센다 (완료해도 total 유지).
   const markerByDate = new Map<string, { total: number; done: number }>();
   for (const [date, count] of homeworkCountByDate) {
     if (date < range.start || date > range.end) {
       continue;
     }
-    markerByDate.set(date, { total: count, done: 0 });
+    markerByDate.set(date, { total: count.total, done: count.done });
   }
   for (const group of activeGroups) {
     for (const item of activePreparationItems(group.preparation_items)) {
@@ -311,6 +357,10 @@ export default async function TodayTodosPage({
   // 숙제 개수는 "할 일 N개"와 섞지 않고 따로 센다 (기존 카운트의 의미를 바꾸지 않는다)
   const dateHomeworkTotal = dateSections.reduce((sum, section) => sum + section.homework.length, 0);
   const todayHomeworkTotal = sections.reduce((sum, section) => sum + section.homework.length, 0);
+  const todayHomeworkDone = sections.reduce(
+    (sum, section) => sum + section.homework.filter((hw) => hw.completed).length,
+    0,
+  );
 
   const dateHref = (date: string) => `/todos?month=${date.slice(0, 7)}&date=${date}`;
   // month만 이동하면 선택은 해제되고 아래는 오늘 상세로 복귀 (임의 날짜 자동 open 없음)
@@ -499,9 +549,11 @@ export default async function TodayTodosPage({
                       오늘 완료 {doneTodayCount}개
                     </span>
                   ) : null}
+                  {/* 숙제는 자체 완료 상태가 있어 "완료/전체"로 보여준다.
+                      위의 "할 일" 칩들은 기존 Todo 기준 그대로 (의미를 섞지 않는다). */}
                   {todayHomeworkTotal > 0 ? (
                     <span className="rounded-full bg-[#fdf3e4] px-2.5 py-1 text-xs font-medium tabular-nums text-[#94702f]">
-                      숙제 {todayHomeworkTotal}개
+                      숙제 {todayHomeworkDone}/{todayHomeworkTotal}
                     </span>
                   ) : null}
                 </div>

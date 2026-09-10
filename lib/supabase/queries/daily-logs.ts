@@ -178,7 +178,7 @@ export async function getDailyLogDetailForCurrentUser(
   const { data: hwRows, error: hwError } = await supabase
     .from("daily_log_homework_assignments")
     .select(
-      "id, user_id, daily_log_id, content, due_date, textbook, school, assigned_student_id, sort_order, created_at, updated_at, assigned_student:students(id, name)",
+      "id, user_id, daily_log_id, content, due_date, textbook, school, assigned_student_id, completed, completed_at, sort_order, created_at, updated_at, assigned_student:students(id, name)",
     )
     .eq("user_id", user.id)
     .eq("daily_log_id", dailyLogId)
@@ -452,6 +452,8 @@ export type DueHomeworkItem = {
   school: string | null;
   assignedStudentId: string | null;
   assignedStudentName: string | null;
+  completed: boolean;
+  completedAt: string | null;
   sortOrder: number;
 };
 
@@ -480,7 +482,7 @@ export async function getDueHomeworkForCurrentUser(window: {
   const { data, error } = await supabase
     .from("daily_log_homework_assignments")
     .select(
-      "id, daily_log_id, content, due_date, textbook, school, assigned_student_id, sort_order, assigned_student:students(id, name), daily_logs(id, group_id)",
+      "id, daily_log_id, content, due_date, textbook, school, assigned_student_id, completed, completed_at, sort_order, assigned_student:students(id, name), daily_logs(id, group_id)",
     )
     .eq("user_id", user.id)
     .or(orFilter)
@@ -504,6 +506,8 @@ export async function getDueHomeworkForCurrentUser(window: {
       textbook: string | null;
       school: string | null;
       assigned_student_id: string | null;
+      completed: boolean | null;
+      completed_at: string | null;
       sort_order: number;
       assigned_student?: { id: string; name: string } | { id: string; name: string }[] | null;
       daily_logs?: { id: string; group_id: string } | { id: string; group_id: string }[] | null;
@@ -520,9 +524,55 @@ export async function getDueHomeworkForCurrentUser(window: {
       school: typed.school,
       assignedStudentId: typed.assigned_student_id,
       assignedStudentName: student?.name ?? null,
+      completed: typed.completed ?? false,
+      completedAt: typed.completed_at,
       sortOrder: typed.sort_order,
     };
   });
+}
+
+// 숙제 한 건의 완료 상태만 뒤집는다 (오늘 할 일 화면의 체크박스).
+// Todo(class_groups.preparation_items)와는 저장 위치부터 다른 별개 경로 —
+// 여기서 Todo row를 만들거나 건드리는 일은 없다.
+// update 범위는 정확히 이 id 하나이고, user_id 조건으로 남의 숙제는 절대 못 바꾼다
+// (RLS도 같은 조건이지만 client가 보낸 id를 그대로 믿지 않는다는 뜻으로 한 번 더 건다).
+export async function toggleHomeworkCompletion(homeworkId: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return { error: "로그인이 필요합니다." };
+  }
+
+  const { data: current, error: readError } = await supabase
+    .from("daily_log_homework_assignments")
+    .select("id, completed, daily_log_id")
+    .eq("id", homeworkId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (readError || !current) {
+    return { error: "숙제를 찾지 못했어요. 새로고침 후 다시 시도해주세요." };
+  }
+
+  // 현재 저장값을 읽고 뒤집는다 — 클라이언트가 보낸 상태를 그대로 쓰지 않아서
+  // 빠르게 두 번 눌러도 마지막 요청이 DB 기준으로 계산된다.
+  const nextCompleted = !current.completed;
+  const { error: writeError } = await supabase
+    .from("daily_log_homework_assignments")
+    .update({
+      completed: nextCompleted,
+      completed_at: nextCompleted ? new Date().toISOString() : null,
+    })
+    .eq("id", homeworkId)
+    .eq("user_id", user.id);
+
+  if (writeError) {
+    console.error("toggleHomeworkCompletion error", writeError);
+    return { error: "숙제 완료 상태를 저장하지 못했어요. 다시 시도해주세요." };
+  }
+
+  return { completed: nextCompleted, dailyLogId: current.daily_log_id as string };
 }
 
 // ── 오늘 숙제(구조화) ─────────────────────────────────────────────
@@ -548,9 +598,11 @@ async function syncHomeworkAssignments(
     assignedStudentId?: string | null;
   }[],
 ) {
+  // 완료 상태까지 함께 읽어 그대로 다시 써 넣는다 — 일지를 다시 저장한다고
+  // 이미 체크해 둔 숙제가 미완료로 돌아가면 안 된다 (폼은 완료 여부를 다루지 않는다).
   const { data: existingRows, error: readError } = await supabase
     .from("daily_log_homework_assignments")
-    .select("id")
+    .select("id, completed, completed_at")
     .eq("user_id", userId)
     .eq("daily_log_id", dailyLogId);
 
@@ -567,6 +619,12 @@ async function syncHomeworkAssignments(
   }
 
   const existingIds = new Set((existingRows ?? []).map((row) => row.id as string));
+  const completionById = new Map(
+    (existingRows ?? []).map((row) => [
+      row.id as string,
+      { completed: (row.completed as boolean | null) ?? false, completedAt: (row.completed_at as string | null) ?? null },
+    ]),
+  );
 
   // 새 항목 id는 폼이 추가 시점에 발급한다 (저장 후에도 같은 id 유지 — idempotent).
   // 단, 같은 사용자의 "다른 일지" row id를 보내 upsert로 가로채는 것만 막는다:
@@ -587,17 +645,24 @@ async function syncHomeworkAssignments(
     }
   }
 
-  const rows = items.map((item, index) => ({
-    id: item.id && !foreignIds.has(item.id) ? item.id : globalThis.crypto.randomUUID(),
-    user_id: userId,
-    daily_log_id: dailyLogId,
-    content: item.content.trim(),
-    due_date: item.dueDate,
-    textbook: item.textbook?.trim() || null,
-    school: item.school?.trim() || null,
-    assigned_student_id: item.assignedStudentId ?? null,
-    sort_order: index,
-  }));
+  const rows = items.map((item, index) => {
+    const id = item.id && !foreignIds.has(item.id) ? item.id : globalThis.crypto.randomUUID();
+    // 기존 항목이면 저장돼 있던 완료 상태를 그대로 유지 (새 항목은 미완료로 시작)
+    const completion = completionById.get(id) ?? { completed: false, completedAt: null };
+    return {
+      id,
+      user_id: userId,
+      daily_log_id: dailyLogId,
+      content: item.content.trim(),
+      due_date: item.dueDate,
+      textbook: item.textbook?.trim() || null,
+      school: item.school?.trim() || null,
+      assigned_student_id: item.assignedStudentId ?? null,
+      completed: completion.completed,
+      completed_at: completion.completedAt,
+      sort_order: index,
+    };
+  });
 
   if (rows.length > 0) {
     const { error: upsertError } = await supabase

@@ -10,6 +10,7 @@ import {
   getGroupHistoryLogs,
   getPraisesForDailyLog,
   saveDailyLog,
+  toggleHomeworkCompletion,
   updateDailyLogFields,
 } from "@/lib/supabase/queries/daily-logs";
 import {
@@ -272,4 +273,22 @@ export async function discardDailyLogDraftAction(draftId: string) {
     console.error("discardDailyLogDraftAction error", error);
     return { error: "임시저장을 삭제하지 못했어요." };
   }
+}
+
+// 오늘 할 일 화면의 숙제 체크 — 숙제 row 자체의 completed만 토글한다.
+// Todo 토글(togglePreparationItemAction)과는 완전히 분리된 액션이라
+// 숙제 id가 Todo 경로로 넘어갈 수 없고, Todo row가 새로 생기지도 않는다.
+// form action이라 반환값 없이 revalidate만 한다 (Todo 토글과 같은 방식):
+// 낙관적 업데이트가 없으므로 저장이 실패하면 화면은 서버의 실제 상태 그대로 남는다.
+export async function toggleHomeworkCompletionAction(homeworkId: string) {
+  const result = await toggleHomeworkCompletion(homeworkId);
+
+  if ("error" in result) {
+    console.error("toggleHomeworkCompletionAction", result.error);
+    return;
+  }
+
+  // 숙제가 보이는 화면만 갱신 (Dashboard의 Todo 카드는 숙제를 쓰지 않는다)
+  revalidatePath("/todos");
+  revalidatePath(`/daily-logs/${result.dailyLogId}`);
 }

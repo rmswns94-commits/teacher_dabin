@@ -177,6 +177,10 @@ export type DailyLogHomeworkAssignmentRecord = {
   // 숙제 대상: null = 반 공통, uuid = 그 학생 한 명 ("공통"용 가짜 학생 row는 만들지 않는다).
   // 학생이 삭제되면 on delete set null로 공통이 아니라 "연결 끊김"이 되지만, 기록 자체는 남는다.
   assigned_student_id: string | null;
+  // 숙제 자체의 완료 상태 (오늘 할 일 화면의 체크). Todo와 저장 위치가 완전히 다르다 —
+  // Todo는 class_groups.preparation_items jsonb, 숙제는 이 테이블의 자기 row.
+  completed: boolean;
+  completed_at: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
