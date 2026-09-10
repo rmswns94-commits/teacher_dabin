@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, ChevronLeft, ChevronRight, ListChecks } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ListChecks, NotebookTabs } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { ExpandableList } from "@/components/expandable-list";
@@ -22,6 +22,8 @@ import { groupIconOf } from "@/lib/group-icons";
 import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
 import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
 import { formatTimeRange } from "@/lib/schedule";
+import { formatHomeworkDisplay, homeworkAudienceLabel } from "@/lib/homework-assignments";
+import { getDueHomeworkForCurrentUser, type DueHomeworkItem } from "@/lib/supabase/queries/daily-logs";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import type { PreparationItem } from "@/lib/supabase/types";
@@ -130,6 +132,35 @@ function TodoItemRow({
   );
 }
 
+// 숙제 줄 — Todo가 아니라 "그 날짜가 완료일인 숙제"를 읽어 보여주는 read-only 항목이다.
+// 체크박스/삭제 버튼이 없다: 숙제에는 완료 상태가 없고, Todo의 완료/삭제 핸들러를
+// 숙제에 연결하지 않는다 (숙제 수정/삭제는 수업 일지 편집에서).
+function HomeworkItemRow({ homework }: { homework: DueHomeworkItem }) {
+  return (
+    <Link
+      href={`/daily-logs/${homework.dailyLogId}`}
+      className="flex min-h-11 w-full items-start gap-2.5 rounded-xl px-2 py-1.5 text-left transition hover:bg-[#fdf6ec]"
+    >
+      <span
+        aria-hidden
+        className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#fdf3e4]"
+      >
+        <NotebookTabs className="h-3 w-3 text-[#94702f]" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="body-text block whitespace-pre-wrap break-words text-[#2d2928]">
+          {formatHomeworkDisplay({
+            audienceLabel: homeworkAudienceLabel(homework.assignedStudentName),
+            contextLabel: linkedContextLabel(homework),
+            content: homework.content,
+          })}
+        </span>
+        <span className="secondary-text mt-0.5 block text-[#a5854a]">숙제</span>
+      </span>
+    </Link>
+  );
+}
+
 export default async function TodayTodosPage({
   searchParams,
 }: {
@@ -143,12 +174,33 @@ export default async function TodayTodosPage({
   const range = monthRange(month);
   const isTodaySelected = selectedDate === today;
 
-  // 그룹(준비 항목/아이콘)+시간표 — 2쿼리 batch, 항목/날짜별 반복 쿼리 없음
-  const [groups, schedules] = await Promise.all([
+  // 그룹(준비 항목/아이콘)+시간표+숙제 — 3쿼리 batch, 항목/날짜별 반복 쿼리 없음.
+  // 숙제는 이 페이지에서만 조회한다 — Dashboard의 Todo 카드 source는 건드리지 않는다.
+  const [groups, schedules, dueHomework] = await Promise.all([
     getCurrentUserGroups(),
     getCurrentUserSchedulesWithGroup(),
+    // 달력에 보이는 달 + 오늘/선택 날짜(다른 달일 수 있음)를 한 번에
+    getDueHomeworkForCurrentUser({
+      rangeStart: range.start,
+      rangeEnd: range.end,
+      extraDates: [today, selectedDate],
+    }),
   ]);
   const activeGroups = groups.filter((group) => !group.archived);
+  const activeGroupIds = new Set(activeGroups.map((group) => group.id));
+  // (날짜, 그룹)별 숙제 — 보관된 그룹의 숙제는 Todo와 같은 기준으로 제외한다.
+  // 저장된 sort_order 순서를 그대로 유지한다 (학생 이름으로 재정렬하지 않는다).
+  const homeworkByDateGroup = new Map<string, DueHomeworkItem[]>();
+  const homeworkCountByDate = new Map<string, number>();
+  for (const homework of dueHomework) {
+    if (!homework.groupId || !activeGroupIds.has(homework.groupId)) {
+      continue;
+    }
+    const key = `${homework.dueDate}|${homework.groupId}`;
+    homeworkByDateGroup.set(key, [...(homeworkByDateGroup.get(key) ?? []), homework]);
+    homeworkCountByDate.set(homework.dueDate, (homeworkCountByDate.get(homework.dueDate) ?? 0) + 1);
+  }
+  const homeworkOf = (date: string, groupId: string) => homeworkByDateGroup.get(`${date}|${groupId}`) ?? [];
 
   // 요일별 그룹 수업 시간 (표시/정렬용) — 오늘·선택 날짜에서 공유
   const timeByGroupForDow = (dow: number) => {
@@ -168,7 +220,15 @@ export default async function TodayTodosPage({
 
   // ── 캘린더 marker: 표시 월의 due_date별 Todo 수 (완료 포함 — 그 날짜에 있었던 기록 유지,
   //    dismissed 삭제 항목 제외). 이미 받은 preparation_items를 접을 뿐 추가 쿼리 없음 ──
+  // 숙제도 그날 이 페이지에 뜨는 항목이므로 total에 함께 센다.
+  // done은 완료 개념이 있는 Todo만 — 숙제에는 완료 상태가 없다(새로 만들지도 않는다).
   const markerByDate = new Map<string, { total: number; done: number }>();
+  for (const [date, count] of homeworkCountByDate) {
+    if (date < range.start || date > range.end) {
+      continue;
+    }
+    markerByDate.set(date, { total: count, done: 0 });
+  }
   for (const group of activeGroups) {
     for (const item of activePreparationItems(group.preparation_items)) {
       if (!item.dueDate || item.dueDate < range.start || item.dueDate > range.end) {
@@ -206,10 +266,15 @@ export default async function TodayTodosPage({
       // 오늘(KST) 완료한 항목은 당일 동안 취소선으로 유지 — 다시 눌러 즉시 원복 가능.
       // legacy(completed=true, completedAt 없음)는 완료 이력으로 취급해 표시하지 않는다.
       const doneToday = visible.filter((item) => isCompletedToday(item, today));
+      // 오늘이 완료일인 숙제 (carry-over 없음 — 숙제는 날짜에 맞는 것만 보여준다)
+      const homework = homeworkOf(today, group.id);
 
-      return { group, items, doneToday, time: todayTimeByGroup.get(group.id) ?? null };
+      return { group, items, doneToday, homework, time: todayTimeByGroup.get(group.id) ?? null };
     })
-    .filter((section) => section.items.length > 0 || section.doneToday.length > 0)
+    .filter(
+      (section) =>
+        section.items.length > 0 || section.doneToday.length > 0 || section.homework.length > 0,
+    )
     .sort((a, b) => {
       // 오늘 수업 있는 그룹(시작 시간순) → 나머지(가나다순)
       const timeA = a.time?.start ?? "99:99";
@@ -233,15 +298,19 @@ export default async function TodayTodosPage({
           const items = activePreparationItems(group.preparation_items).filter(
             (item) => item.dueDate === selectedDate,
           );
-          return { group, items, time: selectedTimeByGroup.get(group.id) ?? null };
+          const homework = homeworkOf(selectedDate, group.id);
+          return { group, items, homework, time: selectedTimeByGroup.get(group.id) ?? null };
         })
-        .filter((section) => section.items.length > 0)
+        .filter((section) => section.items.length > 0 || section.homework.length > 0)
         .sort((a, b) => {
           const timeA = a.time?.start ?? "99:99";
           const timeB = b.time?.start ?? "99:99";
           return timeA.localeCompare(timeB) || a.group.name.localeCompare(b.group.name, "ko");
         });
   const dateTotal = dateSections.reduce((sum, section) => sum + section.items.length, 0);
+  // 숙제 개수는 "할 일 N개"와 섞지 않고 따로 센다 (기존 카운트의 의미를 바꾸지 않는다)
+  const dateHomeworkTotal = dateSections.reduce((sum, section) => sum + section.homework.length, 0);
+  const todayHomeworkTotal = sections.reduce((sum, section) => sum + section.homework.length, 0);
 
   const dateHref = (date: string) => `/todos?month=${date.slice(0, 7)}&date=${date}`;
   // month만 이동하면 선택은 해제되고 아래는 오늘 상세로 복귀 (임의 날짜 자동 open 없음)
@@ -408,12 +477,14 @@ export default async function TodayTodosPage({
           <h2 className="card-title mb-3 text-[#2b2323]">
             {isTodaySelected
               ? `오늘 할 일 · ${formatKoreanDate(today, true)}`
-              : `${formatKoreanDate(selectedDate, true)} · 할 일 ${dateTotal}개`}
+              : `${formatKoreanDate(selectedDate, true)} · 할 일 ${dateTotal}개${
+                  dateHomeworkTotal > 0 ? ` · 숙제 ${dateHomeworkTotal}개` : ""
+                }`}
           </h2>
 
           {isTodaySelected ? (
             <>
-              {totalCount > 0 || doneTodayCount > 0 ? (
+              {totalCount > 0 || doneTodayCount > 0 || todayHomeworkTotal > 0 ? (
                 <div className="secondary-text mb-4 flex flex-wrap items-center gap-2 text-[#655d5d]">
                   <span className="rounded-full bg-[#efe8fb] px-2.5 py-1 text-xs font-medium tabular-nums text-[#5d4ba5]">
                     남은 할 일 {totalCount}개
@@ -428,6 +499,11 @@ export default async function TodayTodosPage({
                       오늘 완료 {doneTodayCount}개
                     </span>
                   ) : null}
+                  {todayHomeworkTotal > 0 ? (
+                    <span className="rounded-full bg-[#fdf3e4] px-2.5 py-1 text-xs font-medium tabular-nums text-[#94702f]">
+                      숙제 {todayHomeworkTotal}개
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -439,7 +515,7 @@ export default async function TodayTodosPage({
                 </Card>
               ) : (
                 <div className="space-y-4">
-                  {sections.map(({ group, items, doneToday, time }) => (
+                  {sections.map(({ group, items, doneToday, homework, time }) => (
                     <Card key={group.id}>
                       <CardContent className="p-4">
                         {groupHeader(group, time, "오늘 수업")}
@@ -471,6 +547,10 @@ export default async function TodayTodosPage({
                               metaClass="text-[#b0a39f]"
                             />
                           ))}
+                          {/* 오늘이 완료일인 숙제 — Todo와 같은 목록에 두되 key는 source로 구분 */}
+                          {homework.map((hw) => (
+                            <HomeworkItemRow key={`homework:${hw.id}`} homework={hw} />
+                          ))}
                         </ExpandableList>
                       </CardContent>
                     </Card>
@@ -481,13 +561,13 @@ export default async function TodayTodosPage({
           ) : dateSections.length === 0 ? (
             <Card>
               <CardContent className="body-text p-6 text-[#655d5d]">
-                이날 예정된 할 일이 없어요.
+                이날 예정된 할 일과 숙제가 없어요.
               </CardContent>
             </Card>
           ) : (
             // historical/미래 미리보기: 그 날짜로 예정했던 Todo (완료 포함 — carry-over 재구성 없음)
             <div className="space-y-4">
-              {dateSections.map(({ group, items, time }) => (
+              {dateSections.map(({ group, items, homework, time }) => (
                 <Card key={group.id}>
                   <CardContent className="p-4">
                     {groupHeader(group, time, "이날 수업")}
@@ -501,6 +581,10 @@ export default async function TodayTodosPage({
                           meta={`${sourceLabelOf(item)}${item.completed ? " · 완료" : ""}`}
                           metaClass={item.completed ? "text-[#b0a39f]" : "text-[#a79996]"}
                         />
+                      ))}
+                      {/* 이 날짜가 완료일인 숙제 (과거·미래 모두 그 날짜 기준으로 그대로) */}
+                      {homework.map((hw) => (
+                        <HomeworkItemRow key={`homework:${hw.id}`} homework={hw} />
                       ))}
                     </ExpandableList>
                   </CardContent>

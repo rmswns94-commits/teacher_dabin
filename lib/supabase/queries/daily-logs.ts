@@ -439,6 +439,92 @@ async function syncDailyLogTaskTodos(
   }
 }
 
+// ── 날짜별 숙제 projection (오늘 할 일 페이지 전용) ─────────────────
+// 숙제를 Todo row로 복제하지 않고 due_date로 읽어오기만 하는 read model이다.
+// Dashboard의 Todo 카드는 이 함수를 쓰지 않는다 (그쪽 source는 preparation_items 그대로).
+export type DueHomeworkItem = {
+  id: string;
+  dailyLogId: string;
+  groupId: string | null;
+  dueDate: string;
+  content: string;
+  textbook: string | null;
+  school: string | null;
+  assignedStudentId: string | null;
+  assignedStudentName: string | null;
+  sortOrder: number;
+};
+
+// 달력에 보이는 기간 + 오늘/선택 날짜를 한 번에 받는다 (날짜 칸마다 쿼리 금지).
+// 학생 이름/그룹은 relation embed라 숙제가 N개여도 추가 쿼리가 없다.
+export async function getDueHomeworkForCurrentUser(window: {
+  rangeStart: string;
+  rangeEnd: string;
+  extraDates?: string[];
+}): Promise<DueHomeworkItem[]> {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [];
+  }
+
+  const extras = [...new Set(window.extraDates ?? [])].filter((date) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(date),
+  );
+  const orFilter = [
+    `and(due_date.gte.${window.rangeStart},due_date.lte.${window.rangeEnd})`,
+    ...extras.map((date) => `due_date.eq.${date}`),
+  ].join(",");
+
+  const { data, error } = await supabase
+    .from("daily_log_homework_assignments")
+    .select(
+      "id, daily_log_id, content, due_date, textbook, school, assigned_student_id, sort_order, assigned_student:students(id, name), daily_logs(id, group_id)",
+    )
+    .eq("user_id", user.id)
+    .or(orFilter)
+    .order("due_date", { ascending: true })
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    // migration 미적용/조회 실패는 조용히 빈 목록 — 오늘 할 일 화면 자체는 계속 뜬다
+    if (!HW_MISSING_TABLE_CODES.has(error.code ?? "")) {
+      console.error("getDueHomeworkForCurrentUser error", { code: error.code, message: error.message });
+    }
+    return [];
+  }
+
+  return (data ?? []).map((row) => {
+    const typed = row as {
+      id: string;
+      daily_log_id: string;
+      content: string;
+      due_date: string;
+      textbook: string | null;
+      school: string | null;
+      assigned_student_id: string | null;
+      sort_order: number;
+      assigned_student?: { id: string; name: string } | { id: string; name: string }[] | null;
+      daily_logs?: { id: string; group_id: string } | { id: string; group_id: string }[] | null;
+    };
+    const student = Array.isArray(typed.assigned_student) ? typed.assigned_student[0] : typed.assigned_student;
+    const log = Array.isArray(typed.daily_logs) ? typed.daily_logs[0] : typed.daily_logs;
+    return {
+      id: typed.id,
+      dailyLogId: typed.daily_log_id,
+      groupId: log?.group_id ?? null,
+      dueDate: typed.due_date,
+      content: typed.content,
+      textbook: typed.textbook,
+      school: typed.school,
+      assignedStudentId: typed.assigned_student_id,
+      assignedStudentName: student?.name ?? null,
+      sortOrder: typed.sort_order,
+    };
+  });
+}
+
 // ── 오늘 숙제(구조화) ─────────────────────────────────────────────
 // migration 미적용(테이블 없음) 코드: 42P01 undefined table / PGRST205 schema cache 없음
 const HW_MISSING_TABLE_CODES = new Set(["42P01", "PGRST205"]);
