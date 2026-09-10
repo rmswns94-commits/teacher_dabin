@@ -5,6 +5,7 @@ import {
   type MakeupStudentOption,
   type TeacherSlot,
 } from "@/components/makeups-board";
+import { MakeupExcelButton } from "@/components/makeup-excel-export";
 import { PageHeader } from "@/components/page-header";
 import { todayDateString } from "@/lib/dates";
 import { formatGrade } from "@/lib/grades";
@@ -86,6 +87,8 @@ export default async function MakeupsPage() {
           <PageHeader
             title="보충 수업"
             description="결석한 학생의 보충 일정을 관리하고, 필요한 보충 수업을 직접 등록해요."
+            // 보충 완료 기록만 Excel로 — 완료가 0건이면 클릭 시 안내만 (빈 파일 다운로드 없음)
+            action={<MakeupExcelButton hasCompleted={rows.some((row) => row.status === "completed")} />}
           />
 
           {/* 보충이 0건이어도 board를 렌더 — [보충 수업 등록] 버튼은 항상 접근 가능 */}

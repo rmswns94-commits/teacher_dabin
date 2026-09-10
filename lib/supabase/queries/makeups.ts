@@ -76,6 +76,91 @@ export async function getCurrentUserMakeups() {
   });
 }
 
+export type CompletedMakeupForExport = {
+  id: string;
+  source: string;
+  completed_date: string | null;
+  original_class_date: string;
+  missed_progress: string | null;
+  completed_progress: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  studentName: string | null;
+  // 결석 연동 보충의 원래 수업 그룹 (직접 등록은 group_id 우선 — getCurrentUserMakeups와 동일 규칙)
+  groupId: string | null;
+};
+
+// 보충 수업 Excel 내보내기용 — completed만 (required/scheduled/cancelled 제외).
+// 학생/그룹 relation embed 쿼리 1번 (Excel row 수와 무관 — N+1 금지). read-only.
+export async function getCompletedMakeupsForExport() {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as CompletedMakeupForExport[];
+  }
+
+  const primary = await supabase
+    .from("makeup_lessons")
+    .select(
+      "id, source, completed_date, original_class_date, missed_progress, completed_progress, start_time, end_time, students(name), direct_group:class_groups!makeup_lessons_group_id_fkey(id), student_lesson_logs(daily_logs(group_id))",
+    )
+    .eq("user_id", user.id)
+    .eq("status", "completed");
+
+  let data: Record<string, unknown>[] | null = primary.data;
+  let error = primary.error;
+
+  if (error && SCHEMA_MISMATCH_CODES.has(error.code ?? "")) {
+    // 직접 등록 migration 적용 전 legacy 모양 재시도 (결석 연동 보충만 존재하는 계정)
+    const fallback = await supabase
+      .from("makeup_lessons")
+      .select(
+        "id, completed_date, original_class_date, missed_progress, completed_progress, start_time, end_time, students(name), student_lesson_logs(daily_logs(group_id))",
+      )
+      .eq("user_id", user.id)
+      .eq("status", "completed");
+    data = fallback.data;
+    error = fallback.error;
+  }
+
+  if (error) {
+    console.error("getCompletedMakeupsForExport error", error);
+    throw new Error("완료된 보충 수업을 불러오지 못했어요.");
+  }
+
+  return (data ?? []).map((row) => {
+    const record = row as unknown as {
+      id: string;
+      source?: string | null;
+      completed_date: string | null;
+      original_class_date: string;
+      missed_progress: string | null;
+      completed_progress: string | null;
+      start_time: string | null;
+      end_time: string | null;
+      students: unknown;
+      direct_group?: unknown;
+      student_lesson_logs: unknown;
+    };
+    const lessonLog = pickOne<{ daily_logs: unknown }>(record.student_lesson_logs);
+    const dailyLog = pickOne<{ group_id: string | null }>(lessonLog?.daily_logs);
+
+    return {
+      id: record.id,
+      source: record.source ?? "absence",
+      completed_date: record.completed_date,
+      original_class_date: record.original_class_date,
+      missed_progress: record.missed_progress,
+      completed_progress: record.completed_progress,
+      start_time: record.start_time,
+      end_time: record.end_time,
+      studentName: pickOne<{ name: string }>(record.students)?.name ?? null,
+      groupId: pickOne<{ id: string }>(record.direct_group)?.id ?? dailyLog?.group_id ?? null,
+    };
+  });
+}
+
 // ── 직접 등록 보충 ──────────────────────────────────────────────────────
 // 결석 연동 없이 Teacher가 학생/그룹/날짜/시간을 지정한다. 날짜가 이미 있으므로
 // pending(required)을 거치지 않고 바로 scheduled로 생성한다.

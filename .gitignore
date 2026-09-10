@@ -46,3 +46,4 @@ next-env.d.ts
 
 # Excel export template asset은 예외 (개인 수업 데이터 없음)
 !templates/teacher-log-template.xlsx
+!templates/makeup-template.xlsx
