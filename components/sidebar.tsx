@@ -127,7 +127,14 @@ const navSections: { label: string; items: NavItem[] }[] = [
 
 const bottomItem: NavItem = { label: "설정", href: "/settings", icon: Settings };
 
-export type SidebarGroup = { id: string; name: string; icon: string | null };
+export type SidebarGroup = {
+  id: string;
+  name: string;
+  icon: string | null;
+  // 시험 기간 ON이면 이름 옆 "(시험)" 표시 — display만 (DB 이름 무변경).
+  // 기준은 class_groups.is_exam_period 하나 (시험 일정/플래너 존재 여부와 무관)
+  isExamPeriod?: boolean;
+};
 
 function NavLink({
   label,
@@ -274,7 +281,12 @@ export function Sidebar({
                   <span aria-hidden className="shrink-0 text-[13px] leading-none">
                     {groupIconOf(group.icon)}
                   </span>
-                  <span className="truncate">{group.name}</span>
+                  <span className="min-w-0 truncate">{group.name}</span>
+                  {group.isExamPeriod ? (
+                    // 텍스트로 상태 표시 (색만으로 구분하지 않는다) — 긴 이름이 truncate돼도
+                    // shrink-0이라 "(시험)"은 항상 보인다. active styling과는 독립.
+                    <span className="shrink-0 text-[11px] font-semibold text-[#6d5aa8]">(시험)</span>
+                  ) : null}
                 </Link>
               </li>
             );

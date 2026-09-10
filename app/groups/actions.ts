@@ -126,6 +126,10 @@ export async function setExamPeriodAction(groupId: string, isExamPeriod: boolean
   revalidatePath(`/groups/${groupId}`);
   revalidatePath("/groups");
   revalidatePath("/daily-logs");
+  // 사이드바 "(시험)" 라벨은 모든 페이지의 AppShell(layout 공용)이 렌더하므로
+  // 어느 경로에서든 stale 없이 반영되게 layout 단위로 revalidate한다
+  // (서버 재렌더만 — 작성 중인 클라이언트 폼 state를 건드리지 않는다)
+  revalidatePath("/", "layout");
   return { success: true as const };
 }
 

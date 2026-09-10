@@ -26,7 +26,13 @@ export async function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen text-[#2d2928]">
       <Sidebar
-        groups={sortedGroups.map((group) => ({ id: group.id, name: group.name, icon: group.icon ?? null }))}
+        groups={sortedGroups.map((group) => ({
+          id: group.id,
+          name: group.name,
+          icon: group.icon ?? null,
+          // 이미 조회한 그룹 row의 필드 그대로 — 그룹별 추가 쿼리 없음
+          isExamPeriod: group.is_exam_period,
+        }))}
         pendingMakeupCount={pendingMakeupCount}
       />
       <div className="app-main flex-1 overflow-hidden max-lg:pt-14">
