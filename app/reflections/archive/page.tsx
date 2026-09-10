@@ -108,13 +108,13 @@ export default async function AllTimeReflectionsPage() {
                       {bullets.map((bullet, index) => (
                         <li
                           key={index}
-                          className="flex gap-2 whitespace-pre-wrap break-words text-sm leading-6 text-[#4a4160]"
+                          className="flex gap-2 whitespace-pre-wrap break-words text-sm leading-5 text-[#4a4160]"
                         >
                           <span aria-hidden className="shrink-0">•</span>
                           <span className="min-w-0">
                             {bullet.text}
                             {bullet.count > 1 ? (
-                              <span className="ml-1.5 rounded-full bg-white/70 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-[#8a7b77]">
+                              <span className="ml-1.5 rounded-full bg-white/70 px-1.5 py-0.5 text-xs font-medium tabular-nums text-[#8a7b77]">
                                 ×{bullet.count}회
                               </span>
                             ) : null}
@@ -122,7 +122,7 @@ export default async function AllTimeReflectionsPage() {
                         </li>
                       ))}
                     </ul>
-                    <p className="mt-2.5 text-[11px] text-[#a79996]">
+                    <p className="mt-2.5 text-sm text-[#a79996]">
                       자주 적은 내용부터 최대 8개 — 전체 원문은 아래 월별 기록에서 볼 수 있어요.
                     </p>
                   </Card>
@@ -131,7 +131,7 @@ export default async function AllTimeReflectionsPage() {
 
               {/* 월별 기록 — 최신 월부터, 클릭하면 월 누적 상세로 */}
               <div>
-                <h2 className="mb-2.5 text-base font-bold text-[#2b2323]">월별 기록</h2>
+                <h2 className="card-title mb-2.5 text-[#2b2323]">월별 기록</h2>
                 <div className="space-y-2.5">
                   {months.map((entry) => (
                     <Link
@@ -143,11 +143,11 @@ export default async function AllTimeReflectionsPage() {
                         <span className="block font-semibold text-[#2d2928]">
                           {monthLabel(entry.month)}
                         </span>
-                        <span className="mt-0.5 block text-xs tabular-nums text-[#8a7b77]">
+                        <span className="mt-0.5 block text-sm tabular-nums text-[#8a7b77]">
                           {entry.dateCount}일 · {entry.logCount}개 수업
                         </span>
                       </span>
-                      <span className="flex shrink-0 items-center gap-0.5 text-xs font-medium text-[#5c4ca8]">
+                      <span className="flex shrink-0 items-center gap-0.5 text-sm font-medium text-[#5c4ca8]">
                         자세히 보기 <ChevronRight className="h-3.5 w-3.5" aria-hidden />
                       </span>
                     </Link>

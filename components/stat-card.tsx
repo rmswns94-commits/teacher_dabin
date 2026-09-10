@@ -27,7 +27,7 @@ export function StatCard({
         <div className={cn("flex h-8 w-8 items-center justify-center rounded-xl", toneMap[tone])}>
           <Icon className="h-4 w-4" />
         </div>
-        <p className="text-[11px] text-[#756a67]">{label}</p>
+        <p className="text-sm text-[#756a67]">{label}</p>
         <p className="text-lg font-semibold tracking-[-0.02em] text-[#241d1d]">{value}</p>
       </div>
     </Card>

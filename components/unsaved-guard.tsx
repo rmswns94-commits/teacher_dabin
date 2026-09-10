@@ -142,10 +142,10 @@ export function ConfirmDiscardDialog({
       }}
     >
       <div className="w-full max-w-xs rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 text-center shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
-        <div className="font-display text-lg font-semibold text-[#2a2323]">
+        <div className="card-title text-[#2a2323]">
           작성 중인 내용이 있어요
         </div>
-        <p className="mt-2 text-sm leading-6 text-[#655d5d]">
+        <p className="mt-2 text-sm leading-5 text-[#655d5d]">
           지금 닫으면 적어둔 내용이 사라져요.
           <br />
           계속 작성할까요?

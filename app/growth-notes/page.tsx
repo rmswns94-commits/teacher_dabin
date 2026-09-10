@@ -153,7 +153,7 @@ export default async function GrowthNotesPage({
 
           {/* 9개의 성장왕 — 순수 소개 화면 (달성 여부/랭킹/카운트 표시 금지) */}
           <section>
-            <h2 className="text-base font-bold text-[#3a2f2c]">9개의 성장왕</h2>
+            <h2 className="card-title text-[#3a2f2c]">9개의 성장왕</h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {growthAchievementValues.map((type) => {
                 const theme = growthKingThemes[type];
@@ -187,11 +187,11 @@ export default async function GrowthNotesPage({
                       <span aria-hidden className="text-2xl drop-shadow-sm">
                         {growthEmojis[type]}
                       </span>
-                      <span className={cn("text-[15px] font-bold", theme.title)}>
+                      <span className={cn("card-title", theme.title)}>
                         {growthLabels[type]}
                       </span>
                     </div>
-                    <p className={cn("mt-2 text-sm leading-6", theme.desc)}>
+                    <p className={cn("mt-2 text-sm leading-5", theme.desc)}>
                       {growthGuideDescriptions[type]}
                     </p>
                   </div>
@@ -202,7 +202,7 @@ export default async function GrowthNotesPage({
 
           {/* 반 선택 — [전체] 버튼/검색/드롭다운 없음 */}
           <section className="mt-8 pb-8">
-            <h2 className="text-base font-bold text-[#3a2f2c]">내 성장노트 확인하기</h2>
+            <h2 className="card-title text-[#3a2f2c]">내 성장노트 확인하기</h2>
             <p className="mt-1 text-sm text-[#8a7b77]">반을 선택해주세요.</p>
 
             {groups.length === 0 ? (
@@ -221,10 +221,10 @@ export default async function GrowthNotesPage({
                       className="group flex items-center justify-between gap-3 rounded-3xl border border-[#efe4de] bg-[#fffdfb] p-4 shadow-sm transition hover:border-[#e0d2f2] hover:bg-[#fdfbff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#b9a5e3]"
                     >
                       <div className="min-w-0">
-                        <div className="truncate text-[15px] font-bold text-[#3a2f2c]">
+                        <div className="card-title truncate text-[#3a2f2c]">
                           {group.name}
                         </div>
-                        <div className="mt-0.5 text-xs text-[#8a7b77]">
+                        <div className="mt-0.5 text-sm text-[#8a7b77]">
                           성장노트 확인하기{count > 0 ? ` · ${count}명` : ""}
                         </div>
                       </div>
@@ -366,26 +366,26 @@ async function GroupStudentList({ group }: { group: { id: string; name: string }
 
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 sm:justify-end">
                       {shown.length === 0 ? (
-                        <span className="text-xs text-[#8a7b77]">🌱 성장 기록이 쌓이는 중이에요</span>
+                        <span className="text-sm text-[#8a7b77]">🌱 성장 기록이 쌓이는 중이에요</span>
                       ) : (
                         <>
                           {shown.map((badge) => (
                             <span
                               key={badge.type}
-                              className="rounded-full bg-[#f0f7f2] px-2.5 py-1 text-[11px] font-semibold text-[#3d7f64]"
+                              className="rounded-full bg-[#f0f7f2] px-2.5 py-1 text-xs font-semibold text-[#3d7f64]"
                             >
                               {badge.emoji} {badge.label}
                             </span>
                           ))}
                           {extra > 0 ? (
-                            <span className="rounded-full bg-[#f4f1ee] px-2.5 py-1 text-[11px] font-medium text-[#8a7b77]">
+                            <span className="rounded-full bg-[#f4f1ee] px-2.5 py-1 text-xs font-medium text-[#8a7b77]">
                               +{extra}
                             </span>
                           ) : null}
                         </>
                       )}
                       {summary.praiseCount > 0 ? (
-                        <span className="rounded-full bg-[#fdf8ec] px-2.5 py-1 text-[11px] font-semibold text-[#8a6828]">
+                        <span className="rounded-full bg-[#fdf8ec] px-2.5 py-1 text-xs font-semibold text-[#8a6828]">
                           💜 이번 주 칭찬 {summary.praiseCount}회
                         </span>
                       ) : null}

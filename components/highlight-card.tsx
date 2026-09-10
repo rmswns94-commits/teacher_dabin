@@ -53,10 +53,10 @@ export function HighlightCard({
       <Card className="border-[#e8ddf3] bg-gradient-to-br from-[#fbf8ff] to-[#fdf6ee]">
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#6d5aa8]">
+          <div className="flex items-center gap-2 section-title text-[#6d5aa8]">
             <Sparkles className="h-3.5 w-3.5" aria-hidden /> 하이라이트
           </div>
-          {savedMessage ? <span className="text-xs text-[#3d7f64]">{savedMessage}</span> : null}
+          {savedMessage ? <span className="text-sm text-[#3d7f64]">{savedMessage}</span> : null}
         </div>
 
         {editing ? (
@@ -68,7 +68,7 @@ export function HighlightCard({
               maxLength={500}
               autoFocus
               placeholder={"이번 주 Unit 3 마무리 예정.\n민수 단어 테스트 재확인."}
-              className="w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+              className="w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
               aria-label="하이라이트 내용"
             />
 
@@ -89,7 +89,7 @@ export function HighlightCard({
           </div>
         ) : text ? (
           <div className="mt-2 flex items-start justify-between gap-3">
-            <div className="whitespace-pre-line text-sm leading-6 text-[#3d3450]">{text}</div>
+            <div className="whitespace-pre-line text-sm leading-5 text-[#3d3450]">{text}</div>
             <Button type="button" variant="ghost" size="sm" className="shrink-0 gap-1.5" onClick={startEditing}>
               <Pencil className="h-3.5 w-3.5" aria-hidden /> 수정
             </Button>

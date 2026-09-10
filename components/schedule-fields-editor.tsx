@@ -149,10 +149,10 @@ export function ScheduleFieldsEditor() {
       <div className="rounded-2xl border border-dashed border-[#e3d5ce] bg-white/60 p-3">
         <WeekdayTimePicker value={picker} onChange={setPicker} />
 
-        {error ? <p className="mt-2 text-xs text-[#a2665f]">{error}</p> : null}
+        {error ? <p className="mt-2 text-sm text-[#a2665f]">{error}</p> : null}
 
         {pendingDays.length > 0 ? (
-          <p className="mt-2 text-xs text-[#3d7f64]">
+          <p className="mt-2 text-sm text-[#3d7f64]">
             선택한 {formatDayList(pendingDays)} {picker.startTime}~{picker.endTime} 시간은 그룹
             등록 시 함께 저장돼요.
           </p>

@@ -26,8 +26,8 @@ import { cn } from "@/lib/utils";
 function SectionTitle({ children, sub }: { children: React.ReactNode; sub?: string }) {
   return (
     <div className="mb-3">
-      <h2 className="text-base font-bold text-[#3a2f2c]">{children}</h2>
-      {sub ? <p className="mt-0.5 text-xs text-[#9a8b86]">{sub}</p> : null}
+      <h2 className="card-title text-[#3a2f2c]">{children}</h2>
+      {sub ? <p className="mt-0.5 text-sm text-[#9a8b86]">{sub}</p> : null}
     </div>
   );
 }
@@ -73,7 +73,7 @@ export default async function PhilosophyPage({
         <div className="mx-auto w-full max-w-[1000px]">
           <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h1 className="flex items-center gap-2 font-display text-[26px] font-semibold tracking-[-0.01em] text-[#2d2928] md:text-3xl">
+              <h1 className="page-title flex items-center gap-2 text-[#2d2928]">
                 교육 철학
                 <Doodle kind="flower" className="h-5 w-5 text-[#dcb3c2]" />
               </h1>
@@ -105,10 +105,10 @@ export default async function PhilosophyPage({
           <Card className="mb-8 overflow-hidden border-[#f0dbe2] bg-gradient-to-br from-[#fdf7f9] via-[#fbf5fb] to-[#f4f8f4]">
             <CardContent className="relative p-6 md:p-8">
               <Quote aria-hidden className="absolute left-5 top-5 h-5 w-5 text-[#e3c3cf]" />
-              <p className="mx-auto max-w-2xl text-center font-display text-xl leading-9 text-[#4a3c47] md:text-[22px]">
+              <p className="mx-auto max-w-2xl text-center text-lg leading-relaxed text-[#4a3c47]">
                 {philosophyAnchor.headline}
               </p>
-              <p className="mt-3 text-center text-xs text-[#a08a94]">{philosophyAnchor.sub}</p>
+              <p className="mt-3 text-center text-sm text-[#a08a94]">{philosophyAnchor.sub}</p>
             </CardContent>
           </Card>
 
@@ -118,7 +118,7 @@ export default async function PhilosophyPage({
             <Card className="p-5">
               <ul className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
                 {teacherAttitudes.map((item) => (
-                  <li key={item} className="flex items-start gap-2 text-sm leading-6 text-[#4a4140]">
+                  <li key={item} className="flex items-start gap-2 text-sm leading-5 text-[#4a4140]">
                     <Sparkles className="mt-1 h-3.5 w-3.5 shrink-0 text-[#c9a9de]" aria-hidden />
                     {item}
                   </li>
@@ -146,11 +146,11 @@ export default async function PhilosophyPage({
                       {index + 1}
                     </span>
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold leading-6 text-[#2d2928]">
+                      <div className="text-sm font-semibold leading-5 text-[#2d2928]">
                         {principle.title}
                       </div>
                       {principle.detail ? (
-                        <p className="mt-0.5 text-[13px] leading-6 text-[#6f6260]">
+                        <p className="secondary-text mt-0.5 text-[#6f6260]">
                           {principle.detail}
                         </p>
                       ) : null}
@@ -172,8 +172,8 @@ export default async function PhilosophyPage({
                       {guide.target}
                     </span>
                     <div className="min-w-0 flex-1 space-y-1">
-                      <p className="text-sm leading-6 text-[#4a4140]">{guide.core}</p>
-                      <p className="text-[13px] leading-6 text-[#a26660]">
+                      <p className="text-sm leading-5 text-[#4a4140]">{guide.core}</p>
+                      <p className="secondary-text text-[#a26660]">
                         <span className="font-medium">주의</span> · {guide.caution}
                       </p>
                     </div>
@@ -181,7 +181,7 @@ export default async function PhilosophyPage({
                 </Card>
               ))}
             </div>
-            <div className="mt-3 flex items-start gap-2 rounded-2xl border border-[#dcebe2] bg-[#f4faf7] px-4 py-3 text-sm leading-6 text-[#3f6b58]">
+            <div className="mt-3 flex items-start gap-2 rounded-2xl border border-[#dcebe2] bg-[#f4faf7] px-4 py-3 text-sm leading-5 text-[#3f6b58]">
               <MessageCircleHeart className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               {parentNote}
             </div>
@@ -218,7 +218,7 @@ export default async function PhilosophyPage({
                       </li>
                     ))}
                   </ol>
-                  <p className="text-[13px] font-medium text-[#5c4ca8]">⇒ {speakingMethod.outcome}</p>
+                  <p className="secondary-text font-medium text-[#5c4ca8]">⇒ {speakingMethod.outcome}</p>
                 </div>
               </details>
 
@@ -231,10 +231,10 @@ export default async function PhilosophyPage({
                   <ChevronDown className="h-4 w-4 text-[#9a8b86] transition group-open:rotate-180" aria-hidden />
                 </summary>
                 <div className="px-5 pb-5">
-                  <ol className="grid gap-x-6 gap-y-1.5 text-sm leading-6 text-[#4a4140] sm:grid-cols-2 lg:grid-cols-3">
+                  <ol className="grid gap-x-6 gap-y-1.5 text-sm leading-5 text-[#4a4140] sm:grid-cols-2 lg:grid-cols-3">
                     {readingQuestionTypes.map((type, index) => (
                       <li key={type} className="flex items-center gap-2">
-                        <span className="w-5 shrink-0 text-right text-xs tabular-nums text-[#a79996]">
+                        <span className="w-5 shrink-0 text-right text-sm tabular-nums text-[#a79996]">
                           {index + 1}
                         </span>
                         {type}
@@ -253,7 +253,7 @@ export default async function PhilosophyPage({
                   <ChevronDown className="h-4 w-4 text-[#9a8b86] transition group-open:rotate-180" aria-hidden />
                 </summary>
                 <div className="px-5 pb-5">
-                  <ul className="space-y-1.5 text-sm leading-6 text-[#4a4140]">
+                  <ul className="space-y-1.5 text-sm leading-5 text-[#4a4140]">
                     {examPrepRules.map((rule) => (
                       <li key={rule} className="flex items-start gap-2">
                         <span aria-hidden className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#d9a79a]" />
@@ -278,8 +278,8 @@ export default async function PhilosophyPage({
             {words.length === 0 ? (
               <div className="relative">
                 <div className="mx-auto flex max-w-md flex-col items-center gap-4 rounded-[28px] border border-[#f0dbe2] bg-gradient-to-br from-[#fdf7f9] to-[#fdfaf5] px-6 py-12 text-center">
-                  <div className="font-display text-lg text-[#4a3f47]">아직 모아둔 문장이 없어요.</div>
-                  <p className="text-sm leading-6 text-[#8a7b83]">
+                  <div className="body-text text-[#4a3f47]">아직 모아둔 문장이 없어요.</div>
+                  <p className="text-sm leading-5 text-[#8a7b83]">
                     오늘 마음에 남은 한마디를
                     <br />첫 페이지에 적어볼까요?
                   </p>

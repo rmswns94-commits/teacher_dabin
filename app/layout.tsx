@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Hi_Melody } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 import { NavHistoryTracker } from "@/components/nav-history-tracker";
@@ -16,13 +16,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Display font: 제목·인사말·감성 문구에 쓰는 귀여운 손글씨 한글 폰트.
-// (본문/입력/숫자는 가독성을 위해 기존 sans를 유지한다.)
-const hiMelody = Hi_Melody({
-  variable: "--font-hand",
-  weight: "400",
-  subsets: ["latin"],
-});
+// 손글씨 display 폰트(Hi Melody)는 제거했다 — 앱 전체를 하나의 sans stack으로 통일
+// (font-display 유틸은 globals.css에서 본문과 같은 stack을 가리킨다). 웹폰트 요청도 하나 줄었다.
 
 export const metadata: Metadata = {
   title: "강사 일지",
@@ -60,12 +55,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       // 테마 클래스는 head 스크립트가 hydration 전에 붙인다 — 서버 markup과의
       // class 차이는 의도된 것 (테마 기능 표준 패턴)
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} ${hiMelody.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="min-h-full text-[#2d2928]">
+      <body className="min-h-full text-base text-[#2d2928]">
         <ServiceWorkerRegistration />
         <NavHistoryTracker />
         <PullToRefresh />

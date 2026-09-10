@@ -115,13 +115,13 @@ function TodoItemRow({
           <span className={cn("min-w-0 flex-1", checked && "opacity-75")}>
             <span
               className={cn(
-                "block whitespace-pre-wrap break-words text-sm",
+                "body-text block whitespace-pre-wrap break-words",
                 checked ? "text-[#8a7b77] [text-decoration:line-through]" : "text-[#2d2928]",
               )}
             >
               {formatTextbookLinked(linkedContextLabel(item), item.text)}
             </span>
-            <span className={cn("mt-0.5 block text-[11px]", metaClass)}>{meta}</span>
+            <span className={cn("secondary-text mt-0.5 block", metaClass)}>{meta}</span>
           </span>
         </button>
       </form>
@@ -261,7 +261,7 @@ export default async function TodayTodosPage({
         <span className="min-w-0 truncate">{group.name}</span>
       </Link>
       {time ? (
-        <span className="text-xs tabular-nums text-[#8a7b77]">
+        <span className="secondary-text tabular-nums text-[#8a7b77]">
           {timeLabel} {formatTimeRange(time.start, time.end)}
         </span>
       ) : null}
@@ -293,7 +293,7 @@ export default async function TodayTodosPage({
             className="mb-5 rounded-3xl border border-[#d5e6f3] bg-gradient-to-b from-[#e2f0fa] via-[#edf5fb] to-[#eef6ef] p-3 shadow-sm sm:p-4"
           >
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1 pb-1">
-              <h2 className="text-xl font-semibold tracking-[-0.01em] text-[#2b2323]">
+              <h2 className="card-title text-[#2b2323]">
                 {monthLabel(month)}
               </h2>
               <div className="flex items-center gap-1">
@@ -319,7 +319,7 @@ export default async function TodayTodosPage({
                   <div
                     key={label}
                     className={cn(
-                      "px-1 text-center text-[10px] font-bold tracking-[0.08em] sm:text-[11px]",
+                      "px-1 text-center text-xs font-semibold tracking-[0.04em]",
                       index === 0 || index === 6 ? WEEKEND_TEXT : "text-[#4a4a55]",
                     )}
                   >
@@ -362,7 +362,7 @@ export default async function TodayTodosPage({
                         <div className="flex min-w-0 flex-col items-center gap-0.5">
                           <span
                             className={cn(
-                              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums",
+                              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums",
                               isToday
                                 ? "bg-[#8b7ae6] text-white"
                                 : isWeekend
@@ -377,7 +377,7 @@ export default async function TodayTodosPage({
                             // 나머지는 플래너의 민트 oval marker와 동일 계열
                             <span
                               className={cn(
-                                "inline-flex max-w-full items-center gap-0.5 truncate rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+                                "inline-flex max-w-full items-center gap-0.5 truncate rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums",
                                 allDone
                                   ? "bg-[#f0eae4] text-[#8a7b77]"
                                   : "bg-[#d9efe3] text-[#3d7f64]",
@@ -405,7 +405,7 @@ export default async function TodayTodosPage({
           </section>
 
           {/* ── 선택 날짜 상세 ── */}
-          <h2 className="mb-3 text-base font-bold text-[#2b2323]">
+          <h2 className="card-title mb-3 text-[#2b2323]">
             {isTodaySelected
               ? `오늘 할 일 · ${formatKoreanDate(today, true)}`
               : `${formatKoreanDate(selectedDate, true)} · 할 일 ${dateTotal}개`}
@@ -414,7 +414,7 @@ export default async function TodayTodosPage({
           {isTodaySelected ? (
             <>
               {totalCount > 0 || doneTodayCount > 0 ? (
-                <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-[#655d5d]">
+                <div className="secondary-text mb-4 flex flex-wrap items-center gap-2 text-[#655d5d]">
                   <span className="rounded-full bg-[#efe8fb] px-2.5 py-1 text-xs font-medium tabular-nums text-[#5d4ba5]">
                     남은 할 일 {totalCount}개
                   </span>
@@ -433,7 +433,7 @@ export default async function TodayTodosPage({
 
               {sections.length === 0 ? (
                 <Card>
-                  <CardContent className="p-6 text-sm text-[#655d5d]">
+                  <CardContent className="body-text p-6 text-[#655d5d]">
                     오늘 할 일을 모두 마쳤어요 ✨
                   </CardContent>
                 </Card>
@@ -480,7 +480,7 @@ export default async function TodayTodosPage({
             </>
           ) : dateSections.length === 0 ? (
             <Card>
-              <CardContent className="p-6 text-sm text-[#655d5d]">
+              <CardContent className="body-text p-6 text-[#655d5d]">
                 이날 예정된 할 일이 없어요.
               </CardContent>
             </Card>
@@ -509,7 +509,7 @@ export default async function TodayTodosPage({
             </div>
           )}
 
-          <div className="mt-6 flex items-center justify-center gap-1.5 text-xs text-[#a79996]">
+          <div className="secondary-text mt-6 flex items-center justify-center gap-1.5 text-[#a79996]">
             <ListChecks className="h-3.5 w-3.5" aria-hidden />
             완료한 할 일은 목록에서 사라지고, 각 수업 그룹 페이지에서 관리할 수 있어요.
           </div>

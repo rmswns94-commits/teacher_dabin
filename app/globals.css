@@ -6,6 +6,11 @@
   --background: #f6f6f7;
   --foreground: #26262b;
 
+  /* 앱 전체가 쓰는 단 하나의 글씨체 stack (여기서만 정의하고 나머지는 전부 참조).
+     라틴/숫자 = Geist(next/font로 self-host), 한글 = 기기 기본 고딕이 glyph 단위 fallback. */
+  --app-font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", "Noto Sans KR", sans-serif;
+
   /* 다이어리 팔레트 토큰 — 의미 기반으로 사용한다.
      lavender=계획/기본, mint=완료/출석, peach=리마인더/숙제,
      cream=메모/하이라이트, rose=결석/주의 */
@@ -60,23 +65,43 @@
   --color-diary-ink: var(--diary-ink);
   --color-diary-muted: var(--diary-muted);
   --color-diary-border: var(--diary-border);
-  --font-sans: "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", var(--font-geist-sans), Arial, sans-serif;
+  /* 손글씨 display 폰트(Hi Melody)는 제거했다 — 제목/본문/입력이 전부 같은 stack.
+     제목은 글씨체가 아니라 크기·굵기로 구분한다. */
+  --font-sans: var(--app-font-sans);
   --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-hand), var(--font-geist-sans), sans-serif;
 
-  /* 본문 글자 크기: 고딕 기준 표준 스케일. (예전 확대치는 손글씨체 보정용이었음)
-     루트 17px 덕분에 기본값이어도 표준보다 살짝 크게 렌더링된다. */
-  --text-xs: 0.75rem;
+  /* 타이포그래피 스케일 — 12 / 14 / 16 / 18 / 20 / 24 / 30 만 쓴다.
+     px로 고정한 이유: 루트가 17px이라 rem 기준이면 14.875px 같은 어중간한 값이 나오고,
+     루트를 16px로 내리면 rem 기반 여백·높이까지 전부 6% 줄어 레이아웃이 흔들린다.
+     (여백은 지금 감각 그대로 두고 글자 크기만 정확한 스케일로 맞춘다.)
+     행간은 한국어 가독성 기준 — 본문은 넉넉하게, 제목은 조여서. */
+  --text-xs: 12px;
   --text-xs--line-height: 1.45;
-  --text-sm: 0.875rem;
-  --text-sm--line-height: 1.55;
-  --text-base: 1rem;
+  --text-sm: 14px;
+  --text-sm--line-height: 1.5;
+  --text-base: 16px;
   --text-base--line-height: 1.6;
+  --text-lg: 18px;
+  --text-lg--line-height: 1.4;
+  --text-xl: 20px;
+  --text-xl--line-height: 1.35;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 1.3;
+  --text-3xl: 30px;
+  --text-3xl--line-height: 1.25;
+  --text-4xl: 36px;
+  --text-4xl--line-height: 1.2;
+  /* 숫자 하나만 크게 보여주는 자리(캘린더 월 표시 등)에만 쓰는 display 크기 */
+  --text-5xl: 48px;
+  --text-5xl--line-height: 1.1;
+  --text-6xl: 60px;
+  --text-6xl--line-height: 1.05;
 }
 
 html {
   scroll-behavior: smooth;
-  /* 전체 스케일을 살짝 키운다 (rem 기준 일괄 적용 — 제목 손글씨체 가독성 포함) */
+  /* 여백·높이(rem)의 기준. 글자 크기는 @theme의 px 스케일이 따로 잡으므로
+     이 값을 바꿔도 타이포그래피는 흔들리지 않는다. */
   font-size: 17px;
 }
 
@@ -85,9 +110,10 @@ body {
   /* 업무용 클린 스타일: 장식 패턴 없이 옅은 뉴트럴 단색 배경 */
   background-color: var(--background);
   color: var(--foreground);
-  /* 본문은 가독성 좋은 고딕 계열(맑은 고딕 우선, iOS/맥은 Apple SD Gothic Neo).
-     손글씨체(Hi Melody)는 font-display 유틸을 쓰는 제목·감성 문구에만 남긴다. */
-  font-family: "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", var(--font-geist-sans), Arial, sans-serif;
+  font-family: var(--app-font-sans);
+  /* 기본 본문 = 16px / 1.6 (한국어 긴 문장 기준). 스케일과 같은 값을 직접 적는다. */
+  font-size: 16px;
+  line-height: 1.6;
 }
 
 /* Hero 카드 등 일부 영역에만 쓰는 아주 연한 도트 패턴 */
@@ -100,10 +126,105 @@ body {
   box-sizing: border-box;
 }
 
-button,
-input,
-textarea {
-  font: inherit;
+/* 폼 요소 리셋 — @layer base라 Tailwind utilities(뒷 layer)가 항상 이긴다.
+   예전엔 unlayered `font: inherit` 한 줄이라 버튼/입력칸에 붙인 text-* 가 전부 무시되고
+   부모 글자 크기를 따라가 화면마다 크기가 제각각이었다. */
+@layer base {
+  button,
+  select,
+  input,
+  textarea {
+    font-family: inherit;
+    font-weight: inherit;
+    letter-spacing: inherit;
+  }
+
+  button {
+    font-size: inherit;
+    line-height: inherit;
+  }
+
+  /* iOS Safari는 16px 미만 입력칸에 포커스하면 화면을 자동 확대한다.
+     기기/폭과 무관하게 입력 글자는 16px가 기본값 (개별 화면에서 더 작게 두지 않는다). */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  textarea {
+    line-height: 1.6; /* 여러 줄 입력이 답답하지 않게 */
+  }
+}
+
+@layer components {
+  /* ── 타이포그래피 semantic 클래스 ──────────────────────────────────
+     역할이 같은 텍스트는 화면이 달라도 같은 크기/굵기/행간을 쓴다.
+     utilities가 뒷 layer라 특정 화면에서 필요한 부분만 덮어쓸 수 있다. */
+
+  /* 페이지 최상단 제목 (오늘 / 수업 일지 / 학생 …) */
+  .page-title {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+
+  /* 카드 제목 (수업 브리핑 / 수업 기본 정보 / 오늘 할 일 …) */
+  .card-title {
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+  }
+
+  /* 카드 안 섹션 제목 (준비할 일 / 오늘 진도 / 지난 숙제 / 학생 평가 …) */
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.45;
+  }
+
+  /* 실제로 읽는 본문 (진도 / 숙제 / 메모 / 브리핑 내용 …) */
+  .body-text {
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.6;
+  }
+
+  /* 보조 설명 (수업시간 / 도움말 / 빈 상태 안내 …) */
+  .secondary-text {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  /* 작은 meta (임시저장됨 · 15:35 / 보조 라벨 …) — 핵심 정보는 여기 두지 않는다 */
+  .caption-text {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.45;
+  }
+
+  /* 폼 라벨 (날짜 / 수업 그룹 / 교재 …) */
+  .form-label {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  /* 입력 글자 — 기본 리셋과 같은 값이지만 wrapper 등에 명시할 때 쓴다 */
+  .form-control-text {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  @media (min-width: 768px) {
+    .page-title {
+      font-size: 24px;
+    }
+  }
 }
 
 /* lg 미만(아이폰·아이패드 세로)에서는 상단 바(3.5rem) 아래에 페이지 스크롤
@@ -113,16 +234,6 @@ textarea {
   .app-main > main {
     height: calc(100dvh - 3.5rem);
     padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
-  }
-}
-
-/* iOS Safari는 input 글자가 16px보다 작으면 포커스 시 화면을 자동 확대한다.
-   폰에서만 입력 요소 글자를 16px로 강제해 확대 점프를 막는다. */
-@media (max-width: 767px) {
-  input,
-  select,
-  textarea {
-    font-size: 16px !important;
   }
 }
 

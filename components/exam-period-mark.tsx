@@ -16,7 +16,7 @@ export function ExamPeriodMark({
   }
 
   return (
-    <span className={cn("shrink-0 text-[11px] font-semibold text-[#6d5aa8]", className)}>
+    <span className={cn("shrink-0 text-sm font-semibold text-[#6d5aa8]", className)}>
       (시험)
     </span>
   );

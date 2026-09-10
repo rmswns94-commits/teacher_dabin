@@ -61,7 +61,7 @@ export function ExamPeriodToggle({ groupId, isOn }: { groupId: string; isOn: boo
         <GraduationCap className="h-4 w-4" aria-hidden />
         {isPending && !confirmOpen ? "저장 중..." : isOn ? "✓ 시험 기간 ON" : "시험 기간 OFF"}
       </button>
-      {error && !confirmOpen ? <span className="text-xs text-[#a26660]">{error}</span> : null}
+      {error && !confirmOpen ? <span className="text-sm text-[#a26660]">{error}</span> : null}
 
       {confirmOpen ? (
         <div
@@ -82,7 +82,7 @@ export function ExamPeriodToggle({ groupId, isOn }: { groupId: string; isOn: boo
         >
           <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 text-left shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
             <div className="text-lg font-semibold text-[#2a2323]">시험이 잘 끝나셨나요?</div>
-            <p className="mt-3 text-sm leading-6 text-[#655d5d]">
+            <p className="mt-3 text-sm leading-5 text-[#655d5d]">
               시험 기간을 끄면 수업일지가 다시 교재 기준으로 돌아가요. 등록한 시험 대비용 교재는
               지워지지 않고, 다시 켜면 그대로 사용할 수 있어요.
             </p>

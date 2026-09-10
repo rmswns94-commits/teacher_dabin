@@ -35,7 +35,7 @@ export function SchoolExamFilters({
   };
 
   const selectClass =
-    "min-h-[42px] rounded-2xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none";
+    "form-control-text min-h-[42px] rounded-2xl border border-[#ece0db] bg-white px-3 py-2 outline-none";
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -115,12 +115,12 @@ export function SchoolExamDeleteButton({
         size="sm"
         disabled={isPending}
         onClick={remove}
-        className="gap-1.5 text-xs text-[#8f625f]"
+        className="gap-1.5 text-sm text-[#8f625f]"
       >
         <Trash2 className="h-3.5 w-3.5" />
         {isPending ? "삭제 중..." : "시험 삭제"}
       </Button>
-      {error ? <p className="text-xs text-[#a2665f]">{error}</p> : null}
+      {error ? <p className="text-sm text-[#a2665f]">{error}</p> : null}
     </div>
   );
 }

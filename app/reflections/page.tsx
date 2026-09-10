@@ -149,7 +149,7 @@ export default async function ReflectionsPage({
             {/* 상단 바: MONTH / nav / YEAR */}
             <div className="px-4 pt-3 sm:px-6">
               <div className="flex flex-wrap items-center justify-between gap-2 border-t-2 border-[#3f7d54] pt-2.5">
-                <span className="text-sm font-bold tracking-[0.18em] text-[#3f7d54]">{monthEn}</span>
+                <span className="text-sm font-bold tracking-[0.06em] text-[#3f7d54]">{monthEn}</span>
                 <div className="flex items-center gap-1">
                   <Link href={monthHref(addMonths(month, -1))} aria-label="이전 달" className={navButton}>
                     <ChevronLeft className="h-4 w-4" />
@@ -161,7 +161,7 @@ export default async function ReflectionsPage({
                     <ChevronRight className="h-4 w-4" />
                   </Link>
                 </div>
-                <span className="text-sm font-bold tracking-[0.18em] text-[#3f7d54]">
+                <span className="text-sm font-bold tracking-[0.06em] text-[#3f7d54]">
                   {month.slice(0, 4)}
                 </span>
               </div>
@@ -183,7 +183,7 @@ export default async function ReflectionsPage({
                 <span>🌲</span>
               </div>
               <div className="mx-auto -mb-px flex h-14 w-44 items-center justify-center rounded-t-[70px] bg-white sm:h-16">
-                <span className="text-4xl font-bold tracking-[0.06em] text-[#3f7d54]">
+                <span className="text-4xl font-bold text-[#3f7d54]">
                   {month.slice(5, 7)}
                 </span>
               </div>
@@ -196,7 +196,7 @@ export default async function ReflectionsPage({
                 {WEEKDAY_LABELS.map((label) => (
                   <div
                     key={label}
-                    className="border-r border-white/25 py-1.5 text-center text-[10px] font-bold tracking-[0.06em] text-white last:border-r-0 sm:text-[11px]"
+                    className="border-r border-white/25 py-1.5 text-center text-xs font-semibold tracking-[0.04em] text-white last:border-r-0 sm:text-xs"
                   >
                     {label}
                   </div>
@@ -234,7 +234,7 @@ export default async function ReflectionsPage({
                         <div className="flex min-w-0 flex-col items-center gap-0.5">
                           <span
                             className={cn(
-                              "flex h-6 w-6 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums",
+                              "flex h-6 w-6 items-center justify-center rounded-full text-sm font-semibold tabular-nums",
                               isToday
                                 ? "bg-[#4d9163] text-white"
                                 : dayIndex === 0
@@ -245,7 +245,7 @@ export default async function ReflectionsPage({
                             {Number(date.slice(8))}
                           </span>
                           {count > 0 ? (
-                            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#e3f2df] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[#3a7048]">
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#e3f2df] px-1.5 py-0.5 text-xs font-semibold tabular-nums text-[#3a7048]">
                               ✦ {count}
                             </span>
                           ) : null}
@@ -264,7 +264,7 @@ export default async function ReflectionsPage({
                   <div className="border-b border-[#cfe4c8]" />
                 </div>
               </div>
-              <p className="mt-2 text-center text-[11px] text-[#6b9678]">
+              <p className="mt-2 text-center text-sm text-[#6b9678]">
                 {monthLabel(month)}의 수업 회고 {monthTotal}개 — 돌아본 만큼 수업이 자라요.
               </p>
             </div>

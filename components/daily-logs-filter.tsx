@@ -30,11 +30,11 @@ export function DailyLogsFilter({
   return (
     <div className="flex flex-wrap items-end gap-3">
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-[#8a7b77]">수업 그룹</span>
+        <span className="mb-1 block text-sm font-medium text-[#8a7b77]">수업 그룹</span>
         <select
           value={groupId}
           onChange={(event) => navigate(event.target.value, status)}
-          className="rounded-xl border border-[#ecdcd8] bg-white/80 px-3 py-2 text-sm outline-none focus:border-[#e3b9c9]"
+          className="rounded-xl border border-[#ecdcd8] bg-white/80 px-3 py-2 text-base outline-none focus:border-[#e3b9c9]"
         >
           <option value="">전체 그룹</option>
           {groups.map((group) => (
@@ -44,11 +44,11 @@ export function DailyLogsFilter({
       </label>
 
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-[#8a7b77]">작성 상태</span>
+        <span className="mb-1 block text-sm font-medium text-[#8a7b77]">작성 상태</span>
         <select
           value={status}
           onChange={(event) => navigate(groupId, event.target.value)}
-          className="rounded-xl border border-[#ecdcd8] bg-white/80 px-3 py-2 text-sm outline-none focus:border-[#e3b9c9]"
+          className="rounded-xl border border-[#ecdcd8] bg-white/80 px-3 py-2 text-base outline-none focus:border-[#e3b9c9]"
         >
           <option value="">전체 상태</option>
           <option value="draft">작성 중</option>
@@ -60,7 +60,7 @@ export function DailyLogsFilter({
         <button
           type="button"
           onClick={() => navigate("", "")}
-          className="min-h-9 rounded-xl px-3 py-2 text-xs text-[#8a7b77] transition hover:bg-white/70 hover:text-[#564d4d]"
+          className="min-h-9 rounded-xl px-3 py-2 text-sm text-[#8a7b77] transition hover:bg-white/70 hover:text-[#564d4d]"
         >
           초기화
         </button>

@@ -54,7 +54,7 @@ export function DraftDeleteButton({
           setError("");
           setOpen(true);
         }}
-        className="flex h-10 shrink-0 items-center gap-1 rounded-xl px-2.5 text-xs font-medium text-[#a26660] transition hover:bg-[#fff5f2] hover:text-[#8a5048]"
+        className="flex h-10 shrink-0 items-center gap-1 rounded-xl px-2.5 text-sm font-medium text-[#a26660] transition hover:bg-[#fff5f2] hover:text-[#8a5048]"
       >
         <Trash2 className="h-3.5 w-3.5" aria-hidden /> 삭제
       </button>
@@ -89,7 +89,7 @@ export function DraftDeleteButton({
               <div className="mt-0.5 tabular-nums text-[#655d5d]">{dateLabel}</div>
             </div>
 
-            <p className="mt-3 text-sm leading-6 text-[#7f5d57]">
+            <p className="mt-3 text-sm leading-5 text-[#7f5d57]">
               삭제하면 작성 중이던 내용은 복구할 수 없어요. 완료된 수업일지와 다른 임시저장은
               영향을 받지 않아요.
             </p>

@@ -273,7 +273,7 @@ export default async function StudentDetailPage({
               <CardContent>
                 {/* 1. 학생 identity — 이름(크게) + 학년 badge */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[22px] font-bold leading-tight tracking-[-0.01em] text-[#2b2323]">
+                  <span className="page-title text-[#2b2323]">
                     {student.name}
                   </span>
                   <span className="rounded-full bg-[#f3eefa] px-2.5 py-0.5 text-xs font-medium text-[#6d5aa8]">
@@ -284,8 +284,8 @@ export default async function StudentDetailPage({
                 {/* 2. 성별 · 생일 · 학교 — compact info grid (wide에서 벌어지지 않게 max-w 제한) */}
                 <div className="mt-5 grid max-w-xl grid-cols-2 gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl bg-[#faf7f3] px-3.5 py-2.5 text-center">
-                    <div className="text-xs text-[#8a7b77]">성별</div>
-                    <div className="mt-0.5 text-[15px] font-medium text-[#2b2323]">
+                    <div className="secondary-text text-[#8a7b77]">성별</div>
+                    <div className="body-text mt-0.5 font-medium text-[#2b2323]">
                       {student.gender ? (
                         <>
                           <span aria-hidden>{student.gender === "male" ? "👦 " : "👧 "}</span>
@@ -297,14 +297,14 @@ export default async function StudentDetailPage({
                     </div>
                   </div>
                   <div className="rounded-2xl bg-[#faf7f3] px-3.5 py-2.5 text-center">
-                    <div className="text-xs text-[#8a7b77]">생일</div>
-                    <div className="mt-0.5 text-[15px] font-medium tabular-nums text-[#2b2323]">
+                    <div className="secondary-text text-[#8a7b77]">생일</div>
+                    <div className="body-text mt-0.5 font-medium tabular-nums text-[#2b2323]">
                       {student.birth_date ? `🎂 ${student.birth_date.replaceAll("-", ".")}` : "미등록"}
                     </div>
                   </div>
                   <div className="col-span-2 min-w-0 rounded-2xl bg-[#faf7f3] px-3.5 py-2.5 text-center sm:col-span-1">
-                    <div className="text-xs text-[#8a7b77]">학교</div>
-                    <div className="mt-0.5 break-words text-[15px] font-medium text-[#2b2323]">
+                    <div className="secondary-text text-[#8a7b77]">학교</div>
+                    <div className="body-text mt-0.5 break-words font-medium text-[#2b2323]">
                       {student.school ? `🏫 ${student.school}` : "미등록"}
                     </div>
                   </div>
@@ -312,7 +312,7 @@ export default async function StudentDetailPage({
 
                 {/* 3. 수업 그룹 */}
                 <div className="mt-5">
-                  <div className="text-xs font-semibold text-[#8a7b77]">수업 그룹</div>
+                  <div className="form-label font-semibold text-[#8a7b77]">수업 그룹</div>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {studentGroups.length === 0 ? (
                       <span className="text-sm text-[#9a8f8a]">미배정</span>
@@ -362,7 +362,7 @@ export default async function StudentDetailPage({
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle>최근 수업</CardTitle>
                   {attendanceSummary.total > 0 ? (
-                    <div className="flex items-center gap-1.5 text-xs" title="최근 30일 출결">
+                    <div className="flex items-center gap-1.5 text-sm" title="최근 30일 출결">
                       <span className="rounded-full bg-[#edf9f3] px-2 py-1 text-[#3d7f64]">
                         출석 {attendanceSummary.present}
                       </span>
@@ -397,12 +397,12 @@ export default async function StudentDetailPage({
                             {formatKoreanDate(lesson.dailyLog?.class_date)}
                           </span>
                           {lesson.dailyLog?.group ? (
-                            <span className="text-xs text-[#786d6b]">{lesson.dailyLog.group.name}</span>
+                            <span className="text-sm text-[#786d6b]">{lesson.dailyLog.group.name}</span>
                           ) : null}
                           <AttendanceBadge status={lesson.attendance} />
                         </div>
                         {lesson.progress ? (
-                          <div className="mt-1.5 flex items-start gap-1.5 text-xs text-[#564d4d]">
+                          <div className="mt-1.5 flex items-start gap-1.5 text-sm text-[#564d4d]">
                             <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-[#7c6d69]" />
                             <span className="min-w-0 whitespace-pre-line break-words">{lesson.progress}</span>
                           </div>
@@ -411,7 +411,7 @@ export default async function StudentDetailPage({
                         lesson.vocab_correct !== null ||
                         lesson.focus_level ||
                         lesson.participation_level ? (
-                          <div className="mt-1 text-xs tabular-nums text-[#564d4d]">
+                          <div className="mt-1 text-sm tabular-nums text-[#564d4d]">
                             {[
                               lesson.homework_status
                                 ? `숙제 ${homeworkStatusLabels[lesson.homework_status as HomeworkStatus]}`
@@ -444,7 +444,7 @@ export default async function StudentDetailPage({
                             {(praisesByLog.get(lesson.dailyLog.id) ?? []).map((label, praiseIndex) => (
                               <span
                                 key={`${label}-${praiseIndex}`}
-                                className="rounded-full bg-[#fdf3e4] px-1.5 py-0.5 text-[10px] text-[#8a6828]"
+                                className="rounded-full bg-[#fdf3e4] px-1.5 py-0.5 text-xs text-[#8a6828]"
                               >
                                 {label}
                               </span>
@@ -452,19 +452,19 @@ export default async function StudentDetailPage({
                           </div>
                         ) : null}
                         {lesson.parent_note ? (
-                          <div className="mt-1 text-xs text-[#96534c]">
+                          <div className="mt-1 text-sm text-[#96534c]">
                             학부모 전달{lesson.parent_note_status === "completed" ? " (완료)" : ""} ·{" "}
                             {lesson.parent_note}
                           </div>
                         ) : null}
                         {lesson.strengths ? (
-                          <div className="mt-1 text-xs text-[#3d6d58]">잘한 점 · {lesson.strengths}</div>
+                          <div className="mt-1 text-sm text-[#3d6d58]">잘한 점 · {lesson.strengths}</div>
                         ) : null}
                         {lesson.improvements ? (
-                          <div className="mt-1 text-xs text-[#8a5d52]">보완 · {lesson.improvements}</div>
+                          <div className="mt-1 text-sm text-[#8a5d52]">보완 · {lesson.improvements}</div>
                         ) : null}
                         {lesson.memo ? (
-                          <div className="mt-1 text-xs text-[#7c6d69]">메모 · {lesson.memo}</div>
+                          <div className="mt-1 text-sm text-[#7c6d69]">메모 · {lesson.memo}</div>
                         ) : null}
                       </div>
                     </Link>
@@ -480,16 +480,16 @@ export default async function StudentDetailPage({
                 </CardHeader>
                 <CardContent className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-[#2f5d4b]">
+                    <div className="flex items-center gap-1.5 text-sm font-semibold text-[#2f5d4b]">
                       <Sparkles className="h-3.5 w-3.5" /> 잘한 부분
                     </div>
                     {recentComments.filter((item) => item.strengths).length === 0 ? (
-                      <div className="rounded-2xl bg-[#f8f3ef] p-3 text-xs text-[#655d5d]">기록이 없어요.</div>
+                      <div className="rounded-2xl bg-[#f8f3ef] p-3 text-sm text-[#655d5d]">기록이 없어요.</div>
                     ) : (
                       recentComments
                         .filter((item) => item.strengths)
                         .map((item) => (
-                          <div key={`s-${item.id}`} className="rounded-2xl bg-[#edf8f2] p-3 text-xs text-[#2f5d4b]">
+                          <div key={`s-${item.id}`} className="rounded-2xl bg-[#edf8f2] p-3 text-sm text-[#2f5d4b]">
                             <span className="font-medium">{formatKoreanDate(item.dailyLog?.class_date)}</span> ·{" "}
                             {item.strengths}
                           </div>
@@ -497,16 +497,16 @@ export default async function StudentDetailPage({
                     )}
                   </div>
                   <div className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-[#8a5d52]">
+                    <div className="flex items-center gap-1.5 text-sm font-semibold text-[#8a5d52]">
                       <Target className="h-3.5 w-3.5" /> 보완할 부분
                     </div>
                     {recentComments.filter((item) => item.improvements).length === 0 ? (
-                      <div className="rounded-2xl bg-[#f8f3ef] p-3 text-xs text-[#655d5d]">기록이 없어요.</div>
+                      <div className="rounded-2xl bg-[#f8f3ef] p-3 text-sm text-[#655d5d]">기록이 없어요.</div>
                     ) : (
                       recentComments
                         .filter((item) => item.improvements)
                         .map((item) => (
-                          <div key={`i-${item.id}`} className="rounded-2xl bg-[#fff3ef] p-3 text-xs text-[#8a5d52]">
+                          <div key={`i-${item.id}`} className="rounded-2xl bg-[#fff3ef] p-3 text-sm text-[#8a5d52]">
                             <span className="font-medium">{formatKoreanDate(item.dailyLog?.class_date)}</span> ·{" "}
                             {item.improvements}
                           </div>
@@ -521,7 +521,7 @@ export default async function StudentDetailPage({
               <CardHeader>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle>주간 리포트</CardTitle>
-                  <div className="flex items-center gap-1 text-xs">
+                  <div className="flex items-center gap-1 text-sm">
                     <Link
                       href={`/students/${id}?week=${prevWeek}`}
                       className="rounded-lg px-2 py-1 text-[#6b6b74] transition hover:bg-[#f4f4f6]"
@@ -551,26 +551,26 @@ export default async function StudentDetailPage({
                   <div className="space-y-3 text-sm">
                     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                       <div className="rounded-2xl bg-[#edf9f3] p-3 text-center">
-                        <div className="text-[11px] text-[#3d7f64]">출석</div>
+                        <div className="text-sm text-[#3d7f64]">출석</div>
                         <div className="mt-0.5 font-semibold tabular-nums text-[#2f6d54]">
                           {weekAttendance.present + weekAttendance.late} / {weekAttendance.total}
                         </div>
                       </div>
                       <div className="rounded-2xl bg-[#fdf3e4] p-3 text-center">
-                        <div className="text-[11px] text-[#94702f]">숙제 완료</div>
+                        <div className="text-sm text-[#94702f]">숙제 완료</div>
                         <div className="mt-0.5 font-semibold tabular-nums text-[#8a6828]">
                           {weekHomework.completed} /{" "}
                           {weekHomework.completed + weekHomework.partial + weekHomework.missing}
                         </div>
                       </div>
                       <div className="rounded-2xl bg-[#f0ecfb] p-3 text-center">
-                        <div className="text-[11px] text-[#54479c]">단어시험</div>
+                        <div className="text-sm text-[#54479c]">단어시험</div>
                         <div className="mt-0.5 font-semibold tabular-nums text-[#54479c]">
                           {weekVocab.length > 0 ? weekVocab.map((p) => `${p}`).join(" → ") : "-"}
                         </div>
                       </div>
                       <div className="rounded-2xl bg-[#fdf8ec] p-3 text-center">
-                        <div className="text-[11px] text-[#8a6828]">칭찬</div>
+                        <div className="text-sm text-[#8a6828]">칭찬</div>
                         <div className="mt-0.5 font-semibold tabular-nums text-[#8a6828]">
                           ⭐ {weekPraiseCount}
                         </div>
@@ -578,7 +578,7 @@ export default async function StudentDetailPage({
                     </div>
 
                     {weekFocus.size > 0 || weekParticipation.size > 0 ? (
-                      <div className="text-xs text-[#564d4d]">
+                      <div className="text-sm text-[#564d4d]">
                         {[
                           ...[...weekFocus.entries()].map(
                             ([level, count]) =>
@@ -594,8 +594,8 @@ export default async function StudentDetailPage({
 
                     {weeklyGrowth.achieved.length > 0 ? (
                       <div className="rounded-2xl bg-[#e9f6ef] p-3">
-                        <div className="text-xs font-semibold text-[#2f6d54]">이번 주 성장 🌱</div>
-                        <ul className="mt-1 space-y-0.5 text-xs leading-5 text-[#2f6d54]">
+                        <div className="text-sm font-semibold text-[#2f6d54]">이번 주 성장 🌱</div>
+                        <ul className="mt-1 space-y-0.5 text-sm leading-5 text-[#2f6d54]">
                           {weeklyGrowth.achieved.map((type) => (
                             <li key={type}>
                               {growthEmojis[type]}{" "}
@@ -607,7 +607,7 @@ export default async function StudentDetailPage({
                       </div>
                     ) : null}
                     {weeklyGrowth.vocabTrend ? (
-                      <div className="rounded-2xl bg-[#f0ecfb] p-3 text-xs text-[#54479c]">
+                      <div className="rounded-2xl bg-[#f0ecfb] p-3 text-sm text-[#54479c]">
                         📝 단어 성장 · {weeklyGrowth.vocabTrend.from}점 →{" "}
                         {weeklyGrowth.vocabTrend.to}점 ({weeklyGrowth.vocabTrend.rise}점 성장했어요!)
                       </div>
@@ -615,7 +615,7 @@ export default async function StudentDetailPage({
                     {Object.entries(weeklyGrowth.stats).some(
                       ([, stat]) => (stat?.evaluated ?? 0) > 0,
                     ) ? (
-                      <div className="text-xs text-[#8a7b77]">
+                      <div className="secondary-text text-[#8a7b77]">
                         이번 주 관찰:{" "}
                         {Object.entries(weeklyGrowth.stats)
                           .filter(([, stat]) => (stat?.evaluated ?? 0) > 0)
@@ -629,8 +629,8 @@ export default async function StudentDetailPage({
 
                     {weekStrengths.length > 0 ? (
                       <div className="rounded-2xl bg-[#edf8f2] p-3">
-                        <div className="text-xs font-semibold text-[#2f5d4b]">잘한 점</div>
-                        <ul className="mt-1 space-y-0.5 text-xs leading-5 text-[#2f5d4b]">
+                        <div className="text-sm font-semibold text-[#2f5d4b]">잘한 점</div>
+                        <ul className="mt-1 space-y-0.5 text-sm leading-5 text-[#2f5d4b]">
                           {weekStrengths.map((text) => (
                             <li key={text}>• {text}</li>
                           ))}
@@ -640,8 +640,8 @@ export default async function StudentDetailPage({
 
                     {weekChecks.length > 0 ? (
                       <div className="rounded-2xl bg-[#fff3ef] p-3">
-                        <div className="text-xs font-semibold text-[#8a5d52]">다음 주 체크</div>
-                        <ul className="mt-1 space-y-0.5 text-xs leading-5 text-[#8a5d52]">
+                        <div className="text-sm font-semibold text-[#8a5d52]">다음 주 체크</div>
+                        <ul className="mt-1 space-y-0.5 text-sm leading-5 text-[#8a5d52]">
                           {[...new Set(weekChecks)].map((text) => (
                             <li key={text}>• {text}</li>
                           ))}
@@ -661,7 +661,7 @@ export default async function StudentDetailPage({
                   <div className="flex items-center justify-between gap-3">
                     <CardTitle>학부모 전달</CardTitle>
                     {pendingParentNotes.length > 0 ? (
-                      <span className="rounded-full bg-[#fff0ef] px-2.5 py-1 text-[11px] font-medium text-[#a26660]">
+                      <span className="rounded-full bg-[#fff0ef] px-2.5 py-1 text-xs font-medium text-[#a26660]">
                         전달 필요 {pendingParentNotes.length}
                       </span>
                     ) : null}
@@ -669,14 +669,14 @@ export default async function StudentDetailPage({
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {pendingParentNotes.length === 0 ? (
-                    <div className="rounded-2xl bg-[#f8f3ef] p-3 text-xs text-[#655d5d]">
+                    <div className="rounded-2xl bg-[#f8f3ef] p-3 text-sm text-[#655d5d]">
                       전달할 내용이 없어요.
                     </div>
                   ) : (
                     pendingParentNotes.map((item) => (
                       <div
                         key={item.id}
-                        className="rounded-2xl border border-[#f0ddd8] bg-[#fff9f7] p-3 text-xs"
+                        className="rounded-2xl border border-[#f0ddd8] bg-[#fff9f7] p-3 text-sm"
                       >
                         <div className="font-medium text-[#8a5d52]">
                           {formatKoreanDate(item.dailyLog?.class_date)}
@@ -692,12 +692,12 @@ export default async function StudentDetailPage({
                   )}
                   {completedParentNotes.length > 0 ? (
                     <details>
-                      <summary className="cursor-pointer text-xs text-[#8a8a93]">
+                      <summary className="cursor-pointer text-sm text-[#8a8a93]">
                         전달 완료 기록 {completedParentNotes.length}건 보기
                       </summary>
                       <div className="mt-2 space-y-2">
                         {completedParentNotes.map((item) => (
-                          <div key={item.id} className="rounded-2xl bg-[#f8f3ef] p-3 text-xs text-[#655d5d]">
+                          <div key={item.id} className="rounded-2xl bg-[#f8f3ef] p-3 text-sm text-[#655d5d]">
                             {formatKoreanDate(item.dailyLog?.class_date)} · {item.parent_note}
                           </div>
                         ))}
@@ -729,20 +729,20 @@ export default async function StudentDetailPage({
                 <CardHeader>
                   <div className="flex items-center justify-between gap-3">
                     <CardTitle>칭찬 기록</CardTitle>
-                    <span className="rounded-full bg-[#fdf8ec] px-2.5 py-1 text-[11px] font-medium text-[#8a6828]">
+                    <span className="rounded-full bg-[#fdf8ec] px-2.5 py-1 text-xs font-medium text-[#8a6828]">
                       이번 달 ⭐ {monthPraiseCount}
                     </span>
                   </div>
                 </CardHeader>
                 <CardContent>
                   {praises.length === 0 ? (
-                    <div className="rounded-2xl bg-[#f8f3ef] p-3 text-xs text-[#655d5d]">
+                    <div className="rounded-2xl bg-[#f8f3ef] p-3 text-sm text-[#655d5d]">
                       수업일지에서 ⭐ 칭찬을 기록하면 여기에 모여요.
                     </div>
                   ) : (
                     <div className="space-y-1.5">
                       {praises.slice(0, 6).map((praise) => (
-                        <div key={praise.id} className="flex items-start gap-2 text-xs text-[#564d4d]">
+                        <div key={praise.id} className="flex items-start gap-2 text-sm text-[#564d4d]">
                           <span className="tabular-nums text-[#8a8a93]">
                             {formatKoreanDate(
                               praise.daily_log_id
@@ -772,7 +772,7 @@ export default async function StudentDetailPage({
                   studentGroups.map((group) => (
                     <div key={group.id} className="rounded-2xl border border-[#eee0dc] bg-[#fffdfb] p-3">
                       <div className="font-medium text-[#2b2323]">{group.name}</div>
-                      <div className="mt-1 text-xs text-[#786d6b]">
+                      <div className="mt-1 text-sm text-[#786d6b]">
                         {gradeDisplay[group.grade as keyof typeof gradeDisplay]}
                       </div>
                     </div>
@@ -786,7 +786,7 @@ export default async function StudentDetailPage({
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle>보충수업</CardTitle>
                   {openMakeups.length > 0 ? (
-                    <span className="rounded-full bg-[#fff0ef] px-2.5 py-1 text-[11px] font-medium text-[#a26660]">
+                    <span className="rounded-full bg-[#fff0ef] px-2.5 py-1 text-xs font-medium text-[#a26660]">
                       보충 필요 {openMakeups.length}건
                     </span>
                   ) : null}
@@ -800,7 +800,7 @@ export default async function StudentDetailPage({
                 ) : (
                   <>
                     {openMakeups.map((makeup) => (
-                      <div key={makeup.id} className="rounded-2xl border border-[#f0ddd8] bg-[#fff9f7] p-3 text-xs">
+                      <div key={makeup.id} className="rounded-2xl border border-[#f0ddd8] bg-[#fff9f7] p-3 text-sm">
                         <div className="flex items-center gap-2">
                           <MakeupStatusBadge status={makeup.status} />
                           <span className="tabular-nums text-[#655d5d]">
@@ -823,7 +823,7 @@ export default async function StudentDetailPage({
                       </div>
                     ))}
                     {pastMakeups.map((makeup) => (
-                      <div key={makeup.id} className="rounded-2xl border border-[#eee0dc] bg-[#fffdfb] p-3 text-xs">
+                      <div key={makeup.id} className="rounded-2xl border border-[#eee0dc] bg-[#fffdfb] p-3 text-sm">
                         <div className="flex items-center gap-2">
                           <MakeupStatusBadge status={makeup.status} />
                           <span className="text-[#655d5d]">
@@ -840,7 +840,7 @@ export default async function StudentDetailPage({
                         ) : null}
                       </div>
                     ))}
-                    <Link href="/makeups" className="block pt-1 text-xs text-[#5c4ca8] hover:underline">
+                    <Link href="/makeups" className="block pt-1 text-sm text-[#5c4ca8] hover:underline">
                       보충수업 관리로 이동
                     </Link>
                   </>
@@ -853,7 +853,7 @@ export default async function StudentDetailPage({
                 <CardTitle>학생 메모</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="rounded-2xl bg-[#f8f3ef] p-4 text-sm leading-6 text-[#564d4d]">
+                <div className="rounded-2xl bg-[#f8f3ef] p-4 text-sm leading-5 text-[#564d4d]">
                   {student.memo || "등록된 메모가 아직 없어요."}
                 </div>
               </CardContent>
@@ -864,7 +864,7 @@ export default async function StudentDetailPage({
         {/* 삭제는 수정과 분리된 destructive 영역 (기능은 기존 그대로) */}
         <div className="mt-8 border-t border-dashed border-[#f0ddd8] pt-5 pb-8">
           <div className="text-sm font-semibold text-[#8a5d52]">학생 삭제</div>
-          <p className="mt-1 text-xs leading-5 text-[#a68e88]">
+          <p className="mt-1 text-sm leading-5 text-[#a68e88]">
             학생과 연결된 수업 기록·보충 기록·약점 노트가 함께 삭제되며 되돌릴 수 없어요.
           </p>
           <div className="mt-3">

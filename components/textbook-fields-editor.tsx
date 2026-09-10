@@ -39,7 +39,7 @@ export function TextbookFieldsEditor({ initialBooks = [] }: { initialBooks?: str
             maxLength={100}
             onChange={(event) => update(row.key, event.target.value)}
             placeholder="능률 영어 중2"
-            className="flex-1 rounded-xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+            className="flex-1 rounded-xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
             aria-label="교재 이름"
           />
           <button

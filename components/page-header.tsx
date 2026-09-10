@@ -23,9 +23,9 @@ export function PageHeader({
       <div className="flex min-w-0 items-center gap-2">
         {backHref ? <PageBackButton fallbackHref={backHref} /> : null}
         <div className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#232327]">{title}</h1>
+        <h1 className="page-title text-[#232327]">{title}</h1>
         {description ? (
-          <p className="mt-1 text-sm text-[#6b6b74]">{description}</p>
+          <p className="secondary-text mt-1 text-[#6b6b74]">{description}</p>
         ) : null}
         </div>
       </div>

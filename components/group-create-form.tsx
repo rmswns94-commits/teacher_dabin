@@ -36,7 +36,7 @@ export function GroupCreateForm({
             <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">그룹명</span>
             <input
               name="name"
-              className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+              className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
               placeholder="중2 화목반"
               required
             />
@@ -47,7 +47,7 @@ export function GroupCreateForm({
             <select
               name="grade"
               defaultValue="middle_2"
-              className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
+              className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none"
               required
             >
               {gradeOptions.map((option) => (
@@ -64,7 +64,7 @@ export function GroupCreateForm({
             <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">메모 (선택)</span>
             <input
               name="memo"
-              className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+              className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
               placeholder="보충 위주 반, 숙제 확인 필수"
             />
           </label>

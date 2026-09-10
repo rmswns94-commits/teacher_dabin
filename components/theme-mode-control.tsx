@@ -83,7 +83,7 @@ export function ThemeModeControl() {
           );
         })}
       </div>
-      <p className="mt-2 text-xs text-[#8a7b77]">
+      <p className="mt-2 text-sm text-[#8a7b77]">
         선택한 설정은 자동 저장돼요. 시스템을 고르면 기기의 라이트/다크 설정을 따라가요.
       </p>
     </div>

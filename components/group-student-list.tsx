@@ -75,7 +75,7 @@ export function GroupStudentList({ students }: { students: GroupStudentItem[] })
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-end gap-1.5" role="group" aria-label="학생 정렬">
-        <span className="mr-0.5 text-xs text-[#8a7b77]">정렬</span>
+        <span className="mr-0.5 text-sm text-[#8a7b77]">정렬</span>
         {sortOptions.map((option) => (
           <button
             key={option.key}
@@ -101,13 +101,13 @@ export function GroupStudentList({ students }: { students: GroupStudentItem[] })
               <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-[#2b2323]">
                 <span
                   aria-hidden
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#e8e1ff] to-[#f6dfe9] text-[10px] font-semibold text-[#4a3c52]"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#e8e1ff] to-[#f6dfe9] text-xs font-semibold text-[#4a3c52]"
                 >
                   {student.name.charAt(0)}
                 </span>
                 <span className="truncate">{student.name}</span>
               </span>
-              <span className="min-w-0 truncate text-right text-xs text-[#8a7b77]">
+              <span className="min-w-0 truncate text-right text-sm text-[#8a7b77]">
                 {[
                   gradeDisplay[student.grade],
                   student.school || null,

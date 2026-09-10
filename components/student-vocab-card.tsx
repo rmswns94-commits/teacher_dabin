@@ -69,14 +69,14 @@ export function StudentVocabCard({
       </CardHeader>
       <CardContent className="space-y-3">
         {rows.length === 0 ? (
-          <div className="rounded-2xl bg-[#f8f3ef] p-3 text-xs text-[#655d5d]">
+          <div className="rounded-2xl bg-[#f8f3ef] p-3 text-sm text-[#655d5d]">
             아직 단어시험 기록이 없어요.
           </div>
         ) : (
           <div className="space-y-1.5">
             {rows.map((row) => (
               <div key={row.id} className="rounded-xl bg-[#f8f6fc] px-3 py-2">
-                <div className="flex items-center justify-between text-xs tabular-nums">
+                <div className="flex items-center justify-between text-sm tabular-nums">
                   <span className="text-[#564d4d]">{formatKoreanDate(row.date)}</span>
                   <span className="font-medium text-[#33333b]">
                     {row.correct} / {row.total}
@@ -90,7 +90,7 @@ export function StudentVocabCard({
                     {row.words.map((word) => (
                       <span
                         key={word}
-                        className="rounded-full bg-white px-2 py-0.5 text-[11px] text-[#7a5a92]"
+                        className="rounded-full bg-white px-2 py-0.5 text-xs text-[#7a5a92]"
                       >
                         {word}
                       </span>
@@ -104,7 +104,7 @@ export function StudentVocabCard({
 
         {frequentWords.length > 0 ? (
           <div>
-            <div className="text-xs font-semibold text-[#7c6d69]">자주 틀리는 단어</div>
+            <div className="text-sm font-semibold text-[#7c6d69]">자주 틀리는 단어</div>
             <div className="mt-1.5 space-y-1">
               {frequentWords.map((item) => {
                 const key = vocabWordKey(item.word);
@@ -114,7 +114,7 @@ export function StudentVocabCard({
                 return (
                   <div
                     key={key}
-                    className="flex items-center justify-between gap-2 rounded-xl bg-[#fdf8ec] px-3 py-1.5 text-xs"
+                    className="flex items-center justify-between gap-2 rounded-xl bg-[#fdf8ec] px-3 py-1.5 text-sm"
                   >
                     <span className="min-w-0 truncate font-medium text-[#33333b]">{item.word}</span>
                     <span className="shrink-0 tabular-nums text-[#8a6828]">{item.count}회</span>
@@ -135,7 +135,7 @@ export function StudentVocabCard({
                 );
               })}
             </div>
-            {error ? <p className="mt-1.5 text-xs text-[#a2665f]">{error}</p> : null}
+            {error ? <p className="mt-1.5 text-sm text-[#a2665f]">{error}</p> : null}
           </div>
         ) : null}
       </CardContent>

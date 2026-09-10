@@ -89,7 +89,7 @@ export default function SignupPage() {
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#ebe2ff] to-[#f6dfe9] text-[#433a57] shadow-sm">
             <BookOpenText className="h-5 w-5" />
           </div>
-          <h1 className="font-display mt-4 text-2xl font-semibold tracking-[-0.01em] text-[#2a2323]">
+          <h1 className="page-title mt-4 text-[#2a2323]">
             강사 일지
           </h1>
           <p className="mt-2 text-sm text-[#716968]">선생님의 수업 기록을 더 편하게</p>
@@ -103,7 +103,7 @@ export default function SignupPage() {
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                className="w-full bg-transparent text-sm outline-none placeholder:text-[#a79996]"
+                className="w-full bg-transparent text-base outline-none placeholder:text-[#a79996]"
                 placeholder="김다빈"
                 autoComplete="name"
               />
@@ -117,7 +117,7 @@ export default function SignupPage() {
               <input
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className="w-full bg-transparent text-sm outline-none placeholder:text-[#a79996]"
+                className="w-full bg-transparent text-base outline-none placeholder:text-[#a79996]"
                 placeholder="teacher@example.com"
                 type="email"
                 autoComplete="email"
@@ -133,7 +133,7 @@ export default function SignupPage() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 type="password"
-                className="w-full bg-transparent text-sm outline-none placeholder:text-[#a79996]"
+                className="w-full bg-transparent text-base outline-none placeholder:text-[#a79996]"
                 placeholder="••••••••"
                 autoComplete="new-password"
               />
@@ -148,7 +148,7 @@ export default function SignupPage() {
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
                 type="password"
-                className="w-full bg-transparent text-sm outline-none placeholder:text-[#a79996]"
+                className="w-full bg-transparent text-base outline-none placeholder:text-[#a79996]"
                 placeholder="••••••••"
                 autoComplete="new-password"
               />

@@ -50,7 +50,7 @@ export function WeekdayTimePicker({
   return (
     <div className="space-y-2.5">
       <div>
-        <span className="mb-1.5 block text-xs font-medium text-[#8a7b77]">수업 요일</span>
+        <span className="mb-1.5 block text-sm font-medium text-[#8a7b77]">수업 요일</span>
         <div className="flex flex-wrap gap-1.5">
           {DAY_DISPLAY_ORDER.map((day) => {
             const selected = value.days.includes(day);
@@ -73,7 +73,7 @@ export function WeekdayTimePicker({
             );
           })}
         </div>
-        <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px]">
+        <div className="mt-1.5 flex flex-wrap gap-1.5 text-sm">
           <button
             type="button"
             onClick={() => setDays(WEEKDAYS)}
@@ -108,7 +108,7 @@ export function WeekdayTimePicker({
       </div>
 
       <div>
-        <span className="mb-1.5 block text-xs font-medium text-[#8a7b77]">수업 시간</span>
+        <span className="mb-1.5 block text-sm font-medium text-[#8a7b77]">수업 시간</span>
         <div className="flex flex-wrap items-center gap-2">
           <input
             type="time"
@@ -116,7 +116,7 @@ export function WeekdayTimePicker({
             value={value.startTime}
             onChange={(event) => onChange({ ...value, startTime: event.target.value })}
             aria-label="시작 시간"
-            className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none"
+            className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
           />
           <span className="text-sm text-[#8a7b77]">~</span>
           <input
@@ -125,7 +125,7 @@ export function WeekdayTimePicker({
             value={value.endTime}
             onChange={(event) => onChange({ ...value, endTime: event.target.value })}
             aria-label="종료 시간"
-            className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none"
+            className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
           />
         </div>
       </div>

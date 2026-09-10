@@ -87,10 +87,10 @@ function Section({ label, value }: { label: string; value: string | null }) {
 
   return (
     <div>
-      <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#8f5470]">
+      <div className="section-title text-[#8f5470]">
         {label}
       </div>
-      <div className="mt-1 whitespace-pre-line text-sm leading-6 text-[#3d3450]">{value}</div>
+      <div className="mt-1 whitespace-pre-line text-sm leading-5 text-[#3d3450]">{value}</div>
     </div>
   );
 }
@@ -108,19 +108,19 @@ function EditField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-[#7c6d69]">{label}</span>
+      <span className="mb-1 block text-sm font-medium text-[#7c6d69]">{label}</span>
       {rows ? (
         <textarea
           value={value}
           onChange={(event) => onChange(event.target.value)}
           rows={rows}
-          className="w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-[#c9b9e8]"
+          className="w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2 text-base leading-6 outline-none focus:border-[#c9b9e8]"
         />
       ) : (
         <input
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2 text-sm outline-none focus:border-[#c9b9e8]"
+          className="w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8]"
         />
       )}
     </label>
@@ -319,10 +319,10 @@ export function LessonHistoryWorkspace({
     <div className="flex h-full flex-col">
       <div className="flex items-start justify-between gap-2 border-b border-dashed border-[#eee3dc] pb-3">
         <div>
-          <div className="flex items-center gap-1.5 font-display text-base font-semibold text-[#2a2323]">
+          <div className="card-title flex items-center gap-1.5 text-[#2a2323]">
             <History className="h-4 w-4 text-[#8b7ae6]" aria-hidden /> 이전 수업 기록
           </div>
-          <div className="mt-0.5 text-xs text-[#8a7b77]">
+          <div className="mt-0.5 text-sm text-[#8a7b77]">
             {group ? group.name : "수업 그룹 미선택"}
           </div>
         </div>
@@ -344,7 +344,7 @@ export function LessonHistoryWorkspace({
         ) : mode === "list" ? (
           <>
             {listError ? (
-              <p className="mb-2 rounded-2xl bg-[#fdf1f0] px-3 py-2.5 text-xs text-[#a05252]">
+              <p className="mb-2 rounded-2xl bg-[#fdf1f0] px-3 py-2.5 text-sm text-[#a05252]">
                 {listError}
               </p>
             ) : null}
@@ -376,10 +376,10 @@ export function LessonHistoryWorkspace({
                               {formatKoreanDate(row.class_date)}
                             </span>
                             {time ? (
-                              <span className="text-[11px] tabular-nums text-[#8a7b77]">{time}</span>
+                              <span className="text-sm tabular-nums text-[#8a7b77]">{time}</span>
                             ) : null}
                           </span>
-                          <span className="mt-0.5 line-clamp-2 block whitespace-pre-line text-xs leading-5 text-[#655d5d]">
+                          <span className="mt-0.5 line-clamp-2 block whitespace-pre-line text-sm leading-5 text-[#655d5d]">
                             {progress || "기록된 진도가 없어요."}
                           </span>
                         </span>
@@ -409,7 +409,7 @@ export function LessonHistoryWorkspace({
             <button
               type="button"
               onClick={mode === "edit" ? () => withEditGuard(() => setMode("detail")) : backToList}
-              className="flex items-center gap-1.5 text-xs font-medium text-[#8a7b77] transition hover:text-[#564d4d]"
+              className="flex items-center gap-1.5 text-sm font-medium text-[#8a7b77] transition hover:text-[#564d4d]"
             >
               <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
               {mode === "edit" ? "기록 보기로 돌아가기" : "이전 수업 기록"}
@@ -420,7 +420,7 @@ export function LessonHistoryWorkspace({
                 {formatKoreanDate(selected.class_date, true)}
               </span>
               {timeOf(selected.class_date) ? (
-                <span className="text-xs tabular-nums text-[#8a7b77]">
+                <span className="text-sm tabular-nums text-[#8a7b77]">
                   {timeOf(selected.class_date)}
                 </span>
               ) : null}
@@ -483,9 +483,9 @@ export function LessonHistoryWorkspace({
                   </div>
                   {recordsOpen ? (
                     recordsError ? (
-                      <p className="mt-2 text-xs text-[#a05252]">{recordsError}</p>
+                      <p className="mt-2 text-sm text-[#a05252]">{recordsError}</p>
                     ) : !recordsCache[selected.id] ? (
-                      <p className="mt-2 text-xs text-[#8a7b77]">불러오는 중...</p>
+                      <p className="mt-2 text-sm text-[#8a7b77]">불러오는 중...</p>
                     ) : (
                       <ul className="mt-2 space-y-2.5">
                         {recordsCache[selected.id].records.map((record) => {
@@ -518,15 +518,15 @@ export function LessonHistoryWorkspace({
                           return (
                             <li
                               key={record.id}
-                              className="rounded-xl bg-[#fbf8f4] px-3 py-2 text-xs leading-5"
+                              className="rounded-xl bg-[#fbf8f4] px-3 py-2 text-sm leading-5"
                             >
                               <span className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-[13px] font-semibold text-[#2d2928]">
+                                <span className="text-base font-semibold text-[#2d2928]">
                                   {record.student?.name ?? "학생"}
                                 </span>
                                 <span
                                   className={cn(
-                                    "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                                    "rounded-full px-1.5 py-0.5 text-xs font-medium",
                                     record.attendance === "absent"
                                       ? "bg-[#fdeceb] text-[#a05252]"
                                       : record.attendance === "late"
@@ -563,7 +563,7 @@ export function LessonHistoryWorkspace({
                 {/* 현재 일지에 참고하기 — DB 저장 없이 현재 작성 폼에만 값 반영 */}
                 <div className="rounded-2xl border border-[#e8ddf3] bg-[#fbf8ff] px-3.5 py-3">
                   <div className="text-sm font-medium text-[#4d3a3a]">현재 일지에 참고하기</div>
-                  <p className="mt-0.5 text-[11px] leading-4 text-[#8a7b77]">
+                  <p className="mt-0.5 text-sm leading-5 text-[#8a7b77]">
                     선택한 값이 현재 작성 중인 공통 진도에 들어가요. 저장 전까지 DB에는 반영되지
                     않아요.
                   </p>
@@ -627,7 +627,7 @@ export function LessonHistoryWorkspace({
                   onChange={(value) => setEditValues((prev) => prev && { ...prev, homework: value })}
                 />
                 <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-[#7c6d69]">
+                  <span className="mb-1 block text-sm font-medium text-[#7c6d69]">
                     숙제 날짜 (선택)
                   </span>
                   <input
@@ -636,7 +636,7 @@ export function LessonHistoryWorkspace({
                     onChange={(event) =>
                       setEditValues((prev) => prev && { ...prev, homeworkDueDate: event.target.value })
                     }
-                    className="w-full min-w-0 max-w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2 text-sm outline-none focus:border-[#c9b9e8]"
+                    className="w-full min-w-0 max-w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8]"
                   />
                 </label>
                 <EditField
@@ -648,7 +648,7 @@ export function LessonHistoryWorkspace({
                   }
                 />
                 <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-[#7c6d69]">
+                  <span className="mb-1 block text-sm font-medium text-[#7c6d69]">
                     다음 수업 계획 날짜
                   </span>
                   <input
@@ -657,7 +657,7 @@ export function LessonHistoryWorkspace({
                     onChange={(event) =>
                       setEditValues((prev) => prev && { ...prev, nextPlanDate: event.target.value })
                     }
-                    className="w-full min-w-0 max-w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2 text-sm outline-none focus:border-[#c9b9e8]"
+                    className="w-full min-w-0 max-w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8]"
                   />
                 </label>
                 <EditField
@@ -668,7 +668,7 @@ export function LessonHistoryWorkspace({
                 />
 
                 {editError ? (
-                  <p className="rounded-2xl bg-[#fdf1f0] px-3 py-2.5 text-xs text-[#a05252]">
+                  <p className="rounded-2xl bg-[#fdf1f0] px-3 py-2.5 text-sm text-[#a05252]">
                     {editError}
                   </p>
                 ) : null}
@@ -693,7 +693,7 @@ export function LessonHistoryWorkspace({
                   </Button>
                 </div>
 
-                <p className="text-[11px] leading-4 text-[#8a7b77]">
+                <p className="text-sm leading-5 text-[#8a7b77]">
                   출결·학생 평가·칭찬 수정은{" "}
                   <Link
                     href={`/daily-logs/${selected.id}/edit`}

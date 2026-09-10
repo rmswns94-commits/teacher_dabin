@@ -5,7 +5,9 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9b9c6] disabled:pointer-events-none disabled:opacity-50",
+  // 글자 크기는 size variant가 정한다 (기본 버튼 16px / 작은 액션 14px).
+  // globals.css의 폼 리셋이 @layer base로 내려가면서 이제 이 text-* 유틸이 실제로 적용된다.
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl font-medium leading-none transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9b9c6] disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
@@ -20,10 +22,11 @@ const buttonVariants = cva(
           "bg-[#e8e8ee] text-[#33333b] hover:bg-[#dedee6]",
       },
       size: {
-        default: "h-11 px-4 py-2",
-        sm: "h-9 rounded-lg px-3",
+        // 높이(터치 영역)는 글자 크기와 별개로 유지한다 — sm도 40px 이상.
+        default: "h-11 px-4 py-2 text-base",
+        sm: "h-10 rounded-lg px-3 text-sm",
         lg: "h-12 rounded-xl px-5 text-base",
-        icon: "h-10 w-10",
+        icon: "h-10 w-10 text-base",
       },
     },
     defaultVariants: {

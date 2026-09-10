@@ -29,7 +29,7 @@ export function ExamTextbooksEditor({
   const [isPending, startTransition] = useTransition();
 
   const inputClass =
-    "min-h-[40px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]";
+    "form-control-text min-h-[40px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]";
 
   const submitAdd = () => {
     const name = newName.trim();
@@ -79,7 +79,7 @@ export function ExamTextbooksEditor({
 
   return (
     <div>
-      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#a2643c]">
+      <div className="flex items-center gap-1.5 section-title text-[#a2643c]">
         <BookMarked className="h-3.5 w-3.5" aria-hidden /> 시험 대비용 교재
       </div>
 
@@ -131,7 +131,7 @@ export function ExamTextbooksEditor({
                       setEditingName(book.name);
                       setError("");
                     }}
-                    className="min-h-[40px] shrink-0 px-2 text-xs text-[#5c4ca8] transition hover:underline"
+                    className="min-h-[40px] shrink-0 px-2 text-sm text-[#5c4ca8] transition hover:underline"
                   >
                     수정
                   </button>
@@ -173,7 +173,7 @@ export function ExamTextbooksEditor({
             type="button"
             onClick={submitAdd}
             disabled={isPending || !newName.trim()}
-            className="min-h-[40px] shrink-0 rounded-xl bg-[#2b2b31] px-3 text-xs font-medium text-white transition hover:bg-[#3a3a42] disabled:opacity-50"
+            className="min-h-[40px] shrink-0 rounded-xl bg-[#2b2b31] px-3 text-sm font-medium text-white transition hover:bg-[#3a3a42] disabled:opacity-50"
           >
             등록
           </button>
@@ -184,7 +184,7 @@ export function ExamTextbooksEditor({
               setNewName("");
               setError("");
             }}
-            className="min-h-[40px] shrink-0 px-2 text-xs text-[#8a7b77] transition hover:underline"
+            className="min-h-[40px] shrink-0 px-2 text-sm text-[#8a7b77] transition hover:underline"
           >
             취소
           </button>
@@ -202,7 +202,7 @@ export function ExamTextbooksEditor({
         </button>
       )}
 
-      {error ? <p className="mt-1.5 text-xs text-[#a2665f]">{error}</p> : null}
+      {error ? <p className="mt-1.5 text-sm text-[#a2665f]">{error}</p> : null}
     </div>
   );
 }

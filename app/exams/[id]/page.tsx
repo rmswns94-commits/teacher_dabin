@@ -148,7 +148,7 @@ export default async function SchoolExamDetailPage({
                   <CardTitle>시험 범위</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="whitespace-pre-line rounded-2xl bg-[#f8f6fc] p-4 text-sm leading-6 text-[#453b3b]">
+                  <div className="whitespace-pre-line rounded-2xl bg-[#f8f6fc] p-4 text-sm leading-5 text-[#453b3b]">
                     {exam.scope_text || "아직 등록된 시험 범위가 없어요. [수정]에서 적어둘 수 있어요."}
                   </div>
                 </CardContent>
@@ -159,7 +159,7 @@ export default async function SchoolExamDetailPage({
                   <CardTitle>강사 메모</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="whitespace-pre-line rounded-2xl bg-[#f8f3ef] p-4 text-sm leading-6 text-[#564d4d]">
+                  <div className="whitespace-pre-line rounded-2xl bg-[#f8f3ef] p-4 text-sm leading-5 text-[#564d4d]">
                     {exam.memo || "등록된 메모가 아직 없어요."}
                   </div>
                 </CardContent>
@@ -171,7 +171,7 @@ export default async function SchoolExamDetailPage({
                 <CardHeader>
                   <div className="flex items-center justify-between gap-3">
                     <CardTitle>시험 대상 학생</CardTitle>
-                    <span className="flex items-center gap-1 rounded-full bg-[#f3eefa] px-2.5 py-1 text-[11px] font-medium text-[#6d5aa8]">
+                    <span className="flex items-center gap-1 rounded-full bg-[#f3eefa] px-2.5 py-1 text-xs font-medium text-[#6d5aa8]">
                       <Users className="h-3 w-3" /> {exam.students.length}명
                     </span>
                   </div>
@@ -204,13 +204,13 @@ export default async function SchoolExamDetailPage({
                           {studentWeaknesses.length > 0 ? (
                             <ul className="mt-1.5 space-y-1">
                               {studentWeaknesses.slice(0, 3).map((weakness, index) => (
-                                <li key={index} className="flex items-center gap-1.5 text-xs text-[#564d4d]">
+                                <li key={index} className="flex items-center gap-1.5 text-sm text-[#564d4d]">
                                   <WeaknessCategoryBadge category={weakness.category} />
                                   <span className="min-w-0 truncate">{weakness.title}</span>
                                 </li>
                               ))}
                               {studentWeaknesses.length > 3 ? (
-                                <li className="text-[11px] text-[#a79996]">
+                                <li className="text-sm text-[#a79996]">
                                   +{studentWeaknesses.length - 3}개 (학생 상세에서 확인)
                                 </li>
                               ) : null}
@@ -220,14 +220,14 @@ export default async function SchoolExamDetailPage({
                           {/* Phase 2 반복 오답 — compact + expand */}
                           {repeated.length > 0 ? (
                             <details className="mt-1.5">
-                              <summary className="cursor-pointer text-xs text-[#54479c] hover:underline">
+                              <summary className="cursor-pointer text-sm text-[#54479c] hover:underline">
                                 반복 단어 오답 {repeated.length}개
                               </summary>
                               <div className="mt-1 flex flex-wrap gap-1">
                                 {repeated.slice(0, 8).map((item) => (
                                   <span
                                     key={item.word}
-                                    className="rounded-full bg-[#f0ecfb] px-2 py-0.5 text-[11px] text-[#54479c]"
+                                    className="rounded-full bg-[#f0ecfb] px-2 py-0.5 text-xs text-[#54479c]"
                                   >
                                     {item.word} {item.count}회
                                   </span>

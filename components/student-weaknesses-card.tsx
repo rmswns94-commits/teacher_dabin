@@ -31,7 +31,7 @@ const categoryBadgeClass: Record<WeaknessCategory, string> = {
 export function WeaknessCategoryBadge({ category }: { category: WeaknessCategory }) {
   return (
     <span
-      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${categoryBadgeClass[category]}`}
+      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${categoryBadgeClass[category]}`}
     >
       {weaknessCategoryLabels[category]}
     </span>
@@ -133,7 +133,7 @@ export function StudentWeaknessesCard({
           <div className="flex items-center gap-2">
             <CardTitle>약점 노트</CardTitle>
             {dueCount > 0 ? (
-              <span className="flex items-center gap-1 rounded-full bg-[#fdf3e4] px-2.5 py-1 text-[11px] font-medium text-[#94702f]">
+              <span className="flex items-center gap-1 rounded-full bg-[#fdf3e4] px-2.5 py-1 text-xs font-medium text-[#94702f]">
                 <CalendarClock className="h-3 w-3" /> 복습 필요 {dueCount}
               </span>
             ) : null}
@@ -144,7 +144,7 @@ export function StudentWeaknessesCard({
               setDialogError("");
               setDialog({ mode: "create" });
             }}
-            className="flex min-h-[36px] items-center gap-1 rounded-xl border border-[#ddd0ec] bg-[#f9f5fd] px-3 py-1.5 text-xs font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
+            className="flex min-h-[36px] items-center gap-1 rounded-xl border border-[#ddd0ec] bg-[#f9f5fd] px-3 py-1.5 text-sm font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
           >
             <Plus className="h-3.5 w-3.5" /> 약점 기록
           </button>
@@ -173,15 +173,15 @@ export function StudentWeaknessesCard({
                     {weakness.title}
                   </span>
                   {isDue ? (
-                    <span className="rounded-full bg-[#fdf3e4] px-2 py-0.5 text-[10px] font-medium text-[#94702f]">
+                    <span className="rounded-full bg-[#fdf3e4] px-2 py-0.5 text-xs font-medium text-[#94702f]">
                       복습 필요
                     </span>
                   ) : null}
                 </div>
                 {weakness.note ? (
-                  <div className="mt-1 text-xs leading-5 text-[#564d4d]">{weakness.note}</div>
+                  <div className="mt-1 text-sm leading-5 text-[#564d4d]">{weakness.note}</div>
                 ) : null}
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] tabular-nums text-[#8a7b77]">
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm tabular-nums text-[#8a7b77]">
                   <span>{formatKoreanDate(weakness.created_at.slice(0, 10))} 기록</span>
                   <span>
                     다음 확인{" "}
@@ -199,7 +199,7 @@ export function StudentWeaknessesCard({
                         resolveStudentWeaknessAction(weakness.id, studentId),
                       )
                     }
-                    className="min-h-[34px] rounded-xl border border-[#cbe0d3] bg-[#edf9f3] px-2.5 py-1 text-xs font-medium text-[#2f6d54] transition hover:bg-[#e2f4ea] disabled:opacity-50"
+                    className="min-h-[34px] rounded-xl border border-[#cbe0d3] bg-[#edf9f3] px-2.5 py-1 text-sm font-medium text-[#2f6d54] transition hover:bg-[#e2f4ea] disabled:opacity-50"
                   >
                     {rowPending ? "처리 중..." : "확인 완료"}
                   </button>
@@ -210,7 +210,7 @@ export function StudentWeaknessesCard({
                       setDialogError("");
                       setDialog({ mode: "edit", weakness });
                     }}
-                    className="min-h-[34px] rounded-xl border border-[#ece0db] bg-white px-2.5 py-1 text-xs font-medium text-[#7c6d69] transition hover:bg-[#faf6f3] disabled:opacity-50"
+                    className="min-h-[34px] rounded-xl border border-[#ece0db] bg-white px-2.5 py-1 text-sm font-medium text-[#7c6d69] transition hover:bg-[#faf6f3] disabled:opacity-50"
                   >
                     수정
                   </button>
@@ -219,7 +219,7 @@ export function StudentWeaknessesCard({
                     disabled={rowPending}
                     onClick={() => remove(weakness)}
                     aria-label={`${weakness.title} 약점 기록 삭제`}
-                    className="ml-auto min-h-[34px] rounded-xl px-2 text-xs text-[#a79996] transition hover:bg-[#faf6f3] hover:text-[#7c6d69] disabled:opacity-50"
+                    className="ml-auto min-h-[34px] rounded-xl px-2 text-sm text-[#a79996] transition hover:bg-[#faf6f3] hover:text-[#7c6d69] disabled:opacity-50"
                   >
                     삭제
                   </button>
@@ -229,11 +229,11 @@ export function StudentWeaknessesCard({
           })
         )}
 
-        {listError ? <p className="text-xs text-[#a2665f]">{listError}</p> : null}
+        {listError ? <p className="text-sm text-[#a2665f]">{listError}</p> : null}
 
         {resolved.length > 0 ? (
           <details>
-            <summary className="cursor-pointer text-xs text-[#8a8a93]">
+            <summary className="cursor-pointer text-sm text-[#8a8a93]">
               해결된 기록 {resolved.length}건 보기
             </summary>
             <div className="mt-2 space-y-2">
@@ -244,11 +244,11 @@ export function StudentWeaknessesCard({
                   <div key={weakness.id} className="rounded-2xl bg-[#f8f3ef] p-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <WeaknessCategoryBadge category={weakness.category} />
-                      <span className="min-w-0 text-xs text-[#655d5d] line-through decoration-[#c9beb8]">
+                      <span className="min-w-0 text-sm text-[#655d5d] line-through decoration-[#c9beb8]">
                         {weakness.title}
                       </span>
                     </div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] tabular-nums text-[#9a8f8a]">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm tabular-nums text-[#9a8f8a]">
                       {weakness.resolved_at ? (
                         <span>{formatKoreanDate(weakness.resolved_at.slice(0, 10))} 확인 완료</span>
                       ) : null}

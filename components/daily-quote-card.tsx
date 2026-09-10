@@ -10,11 +10,11 @@ export function DailyQuoteCard({ quote }: { quote: string }) {
     >
       <Sparkles className="absolute right-4 top-4 h-4 w-4 text-[#c8b6e8]" aria-hidden />
       <Sparkles className="absolute bottom-3 right-10 h-3 w-3 text-[#b9d8c8]" aria-hidden />
-      <div className="flex items-center gap-1.5 text-xs font-semibold text-[#5c4a9c]">
+      <div className="flex items-center gap-1.5 text-sm font-semibold text-[#5c4a9c]">
         <Quote className="h-3.5 w-3.5" aria-hidden />
         오늘의 명언
       </div>
-      <p className="mt-2 font-display text-[19px] leading-8 text-[#463c58]">{quote}</p>
+      <p className="mt-2 text-lg leading-relaxed text-[#463c58]">{quote}</p>
     </section>
   );
 }

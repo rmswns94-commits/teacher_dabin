@@ -171,6 +171,7 @@
 .dark .border-\[\#ded2f0\] { border-color: #2e243c; }
 .dark .border-\[\#dfe7ef\] { border-color: #262d35; }
 .dark .border-\[\#dfeee6\] { border-color: #26342d; }
+.dark .border-\[\#e0c9b4\] { border-color: #e0c9b4; }
 .dark .border-\[\#e0eee6\] { border-color: #27342c; }
 .dark .border-\[\#e2d8f3\] { border-color: #2b223a; }
 .dark .border-\[\#e2e2e8\] { border-color: #2c2c31; }
@@ -220,6 +221,7 @@
 .dark .border-\[\#f0ded8\] { border-color: #392a24; }
 .dark .border-\[\#f0e0c8\] { border-color: #423625; }
 .dark .border-\[\#f0e0d8\] { border-color: #392b24; }
+.dark .border-\[\#f0e2d8\] { border-color: #392d24; }
 .dark .border-\[\#f0e3dc\] { border-color: #372b25; }
 .dark .border-\[\#f0e3df\] { border-color: #352925; }
 .dark .border-\[\#f0e3ea\] { border-color: #32252c; }
@@ -286,6 +288,7 @@
 .dark .hover\:bg-\[\#e2f4ea\]:hover { background-color: #21352a; }
 .dark .hover\:bg-\[\#e5dff5\]:hover { background-color: #262037; }
 .dark .hover\:bg-\[\#e6e6ea\]:hover { background-color: #2b2b2e; }
+.dark .hover\:bg-\[\#eaf5ef\]:hover { background-color: #213028; }
 .dark .hover\:bg-\[\#f0faf5\]:hover { background-color: #1c2f25; }
 .dark .hover\:bg-\[\#f1ecfa\]:hover { background-color: #231b32; }
 .dark .hover\:bg-\[\#f2edf9\]:hover { background-color: #251d30; }

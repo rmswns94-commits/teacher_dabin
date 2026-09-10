@@ -22,7 +22,7 @@ export default async function SettingsPage() {
           <PageHeader title="설정" description="강사 일지의 계정과 앱 설정을 관리해요." />
 
           <section>
-            <h2 className="text-sm font-semibold text-[#8f5470]">내 정보</h2>
+            <h2 className="card-title text-[#8f5470]">내 정보</h2>
             <Card className="mt-2">
               <CardContent className="flex items-center gap-3 p-4">
                 <span
@@ -34,7 +34,7 @@ export default async function SettingsPage() {
                 <div className="min-w-0">
                   <div className="truncate font-semibold text-[#232327]">{displayName}</div>
                   {email ? (
-                    <div className="truncate text-xs text-[#8a8a93]">{email}</div>
+                    <div className="secondary-text truncate text-[#8a8a93]">{email}</div>
                   ) : null}
                 </div>
               </CardContent>
@@ -42,11 +42,11 @@ export default async function SettingsPage() {
           </section>
 
           <section className="mt-6">
-            <h2 className="text-sm font-semibold text-[#8f5470]">화면 설정</h2>
+            <h2 className="card-title text-[#8f5470]">화면 설정</h2>
             <Card className="mt-2">
               <CardContent className="p-4">
-                <div className="text-sm font-medium text-[#2d2928]">화면 모드</div>
-                <p className="mt-0.5 text-xs text-[#8a7b77]">
+                <div className="text-base font-medium text-[#2d2928]">화면 모드</div>
+                <p className="secondary-text mt-0.5 text-[#8a7b77]">
                   라이트 · 다크 · 시스템 중에서 고를 수 있어요.
                 </p>
                 <div className="mt-3">
@@ -57,13 +57,13 @@ export default async function SettingsPage() {
           </section>
 
           <section className="mt-6">
-            <h2 className="text-sm font-semibold text-[#8f5470]">앱</h2>
+            <h2 className="card-title text-[#8f5470]">앱</h2>
             <Card className="mt-2">
               <CardContent className="p-4">
-                <div className="text-sm font-medium text-[#2d2928]">
+                <div className="text-base font-medium text-[#2d2928]">
                   강사 일지를 앱처럼 사용하기
                 </div>
-                <p className="mt-0.5 text-xs text-[#8a7b77]">
+                <p className="secondary-text mt-0.5 text-[#8a7b77]">
                   홈 화면에 추가하면 앱처럼 빠르게 실행할 수 있어요.
                 </p>
                 <div className="mt-3">
@@ -74,11 +74,11 @@ export default async function SettingsPage() {
           </section>
 
           <section className="mt-6">
-            <h2 className="text-sm font-semibold text-[#8f5470]">도움</h2>
+            <h2 className="card-title text-[#8f5470]">도움</h2>
             <Card className="mt-2">
               <CardContent className="p-4">
-                <div className="text-sm font-medium text-[#2d2928]">피드백 보내기</div>
-                <p className="mt-0.5 text-xs text-[#8a7b77]">
+                <div className="text-base font-medium text-[#2d2928]">피드백 보내기</div>
+                <p className="secondary-text mt-0.5 text-[#8a7b77]">
                   불편한 점이나 필요한 기능을 알려주세요.
                 </p>
                 <div className="mt-3">
@@ -89,12 +89,12 @@ export default async function SettingsPage() {
           </section>
 
           <section className="mt-6 pb-10">
-            <h2 className="text-sm font-semibold text-[#8f5470]">계정</h2>
+            <h2 className="card-title text-[#8f5470]">계정</h2>
             <Card className="mt-2">
               <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-[#2d2928]">로그아웃</div>
-                  <p className="mt-0.5 text-xs text-[#8a7b77]">
+                  <div className="text-base font-medium text-[#2d2928]">로그아웃</div>
+                  <p className="secondary-text mt-0.5 text-[#8a7b77]">
                     현재 기기에서 로그아웃해요. 다시 사용하려면 로그인이 필요해요.
                   </p>
                 </div>

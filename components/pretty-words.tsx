@@ -55,16 +55,16 @@ export function PrettyWordsHero({
       <Tape className="bg-[#e6ddf5]/85" />
       <div className="dot-pattern absolute inset-y-0 right-0 w-1/4 rounded-r-[28px] opacity-50" aria-hidden />
       <div className="relative overflow-hidden rounded-[28px] border border-[#e8ddf3] bg-gradient-to-br from-[#fbf8ff] via-[#fdf9f4] to-[#fff6ee] px-6 py-7 text-center shadow-[0_10px_30px_rgba(139,122,230,0.07)]">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#a493c9]">
+        <div className="caption-text font-semibold uppercase tracking-[0.06em] text-[#a493c9]">
           오늘 꺼내본 문장
         </div>
 
-        <p className="mx-auto mt-4 max-w-xl whitespace-pre-line font-display text-[23px] leading-9 text-[#443b4f]">
+        <p className="mx-auto mt-4 max-w-xl whitespace-pre-line text-xl leading-relaxed text-[#443b4f]">
           {word.content}
         </p>
 
         {word.author ? (
-          <div className="mt-2 text-xs text-[#8a7b8f]">— {word.author}</div>
+          <div className="mt-2 text-sm text-[#8a7b8f]">— {word.author}</div>
         ) : null}
 
         <div className="mt-4 flex items-center justify-center gap-2">
@@ -73,7 +73,7 @@ export function PrettyWordsHero({
             <button
               type="button"
               onClick={showAnother}
-              className="flex min-h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs text-[#8f7fae] transition hover:bg-white/70 hover:text-[#5d5370]"
+              className="flex min-h-9 items-center gap-1.5 rounded-xl px-2.5 text-sm text-[#8f7fae] transition hover:bg-white/70 hover:text-[#5d5370]"
             >
               다른 문장 보기 <RefreshCw className="h-3.5 w-3.5" aria-hidden />
             </button>
@@ -113,7 +113,7 @@ function WordFormDialog({
       aria-label={title}
     >
       <div className="w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-        <div className="font-display text-base font-semibold text-[#2a2323]">{title}</div>
+        <div className="card-title text-[#2a2323]">{title}</div>
 
         <label className="mt-4 block">
           <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">문장</span>
@@ -124,7 +124,7 @@ function WordFormDialog({
             maxLength={500}
             autoFocus
             placeholder="오늘도 충분히 잘했어."
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
           />
         </label>
 
@@ -135,7 +135,7 @@ function WordFormDialog({
             onChange={(event) => setAuthor(event.target.value)}
             maxLength={100}
             placeholder="학생 / 책 / 작가 이름 / 나"
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
           />
         </label>
 
@@ -144,7 +144,7 @@ function WordFormDialog({
           <select
             value={category}
             onChange={(event) => setCategory(event.target.value)}
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none"
           >
             <option value="">분류 없음</option>
             {prettyWordCategories.map((value) => (
@@ -203,7 +203,7 @@ export function PrettyWordCreateButton({ label = "이쁜 말 등록하기" }: { 
 
   return (
     <div className="flex items-center gap-3">
-      {savedMessage ? <span className="text-xs text-[#a06b8a]">{savedMessage}</span> : null}
+      {savedMessage ? <span className="text-sm text-[#a06b8a]">{savedMessage}</span> : null}
       <Button
         type="button"
         className="gap-2"
@@ -345,12 +345,12 @@ export function PrettyWordCard({ word }: { word: PrettyWordRecord }) {
           </details>
         </div>
 
-        <p className="mt-1 flex-1 whitespace-pre-line font-display text-[19px] leading-8 text-[#3d3542]">
+        <p className="mt-1 flex-1 whitespace-pre-line text-lg leading-relaxed text-[#3d3542]">
           {word.content}
         </p>
 
         {word.author ? (
-          <div className="mt-2 text-xs text-[#8a7b8f]">— {word.author}</div>
+          <div className="mt-2 text-sm text-[#8a7b8f]">— {word.author}</div>
         ) : null}
 
         {doodleKind ? (
@@ -358,7 +358,7 @@ export function PrettyWordCard({ word }: { word: PrettyWordRecord }) {
         ) : null}
 
         <div className="mt-3 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-[11px] text-[#a89a95]">
+          <div className="flex items-center gap-1.5 text-sm text-[#a89a95]">
             <span>{formatKoreanDate(word.created_at.slice(0, 10))}</span>
             {word.category ? (
               <span className="rounded-full bg-white/70 px-1.5 py-0.5">
@@ -380,7 +380,7 @@ export function PrettyWordCard({ word }: { word: PrettyWordRecord }) {
           </button>
         </div>
 
-        {error ? <div className="mt-2 text-xs text-[#a2665f]">{error}</div> : null}
+        {error ? <div className="mt-2 text-sm text-[#a2665f]">{error}</div> : null}
       </div>
 
       {editing ? (

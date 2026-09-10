@@ -111,7 +111,7 @@ function DialogShell({
       className="fixed inset-0 z-[60] flex items-center justify-center bg-[#26262b]/35 px-4"
     >
       <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[#e6e6ea] bg-white p-5 shadow-xl">
-        <div className="text-base font-bold text-[#232327]">{title}</div>
+        <div className="card-title text-[#232327]">{title}</div>
         {children}
       </div>
     </div>
@@ -119,8 +119,8 @@ function DialogShell({
 }
 
 const inputClass =
-  "w-full rounded-xl border border-[#dcdce2] bg-white px-3 py-2 text-sm text-[#33333b] outline-none focus:border-[#b9b9c6]";
-const labelClass = "mb-1 block text-xs font-semibold text-[#6b6b74]";
+  "form-control-text w-full rounded-xl border border-[#dcdce2] bg-white px-3 py-2 text-[#33333b] outline-none focus:border-[#b9b9c6]";
+const labelClass = "form-label mb-1 block text-[#6b6b74]";
 
 // ---------- 일정 잡기 / 변경 ----------
 
@@ -185,12 +185,12 @@ function ScheduleDialog({
 
   return (
     <DialogShell title={`${row.studentName} 보충수업`} dirty={dirty} onClose={onClose}>
-      <div className="mt-1 text-xs text-[#6b6b74]">
+      <div className="secondary-text mt-1 text-[#6b6b74]">
         놓친 수업 {formatKoreanDate(row.absenceDate)}
         {row.groupName ? ` · ${row.groupName}` : ""}
       </div>
       {row.missedProgress ? (
-        <div className="mt-2 whitespace-pre-line break-words rounded-xl bg-[#f4f4f6] px-3 py-2 text-xs text-[#4c4c55]">
+        <div className="mt-2 whitespace-pre-line break-words body-text rounded-xl bg-[#f4f4f6] px-3 py-2 text-[#4c4c55]">
           놓친 진도 · {row.missedProgress}
         </div>
       ) : null}
@@ -221,11 +221,11 @@ function ScheduleDialog({
         </label>
 
         {conflicts.length > 0 ? (
-          <p className="rounded-xl bg-[#fdeee3] px-3 py-2 text-xs text-[#a2643c]">
+          <p className="secondary-text rounded-xl bg-[#fdeee3] px-3 py-2 text-[#a2643c]">
             이 시간에는 {conflicts.join(", ")} 정규 수업이 있어요.
           </p>
         ) : null}
-        {error ? <p className="text-xs text-[#a2665f]">{error}</p> : null}
+        {error ? <p className="secondary-text text-[#a2665f]">{error}</p> : null}
       </div>
 
       <div className="mt-5 flex justify-end gap-2">
@@ -340,7 +340,7 @@ function ManualMakeupDialog({
 
   return (
     <DialogShell title={row ? "보충 수업 수정" : "보충 수업 등록"} dirty={dirty} onClose={onClose}>
-      <div className="mt-1 text-xs text-[#6b6b74]">
+      <div className="secondary-text mt-1 text-[#6b6b74]">
         결석 기록 없이도 보충 일정을 직접 등록할 수 있어요.
       </div>
 
@@ -425,16 +425,16 @@ function ManualMakeupDialog({
         </label>
 
         {duplicate ? (
-          <p className="rounded-xl bg-[#fdf3e4] px-3 py-2 text-xs text-[#8a6828]">
+          <p className="secondary-text rounded-xl bg-[#fdf3e4] px-3 py-2 text-[#8a6828]">
             같은 날짜에 이 학생의 보충이 이미 있어요. 하루 두 번 보충이 맞는지 확인해주세요.
           </p>
         ) : null}
         {conflicts.length > 0 ? (
-          <p className="rounded-xl bg-[#fdeee3] px-3 py-2 text-xs text-[#a2643c]">
+          <p className="secondary-text rounded-xl bg-[#fdeee3] px-3 py-2 text-[#a2643c]">
             이 시간에는 {conflicts.join(", ")} 정규 수업이 있어요.
           </p>
         ) : null}
-        {error ? <p className="text-xs text-[#a2665f]">{error}</p> : null}
+        {error ? <p className="secondary-text text-[#a2665f]">{error}</p> : null}
       </div>
 
       <div className="mt-5 flex justify-end gap-2">
@@ -495,12 +495,12 @@ function CompleteDialog({
 
   return (
     <DialogShell title="보충 완료" dirty={dirty} onClose={onClose}>
-      <div className="mt-1 text-xs text-[#6b6b74]">
+      <div className="secondary-text mt-1 text-[#6b6b74]">
         {row.studentName}
         {row.groupName ? ` · ${row.groupName}` : ""}
       </div>
       {row.missedProgress ? (
-        <div className="mt-2 whitespace-pre-line break-words rounded-xl bg-[#f4f4f6] px-3 py-2 text-xs text-[#4c4c55]">
+        <div className="mt-2 whitespace-pre-line break-words body-text rounded-xl bg-[#f4f4f6] px-3 py-2 text-[#4c4c55]">
           놓친 진도 · {row.missedProgress}
         </div>
       ) : null}
@@ -550,7 +550,7 @@ function CompleteDialog({
                 type="button"
                 aria-pressed={followUp === value}
                 onClick={() => setFollowUp(value)}
-                className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+                className={`rounded-xl border px-3 py-1.5 text-sm font-medium transition ${
                   followUp === value
                     ? "border-[#cfc4f0] bg-[#efe8fb] text-[#4a3c8f]"
                     : "border-[#e2e2e8] bg-white text-[#4c4c55]"
@@ -561,7 +561,7 @@ function CompleteDialog({
             ))}
           </div>
         </fieldset>
-        {error ? <p className="text-xs text-[#a2665f]">{error}</p> : null}
+        {error ? <p className="secondary-text text-[#a2665f]">{error}</p> : null}
       </div>
 
       <div className="mt-5 flex justify-end gap-2">
@@ -588,7 +588,7 @@ function statusChip(text: string, tone: "peach" | "lavender" | "mint" | "rose" |
   } as const;
 
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${tones[tone]}`}>{text}</span>
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tones[tone]}`}>{text}</span>
   );
 }
 
@@ -624,18 +624,18 @@ function MakeupCard({
         {row.studentId ? (
           <Link
             href={`/students/${row.studentId}`}
-            className="text-sm font-bold text-[#232327] hover:underline"
+            className="text-base font-semibold text-[#232327] hover:underline"
           >
             {row.studentName}
           </Link>
         ) : (
-          <span className="text-sm font-bold text-[#232327]">{row.studentName}</span>
+          <span className="text-base font-semibold text-[#232327]">{row.studentName}</span>
         )}
         {row.gradeLabel ? statusChip(row.gradeLabel, "gray") : null}
         {row.groupId && row.groupName ? (
           <Link
             href={`/groups/${row.groupId}`}
-            className="rounded-full bg-[#f0f0f3] px-2 py-0.5 text-[11px] font-medium text-[#4c4c55] hover:bg-[#e6e6ea]"
+            className="rounded-full bg-[#f0f0f3] px-2 py-0.5 text-xs font-medium text-[#4c4c55] hover:bg-[#e6e6ea]"
           >
             {row.groupName}
           </Link>
@@ -650,10 +650,10 @@ function MakeupCard({
         </span>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#6b6b74]">
+      <div className="secondary-text mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[#6b6b74]">
         {/* 직접 등록 record는 결석 날짜 개념이 없다 — source badge로 구분 */}
         {row.source === "manual" ? (
-          <span className="rounded-full bg-[#f0f0f3] px-2 py-0.5 text-[10px] font-medium text-[#6b6b74]">
+          <span className="rounded-full bg-[#f0f0f3] px-2 py-0.5 text-xs font-medium text-[#6b6b74]">
             직접 등록
           </span>
         ) : row.dailyLogId ? (
@@ -680,17 +680,17 @@ function MakeupCard({
       </div>
 
       {row.missedProgress && !hideMissedProgress ? (
-        <div className="mt-1.5 whitespace-pre-line break-words text-sm text-[#33333b]">
+        <div className="body-text mt-1.5 whitespace-pre-line break-words text-[#33333b]">
           놓친 진도 · {row.missedProgress}
         </div>
       ) : null}
       {row.status === "completed" && row.completedProgress ? (
-        <div className="mt-1 whitespace-pre-line break-words text-sm text-[#3d7f64]">
+        <div className="body-text mt-1 whitespace-pre-line break-words text-[#3d7f64]">
           보충한 내용 · {row.completedProgress}
         </div>
       ) : null}
       {row.status === "completed" && row.comment ? (
-        <div className="mt-1 whitespace-pre-line text-xs text-[#6b6b74]">{row.comment}</div>
+        <div className="secondary-text mt-1 whitespace-pre-line text-[#6b6b74]">{row.comment}</div>
       ) : null}
 
       {isOpen ? (
@@ -885,7 +885,7 @@ export function MakeupsBoard({
           <input
             value={q}
             onChange={(event) => setQ(event.target.value)}
-            className="w-full border-none bg-transparent text-sm text-[#33333b] outline-none placeholder:text-[#9a9aa3]"
+            className="w-full border-none bg-transparent text-base text-[#33333b] outline-none placeholder:text-[#9a9aa3]"
             placeholder="학생 이름 검색"
             aria-label="학생 이름 검색"
           />
@@ -909,7 +909,7 @@ export function MakeupsBoard({
               type="button"
               aria-pressed={active}
               onClick={() => setFilter(key)}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
                 active
                   ? "border-[#cfc4f0] bg-[#efe8fb] text-[#4a3c8f]"
                   : "border-[#e2e2e8] bg-white text-[#4c4c55] hover:bg-[#f4f4f6]"
@@ -930,32 +930,32 @@ export function MakeupsBoard({
       {filter === "all" || filter === "required" ? (
         <section className="mt-6">
           <div className="mb-3 flex items-center justify-between border-b border-[#ececf0] pb-2">
-            <h2 className="text-sm font-bold text-[#232327]">일정이 필요한 보충</h2>
+            <h2 className="card-title text-[#232327]">일정이 필요한 보충</h2>
             {required.length > 0 ? (
-              <span className="text-xs tabular-nums text-[#8a8a93]">{required.length}건</span>
+              <span className="secondary-text tabular-nums text-[#8a8a93]">{required.length}건</span>
             ) : null}
           </div>
           {required.length === 0 ? (
-            <p className="text-sm text-[#8a8a93]">일정을 잡아야 할 보충이 없어요.</p>
+            <p className="body-text text-[#8a8a93]">일정을 잡아야 할 보충이 없어요.</p>
           ) : (
             // 결석 날짜 → 그 결석이 난 원래 수업 그룹 → 학생 카드 (표시 계층만 변경)
             <div className="space-y-5">
               {requiredSections.map((section) => (
                 <div key={section.absenceDate ?? "unknown-date"}>
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <h3 className="text-sm font-semibold text-[#2d2928]">
+                    <h3 className="card-title text-[#2d2928]">
                       {section.absenceDate
                         ? formatKoreanDate(section.absenceDate, true)
                         : "결석일 미확인"}
                     </h3>
-                    <span className="text-xs tabular-nums text-[#8a8a93]">{section.count}건</span>
+                    <span className="secondary-text tabular-nums text-[#8a8a93]">{section.count}건</span>
                   </div>
 
                   <div className="mt-2 space-y-4">
                     {section.groups.map((group) => (
                       <div key={group.groupId ?? "no-group"}>
                         <div className="mb-1.5 pl-0.5">
-                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-[#655d5d]">
+                          <div className="secondary-text flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[#655d5d]">
                             <span className="min-w-0 font-medium text-[#4c4c55]">
                               {group.groupName ?? "반 정보 없음"}
                             </span>
@@ -967,7 +967,7 @@ export function MakeupsBoard({
                           {/* 이 반의 학생들이 같은 진도를 놓쳤으면 여기 한 번만 (카드에서는 숨김).
                               학생마다 다르면 null이라 각 카드가 자기 진도를 그대로 보여준다. */}
                           {group.commonMissedProgress ? (
-                            <div className="mt-1 flex flex-wrap gap-x-1.5 text-xs text-[#655d5d]">
+                            <div className="body-text mt-1 flex flex-wrap gap-x-1.5 text-[#655d5d]">
                               <span className="shrink-0 font-medium text-[#8a7b77]">놓친 진도</span>
                               <span className="min-w-0 whitespace-pre-line break-words text-[#33333b]">
                                 {group.commonMissedProgress}
@@ -992,28 +992,28 @@ export function MakeupsBoard({
       {filter === "all" || filter === "scheduled" ? (
         <section className="mt-7">
           <div className="mb-3 flex items-center justify-between border-b border-[#ececf0] pb-2">
-            <h2 className="text-sm font-bold text-[#232327]">다가오는 보충</h2>
+            <h2 className="card-title text-[#232327]">다가오는 보충</h2>
             {scheduled.length > 0 ? (
-              <span className="text-xs tabular-nums text-[#8a8a93]">{scheduled.length}건</span>
+              <span className="secondary-text tabular-nums text-[#8a8a93]">{scheduled.length}건</span>
             ) : null}
           </div>
 
           {scheduled.length === 0 ? (
-            <p className="text-sm text-[#8a8a93]">예정된 보충수업이 없어요.</p>
+            <p className="body-text text-[#8a8a93]">예정된 보충수업이 없어요.</p>
           ) : (
             <div className="space-y-4">
               {overdueScheduled.length > 0 ? (
                 <div>
-                  <h3 className="mb-2 text-xs font-semibold text-[#a05560]">일정이 지난 보충</h3>
+                  <h3 className="section-title mb-2 text-[#a05560]">일정이 지난 보충</h3>
                   <div className="grid gap-3 lg:grid-cols-2">{overdueScheduled.map(cardOf)}</div>
                 </div>
               ) : null}
               {upcomingByDate.map(([date, rows]) => (
                 <div key={date}>
-                  <h3 className="mb-2 text-xs font-semibold text-[#6b6b74]">
+                  <h3 className="section-title mb-2 text-[#6b6b74]">
                     {dateHeading(date, today)}
                     {date === today ? (
-                      <span className="ml-1.5 rounded-full bg-[#efe8fb] px-2 py-0.5 text-[10px] font-medium text-[#5d4ba5]">
+                      <span className="ml-1.5 rounded-full bg-[#efe8fb] px-2 py-0.5 text-xs font-medium text-[#5d4ba5]">
                         오늘 보충 {rows.length}건
                       </span>
                     ) : null}
@@ -1030,10 +1030,10 @@ export function MakeupsBoard({
       {filter === "done" ? (
         <section className="mt-6">
           <div className="mb-3 border-b border-[#ececf0] pb-2">
-            <h2 className="text-sm font-bold text-[#232327]">완료된 보충</h2>
+            <h2 className="card-title text-[#232327]">완료된 보충</h2>
           </div>
           {completed.length === 0 ? (
-            <p className="text-sm text-[#8a8a93]">완료된 보충수업이 아직 없어요.</p>
+            <p className="body-text text-[#8a8a93]">완료된 보충수업이 아직 없어요.</p>
           ) : (
             <div className="grid gap-3 lg:grid-cols-2">{completed.map(cardOf)}</div>
           )}
@@ -1042,7 +1042,7 @@ export function MakeupsBoard({
 
       {filter === "all" && completed.length > 0 ? (
         <details className="mt-7">
-          <summary className="cursor-pointer text-sm font-medium text-[#6b6b74]">
+          <summary className="section-title cursor-pointer font-medium text-[#6b6b74]">
             완료된 보충 {completed.length}건 보기
           </summary>
           <div className="mt-3 grid gap-3 lg:grid-cols-2">{completed.map(cardOf)}</div>
@@ -1051,7 +1051,7 @@ export function MakeupsBoard({
 
       {cancelled.length > 0 && (filter === "all" || filter === "done") ? (
         <details className="mt-4 pb-6">
-          <summary className="cursor-pointer text-xs text-[#8a8a93]">
+          <summary className="secondary-text cursor-pointer text-[#8a8a93]">
             취소된 기록 {cancelled.length}건 보기
           </summary>
           <div className="mt-3 grid gap-3 opacity-80 lg:grid-cols-2">{cancelled.map(cardOf)}</div>

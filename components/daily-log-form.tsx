@@ -303,7 +303,7 @@ function SegmentedToggle({
 }) {
   return (
     <div className="flex items-center gap-2" role="group" aria-label={label}>
-      <span className="w-8 shrink-0 text-xs font-semibold text-[#7c6d69]">{label}</span>
+      <span className="form-label w-8 shrink-0 font-semibold text-[#7c6d69]">{label}</span>
       <div className="flex gap-1">
         {options.map((option) => (
           <button
@@ -312,7 +312,7 @@ function SegmentedToggle({
             aria-pressed={value === option.value}
             onClick={() => onChange(value === option.value ? "" : option.value)}
             className={cn(
-              "min-h-[38px] rounded-xl border px-2.5 py-1.5 text-xs font-medium transition",
+              "min-h-[38px] rounded-xl border px-2.5 py-1.5 text-sm font-medium transition",
               value === option.value
                 ? activeClass
                 : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
@@ -376,11 +376,11 @@ function VocabMistakeChips({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={`${studentName} 틀린 단어`}>
-      <span className="w-8 shrink-0 text-xs font-semibold text-[#7c6d69]">오답</span>
+      <span className="form-label w-8 shrink-0 font-semibold text-[#7c6d69]">오답</span>
       {words.map((word) => (
         <span
           key={word}
-          className="flex min-h-[34px] items-center gap-1.5 rounded-xl bg-[#f0ecfb] px-2.5 py-1 text-xs text-[#54479c]"
+          className="flex min-h-[34px] items-center gap-1.5 rounded-xl bg-[#f0ecfb] px-2.5 py-1 text-sm text-[#54479c]"
         >
           {word}
           <button
@@ -408,14 +408,14 @@ function VocabMistakeChips({
         }}
         maxLength={200}
         placeholder="틀린 단어 (쉼표로 여러 개)"
-        className="w-44 min-w-0 rounded-xl border border-[#ece0db] bg-white px-2.5 py-1.5 text-sm outline-none focus:border-[#c9b9e8]"
+        className="w-44 min-w-0 rounded-xl border border-[#ece0db] bg-white px-2.5 py-1.5 text-base outline-none focus:border-[#c9b9e8]"
         aria-label={`${studentName} 틀린 단어 입력`}
       />
       <button
         type="button"
         onClick={add}
         disabled={!draft.trim()}
-        className="min-h-[38px] rounded-xl border border-[#ece0db] bg-white px-2.5 py-1.5 text-xs font-medium text-[#7c6d69] transition hover:bg-[#faf6f3] disabled:opacity-40"
+        className="min-h-[38px] rounded-xl border border-[#ece0db] bg-white px-2.5 py-1.5 text-sm font-medium text-[#7c6d69] transition hover:bg-[#faf6f3] disabled:opacity-40"
       >
         추가
       </button>
@@ -1140,13 +1140,13 @@ export function DailyLogForm({
     if (examPeriod && schools.length > 1) {
       const options = value && !schools.includes(value) ? [value, ...schools] : schools;
       return (
-        <label className="flex items-center gap-2 text-xs font-medium text-[#7c6d69]">
+        <label className="form-label flex items-center gap-2 text-[#7c6d69]">
           <span className="shrink-0">학교</span>
           <select
             value={value}
             onChange={(event) => onChange(event.target.value)}
             aria-label={ariaLabel}
-            className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-2.5 py-1.5 text-xs font-medium text-[#a2643c] outline-none"
+            className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-2.5 py-1.5 text-base font-medium text-[#a2643c] outline-none"
           >
             <option value="">학교 선택</option>
             {options.map((name) => (
@@ -1160,9 +1160,9 @@ export function DailyLogForm({
     }
     const label = value || schools[0] || "";
     return (
-      <div className="flex items-center gap-2 text-xs font-medium text-[#7c6d69]">
+      <div className="form-label flex items-center gap-2 text-[#7c6d69]">
         <span className="shrink-0">학교</span>
-        <span className="flex min-h-[36px] w-full min-w-0 items-center truncate rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-2.5 text-xs font-medium text-[#a2643c]">
+        <span className="flex min-h-[36px] w-full min-w-0 items-center truncate rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-2.5 text-sm font-medium text-[#a2643c]">
           {label || "등록된 학교가 없어요 — 학생 정보에 학교를 등록해주세요."}
         </span>
       </div>
@@ -1411,7 +1411,7 @@ export function DailyLogForm({
           아래까지 내려가지 않아도 저장 가능). 자동 임시저장 상태도 같은 줄에 표시 */}
       <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
         {autosave.status !== "idle" ? (
-          <span className="text-[11px]">
+          <span className="text-sm">
             {autosave.status === "saving" ? (
               <span className="flex items-center gap-1 text-[#a79996]">
                 <Cloud className="h-3 w-3" aria-hidden /> 저장 중...
@@ -1483,7 +1483,7 @@ export function DailyLogForm({
                     setNextPlanDate(nextClassDateAfter(scheduleDays, value) ?? "");
                   }
                 }}
-                className="min-h-[46px] w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8]"
+                className="min-h-[46px] w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8]"
                 required
               />
             </label>
@@ -1498,7 +1498,7 @@ export function DailyLogForm({
                   // (-my-2로 시각 크기는 compact하게 두고 터치 영역만 44px 수준 확보)
                   <Link
                     href="/daily-logs/new?fresh=1"
-                    className="-my-2 -mr-2 flex min-h-[44px] shrink-0 items-center px-2 text-xs text-[#5c4ca8] hover:underline"
+                    className="-my-2 -mr-2 flex min-h-[44px] shrink-0 items-center px-2 text-sm text-[#5c4ca8] hover:underline"
                   >
                     변경
                   </Link>
@@ -1517,7 +1517,7 @@ export function DailyLogForm({
                 aria-label="수업 제목"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                className="min-w-0 flex-1 basis-56 rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                className="min-w-0 flex-1 basis-56 rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                 placeholder="Unit 3 본문 독해"
               />
               {textbooks.length > 0 ? (
@@ -1578,7 +1578,7 @@ export function DailyLogForm({
                 <div className="space-y-2.5">
                   {progressTextbookNames.map((name) => (
                     <label key={`tb-${name}`} className="block min-w-0">
-                      <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-[#6652b9]">
+                      <span className="form-label mb-1 flex items-center gap-1.5 font-semibold text-[#6652b9]">
                         <span aria-hidden>📘</span>
                         <span className="min-w-0 truncate">{name}</span>
                       </span>
@@ -1590,14 +1590,14 @@ export function DailyLogForm({
                         }}
                         rows={3}
                         aria-label={`${name} 진도`}
-                        className="min-h-[76px] w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                        className="min-h-[76px] w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                         placeholder={"p.42~47\n관계대명사 주격 (여러 줄로 쓸 수 있어요)"}
                       />
                     </label>
                   ))}
                   {progressSchoolNames.map((name) => (
                     <label key={`sc-${name}`} className="block min-w-0">
-                      <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-[#a2643c]">
+                      <span className="form-label mb-1 flex items-center gap-1.5 font-semibold text-[#a2643c]">
                         <span aria-hidden>🏫</span>
                         <span className="min-w-0 truncate">{name}</span>
                       </span>
@@ -1609,14 +1609,14 @@ export function DailyLogForm({
                         }}
                         rows={3}
                         aria-label={`${name} 진도`}
-                        className="min-h-[76px] w-full rounded-2xl border border-[#e8c9b0] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#e0b28c] placeholder:text-[#a79996]"
+                        className="min-h-[76px] w-full rounded-2xl border border-[#e8c9b0] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#e0b28c] placeholder:text-[#a79996]"
                         placeholder={"중간고사 문법 범위 1~3과\n(여러 줄로 쓸 수 있어요)"}
                       />
                     </label>
                   ))}
                 </div>
                 <label className="mt-3 block">
-                  <span className="mb-1 block text-xs font-medium text-[#7c6d69]">
+                  <span className="form-label mb-1 block text-[#7c6d69]">
                     기타 진도 메모 (선택 — {examPeriod ? "학교" : "교재"} 외 내용)
                   </span>
                   <textarea
@@ -1624,13 +1624,13 @@ export function DailyLogForm({
                     onChange={(event) => setDefaultProgress(event.target.value)}
                     rows={2}
                     aria-label="기타 진도 메모"
-                    className="w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                    className="w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                     placeholder={examPeriod ? "학교와 무관한 진도/활동이 있으면 적어주세요." : "교재와 무관한 진도/활동이 있으면 적어주세요."}
                   />
                 </label>
                 <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
                   {examPeriod && progressSchoolNames.length > 0 ? (
-                    <span className="text-xs text-[#a2643c]">
+                    <span className="secondary-text text-[#a2643c]">
                       시험 기간에는 학생의 학교에 맞는 진도가 적용돼요.
                     </span>
                   ) : null}
@@ -1647,7 +1647,7 @@ export function DailyLogForm({
                 {examPeriod && schools.length === 0 ? (
                   // 시험 기간 ON인데 그룹 학생 전원이 학교 미등록 — 학교 편집기 없이도
                   // 작성/저장은 그대로 가능 (임의 학교를 만들지 않는다)
-                  <span className="mb-2 block rounded-xl bg-[#fdf1e6] px-3 py-2 text-xs text-[#a2643c]">
+                  <span className="secondary-text mb-2 block rounded-xl bg-[#fdf1e6] px-3 py-2 text-[#a2643c]">
                     학생 정보에 등록된 학교가 없어요 — 학교를 등록하면 학교별 진도를 쓸 수 있어요.
                   </span>
                 ) : null}
@@ -1655,7 +1655,7 @@ export function DailyLogForm({
                   value={defaultProgress}
                   onChange={(event) => setDefaultProgress(event.target.value)}
                   rows={6}
-                  className="min-h-[150px] w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996] max-md:min-h-[135px]"
+                  className="min-h-[150px] w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996] max-md:min-h-[135px]"
                   placeholder={"오늘 진행한 공통 진도를 자유롭게 적어주세요.\n단원 · 페이지 · 본문 · 문법 · 워크북 등을 여러 줄로 쓸 수 있어요."}
                 />
                 <div className="mt-2 flex justify-end">
@@ -1696,7 +1696,7 @@ export function DailyLogForm({
                         )
                       ) : textbooks.length > 0 ? (
                         // 숙제별 교재 연결(선택) — 같은 교재로 여러 숙제 가능, 자동 생성 없음
-                        <label className="flex items-center gap-2 text-xs font-medium text-[#7c6d69]">
+                        <label className="form-label flex items-center gap-2 text-[#7c6d69]">
                           <span className="shrink-0">교재</span>
                           <select
                             value={item.textbook}
@@ -1707,7 +1707,7 @@ export function DailyLogForm({
                               );
                             }}
                             aria-label={`숙제 ${index + 1} 교재 선택`}
-                            className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 py-1.5 text-xs font-medium text-[#6652b9] outline-none"
+                            className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 py-1.5 text-base font-medium text-[#6652b9] outline-none"
                           >
                             <option value="">교재 없음 / 기타</option>
                             {textbooks.map((name) => (
@@ -1730,10 +1730,10 @@ export function DailyLogForm({
                         maxLength={500}
                         aria-label={`숙제 ${index + 1} 내용`}
                         placeholder={"백발백중 5과 문법 문제\n(여러 줄로 적을 수 있어요)"}
-                        className="min-h-[58px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                        className="min-h-[58px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                       />
                       <div className="flex min-w-0 items-center justify-between gap-1.5">
-                        <span className="flex min-h-[38px] min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-xs font-medium text-[#6652b9]">
+                        <span className="flex min-h-[38px] min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-sm font-medium text-[#6652b9]">
                           <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
                           <input
                             type="date"
@@ -1746,7 +1746,7 @@ export function DailyLogForm({
                                 prev.map((it) => (it.key === item.key ? { ...it, dueDate: value } : it)),
                               );
                             }}
-                            className="w-full min-w-0 max-w-[140px] bg-transparent text-xs font-medium text-[#6652b9] outline-none"
+                            className="w-full min-w-0 max-w-[140px] bg-transparent text-base font-medium text-[#6652b9] outline-none"
                           />
                         </span>
                         <button
@@ -1787,7 +1787,7 @@ export function DailyLogForm({
                 >
                   <Plus className="h-4 w-4" aria-hidden /> 숙제 추가
                 </button>
-                <p className="text-[11px] text-[#a79996]">
+                <p className="secondary-text text-[#a79996]">
                   숙제마다 완료일을 다르게 정할 수 있어요. 기본값은 다음 수업일이에요.
                 </p>
               </div>
@@ -1795,17 +1795,17 @@ export function DailyLogForm({
               {/* legacy free-text 숙제 (이전 방식으로 저장된 일지만) — 데이터/Todo 연동 그대로 편집 */}
               {showLegacyHomework ? (
                 <div className="mt-3">
-                  <span className="mb-1.5 block text-xs font-medium text-[#8a7b77]">
+                  <span className="form-label mb-1.5 block text-[#8a7b77]">
                     기존 숙제 메모 (이전 방식)
                   </span>
                   <textarea
                     value={homework}
                     onChange={(event) => setHomework(event.target.value)}
                     rows={3}
-                    className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                    className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                     placeholder={"Workbook p.24~27 / Unit 3 단어 1~30"}
                   />
-                  <span className="mt-2 flex min-h-[38px] w-fit max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-xs font-medium text-[#6652b9]">
+                  <span className="mt-2 flex min-h-[38px] w-fit max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-sm font-medium text-[#6652b9]">
                     <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     <span className="shrink-0">숙제 날짜</span>
                     <input
@@ -1814,7 +1814,7 @@ export function DailyLogForm({
                       value={homeworkDueDate}
                       min={addDaysStr(classDate, 1)}
                       onChange={(event) => setHomeworkDueDate(event.target.value)}
-                      className="min-w-0 max-w-[140px] bg-transparent text-xs font-medium text-[#6652b9] outline-none"
+                      className="min-w-0 max-w-[140px] bg-transparent text-base font-medium text-[#6652b9] outline-none"
                     />
                     {homeworkDueDate ? (
                       <button
@@ -1841,7 +1841,7 @@ export function DailyLogForm({
                 <div className="space-y-2.5">
                   {planTextbookNames.map((name) => (
                     <label key={`tb-${name}`} className="block min-w-0">
-                      <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-[#3e7d6b]">
+                      <span className="form-label mb-1 flex items-center gap-1.5 font-semibold text-[#3e7d6b]">
                         <span aria-hidden>📘</span>
                         <span className="min-w-0 truncate">{name}</span>
                       </span>
@@ -1853,14 +1853,14 @@ export function DailyLogForm({
                         }}
                         rows={2}
                         aria-label={`${name} 다음 수업 계획`}
-                        className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                        className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                         placeholder={"p.51~55\n관계대명사 목적격"}
                       />
                     </label>
                   ))}
                   {planSchoolNames.map((name) => (
                     <label key={`sc-${name}`} className="block min-w-0">
-                      <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-[#a2643c]">
+                      <span className="form-label mb-1 flex items-center gap-1.5 font-semibold text-[#a2643c]">
                         <span aria-hidden>🏫</span>
                         <span className="min-w-0 truncate">{name}</span>
                       </span>
@@ -1872,13 +1872,13 @@ export function DailyLogForm({
                         }}
                         rows={2}
                         aria-label={`${name} 다음 수업 계획`}
-                        className="w-full rounded-2xl border border-[#e8c9b0] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#e0b28c] placeholder:text-[#a79996]"
+                        className="w-full rounded-2xl border border-[#e8c9b0] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#e0b28c] placeholder:text-[#a79996]"
                         placeholder={"중간고사 서술형 대비\n(시험 기간 계획)"}
                       />
                     </label>
                   ))}
                   <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-[#7c6d69]">
+                    <span className="form-label mb-1 block text-[#7c6d69]">
                       기타 계획 메모 (선택)
                     </span>
                     <textarea
@@ -1886,7 +1886,7 @@ export function DailyLogForm({
                       onChange={(event) => setNextLessonPlan(event.target.value)}
                       rows={2}
                       aria-label="기타 계획 메모"
-                      className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                      className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                       placeholder="교재/학교와 무관한 계획이 있으면 적어주세요."
                     />
                   </label>
@@ -1896,13 +1896,13 @@ export function DailyLogForm({
                   value={nextLessonPlan}
                   onChange={(event) => setNextLessonPlan(event.target.value)}
                   rows={3}
-                  className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                  className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                   placeholder={"Unit 3 p.54~59 / 관계대명사 목적격 복습"}
                 />
               )}
               {/* 계획 날짜 — header에 두면 iPad 가로(열폭 ~312px)에서 줄바꿈이 생겨
                   textarea 아래 전용 줄로 분리. 기본은 수업일 이후 실제 다음 수업일 */}
-              <span className="mt-2 flex min-h-[38px] w-fit max-w-full items-center gap-1.5 rounded-xl border border-[#d8ebe0] bg-[#f4faf7] px-2.5 text-xs font-medium text-[#3e7d6b]">
+              <span className="mt-2 flex min-h-[38px] w-fit max-w-full items-center gap-1.5 rounded-xl border border-[#d8ebe0] bg-[#f4faf7] px-2.5 text-sm font-medium text-[#3e7d6b]">
                 <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 <span className="shrink-0">계획 날짜</span>
                 <input
@@ -1914,7 +1914,7 @@ export function DailyLogForm({
                     setNextPlanDate(event.target.value);
                     setPlanDateTouched(true);
                   }}
-                  className="min-w-0 max-w-[140px] bg-transparent text-xs font-medium text-[#3e7d6b] outline-none"
+                  className="min-w-0 max-w-[140px] bg-transparent text-base font-medium text-[#3e7d6b] outline-none"
                 />
               </span>
 
@@ -1943,7 +1943,7 @@ export function DailyLogForm({
                             `할 일 ${index + 1} 학교 선택`,
                           )
                         ) : textbooks.length > 0 ? (
-                          <label className="flex items-center gap-2 text-xs font-medium text-[#7c6d69]">
+                          <label className="form-label flex items-center gap-2 text-[#7c6d69]">
                             <span className="shrink-0">교재</span>
                             <select
                               value={task.textbook}
@@ -1954,7 +1954,7 @@ export function DailyLogForm({
                                 );
                               }}
                               aria-label={`할 일 ${index + 1} 교재 선택`}
-                              className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 py-1.5 text-xs font-medium text-[#5d4ba5] outline-none"
+                              className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 py-1.5 text-base font-medium text-[#5d4ba5] outline-none"
                             >
                               <option value="">교재 없음 / 기타</option>
                               {textbooks.map((name) => (
@@ -1976,11 +1976,11 @@ export function DailyLogForm({
                           rows={2}
                           maxLength={1000}
                           aria-label={`할 일 ${index + 1} 내용`}
-                          className="min-h-[58px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                          className="min-h-[58px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                           placeholder={"프린트 출력\n(여러 줄로 적을 수 있어요)"}
                         />
                         <div className="flex min-w-0 items-center justify-between gap-1.5">
-                          <span className="flex min-h-[38px] min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-xs font-medium text-[#5d4ba5]">
+                          <span className="flex min-h-[38px] min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-sm font-medium text-[#5d4ba5]">
                             <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
                             <input
                               type="date"
@@ -1993,7 +1993,7 @@ export function DailyLogForm({
                                   prev.map((it) => (it.key === task.key ? { ...it, dueDate: value } : it)),
                                 );
                               }}
-                              className="w-full min-w-0 max-w-[140px] bg-transparent text-xs font-medium text-[#5d4ba5] outline-none"
+                              className="w-full min-w-0 max-w-[140px] bg-transparent text-base font-medium text-[#5d4ba5] outline-none"
                             />
                           </span>
                           <button
@@ -2031,7 +2031,7 @@ export function DailyLogForm({
                     <Plus className="h-4 w-4" aria-hidden /> 할 일 추가
                   </button>
                 </div>
-                <p className="mt-1 text-[11px] text-[#a79996]">
+                <p className="secondary-text mt-1 text-[#a79996]">
                   수업 기록을 완료하면 내용이 있는 항목마다 오늘 할 일에 하나씩 등록돼요. 날짜를
                   선택하지 않으면 수업 다음날 할 일로 등록돼요.
                 </p>
@@ -2045,7 +2045,7 @@ export function DailyLogForm({
               value={memo}
               onChange={(event) => setMemo(event.target.value)}
               rows={2}
-              className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+              className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
               placeholder="다음 시간 Unit 3 Workbook 진행"
             />
           </label>
@@ -2054,7 +2054,7 @@ export function DailyLogForm({
 
       <Card className="p-4">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-            <span className="text-sm font-semibold text-[#2b2323]">빠른 체크</span>
+            <span className="section-title text-[#2b2323]">빠른 체크</span>
             <label className="flex items-center gap-2 text-sm text-[#564d4d]">
               오늘 단어시험 총 문항
               <input
@@ -2066,7 +2066,7 @@ export function DailyLogForm({
                   )
                 }
                 onCompositionEnd={(event) => setVocabTotal(digitsOnly(event.currentTarget.value))}
-                className="w-16 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-center text-sm tabular-nums outline-none focus:border-[#c9b9e8]"
+                className="w-16 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-center text-base tabular-nums outline-none focus:border-[#c9b9e8]"
                 placeholder="20"
                 aria-label="오늘 단어시험 총 문항 수"
               />
@@ -2075,7 +2075,7 @@ export function DailyLogForm({
             <Button type="button" variant="secondary" size="sm" onClick={markAllHomeworkCompleted}>
               숙제 전원 완료로 표시
             </Button>
-            <span className="text-xs text-[#8a7b77]">
+            <span className="text-sm text-[#8a7b77]">
               시험이 없는 날은 비워두면 돼요. 저장 전까지 학생별로 수정할 수 있어요.
             </span>
           </div>
@@ -2097,8 +2097,8 @@ export function DailyLogForm({
                   >
                     {student.name.charAt(0)}
                   </span>
-                  <span className="font-semibold text-[#2b2323]">{student.name}</span>
-                  <span className="rounded-full bg-[#f2effc] px-2 py-0.5 text-[10px] text-[#5f54b8]">
+                  <span className="text-base font-semibold text-[#2b2323]">{student.name}</span>
+                  <span className="rounded-full bg-[#f2effc] px-2 py-0.5 text-xs text-[#5f54b8]">
                     {gradeDisplay[student.grade]}
                   </span>
                 </div>
@@ -2108,7 +2108,7 @@ export function DailyLogForm({
                     type="button"
                     onClick={() => updateEntry(student.studentId, { attendance: "present" })}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition",
+                      "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-medium transition",
                       entry.attendance === "present"
                         ? "border-[#bfe3d2] bg-[#edf9f3] text-[#2f6d54]"
                         : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
@@ -2120,7 +2120,7 @@ export function DailyLogForm({
                     type="button"
                     onClick={() => updateEntry(student.studentId, { attendance: "late" })}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition",
+                      "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-medium transition",
                       entry.attendance === "late"
                         ? "border-[#ecd9b4] bg-[#fdf3e4] text-[#8a6828]"
                         : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
@@ -2132,7 +2132,7 @@ export function DailyLogForm({
                     type="button"
                     onClick={() => updateEntry(student.studentId, { attendance: "early_leave" })}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition",
+                      "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-medium transition",
                       entry.attendance === "early_leave"
                         ? "border-[#d8cdf0] bg-[#f3eefc] text-[#5d4ba5]"
                         : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
@@ -2144,7 +2144,7 @@ export function DailyLogForm({
                     type="button"
                     onClick={() => updateEntry(student.studentId, { attendance: "absent" })}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition",
+                      "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-medium transition",
                       entry.attendance === "absent"
                         ? "border-[#f0ccc7] bg-[#fff0ef] text-[#96534c]"
                         : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
@@ -2157,11 +2157,11 @@ export function DailyLogForm({
 
               {isAbsent ? (
                 <div className="mt-3 space-y-3 rounded-2xl bg-[#fff7f5] p-3">
-                  <div className="text-xs text-[#96837e]">
+                  <div className="secondary-text text-[#96837e]">
                     놓친 수업 · {formatKoreanDate(classDate)} · {group.name}
                   </div>
                   <label className="block">
-                    <span className="mb-1.5 block text-xs font-semibold text-[#8a5d52]">놓친 진도</span>
+                    <span className="form-label mb-1.5 block font-semibold text-[#8a5d52]">놓친 진도</span>
                     {/* 여러 줄 입력: Enter = 줄바꿈 (submit 아님 — 저장은 하단 버튼).
                         onChange에서 값 재작성 없음 — newline/IME 조합이 그대로 보존된다. */}
                     <textarea
@@ -2169,14 +2169,14 @@ export function DailyLogForm({
                       onChange={(event) => updateEntry(student.studentId, { missedProgress: event.target.value })}
                       rows={4}
                       maxLength={1000}
-                      className="min-h-[96px] w-full min-w-0 max-w-full rounded-xl border border-[#f0ddd8] bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-[#e3bcb4] placeholder:text-[#b5a29e]"
+                      className="min-h-[96px] w-full min-w-0 max-w-full rounded-xl border border-[#f0ddd8] bg-white px-3 py-2 text-base leading-6 outline-none focus:border-[#e3bcb4] placeholder:text-[#b5a29e]"
                       placeholder={
                         derivedDefaultProgress.trim()
                           ? `공통 진도: ${derivedDefaultProgress.trim()}`
                           : "관계대명사 주격 개념\nGrammar Inside p.42~45\n5과 단어시험"
                       }
                     />
-                    <span className="mt-1 block text-[11px] text-[#a68e88]">
+                    <span className="secondary-text mt-1 block text-[#a68e88]">
                       {entry.missedProgress && entry.missedProgress === derivedDefaultProgress.trim()
                         ? "수업일지의 진도를 자동으로 가져왔어요. 필요하면 수정할 수 있어요."
                         : !entry.missedProgress
@@ -2188,14 +2188,14 @@ export function DailyLogForm({
                   </label>
 
                   {entry.makeupCompleted ? (
-                    <div className="flex items-center gap-2 text-xs text-[#655d5d]">
+                    <div className="secondary-text flex items-center gap-2 text-[#655d5d]">
                       <MakeupStatusBadge status="completed" />
                       이미 완료된 보충수업이 연결되어 있어요. 보충 기록은 보충수업 페이지에서 확인할 수 있어요.
                     </div>
                   ) : (
                     <>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-[#8a5d52]">보충수업</span>
+                        <span className="form-label font-semibold text-[#8a5d52]">보충수업</span>
                         <div className="flex gap-1.5">
                           <button
                             type="button"
@@ -2208,7 +2208,7 @@ export function DailyLogForm({
                               })
                             }
                             className={cn(
-                              "flex items-center gap-1 rounded-xl border px-2.5 py-1 text-xs font-medium transition",
+                              "flex items-center gap-1 rounded-xl border px-2.5 py-1 text-sm font-medium transition",
                               entry.needsMakeup
                                 ? "border-[#d8cdf0] bg-[#f3eefc] text-[#5d4ba5]"
                                 : "border-[#ece0db] bg-white text-[#7c6d69]",
@@ -2220,7 +2220,7 @@ export function DailyLogForm({
                             type="button"
                             onClick={() => updateEntry(student.studentId, { needsMakeup: false, makeupScheduledDate: "" })}
                             className={cn(
-                              "rounded-xl border px-2.5 py-1 text-xs font-medium transition",
+                              "rounded-xl border px-2.5 py-1 text-sm font-medium transition",
                               !entry.needsMakeup
                                 ? "border-[#d9cec9] bg-[#f6f1ee] text-[#655a56]"
                                 : "border-[#ece0db] bg-white text-[#7c6d69]",
@@ -2233,7 +2233,7 @@ export function DailyLogForm({
 
                       {entry.needsMakeup ? (
                         <label className="block">
-                          <span className="mb-1.5 block text-xs font-semibold text-[#8a5d52]">
+                          <span className="form-label mb-1.5 block font-semibold text-[#8a5d52]">
                             보충 예정일 (미정이면 비워두세요)
                           </span>
                           <input
@@ -2242,7 +2242,7 @@ export function DailyLogForm({
                             onChange={(event) =>
                               updateEntry(student.studentId, { makeupScheduledDate: event.target.value })
                             }
-                            className="rounded-xl border border-[#f0ddd8] bg-white px-3 py-2 text-sm outline-none focus:border-[#e3bcb4]"
+                            className="rounded-xl border border-[#f0ddd8] bg-white px-3 py-2 text-base outline-none focus:border-[#e3bcb4]"
                           />
                         </label>
                       ) : null}
@@ -2250,11 +2250,11 @@ export function DailyLogForm({
                   )}
 
                   <label className="block">
-                    <span className="mb-1.5 block text-xs font-semibold text-[#7c6d69]">추가 메모</span>
+                    <span className="form-label mb-1.5 block font-semibold text-[#7c6d69]">추가 메모</span>
                     <input
                       value={entry.memo}
                       onChange={(event) => updateEntry(student.studentId, { memo: event.target.value })}
-                      className="w-full rounded-xl border border-[#f0ddd8] bg-white px-3 py-2 text-sm outline-none focus:border-[#e3bcb4]"
+                      className="w-full rounded-xl border border-[#f0ddd8] bg-white px-3 py-2 text-base outline-none focus:border-[#e3bcb4]"
                     />
                   </label>
                 </div>
@@ -2280,7 +2280,7 @@ export function DailyLogForm({
                         />
 
                         <div className="flex items-center gap-2" role="group" aria-label={`${student.name} 단어시험`}>
-                          <span className="shrink-0 text-xs font-semibold text-[#7c6d69]">단어</span>
+                          <span className="form-label shrink-0 font-semibold text-[#7c6d69]">단어</span>
                           <input
                             inputMode="numeric"
                             value={entry.vocabCorrect}
@@ -2296,11 +2296,11 @@ export function DailyLogForm({
                                 vocabCorrect: digitsOnly(event.currentTarget.value),
                               })
                             }
-                            className="w-14 rounded-xl border border-[#ece0db] bg-white px-2 py-1.5 text-center text-sm tabular-nums outline-none focus:border-[#c9b9e8]"
+                            className="w-14 rounded-xl border border-[#ece0db] bg-white px-2 py-1.5 text-center text-base tabular-nums outline-none focus:border-[#c9b9e8]"
                             placeholder="-"
                             aria-label={`${student.name} 단어시험 맞은 개수`}
                           />
-                          <span className="text-xs tabular-nums text-[#8a7b77]">
+                          <span className="text-sm tabular-nums text-[#8a7b77]">
                             / {vocabTotal.trim() || "?"}
                             {entry.vocabCorrect && vocabTotal.trim() &&
                             Number(entry.vocabCorrect) <= Number(vocabTotal)
@@ -2312,7 +2312,7 @@ export function DailyLogForm({
                             aria-pressed={entry.vocabRetest}
                             onClick={() => updateEntry(student.studentId, { vocabRetest: !entry.vocabRetest })}
                             className={cn(
-                              "min-h-[38px] rounded-xl border px-2.5 py-1.5 text-xs font-medium transition",
+                              "min-h-[38px] rounded-xl border px-2.5 py-1.5 text-sm font-medium transition",
                               entry.vocabRetest
                                 ? "border-[#d8cdf0] bg-[#f3eefc] text-[#5d4ba5]"
                                 : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
@@ -2388,7 +2388,7 @@ export function DailyLogForm({
                           {entry.praiseComments.map((comment, praiseIndex) => (
                             <div
                               key={`${praiseIndex}-${comment}`}
-                              className="flex items-start gap-2 rounded-xl bg-[#f6effa] px-3 py-1.5 text-xs text-[#7a5a92]"
+                              className="flex items-start gap-2 rounded-xl bg-[#f6effa] px-3 py-1.5 text-sm text-[#7a5a92]"
                             >
                               <span aria-hidden className="shrink-0">💜</span>
                               <span className="min-w-0 flex-1 break-words leading-5">{comment}</span>
@@ -2436,7 +2436,7 @@ export function DailyLogForm({
                             }
                           }}
                           aria-expanded={praiseOpenFor === student.studentId}
-                          className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#ddd0ec] bg-[#f9f5fd] px-3 py-1.5 text-xs font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
+                          className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#ddd0ec] bg-[#f9f5fd] px-3 py-1.5 text-sm font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
                         >
                           💜 칭찬 한표 +
                         </button>
@@ -2448,12 +2448,12 @@ export function DailyLogForm({
                             setWeaknessError("");
                             setWeaknessOpenFor(student.studentId);
                           }}
-                          className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#ecd9b4] bg-[#fdf8ec] px-3 py-1.5 text-xs font-medium text-[#8a6828] transition hover:bg-[#fdf3e4]"
+                          className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#ecd9b4] bg-[#fdf8ec] px-3 py-1.5 text-sm font-medium text-[#8a6828] transition hover:bg-[#fdf3e4]"
                         >
                           📌 약점 기록 +
                         </button>
                         {weaknessSavedFor === student.studentId ? (
-                          <span className="text-xs text-[#3d7f64]">약점을 기록했어요 ✓</span>
+                          <span className="text-sm text-[#3d7f64]">약점을 기록했어요 ✓</span>
                         ) : null}
 
                         <button
@@ -2463,7 +2463,7 @@ export function DailyLogForm({
                             updateEntry(student.studentId, { parentNoteNeeded: !entry.parentNoteNeeded })
                           }
                           className={cn(
-                            "ml-auto min-h-[38px] rounded-xl border px-3 py-1.5 text-xs font-medium transition",
+                            "ml-auto min-h-[38px] rounded-xl border px-3 py-1.5 text-sm font-medium transition",
                             entry.parentNoteNeeded
                               ? "border-[#f0ccc7] bg-[#fff0ef] text-[#96534c]"
                               : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
@@ -2475,10 +2475,10 @@ export function DailyLogForm({
 
                       {praiseOpenFor === student.studentId ? (
                         <div className="space-y-2 rounded-xl border border-[#e5d9f0] bg-white p-3">
-                          <div className="text-xs font-semibold text-[#6d5aa8]">
+                          <div className="form-label font-semibold text-[#6d5aa8]">
                             {praiseEditIndex === null ? "칭찬 한표 💜" : "칭찬 수정 💜"}
                           </div>
-                          <div className="text-[11px] text-[#8a7b77]">
+                          <div className="secondary-text text-[#8a7b77]">
                             성장노트에 보여줄 짧은 칭찬이에요. 오늘 잘한 모습을 짧게 적어주세요.
                           </div>
                           <textarea
@@ -2488,12 +2488,12 @@ export function DailyLogForm({
                             rows={2}
                             maxLength={120}
                             autoFocus
-                            className="w-full resize-none rounded-xl border border-[#e5d9f0] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8] sm:text-sm"
+                            className="w-full resize-none rounded-xl border border-[#e5d9f0] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8] sm:text-base"
                             placeholder="어려운 문제도 끝까지 다시 풀어보는 모습이 좋았어요."
                             aria-label={`${student.name} 칭찬 코멘트`}
                           />
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-[11px] tabular-nums text-[#a79996]">
+                            <span className="text-sm tabular-nums text-[#a79996]">
                               {praiseDraft.length} / 120
                             </span>
                             <div className="flex gap-1.5">
@@ -2503,7 +2503,7 @@ export function DailyLogForm({
                                   setPraiseOpenFor(null);
                                   setPraiseEditIndex(null);
                                 }}
-                                className="rounded-xl border border-[#ece0db] bg-white px-3 py-1.5 text-xs font-medium text-[#7c6d69] transition hover:bg-[#faf6f3]"
+                                className="rounded-xl border border-[#ece0db] bg-white px-3 py-1.5 text-sm font-medium text-[#7c6d69] transition hover:bg-[#faf6f3]"
                               >
                                 취소
                               </button>
@@ -2523,7 +2523,7 @@ export function DailyLogForm({
                                   setPraiseOpenFor(null);
                                   setPraiseEditIndex(null);
                                 }}
-                                className="rounded-xl bg-[#6d5aa8] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#5d4ba5] disabled:cursor-not-allowed disabled:opacity-40"
+                                className="rounded-xl bg-[#6d5aa8] px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-[#5d4ba5] disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 {praiseEditIndex === null ? "칭찬 추가" : "칭찬 저장"}
                               </button>
@@ -2547,13 +2547,13 @@ export function DailyLogForm({
 
                       {entry.parentNoteNeeded ? (
                         <label className="block">
-                          <span className="mb-1 block text-xs font-semibold text-[#96534c]">전달 내용</span>
+                          <span className="form-label mb-1 block font-semibold text-[#96534c]">전달 내용</span>
                           <input
                             value={entry.parentNote}
                             onChange={(event) =>
                               updateEntry(student.studentId, { parentNote: event.target.value })
                             }
-                            className="w-full rounded-xl border border-[#f0ddd8] bg-white px-3 py-2 text-sm outline-none focus:border-[#e3bcb4]"
+                            className="w-full rounded-xl border border-[#f0ddd8] bg-white px-3 py-2 text-base outline-none focus:border-[#e3bcb4]"
                             placeholder="최근 숙제 미제출이 두 번 있었습니다."
                           />
                         </label>
@@ -2569,7 +2569,7 @@ export function DailyLogForm({
                         value={entry.progress}
                         onChange={(event) => updateEntry(student.studentId, { progress: event.target.value })}
                         rows={2}
-                        className="min-h-[40px] w-full resize-y bg-transparent text-sm leading-5 outline-none placeholder:text-[#a79996]"
+                        className="min-h-[40px] w-full resize-y bg-transparent text-base leading-6 outline-none placeholder:text-[#a79996]"
                         placeholder="진도 (여러 줄 입력 가능)"
                         aria-label={`${student.name} 진도`}
                       />
@@ -2579,7 +2579,7 @@ export function DailyLogForm({
                       onClick={() =>
                         setExpanded((prev) => ({ ...prev, [student.studentId]: !prev[student.studentId] }))
                       }
-                      className="flex items-center justify-center gap-1 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-xs font-medium text-[#564d4d] transition hover:bg-[#faf6f3]"
+                      className="flex items-center justify-center gap-1 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm font-medium text-[#564d4d] transition hover:bg-[#faf6f3]"
                     >
                       {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                       코멘트 {isExpanded ? "접기" : "입력"}
@@ -2589,12 +2589,12 @@ export function DailyLogForm({
                   {isExpanded ? (
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className="rounded-2xl bg-[#edf8f2] p-3">
-                        <div className="mb-2 text-xs font-semibold text-[#2f5d4b]">잘한 부분</div>
+                        <div className="form-label mb-2 font-semibold text-[#2f5d4b]">잘한 부분</div>
                         <textarea
                           value={entry.strengths}
                           onChange={(event) => updateEntry(student.studentId, { strengths: event.target.value })}
                           rows={2}
-                          className="w-full resize-none rounded-xl border border-[#dfeee6] bg-white px-3 py-2 text-sm outline-none focus:border-[#bcdccb]"
+                          className="w-full resize-none rounded-xl border border-[#dfeee6] bg-white px-3 py-2 text-base outline-none focus:border-[#bcdccb]"
                           aria-label={`${student.name} 잘한 부분`}
                         />
                         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -2603,7 +2603,7 @@ export function DailyLogForm({
                               key={preset}
                               type="button"
                               onClick={() => appendPreset(student.studentId, "strengths", preset)}
-                              className="rounded-full border border-[#d8ebe0] bg-white px-2 py-0.5 text-[11px] text-[#3d6d58] transition hover:bg-[#f0faf5]"
+                              className="rounded-full border border-[#d8ebe0] bg-white px-2 py-0.5 text-xs text-[#3d6d58] transition hover:bg-[#f0faf5]"
                             >
                               + {preset}
                             </button>
@@ -2612,12 +2612,12 @@ export function DailyLogForm({
                       </div>
 
                       <div className="rounded-2xl bg-[#fff3ef] p-3">
-                        <div className="mb-2 text-xs font-semibold text-[#8a5d52]">보완할 부분</div>
+                        <div className="form-label mb-2 font-semibold text-[#8a5d52]">보완할 부분</div>
                         <textarea
                           value={entry.improvements}
                           onChange={(event) => updateEntry(student.studentId, { improvements: event.target.value })}
                           rows={2}
-                          className="w-full resize-none rounded-xl border border-[#f5e3df] bg-white px-3 py-2 text-sm outline-none focus:border-[#eccec7]"
+                          className="w-full resize-none rounded-xl border border-[#f5e3df] bg-white px-3 py-2 text-base outline-none focus:border-[#eccec7]"
                           aria-label={`${student.name} 보완할 부분`}
                         />
                         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -2626,7 +2626,7 @@ export function DailyLogForm({
                               key={preset}
                               type="button"
                               onClick={() => appendPreset(student.studentId, "improvements", preset)}
-                              className="rounded-full border border-[#f2ded8] bg-white px-2 py-0.5 text-[11px] text-[#8a5d52] transition hover:bg-[#fdf4f1]"
+                              className="rounded-full border border-[#f2ded8] bg-white px-2 py-0.5 text-xs text-[#8a5d52] transition hover:bg-[#fdf4f1]"
                             >
                               + {preset}
                             </button>
@@ -2635,11 +2635,11 @@ export function DailyLogForm({
                       </div>
 
                       <label className="block md:col-span-2">
-                        <span className="mb-1.5 block text-xs font-semibold text-[#7c6d69]">추가 메모</span>
+                        <span className="form-label mb-1.5 block font-semibold text-[#7c6d69]">추가 메모</span>
                         <input
                           value={entry.memo}
                           onChange={(event) => updateEntry(student.studentId, { memo: event.target.value })}
-                          className="w-full rounded-xl border border-[#efe4dd] bg-white px-3 py-2 text-sm outline-none focus:border-[#dcc9c0]"
+                          className="w-full rounded-xl border border-[#efe4dd] bg-white px-3 py-2 text-base outline-none focus:border-[#dcc9c0]"
                         />
                       </label>
                     </div>
@@ -2660,10 +2660,10 @@ export function DailyLogForm({
           aria-expanded={reflectionOpen}
           className="flex w-full items-center justify-between gap-2 text-left"
         >
-          <span className="flex items-center gap-2 text-sm font-semibold text-[#2b2323]">
+          <span className="section-title flex items-center gap-2 text-[#2b2323]">
             <Sparkles className="h-4 w-4 text-[#8a6fc9]" aria-hidden />
             오늘 수업 회고 (선택)
-            <span className="text-xs font-normal text-[#8a7b77]">
+            <span className="text-sm font-normal text-[#8a7b77]">
               30초 돌아보기 — 쓰는 만큼 다음 수업이 좋아져요
             </span>
           </span>
@@ -2687,32 +2687,32 @@ export function DailyLogForm({
         {reflectionOpen ? (
           <div className="mt-3 grid gap-3 lg:grid-cols-3">
             <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-[#3e7d6b]">잘된 점</span>
+              <span className="form-label mb-1.5 block text-[#3e7d6b]">잘된 점</span>
               <textarea
                 value={reflectionGood}
                 onChange={(event) => setReflectionGood(event.target.value)}
                 rows={3}
-                className="w-full rounded-2xl border border-[#dcebe2] bg-[#fbfdfc] px-3 py-2.5 text-sm outline-none focus:border-[#b7d8c6] placeholder:text-[#a79996]"
+                className="w-full rounded-2xl border border-[#dcebe2] bg-[#fbfdfc] px-3 py-2.5 text-base outline-none focus:border-[#b7d8c6] placeholder:text-[#a79996]"
                 placeholder="예) 문법 설명 전에 예문부터 보여주니 이해가 빨랐다"
               />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-[#8a5d52]">아쉬웠던 점</span>
+              <span className="form-label mb-1.5 block text-[#8a5d52]">아쉬웠던 점</span>
               <textarea
                 value={reflectionHard}
                 onChange={(event) => setReflectionHard(event.target.value)}
                 rows={3}
-                className="w-full rounded-2xl border border-[#f0ded8] bg-[#fffcfa] px-3 py-2.5 text-sm outline-none focus:border-[#e2c4ba] placeholder:text-[#a79996]"
+                className="w-full rounded-2xl border border-[#f0ded8] bg-[#fffcfa] px-3 py-2.5 text-base outline-none focus:border-[#e2c4ba] placeholder:text-[#a79996]"
                 placeholder="예) 단어시험 채점에 수업 시간을 너무 썼다"
               />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-[#5c4ca8]">다음에 다르게 해볼 것</span>
+              <span className="form-label mb-1.5 block text-[#5c4ca8]">다음에 다르게 해볼 것</span>
               <textarea
                 value={reflectionNext}
                 onChange={(event) => setReflectionNext(event.target.value)}
                 rows={3}
-                className="w-full rounded-2xl border border-[#e2d8f3] bg-[#fcfaff] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                className="w-full rounded-2xl border border-[#e2d8f3] bg-[#fcfaff] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                 placeholder="예) 채점은 짝 바꿔 하게 하고, 그 시간에 개별 질문 받기"
               />
             </label>
@@ -2738,7 +2738,7 @@ export function DailyLogForm({
           onDraft={() => save("draft")}
           onFinal={() => setShowSummary(true)}
         />
-        <span className="text-xs text-[#8a7b77]">
+        <span className="text-sm text-[#8a7b77]">
           임시 저장한 일지는 목록에서 &quot;작성 중&quot;으로 표시돼요.
         </span>
       </div>
@@ -2751,10 +2751,10 @@ export function DailyLogForm({
           aria-label="공통 진도 덮어쓰기 확인"
         >
           <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
-            <div className="font-display text-lg font-semibold text-[#2a2323]">
+            <div className="card-title text-[#2a2323]">
               현재 작성한 공통 진도가 있어요
             </div>
-            <p className="mt-2 text-sm leading-6 text-[#655d5d]">
+            <p className="mt-2 text-sm leading-5 text-[#655d5d]">
               기존 내용을 이전 기록에서 가져온 내용으로 바꿀까요?
             </p>
             <div className="mt-4 flex justify-end gap-2">
@@ -2796,7 +2796,7 @@ export function DailyLogForm({
         >
           <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
             <div className="text-lg font-semibold text-[#2a2323]">수업일지가 이미 있어요</div>
-            <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[#564d4d]">
+            <p className="mt-3 whitespace-pre-line text-sm leading-5 text-[#564d4d]">
               {`${formatKoreanDate(classDate)}에 이미 등록된 수업 일지가 있어요.\n같은 반의 수업 일지는 하루에 한 번만 등록할 수 있어요.${
                 duplicateExistingId
                   ? "\n기존 일지를 이어서 작성해주세요 — 지금 화면의 내용은 자동 임시저장으로 보관해둘게요."
@@ -2942,15 +2942,15 @@ function CompletionSummary({
 
         <div className="mt-4 space-y-3 text-sm">
           <div className="rounded-2xl bg-[#f8f3ef] p-3">
-            <div className="text-[11px] uppercase tracking-[0.12em] text-[#8b7b77]">진도</div>
+            <div className="form-label uppercase tracking-normal text-[#8b7b77]">진도</div>
             <div className="mt-1 whitespace-pre-line font-medium text-[#2b2323]">
               {defaultProgress.trim() || "입력된 진도가 없어요."}
             </div>
           </div>
 
           <div className="rounded-2xl bg-[#f5f2ff] p-3">
-            <div className="text-[11px] uppercase tracking-[0.12em] text-[#8b7b77]">출결</div>
-            <div className="mt-1 flex flex-wrap gap-2 text-xs">
+            <div className="form-label uppercase tracking-normal text-[#8b7b77]">출결</div>
+            <div className="mt-1 flex flex-wrap gap-2 text-sm">
               <span className="rounded-full bg-[#edf9f3] px-2 py-1 text-[#3d7f64]">출석 {counts.present}명</span>
               <span className="rounded-full bg-[#fdf3e4] px-2 py-1 text-[#94702f]">지각 {counts.late}명</span>
               <span className="rounded-full bg-[#f3eefc] px-2 py-1 text-[#614ea7]">조퇴 {counts.early_leave}명</span>
@@ -2959,7 +2959,7 @@ function CompletionSummary({
           </div>
 
           <div className="rounded-2xl bg-[#f8f3ef] p-3">
-            <div className="text-[11px] uppercase tracking-[0.12em] text-[#8b7b77]">오늘 숙제</div>
+            <div className="form-label uppercase tracking-normal text-[#8b7b77]">오늘 숙제</div>
             <div className="mt-1 whitespace-pre-line font-medium text-[#2b2323]">
               {homework.trim() || "입력된 숙제가 없어요."}
             </div>
@@ -2967,14 +2967,14 @@ function CompletionSummary({
 
           {checkStudents.length > 0 ? (
             <div className="rounded-2xl bg-[#fff7f5] p-3">
-              <div className="text-[11px] uppercase tracking-[0.12em] text-[#a26660]">
+              <div className="form-label uppercase tracking-normal text-[#a26660]">
                 오늘 체크할 학생 {checkStudents.length}명
               </div>
               <div className="mt-2 space-y-2">
                 {checkStudents.map((item) => (
                   <div key={item.name}>
                     <div className="font-medium text-[#8a5d52]">{item.name}</div>
-                    <ul className="mt-0.5 text-xs leading-5 text-[#a26660]">
+                    <ul className="secondary-text mt-0.5 text-[#a26660]">
                       {item.items.map((flag) => (
                         <li key={flag}>• {flag}</li>
                       ))}
@@ -2986,7 +2986,7 @@ function CompletionSummary({
           ) : null}
 
           <div className="rounded-2xl bg-[#edf9f3] p-3">
-            <div className="text-[11px] uppercase tracking-[0.12em] text-[#8b7b77]">다음 수업</div>
+            <div className="form-label uppercase tracking-normal text-[#8b7b77]">다음 수업</div>
             <div className="mt-1 whitespace-pre-line font-medium text-[#2b2323]">
               {nextLessonPlan.trim() || "입력된 계획이 없어요."}
             </div>
@@ -2999,7 +2999,7 @@ function CompletionSummary({
                   <span aria-hidden>•</span> {reminder}
                 </div>
               ))}
-              <div className="mt-1 text-xs text-[#a08883]">그래도 그대로 완료할 수 있어요.</div>
+              <div className="secondary-text mt-1 text-[#a08883]">그래도 그대로 완료할 수 있어요.</div>
             </div>
           ) : null}
         </div>

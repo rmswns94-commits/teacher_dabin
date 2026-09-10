@@ -80,12 +80,12 @@ export function ReflectionDayCard({
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <div className="text-base font-bold text-[#2b2323]">{dateLabel}</div>
-            <div className="mt-0.5 text-xs text-[#8a7b77]">
+            <div className="card-title text-[#2b2323]">{dateLabel}</div>
+            <div className="mt-0.5 text-sm text-[#8a7b77]">
               {classes.length}개 반의 수업 회고
             </div>
           </div>
-          <span className="flex items-center gap-1 text-xs font-medium text-[#5c4ca8]">
+          <span className="flex items-center gap-1 text-sm font-medium text-[#5c4ca8]">
             {expanded ? "접기" : "전체 회고 보기"}
             {expanded ? (
               <ChevronUp className="h-3.5 w-3.5" aria-hidden />
@@ -106,14 +106,14 @@ export function ReflectionDayCard({
 
             return (
               <div key={section.key} className={cn("rounded-2xl border px-3.5 py-3", section.boxClass)}>
-                <div className={cn("text-xs font-semibold", section.labelClass)}>
+                <div className={cn("text-sm font-semibold", section.labelClass)}>
                   <span aria-hidden>{section.icon}</span> {section.title}
                 </div>
                 <ul className="mt-1.5 space-y-1">
                   {bullets.map((text, index) => (
                     <li
                       key={index}
-                      className="whitespace-pre-line break-words text-sm leading-6 text-[#4a4160]"
+                      className="whitespace-pre-line break-words text-sm leading-5 text-[#4a4160]"
                     >
                       • {text}
                     </li>
@@ -143,7 +143,7 @@ export function ReflectionDayCard({
                 <Link
                   href={`/daily-logs/${item.id}`}
                   onClick={(event) => event.stopPropagation()}
-                  className="flex items-center gap-0.5 text-xs font-medium text-[#5c4ca8] hover:underline"
+                  className="flex items-center gap-0.5 text-sm font-medium text-[#5c4ca8] hover:underline"
                 >
                   일지 보기 <ChevronRight className="h-3.5 w-3.5" aria-hidden />
                 </Link>
@@ -161,10 +161,10 @@ export function ReflectionDayCard({
 
                   return (
                     <div key={section.key} className={cn("rounded-2xl border px-3 py-2.5", section.boxClass)}>
-                      <div className={cn("text-[11px] font-semibold", section.labelClass)}>
+                      <div className={cn("text-sm font-semibold", section.labelClass)}>
                         {section.title}
                       </div>
-                      <div className="mt-1 whitespace-pre-line break-words text-sm leading-6 text-[#4a4160]">
+                      <div className="mt-1 whitespace-pre-line break-words text-sm leading-5 text-[#4a4160]">
                         {value}
                       </div>
                     </div>

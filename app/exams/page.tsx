@@ -72,17 +72,17 @@ function ExamCard({
                 <School className="h-4.5 w-4.5" />
               </span>
               <div className="min-w-0">
-                <div className="truncate text-[15px] font-semibold text-[#2b2323]">
+                <div className="card-title truncate text-[#2b2323]">
                   {exam.school_name}
                 </div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs">
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-sm">
                   <span className="text-[#786d6b]">{gradeDisplay[exam.grade]}</span>
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${examTypeBadgeClass[exam.exam_type]}`}
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${examTypeBadgeClass[exam.exam_type]}`}
                   >
                     {examTypeLabels[exam.exam_type]}
                   </span>
-                  <span className="text-[11px] text-[#a79996]">
+                  <span className="text-sm text-[#a79996]">
                     {exam.exam_year}년 {semesterLabels[exam.semester]}
                   </span>
                 </div>
@@ -99,7 +99,7 @@ function ExamCard({
             {formatExamPeriod(exam.event.start_date, exam.event.end_date)}
           </div>
 
-          <div className="mt-2 flex items-center gap-1.5 text-xs text-[#564d4d]">
+          <div className="mt-2 flex items-center gap-1.5 text-sm text-[#564d4d]">
             <Users className="h-3.5 w-3.5 shrink-0 text-[#7c6d69]" />
             학생 {exam.students.length}명
             {previewNames.length > 0 ? (
@@ -110,7 +110,7 @@ function ExamCard({
             ) : null}
           </div>
 
-          <div className="mt-2 text-xs">
+          <div className="mt-2 text-sm">
             <span className="block min-w-0 truncate text-[#786d6b]">
               {scopeSummary ? `범위 ${scopeSummary}` : "시험 범위 미등록"}
             </span>
@@ -118,7 +118,7 @@ function ExamCard({
 
           {/* 시험 준비 진행률 — Planner 완료 개수 기준 (상세 플래너와 같은 공식) */}
           <div className="mt-3 border-t border-dashed border-[#f0e3dc] pt-2.5">
-            <div className="flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center justify-between gap-2 text-sm">
               <span className="text-[#786d6b]">시험 준비 진행률</span>
               <span className="font-semibold tabular-nums text-[#5c4ca8]">{percent}%</span>
             </div>
@@ -135,7 +135,7 @@ function ExamCard({
                 style={{ width: `${percent}%` }}
               />
             </div>
-            <div className="mt-1 text-[11px] tabular-nums text-[#a79996]">
+            <div className="mt-1 text-sm tabular-nums text-[#a79996]">
               {planTotal > 0 ? `${planDone} / ${planTotal} 완료` : "아직 등록된 준비 계획이 없어요"}
             </div>
           </div>
@@ -239,7 +239,7 @@ export default async function SchoolExamsPage({
 
         {exams.failed ? (
           <Card>
-            <CardContent className="p-5 text-sm leading-6 text-[#7f5d57]">
+            <CardContent className="p-5 text-sm leading-5 text-[#7f5d57]">
               시험 관리 기능의 데이터베이스 변경(migration)이 아직 적용되지 않았어요.
               <br />
               Supabase SQL Editor에서 <code>20260907_create_school_exams.sql</code>을 실행한 뒤
@@ -250,7 +250,7 @@ export default async function SchoolExamsPage({
           <Card>
             <CardContent className="p-8 text-center text-sm text-[#655d5d]">
               {year}년 {semester ? semesterLabels[semester] : ""}에 등록된 시험이 없어요.
-              <div className="mt-1 text-xs text-[#a79996]">
+              <div className="mt-1 text-sm text-[#a79996]">
                 오른쪽 위 [학교 시험 등록]으로 학교별 시험을 정리해보세요.
               </div>
             </CardContent>
@@ -272,7 +272,7 @@ export default async function SchoolExamsPage({
 
             {past.length > 0 ? (
               <div>
-                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#a8968f]">
+                <div className="caption-text mb-2 font-semibold uppercase tracking-[0.06em] text-[#a8968f]">
                   지난 시험
                 </div>
                 <div className="grid gap-4 lg:grid-cols-2">

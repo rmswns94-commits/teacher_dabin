@@ -152,15 +152,15 @@ export function ScheduleSetEditor({
 
       <div className="rounded-2xl border border-dashed border-[#e3d5ce] bg-white/60 p-3">
         {editingIds ? (
-          <p className="mb-2 text-xs font-medium text-[#8f5470]">수업 시간을 수정하고 있어요.</p>
+          <p className="mb-2 text-sm font-medium text-[#8f5470]">수업 시간을 수정하고 있어요.</p>
         ) : null}
 
         <WeekdayTimePicker value={picker} onChange={setPicker} />
 
-        {error ? <p className="mt-2 text-xs text-[#a2665f]">{error}</p> : null}
+        {error ? <p className="mt-2 text-sm text-[#a2665f]">{error}</p> : null}
 
         {pendingDays.length > 0 ? (
-          <p className="mt-2 text-xs text-[#3d7f64]">
+          <p className="mt-2 text-sm text-[#3d7f64]">
             선택한 {formatDayList(pendingDays)} {picker.startTime}~{picker.endTime} 시간은 아래
             저장 버튼으로도 함께 저장돼요.
           </p>

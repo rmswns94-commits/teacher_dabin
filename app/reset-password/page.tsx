@@ -65,7 +65,7 @@ export default function ResetPasswordPage() {
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#ebe2ff] to-[#f6dfe9] text-[#433a57] shadow-sm">
             <BookOpenText className="h-5 w-5" />
           </div>
-          <h1 className="font-display mt-4 text-2xl font-semibold tracking-[-0.01em] text-[#2a2323]">
+          <h1 className="page-title mt-4 text-[#2a2323]">
             강사 일지
           </h1>
           <p className="mt-2 text-sm text-[#716968]">새 비밀번호를 설정해보세요.</p>
@@ -80,7 +80,7 @@ export default function ResetPasswordPage() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 type="password"
-                className="w-full bg-transparent text-sm outline-none placeholder:text-[#a79996]"
+                className="w-full bg-transparent text-base outline-none placeholder:text-[#a79996]"
                 placeholder="••••••••"
                 autoComplete="new-password"
               />
@@ -95,7 +95,7 @@ export default function ResetPasswordPage() {
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
                 type="password"
-                className="w-full bg-transparent text-sm outline-none placeholder:text-[#a79996]"
+                className="w-full bg-transparent text-base outline-none placeholder:text-[#a79996]"
                 placeholder="••••••••"
                 autoComplete="new-password"
               />

@@ -96,7 +96,7 @@ export function EncouragementCard() {
               onClick={refreshMessage}
               disabled={!entry}
               aria-label="다른 한마디 보기"
-              className="flex min-h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs text-[#a2886f] transition hover:bg-white/70 hover:text-[#7a6455] disabled:opacity-40"
+              className="flex min-h-9 items-center gap-1.5 rounded-xl px-2.5 text-sm text-[#a2886f] transition hover:bg-white/70 hover:text-[#7a6455] disabled:opacity-40"
             >
               다른 한마디 <RefreshCw className="h-3.5 w-3.5" aria-hidden />
             </button>
@@ -111,7 +111,7 @@ export function EncouragementCard() {
                 {entry.emoji}
               </span>
             ) : null}
-            <p className="whitespace-pre-line pt-1 font-display text-[19px] leading-8 text-[#544639]">
+            <p className="whitespace-pre-line pt-1 text-lg leading-relaxed text-[#544639]">
               {entry?.message ?? ""}
             </p>
           </div>

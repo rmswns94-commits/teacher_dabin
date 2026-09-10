@@ -25,7 +25,7 @@ import type { PraiseCategory } from "@/lib/supabase/types";
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-5 border-t border-dashed border-[#f0dae2] pt-4 text-xs font-semibold uppercase tracking-[0.1em] text-[#8f5470]">
+    <div className="mt-5 border-t border-dashed border-[#f0dae2] pt-4 section-title text-[#8f5470]">
       {children}
     </div>
   );
@@ -78,7 +78,7 @@ export function LessonLogDetail({
             <div className="text-lg font-semibold text-[#2d2928]">
               {detail.group?.name ?? "수업 그룹"}
             </div>
-            <div className="mt-0.5 text-sm tabular-nums text-[#7b746f]">
+            <div className="secondary-text mt-0.5 tabular-nums text-[#7b746f]">
               {formatKoreanDate(detail.class_date, true)}
               {timeRange ? ` · ${timeRange}` : ""}
             </div>
@@ -86,7 +86,7 @@ export function LessonLogDetail({
               <div className="mt-1.5">
                 <Link
                   href={`/groups/${detail.group.id}`}
-                  className="text-xs text-[#5c4ca8] hover:underline"
+                  className="secondary-text text-[#5c4ca8] hover:underline"
                 >
                   반 보기
                 </Link>
@@ -111,7 +111,7 @@ export function LessonLogDetail({
         {/* 수업 요약 — 상태 · 수업 제목 · 공통 진도 (수업 내용은 공통 진도로 통합됨) */}
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <div className="rounded-2xl bg-[#f8f3ef] p-3.5">
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8b7b77]">
+            <div className="section-title text-[#8b7b77]">
               상태
             </div>
             <div className="mt-2">
@@ -119,18 +119,18 @@ export function LessonLogDetail({
             </div>
           </div>
           <div className="rounded-2xl bg-[#f5f2ff] p-3.5">
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8b7b77]">
+            <div className="section-title text-[#8b7b77]">
               수업 제목
             </div>
-            <div className="mt-1.5 text-sm font-medium leading-6 text-[#2a2323]">
+            <div className="body-text mt-1.5 font-medium text-[#2a2323]">
               {detail.title || "입력된 제목이 없어요."}
             </div>
           </div>
           <div className="rounded-2xl bg-[#edf9f3] p-3.5">
-            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#3e7d6b]">
+            <div className="flex items-center gap-1.5 section-title text-[#3e7d6b]">
               <BookOpen className="h-3.5 w-3.5" aria-hidden /> 공통 진도
             </div>
-            <div className="mt-1.5 whitespace-pre-line text-sm font-medium leading-6 text-[#2a2323]">
+            <div className="body-text mt-1.5 whitespace-pre-line font-medium text-[#2a2323]">
               {mergeLegacyLessonContent(detail.default_progress, detail.lesson_content) ||
                 "기록된 진도가 없어요."}
             </div>
@@ -142,9 +142,9 @@ export function LessonLogDetail({
             {detail.homeworkAssignments.length > 0 ? (
               // 오늘 숙제(구조화) — 완료일 오름차순, 원문 전체(줄바꿈 보존, truncate 없음)
               <div className="rounded-2xl bg-[#fdf6ec] p-3.5">
-                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#94702f]">
+                <div className="flex items-center gap-1.5 section-title text-[#94702f]">
                   <NotebookTabs className="h-3.5 w-3.5" aria-hidden /> 오늘 숙제
-                  <span className="normal-case tracking-normal text-[#ad8c53]">
+                  <span className="secondary-text font-normal text-[#ad8c53]">
                     · {detail.homeworkAssignments.length}개
                   </span>
                 </div>
@@ -152,11 +152,11 @@ export function LessonLogDetail({
                 <ExpandableList className="mt-1.5 space-y-2.5">
                   {detail.homeworkAssignments.map((hw) => (
                     <div key={hw.id} className="min-w-0">
-                      <div className="text-xs font-semibold text-[#ad8c53]">
+                      <div className="text-sm font-semibold text-[#ad8c53]">
                         {formatKoreanDate(hw.due_date)}까지
                       </div>
                       {/* 교재/학교 context가 연결된 숙제는 "이름 - 내용" (없으면 내용만) */}
-                      <div className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-6 text-[#5c4a2e]">
+                      <div className="body-text mt-0.5 whitespace-pre-wrap break-words text-[#5c4a2e]">
                         {formatTextbookLinked(linkedContextLabel(hw), hw.content)}
                       </div>
                     </div>
@@ -179,27 +179,27 @@ export function LessonLogDetail({
                 )
             ) ? (
               <div className="rounded-2xl bg-[#fdf6ec] p-3.5">
-                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#94702f]">
+                <div className="flex items-center gap-1.5 section-title text-[#94702f]">
                   <NotebookTabs className="h-3.5 w-3.5" aria-hidden />
                   {detail.homeworkAssignments.length > 0 ? "숙제 메모" : "오늘 숙제"}
                   {detail.homework_due_date ? (
-                    <span className="normal-case tracking-normal text-[#ad8c53]">· {formatKoreanDate(detail.homework_due_date)}</span>
+                    <span className="secondary-text font-normal text-[#ad8c53]">· {formatKoreanDate(detail.homework_due_date)}</span>
                   ) : null}
                 </div>
-                <div className="mt-1.5 whitespace-pre-line text-sm leading-6 text-[#5c4a2e]">
+                <div className="body-text mt-1.5 whitespace-pre-line text-[#5c4a2e]">
                   {detail.homework}
                 </div>
               </div>
             ) : null}
             {detail.next_lesson_plan ? (
               <div className="rounded-2xl bg-[#eef7f2] p-3.5">
-                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#3e7d6b]">
+                <div className="flex items-center gap-1.5 section-title text-[#3e7d6b]">
                   <CircleArrowRight className="h-3.5 w-3.5" aria-hidden /> 다음 수업 계획
                   {detail.next_plan_date ? (
-                    <span className="normal-case tracking-normal text-[#5f9683]">· {formatKoreanDate(detail.next_plan_date)}</span>
+                    <span className="secondary-text font-normal text-[#5f9683]">· {formatKoreanDate(detail.next_plan_date)}</span>
                   ) : null}
                 </div>
-                <div className="mt-1.5 whitespace-pre-line text-sm leading-6 text-[#33473f]">
+                <div className="body-text mt-1.5 whitespace-pre-line text-[#33473f]">
                   {detail.next_lesson_plan}
                 </div>
               </div>
@@ -207,16 +207,16 @@ export function LessonLogDetail({
             {detail.linkedTasks.length > 0 ? (
               // 해야 할 일 — 공용 Todo와 같은 linked 항목들의 read-only 상태 (복제 아님)
               <div className="rounded-2xl bg-[#f5f1fb] p-3.5">
-                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#5d4ba5]">
+                <div className="flex items-center gap-1.5 section-title text-[#5d4ba5]">
                   <CheckCheck className="h-3.5 w-3.5" aria-hidden /> 해야 할 일
-                  <span className="normal-case tracking-normal text-[#8a7ba8]">
+                  <span className="secondary-text font-normal text-[#8a7ba8]">
                     · {detail.linkedTasks.length}개
                   </span>
                 </div>
                 <ExpandableList className="mt-1.5 space-y-2">
                   {detail.linkedTasks.map((task) => (
                     <div key={task.id} className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#8a7ba8]">
+                      <div className="secondary-text flex flex-wrap items-center gap-1.5 text-[#8a7ba8]">
                         {task.dueDate ? (
                           <span className="tabular-nums">{formatKoreanDate(task.dueDate)}</span>
                         ) : null}
@@ -230,7 +230,7 @@ export function LessonLogDetail({
                           {task.completed ? "완료됨" : "미완료"}
                         </span>
                       </div>
-                      <div className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-6 text-[#4a4160]">
+                      <div className="body-text mt-0.5 whitespace-pre-wrap break-words text-[#4a4160]">
                         {formatTextbookLinked(linkedContextLabel(task), task.text)}
                       </div>
                     </div>
@@ -242,7 +242,7 @@ export function LessonLogDetail({
         ) : null}
 
         {detail.memo ? (
-          <div className="mt-3 rounded-2xl bg-[#f8f3ef] p-3.5 text-sm leading-6 text-[#564d4d]">
+          <div className="body-text mt-3 rounded-2xl bg-[#f8f3ef] p-3.5 text-[#564d4d]">
             <span className="font-semibold text-[#4d3a3a]">수업 메모</span> · {detail.memo}
           </div>
         ) : null}
@@ -250,10 +250,10 @@ export function LessonLogDetail({
         {/* 수업 회고 (강사 전용 화면이므로 노출 무방) — 값 있는 항목만 */}
         {detail.reflection_good || detail.reflection_hard || detail.reflection_next ? (
           <div className="mt-3 rounded-2xl bg-[#f5f2ff] p-3.5">
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-[#6d5aa8]">
+            <div className="section-title text-[#6d5aa8]">
               오늘 수업 회고
             </div>
-            <div className="mt-1.5 space-y-1.5 text-sm leading-6 text-[#4a4160]">
+            <div className="body-text mt-1.5 space-y-1.5 text-[#4a4160]">
               {detail.reflection_good ? (
                 <div>
                   <span className="font-medium text-[#3e7d6b]">잘된 점</span> ·{" "}
@@ -278,7 +278,7 @@ export function LessonLogDetail({
 
         {/* 출결 + 학생별 기록 */}
         <SectionHeading>출결 · 학생 기록</SectionHeading>
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm">
           <span className="rounded-full bg-[#e4f4ec] px-2 py-1 tabular-nums text-[#3d7f64]">출석 {counts.present}</span>
           <span className="rounded-full bg-[#fdf3e4] px-2 py-1 tabular-nums text-[#94702f]">지각 {counts.late}</span>
           <span className="rounded-full bg-[#f3eefc] px-2 py-1 tabular-nums text-[#614ea7]">조퇴 {counts.early_leave}</span>
@@ -295,14 +295,14 @@ export function LessonLogDetail({
             return (
               <div key={lessonLog.id} className="py-2.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-[#2d2928]">
+                  <span className="text-base font-semibold text-[#2d2928]">
                     {lessonLog.student?.name ?? "학생"}
                   </span>
                   <AttendanceBadge status={lessonLog.attendance} />
                   {studentPraises.map((label, praiseIndex) => (
                     <span
                       key={`${label}-${praiseIndex}`}
-                      className="rounded-full bg-[#fdf3e4] px-1.5 py-0.5 text-[10px] text-[#8a6828]"
+                      className="rounded-full bg-[#fdf3e4] px-1.5 py-0.5 text-xs text-[#8a6828]"
                     >
                       {label}
                     </span>
@@ -310,7 +310,7 @@ export function LessonLogDetail({
                 </div>
 
                 {lessonLog.attendance === "absent" ? (
-                  <div className="mt-1.5 rounded-xl bg-[#fff5f2] p-2.5 text-xs leading-5 text-[#8a5d52]">
+                  <div className="body-text mt-1.5 rounded-xl bg-[#fff5f2] p-2.5 text-[#8a5d52]">
                     {/* Teacher가 입력한 줄바꿈 그대로 전체 표시 (truncate/clamp 없음) */}
                     <div className="whitespace-pre-line break-words">
                       놓친 진도: {makeup?.missed_progress || "기록 없음"}
@@ -334,7 +334,7 @@ export function LessonLogDetail({
                     )}
                   </div>
                 ) : (
-                  <div className="mt-1 space-y-0.5 text-xs leading-5">
+                  <div className="secondary-text mt-1 space-y-0.5">
                     {lessonLog.progress ? (
                       <div className="whitespace-pre-line break-words text-[#564d4d]">진도 · {lessonLog.progress}</div>
                     ) : null}
@@ -394,7 +394,7 @@ export function LessonLogDetail({
               {vocabRows.map((lessonLog) => (
                 <div
                   key={`vocab-${lessonLog.id}`}
-                  className="flex flex-wrap items-center gap-2 rounded-xl bg-[#f8f6fc] px-3 py-1.5 text-xs tabular-nums"
+                  className="secondary-text flex flex-wrap items-center gap-2 rounded-xl bg-[#f8f6fc] px-3 py-1.5 tabular-nums"
                 >
                   <span className="w-16 truncate font-medium text-[#2d2928]">
                     {lessonLog.student?.name ?? "학생"}
@@ -408,7 +408,7 @@ export function LessonLogDetail({
                     </span>
                   ) : null}
                   {lessonLog.vocab_retest ? (
-                    <span className="rounded-full bg-[#efe8fb] px-1.5 py-0.5 text-[10px] text-[#5d4ba5]">
+                    <span className="rounded-full bg-[#efe8fb] px-1.5 py-0.5 text-xs text-[#5d4ba5]">
                       재시험 필요
                     </span>
                   ) : null}
@@ -426,14 +426,14 @@ export function LessonLogDetail({
               {parentNoteRows.map((lessonLog) => (
                 <div
                   key={`parent-${lessonLog.id}`}
-                  className="rounded-xl bg-[#fff5f2] px-3 py-2 text-xs leading-5"
+                  className="secondary-text rounded-xl bg-[#fff5f2] px-3 py-2"
                 >
                   <div className="flex items-center gap-1.5">
                     <span className="font-medium text-[#8a5d52]">
                       {lessonLog.student?.name ?? "학생"}
                     </span>
                     <span
-                      className={`rounded-full px-1.5 py-0.5 text-[10px] ${
+                      className={`rounded-full px-1.5 py-0.5 text-xs ${
                         lessonLog.parent_note_status === "completed"
                           ? "bg-[#e4f4ec] text-[#3d7f64]"
                           : "bg-[#f9e7e5] text-[#a25a54]"

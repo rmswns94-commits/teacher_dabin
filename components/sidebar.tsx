@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 
 function BetaBadge() {
   return (
-    <span className="rounded-full bg-[#eef0f4] px-1.5 py-0.5 text-[10px] font-medium text-[#4f5560]">
+    <span className="rounded-full bg-[#eef0f4] px-1.5 py-0.5 text-xs font-medium text-[#4f5560]">
       Beta
     </span>
   );
@@ -149,7 +149,7 @@ function NavLink({
     <Link
       href={href}
       className={cn(
-        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all",
+        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-base font-medium transition-all",
         isActive
           ? "bg-[#f0f0f3] text-[#232327] shadow-sm ring-1 ring-[#e2e2e8]"
           : "text-[#3c3c45] hover:bg-[#f4f4f6] hover:text-[#232327]",
@@ -167,7 +167,7 @@ function NavLink({
       {badgeCount && badgeCount > 0 ? (
         <span
           aria-label={`일정을 잡아야 할 보충 ${badgeCount}건`}
-          className="ml-auto rounded-full bg-[#fdeee3] px-2 py-0.5 text-[11px] font-semibold tabular-nums text-[#a2643c]"
+          className="ml-auto rounded-full bg-[#fdeee3] px-2 py-0.5 text-xs font-semibold tabular-nums text-[#a2643c]"
         >
           {badgeCount}
         </span>
@@ -230,7 +230,7 @@ export function Sidebar({
         <Link
           href={item.href}
           className={cn(
-            "flex flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold",
+            "flex flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-base font-medium",
             inGroupsSection ? "text-[#232327]" : "text-[#3c3c45]",
           )}
         >
@@ -268,13 +268,13 @@ export function Sidebar({
                   href={`/groups/${group.id}`}
                   aria-current={groupActive ? "page" : undefined}
                   className={cn(
-                    "flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all",
+                    "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-normal transition-all",
                     groupActive
                       ? "bg-[#f0f0f3] font-semibold text-[#232327] ring-1 ring-[#e2e2e8]"
                       : "text-[#4c4c55] hover:bg-[#f4f4f6] hover:text-[#232327]",
                   )}
                 >
-                  <span aria-hidden className="shrink-0 text-[13px] leading-none">
+                  <span aria-hidden className="shrink-0 text-sm leading-none">
                     {groupIconOf(group.icon)}
                   </span>
                   <span className="min-w-0 truncate">{group.name}</span>
@@ -300,7 +300,7 @@ export function Sidebar({
         >
           <Menu className="h-5 w-5" aria-hidden />
         </button>
-        <span className="whitespace-nowrap text-lg font-bold tracking-[-0.01em] text-[#232327]">강사 일지</span>
+        <span className="card-title whitespace-nowrap text-[#232327]">강사 일지</span>
         <BetaBadge />
       </div>
 
@@ -339,12 +339,12 @@ export function Sidebar({
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-1.5">
-            <div className="whitespace-nowrap text-lg font-bold tracking-[-0.01em] text-[#232327]">
+            <div className="card-title whitespace-nowrap text-[#232327]">
               강사 일지
             </div>
             <BetaBadge />
           </div>
-          <div className="text-[11px] text-[#8a8a93]">오늘도 차근차근</div>
+          <div className="caption-text text-[#8a8a93]">오늘도 차근차근</div>
         </div>
         <button
           type="button"
@@ -375,7 +375,7 @@ export function Sidebar({
 
         {navSections.map((section) => (
           <div key={section.label} className="py-3.5">
-            <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9a9aa3]">
+            <div className="caption-text mb-2 px-2 font-semibold uppercase tracking-[0.06em] text-[#9a9aa3]">
               {section.label}
             </div>
             <ul className="space-y-1">

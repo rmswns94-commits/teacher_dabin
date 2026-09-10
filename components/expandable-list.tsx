@@ -33,7 +33,7 @@ export function ExpandableList({
             type="button"
             aria-expanded={expanded}
             onClick={() => setExpanded((prev) => !prev)}
-            className="flex min-h-[40px] items-center gap-1 rounded-xl px-3 text-xs font-medium text-[#6d5aa8] transition hover:bg-[#f2edf9]"
+            className="flex min-h-[40px] items-center gap-1 rounded-xl px-3 text-sm font-medium text-[#6d5aa8] transition hover:bg-[#f2edf9]"
           >
             {expanded ? (
               <>

@@ -44,7 +44,7 @@ function ToggleRow({
       <button
         type="submit"
         aria-pressed={completed}
-        className="flex min-h-10 w-full items-start gap-2.5 rounded-xl px-3 py-1.5 text-left text-[13px] transition hover:bg-[#f2edf9]"
+        className="flex min-h-10 w-full items-start gap-2.5 rounded-xl px-3 py-1.5 text-left text-base transition hover:bg-[#f2edf9]"
       >
         {/* 여러 줄 할 일: checkbox는 첫 줄에 정렬 */}
         {completed ? (
@@ -124,11 +124,11 @@ export function DashboardTodoCard({
           <CardTitle className="flex items-center gap-2">
             <ListTodo className="h-4 w-4 text-[#3e7d6b]" /> To do list
             {focusGroup ? (
-              <span className="text-sm font-normal text-[#8a7b77]">· {focusGroup.name}</span>
+              <span className="secondary-text font-normal text-[#8a7b77]">· {focusGroup.name}</span>
             ) : null}
           </CardTitle>
           {visibleChecklist.length > 0 ? (
-            <span className="text-xs tabular-nums text-[#8a7b77]">
+            <span className="secondary-text tabular-nums text-[#8a7b77]">
               {checklistDone} / {visibleChecklist.length}
             </span>
           ) : null}
@@ -144,7 +144,7 @@ export function DashboardTodoCard({
       </CardHeader>
       <CardContent className="space-y-3">
         {nothingVisible ? (
-          <div className="rounded-2xl bg-[#faf5f0] p-3 text-sm text-[#655d5d]">
+          <div className="body-text rounded-2xl bg-[#faf5f0] p-3 text-[#655d5d]">
             {hasHiddenItems
               ? "준비 항목은 수업 시작 20분 전부터 표시돼요 🍃"
               : "등록된 준비 항목이 없어요 🍃"}
@@ -181,7 +181,7 @@ export function DashboardTodoCard({
                 : undefined
             }
           >
-            <div className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8a7fb8]">
+            <div className="caption-text mb-1 px-3 font-semibold uppercase tracking-[0.04em] text-[#8a7fb8]">
               오늘의 할 일
             </div>
             <ExpandableList className="divide-y divide-dashed divide-[#f4e2e8]">
@@ -189,7 +189,7 @@ export function DashboardTodoCard({
                 <div key={`${item.groupId}:${item.id}`}>
                   <ToggleRow groupId={item.groupId} itemId={item.id} completed={item.completed}>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[11px] text-[#8a7b77]">
+                      <span className="secondary-text block text-[#8a7b77]">
                         <span aria-hidden>{groupIconOf(item.groupIcon)}</span> {item.groupName}
                         {item.window ? ` · ${item.window.start.slice(0, 5)} 수업` : ""}
                       </span>
@@ -213,7 +213,7 @@ export function DashboardTodoCard({
         {focusGroup ? (
           <Link
             href={`/groups/${focusGroup.id}`}
-            className="block text-right text-xs text-[#5c4ca8] hover:underline"
+            className="secondary-text block text-right text-[#5c4ca8] hover:underline"
           >
             준비 항목 관리 →
           </Link>

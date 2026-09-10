@@ -63,7 +63,7 @@ export function DailyLogExamPreview({
           <button
             type="button"
             onClick={() => setCollapsed((prev) => !prev)}
-            className="flex min-h-[40px] items-center gap-1 rounded-xl px-2 text-xs font-medium text-[#a2643c] transition hover:bg-[#fdf1e6]"
+            className="flex min-h-[40px] items-center gap-1 rounded-xl px-2 text-sm font-medium text-[#a2643c] transition hover:bg-[#fdf1e6]"
           >
             {collapsed ? (
               <>
@@ -80,7 +80,7 @@ export function DailyLogExamPreview({
 
       {!collapsed ? (
         <CardContent className="space-y-3">
-          <label className="flex max-w-[420px] items-center gap-2 text-xs font-medium text-[#7c6d69]">
+          <label className="flex max-w-[420px] items-center gap-2 text-sm font-medium text-[#7c6d69]">
             <span className="shrink-0">학교</span>
             {schools.length === 1 ? (
               <span className="flex min-h-[40px] w-full min-w-0 items-center truncate rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-3 text-sm font-medium text-[#a2643c]">
@@ -91,7 +91,7 @@ export function DailyLogExamPreview({
                 value={selectedSchool}
                 onChange={(event) => setSelectedSchool(event.target.value)}
                 aria-label="시험 대비 학교 선택"
-                className="min-h-[40px] w-full min-w-0 rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-3 text-sm font-medium text-[#a2643c] outline-none"
+                className="min-h-[40px] w-full min-w-0 rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-3 text-base font-medium text-[#a2643c] outline-none"
               >
                 <option value="">학교 선택</option>
                 {schools.map((name) => (
@@ -115,17 +115,17 @@ export function DailyLogExamPreview({
                   {gradeDisplay[exam.grade]} · {exam.examYear}년 {semesterLabels[exam.semester]}{" "}
                   {examTypeLabels[exam.examType]}
                 </span>
-                <span className="text-xs tabular-nums text-[#8a7b77]">
+                <span className="text-sm tabular-nums text-[#8a7b77]">
                   {formatExamPeriod(exam.startDate, exam.endDate)}
                 </span>
                 {dday ? (
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${dday.className}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${dday.className}`}>
                     {dday.label}
                   </span>
                 ) : null}
                 <Link
                   href={`/exams/${exam.id}`}
-                  className="ml-auto flex min-h-[40px] shrink-0 items-center gap-1 text-xs text-[#5c4ca8] hover:underline"
+                  className="ml-auto flex min-h-[40px] shrink-0 items-center gap-1 text-sm text-[#5c4ca8] hover:underline"
                 >
                   <ExternalLink className="h-3 w-3" /> 시험 대비에서 보기
                 </Link>
@@ -145,7 +145,7 @@ export function DailyLogExamPreview({
                 plansFailed={exam.plansFailed}
               />
               {exam.plans.length === 0 && !exam.plansFailed ? (
-                <p className="text-xs text-[#8a7b77]">아직 등록된 준비 일정이 없어요.</p>
+                <p className="text-sm text-[#8a7b77]">아직 등록된 준비 일정이 없어요.</p>
               ) : null}
             </div>
           ) : (
@@ -153,7 +153,7 @@ export function DailyLogExamPreview({
               <span>
                 {selected.school}에 등록된 시험 대비 일정이 없어요. (수업일지 작성은 그대로 가능해요)
               </span>
-              <Link href="/exams" className="shrink-0 text-xs text-[#5c4ca8] hover:underline">
+              <Link href="/exams" className="shrink-0 text-sm text-[#5c4ca8] hover:underline">
                 시험 대비에서 등록하기 →
               </Link>
             </div>

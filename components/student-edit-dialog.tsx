@@ -101,8 +101,8 @@ function StudentEditFormDialog({
       }}
     >
       <div className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-        <div className="font-display text-lg font-semibold text-[#2a2323]">학생 정보 수정</div>
-        <p className="mt-1 text-xs text-[#8a7b77]">학생의 기본 정보와 수업 그룹을 수정할 수 있어요.</p>
+        <div className="card-title text-[#2a2323]">학생 정보 수정</div>
+        <p className="mt-1 text-sm text-[#8a7b77]">학생의 기본 정보와 수업 그룹을 수정할 수 있어요.</p>
 
         <label className="mt-4 block">
           <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">이름</span>
@@ -110,7 +110,7 @@ function StudentEditFormDialog({
             value={name}
             onChange={(event) => setName(event.target.value)}
             maxLength={60}
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#e3b9c9]"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none focus:border-[#e3b9c9]"
           />
         </label>
 
@@ -121,7 +121,7 @@ function StudentEditFormDialog({
             <select
               value={grade}
               onChange={(event) => setGrade(event.target.value)}
-              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none"
             >
               {gradeOptions.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -134,7 +134,7 @@ function StudentEditFormDialog({
             <select
               value={gender}
               onChange={(event) => setGender(event.target.value)}
-              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none"
             >
               <option value="">성별 선택</option>
               <option value="male">{genderLabels.male}</option>
@@ -149,7 +149,7 @@ function StudentEditFormDialog({
               value={birthDate}
               max={todayDateString()}
               onChange={(event) => setBirthDate(event.target.value)}
-              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none"
             />
           </label>
 
@@ -160,7 +160,7 @@ function StudentEditFormDialog({
               onChange={(event) => setSchool(event.target.value)}
               maxLength={80}
               placeholder="OO중학교"
-              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#e3b9c9]"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none focus:border-[#e3b9c9]"
             />
           </label>
         </div>
@@ -168,7 +168,7 @@ function StudentEditFormDialog({
         <div className="mt-3">
           <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">소속 수업 그룹 (선택)</span>
           {groups.length === 0 ? (
-            <p className="text-xs text-[#a79996]">아직 만든 수업 그룹이 없어요.</p>
+            <p className="text-sm text-[#a79996]">아직 만든 수업 그룹이 없어요.</p>
           ) : (
             <div className="max-h-36 space-y-1 overflow-y-auto rounded-2xl border border-[#ece0db] bg-white p-2">
               {groups.map((group) => {
@@ -210,7 +210,7 @@ function StudentEditFormDialog({
             onChange={(event) => setMemo(event.target.value)}
             rows={3}
             maxLength={500}
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#e3b9c9]"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#e3b9c9]"
           />
         </label>
 
@@ -280,7 +280,7 @@ export function StudentEditDialog({
         type="button"
         variant="secondary"
         size="sm"
-        className="gap-1.5 text-xs"
+        className="gap-1.5 text-sm"
         onClick={() => {
           setError("");
           setOpen(true);
@@ -288,7 +288,7 @@ export function StudentEditDialog({
       >
         <SquarePen className="h-3.5 w-3.5" /> 학생 정보 수정하기
       </Button>
-      {savedMessage ? <span className="text-xs text-[#3d7f64]">{savedMessage}</span> : null}
+      {savedMessage ? <span className="text-sm text-[#3d7f64]">{savedMessage}</span> : null}
 
       {open ? (
         <StudentEditFormDialog

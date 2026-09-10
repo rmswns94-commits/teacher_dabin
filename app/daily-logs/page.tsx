@@ -81,14 +81,14 @@ function MiniCalendar({ month, href }: { month: string; href: string }) {
       className="block rounded-2xl border border-[#e9e3f5] bg-white px-2.5 py-2 transition hover:border-[#cfc4f0] hover:bg-[#faf8ff]"
     >
       <span className="flex items-baseline gap-1.5">
-        <span className="text-xs font-bold tabular-nums text-[#6d5aa8]">
+        <span className="text-sm font-bold tabular-nums text-[#6d5aa8]">
           {String(monthNum).padStart(2, "0")}
         </span>
-        <span className="text-[9px] font-medium tracking-[0.08em] text-[#a49bc4]">
+        <span className="text-xs font-medium tracking-[0.04em] text-[#a49bc4]">
           {MONTH_NAMES_EN[monthNum - 1].slice(0, 3)}
         </span>
       </span>
-      <span className="mt-1 grid w-[112px] grid-cols-7 text-center text-[8px] leading-[13px] tabular-nums text-[#8a8a93]">
+      <span className="mt-1 grid w-[112px] grid-cols-7 text-center text-sm leading-tight tabular-nums text-[#8a8a93]">
         {WEEKDAY_HEADERS.map((day, i) => (
           <span
             key={day}
@@ -317,7 +317,7 @@ export default async function DailyLogsPage({
                       </span>
                       <span
                         className={cn(
-                          "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                          "rounded-full px-1.5 py-0.5 text-xs font-semibold",
                           draft.kind === "log"
                             ? "bg-[#efe8fb] text-[#5d4ba5]"
                             : "bg-[#e4f4ec] text-[#3d7f64]",
@@ -325,10 +325,10 @@ export default async function DailyLogsPage({
                       >
                         {draft.kind === "log" ? "임시저장" : "자동 저장"}
                       </span>
-                      <span className="text-[11px] tabular-nums text-[#a79996]">
+                      <span className="text-sm tabular-nums text-[#a79996]">
                         마지막 저장 {kstStamp(draft.updatedAt)}
                       </span>
-                      <span className="ml-auto shrink-0 text-xs font-medium text-[#5c4ca8]">
+                      <span className="ml-auto shrink-0 text-sm font-medium text-[#5c4ca8]">
                         이어쓰기 →
                       </span>
                     </Link>
@@ -367,10 +367,10 @@ export default async function DailyLogsPage({
                       {month.slice(5)}
                     </span>
                     <div className="pb-0.5 leading-snug">
-                      <div className="text-sm font-bold tracking-[0.14em] text-[#2d2928] md:text-base">
+                      <div className="text-base font-bold tracking-[0.06em] text-[#2d2928]">
                         / {MONTH_NAMES_EN[Number(month.slice(5)) - 1]}
                       </div>
-                      <div className="text-xs font-semibold tracking-[0.1em] text-[#a08d97] md:text-sm">
+                      <div className="text-xs font-semibold tracking-[0.04em] text-[#a08d97] md:text-sm">
                         / {month.slice(0, 4)}
                       </div>
                     </div>
@@ -392,7 +392,7 @@ export default async function DailyLogsPage({
                     </Link>
                     <Link
                       href={buildQuery({ month: currentMonth, date: today, groupId, status })}
-                      className="rounded-xl border border-[#eee9f6] px-2.5 py-1.5 text-xs text-[#8a7b77] transition hover:bg-[#faf8ff] hover:text-[#564d4d]"
+                      className="rounded-xl border border-[#eee9f6] px-2.5 py-1.5 text-sm text-[#8a7b77] transition hover:bg-[#faf8ff] hover:text-[#564d4d]"
                     >
                       오늘
                     </Link>
@@ -412,7 +412,7 @@ export default async function DailyLogsPage({
               </div>
 
               {/* 요일 헤더 */}
-              <div className="mt-4 grid grid-cols-7 overflow-hidden rounded-t-2xl border border-b-0 border-[#e3ddf1] bg-[#f7f4fd] text-center text-[11px] font-semibold md:text-xs">
+              <div className="mt-4 grid grid-cols-7 overflow-hidden rounded-t-2xl border border-b-0 border-[#e3ddf1] bg-[#f7f4fd] text-center text-sm font-semibold md:text-sm">
                 {WEEKDAY_HEADERS.map((day, headerIndex) => (
                   <div
                     key={day}
@@ -512,7 +512,7 @@ export default async function DailyLogsPage({
                       <span className="flex items-center gap-1">
                         <span
                           className={cn(
-                            "flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums md:h-6 md:w-6 md:text-xs",
+                            "flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold tabular-nums md:h-6 md:w-6 md:text-xs",
                             hasHoliday
                               ? "text-[#cf4f4f]"
                               : isSunday
@@ -537,7 +537,7 @@ export default async function DailyLogsPage({
                       {icons.length > 0 ? (
                         <span
                           aria-hidden
-                          className="mt-0.5 flex flex-wrap items-center gap-x-0.5 px-0.5 text-[13px] leading-[18px] md:mt-1 md:text-[15px] md:leading-5"
+                          className="mt-0.5 flex flex-wrap items-center gap-x-0.5 px-0.5 text-sm md:mt-1"
                         >
                           {icons.map((icon, iconIndex) => (
                             <span key={`${icon}-${iconIndex}`}>{icon}</span>
@@ -571,9 +571,9 @@ export default async function DailyLogsPage({
                 })}
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] text-[#a08d97]">
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm text-[#a08d97]">
                 <span className="flex items-center gap-1">
-                  <span aria-hidden className="text-[11px] leading-none">📘</span> 반 대표 아이콘 = 수업일지
+                  <span aria-hidden className="text-sm leading-none">📘</span> 반 대표 아이콘 = 수업일지
                 </span>
                 <span className="flex items-center gap-1">
                   <span aria-hidden className="h-1 w-4 rounded-full bg-[#b3a5ec]" /> 일정
@@ -584,7 +584,7 @@ export default async function DailyLogsPage({
               </div>
 
               {markers.length === 0 ? (
-                <div className="mt-3 flex items-center justify-center gap-2 rounded-2xl bg-[#faf4ef] px-3 py-2.5 text-center text-xs text-[#8a7b77]">
+                <div className="mt-3 flex items-center justify-center gap-2 rounded-2xl bg-[#faf4ef] px-3 py-2.5 text-center text-sm text-[#8a7b77]">
                   <NotebookPen className="h-3.5 w-3.5 text-[#b9a2a8]" aria-hidden />
                   이번 달에는 아직 작성된 수업일지가 없어요.
                 </div>
@@ -595,7 +595,7 @@ export default async function DailyLogsPage({
           {selectedDate ? (
             <div className="mt-6">
               <div className="flex flex-wrap items-baseline gap-2">
-                <h2 className="text-xl font-semibold text-[#2d2928]">
+                <h2 className="card-title text-[#2d2928]">
                   {formatKoreanDate(selectedDate, true)}
                 </h2>
                 <span className="text-sm text-[#8a7b77]">
@@ -605,7 +605,7 @@ export default async function DailyLogsPage({
 
               <div className="mt-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-[#8f5470]">오늘의 일정</h3>
+                  <h3 className="card-title text-[#8f5470]">오늘의 일정</h3>
                   <EventCreateButton
                     groups={groupOptions}
                     defaultDate={selectedDate}
@@ -614,7 +614,7 @@ export default async function DailyLogsPage({
                   />
                 </div>
                 {(eventsByDate.get(selectedDate) ?? []).length === 0 ? (
-                  <p className="mt-1.5 text-xs text-[#a08d97]">이날은 따로 등록된 일정이 없어요.</p>
+                  <p className="mt-1.5 text-sm text-[#a08d97]">이날은 따로 등록된 일정이 없어요.</p>
                 ) : (
                   <div className="mt-2 space-y-2">
                     {(eventsByDate.get(selectedDate) ?? []).map((event) => (
@@ -626,7 +626,7 @@ export default async function DailyLogsPage({
 
               {(makeupsByDate.get(selectedDate) ?? []).length > 0 ? (
                 <div className="mt-5">
-                  <h3 className="text-sm font-semibold text-[#8f5470]">보충 수업</h3>
+                  <h3 className="card-title text-[#8f5470]">보충 수업</h3>
                   <div className="mt-2 space-y-2">
                     {(makeupsByDate.get(selectedDate) ?? []).map((makeup) => (
                       <Link
@@ -634,7 +634,7 @@ export default async function DailyLogsPage({
                         href="/makeups"
                         className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#e6e6ea] bg-white px-3.5 py-2.5 text-sm transition hover:bg-[#f4faf7]"
                       >
-                        <span className="rounded-full bg-[#e4f4ec] px-2 py-0.5 text-[11px] font-medium text-[#3d7f64]">
+                        <span className="rounded-full bg-[#e4f4ec] px-2 py-0.5 text-xs font-medium text-[#3d7f64]">
                           보충
                         </span>
                         {makeup.start_time ? (
@@ -646,10 +646,10 @@ export default async function DailyLogsPage({
                           {makeup.student?.name ?? "학생"}
                         </span>
                         {makeup.group?.name ? (
-                          <span className="text-xs text-[#6b6b74]">{makeup.group.name}</span>
+                          <span className="text-sm text-[#6b6b74]">{makeup.group.name}</span>
                         ) : null}
                         {makeup.missed_progress ? (
-                          <span className="min-w-0 whitespace-pre-line break-words text-xs text-[#8a8a93]">
+                          <span className="min-w-0 whitespace-pre-line break-words text-sm text-[#8a8a93]">
                             {makeup.missed_progress}
                           </span>
                         ) : null}
@@ -659,7 +659,7 @@ export default async function DailyLogsPage({
                 </div>
               ) : null}
 
-              <h3 className="mt-5 text-sm font-semibold text-[#8f5470]">수업 기록</h3>
+              <h3 className="card-title mt-5 text-[#8f5470]">수업 기록</h3>
 
               {dateLogs.length === 0 ? (
                 <Card className="mt-2">
@@ -721,7 +721,7 @@ export default async function DailyLogsPage({
                               {log.group?.name ?? "수업 그룹"}
                             </span>
                             {meta.length > 0 ? (
-                              <span className="mt-0.5 block text-xs tabular-nums text-[#8a7b77]">
+                              <span className="mt-0.5 block text-sm tabular-nums text-[#8a7b77]">
                                 {meta.join(" · ")}
                               </span>
                             ) : null}
@@ -737,7 +737,7 @@ export default async function DailyLogsPage({
                             (목록 맨 끝이 아니라 — 첫 카드를 눌러도 스크롤 없이 보인다) */}
                         {isActive && detail ? (
                           <div className="pb-2 pt-1">
-                            <h3 className="mb-2 text-sm font-semibold text-[#8f5470]">
+                            <h3 className="card-title mb-2 text-[#8f5470]">
                               선택한 수업
                             </h3>
                             <LessonLogDetail

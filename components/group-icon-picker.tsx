@@ -14,7 +14,7 @@ export function GroupIconPicker({ initialIcon = null }: { initialIcon?: string |
     <div>
       <div className="mb-2 flex items-center gap-2 text-sm font-medium text-[#4d3a3a]">
         대표 아이콘
-        <span className="text-xs font-normal text-[#8a7b77]">
+        <span className="text-sm font-normal text-[#8a7b77]">
           현재 선택: {icon ? icon : "없음"}
         </span>
       </div>
@@ -25,7 +25,7 @@ export function GroupIconPicker({ initialIcon = null }: { initialIcon?: string |
           aria-pressed={icon === ""}
           onClick={() => setIcon("")}
           className={cn(
-            "flex h-9 items-center rounded-xl border px-2.5 text-xs font-medium transition",
+            "flex h-9 items-center rounded-xl border px-2.5 text-sm font-medium transition",
             icon === ""
               ? "border-[#c9b9e8] bg-[#f3eefa] text-[#6d5aa8]"
               : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",

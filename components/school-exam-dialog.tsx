@@ -65,7 +65,7 @@ function StudentCheckRow({
       <span className={cn("min-w-0 truncate", checked ? "text-[#2d2928]" : "text-[#655d5d]")}>
         {student.name}
       </span>
-      {subLabel ? <span className="ml-auto shrink-0 text-[11px] text-[#a79996]">{subLabel}</span> : null}
+      {subLabel ? <span className="ml-auto shrink-0 text-sm text-[#a79996]">{subLabel}</span> : null}
     </button>
   );
 }
@@ -177,8 +177,8 @@ function SchoolExamFormDialog({
       }}
     >
       <div className="max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-        <div className="font-display text-lg font-semibold text-[#2a2323]">{heading}</div>
-        <p className="mt-1 text-xs text-[#8a7b77]">
+        <div className="card-title text-[#2a2323]">{heading}</div>
+        <p className="mt-1 text-sm text-[#8a7b77]">
           학교별 시험 일정과 대상 학생을 정리해요. 등록한 시험은 캘린더와 대시보드에도 함께 보여요.
         </p>
 
@@ -192,7 +192,7 @@ function SchoolExamFormDialog({
               maxLength={80}
               list="school-exam-school-suggestions"
               placeholder="동탄중학교"
-              className="w-full min-w-0 rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#e3b9c9]"
+              className="w-full min-w-0 rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none focus:border-[#e3b9c9]"
             />
             <datalist id="school-exam-school-suggestions">
               {schools.map((school) => (
@@ -206,7 +206,7 @@ function SchoolExamFormDialog({
             <select
               value={grade}
               onChange={(event) => setGrade(event.target.value)}
-              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none"
             >
               {gradeOptions.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -219,7 +219,7 @@ function SchoolExamFormDialog({
             <select
               value={examYear}
               onChange={(event) => setExamYear(event.target.value)}
-              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none"
             >
               {yearOptions.map((year) => (
                 <option key={year} value={String(year)}>{year}년</option>
@@ -232,7 +232,7 @@ function SchoolExamFormDialog({
             <select
               value={semester}
               onChange={(event) => setSemester(event.target.value)}
-              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none"
             >
               <option value="1">{semesterLabels[1]}</option>
               <option value="2">{semesterLabels[2]}</option>
@@ -244,7 +244,7 @@ function SchoolExamFormDialog({
             <select
               value={examType}
               onChange={(event) => setExamType(event.target.value)}
-              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none"
             >
               {examTypeValues.map((value) => (
                 <option key={value} value={value}>{examTypeLabels[value]}</option>
@@ -259,7 +259,7 @@ function SchoolExamFormDialog({
                 type="date"
                 value={startDate}
                 onChange={(event) => setStartDate(event.target.value)}
-                className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-2.5 py-2.5 text-sm outline-none"
+                className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-2.5 py-2.5 text-base outline-none"
                 aria-label="시험 시작일"
               />
             </label>
@@ -270,7 +270,7 @@ function SchoolExamFormDialog({
                 value={endDate}
                 min={startDate || undefined}
                 onChange={(event) => setEndDate(event.target.value)}
-                className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-2.5 py-2.5 text-sm outline-none"
+                className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-2.5 py-2.5 text-base outline-none"
                 aria-label="시험 종료일"
               />
             </label>
@@ -278,7 +278,7 @@ function SchoolExamFormDialog({
         </div>
 
         {duplicateWarning ? (
-          <div className="mt-3 rounded-2xl bg-[#fdf8ec] px-3 py-2 text-xs leading-5 text-[#8a6828]">
+          <div className="mt-3 rounded-2xl bg-[#fdf8ec] px-3 py-2 text-sm leading-5 text-[#8a6828]">
             같은 연도·학기·종류의 {trimmedSchool} {gradeDisplay[grade as keyof typeof gradeDisplay] ?? ""} 시험이
             이미 등록되어 있어요. 분리 일정이 아니라면 기존 시험을 수정해주세요.
           </div>
@@ -287,7 +287,7 @@ function SchoolExamFormDialog({
         <div className="mt-4">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-[#4d3a3a]">
-              대상 학생 <span className="text-xs text-[#8a7b77]">· {selectedCount}명 선택</span>
+              대상 학생 <span className="text-sm text-[#8a7b77]">· {selectedCount}명 선택</span>
             </span>
             {candidates.length > 0 ? (
               <button
@@ -295,7 +295,7 @@ function SchoolExamFormDialog({
                 onClick={() =>
                   setStudentIds((prev) => [...new Set([...prev, ...candidates.map((s) => s.id)])])
                 }
-                className="text-xs font-medium text-[#5c4ca8] hover:underline"
+                className="text-sm font-medium text-[#5c4ca8] hover:underline"
               >
                 이 학교/학년 전체 선택
               </button>
@@ -314,7 +314,7 @@ function SchoolExamFormDialog({
               ))}
             </div>
           ) : (
-            <p className="mt-1.5 text-xs text-[#a79996]">
+            <p className="mt-1.5 text-sm text-[#a79996]">
               {trimmedSchool
                 ? "이 학교/학년으로 등록된 학생이 없어요. 아래에서 직접 선택할 수 있어요."
                 : "학교와 학년을 고르면 해당 학생을 먼저 보여드려요."}
@@ -323,7 +323,7 @@ function SchoolExamFormDialog({
 
           {others.length > 0 ? (
             <details className="mt-2">
-              <summary className="cursor-pointer text-xs text-[#8a8a93] hover:text-[#564d4d]">
+              <summary className="cursor-pointer text-sm text-[#8a8a93] hover:text-[#564d4d]">
                 다른 학생 직접 선택 ({others.length}명)
               </summary>
               <div className="mt-1.5 max-h-40 space-y-0.5 overflow-y-auto rounded-2xl border border-[#ece0db] bg-white p-2">
@@ -351,7 +351,7 @@ function SchoolExamFormDialog({
             rows={3}
             maxLength={2000}
             placeholder={"교과서 Unit 3 ~ Unit 5\n부교재 p.45~72"}
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#e3b9c9]"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#e3b9c9]"
           />
         </label>
 
@@ -363,7 +363,7 @@ function SchoolExamFormDialog({
             rows={2}
             maxLength={2000}
             placeholder="서술형 대비 필요 · 관계대명사 집중"
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#e3b9c9]"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#e3b9c9]"
           />
         </label>
 
@@ -521,7 +521,7 @@ export function SchoolExamEditButton({
         type="button"
         variant="secondary"
         size="sm"
-        className="gap-1.5 text-xs"
+        className="gap-1.5 text-sm"
         onClick={() => {
           setError("");
           setOpen(true);

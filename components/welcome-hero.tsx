@@ -20,8 +20,8 @@ export function WelcomeHero() {
             <NotebookPen className="h-5 w-5" />
           </div>
           <div>
-            <div className="font-display text-xl font-semibold">강사 일지</div>
-            <div className="text-xs text-[#7c6f6d]">수업 준비부터 학생 관리까지, 선생님의 하루를 더 가볍게.</div>
+            <div className="card-title">강사 일지</div>
+            <div className="text-sm text-[#7c6f6d]">수업 준비부터 학생 관리까지, 선생님의 하루를 더 가볍게.</div>
           </div>
         </div>
 
@@ -31,7 +31,7 @@ export function WelcomeHero() {
               <Sparkles className="h-3.5 w-3.5" />
               귀엽고 따뜻한 수업 다이어리
             </div>
-            <h1 className="max-w-xl font-display text-4xl font-semibold tracking-[-0.02em] text-[#271f1f] md:text-5xl">
+            <h1 className="max-w-xl text-3xl font-bold tracking-[-0.01em] text-[#271f1f] md:text-4xl">
               오늘의 수업, 학생 기록, 보충까지 한 번에 정리해요.
             </h1>
             <p className="mt-4 max-w-lg text-base leading-7 text-[#615856]">
@@ -65,15 +65,15 @@ export function WelcomeHero() {
               <div className="space-y-3">
                 <div className="rounded-2xl bg-[#f7f5fb] p-3">
                   <div className="text-sm text-[#534b4a]">중2 화목반</div>
-                  <div className="mt-1 text-xs text-[#756c6b]">Unit 3 p.48~53 · 3:30 PM</div>
+                  <div className="mt-1 text-sm text-[#756c6b]">Unit 3 p.48~53 · 3:30 PM</div>
                 </div>
                 <div className="rounded-2xl bg-[#fff4f1] p-3">
                   <div className="text-sm text-[#534b4a]">결석 1명</div>
-                  <div className="mt-1 text-xs text-[#756c6b]">보충 수업 체크 필요</div>
+                  <div className="mt-1 text-sm text-[#756c6b]">보충 수업 체크 필요</div>
                 </div>
                 <div className="rounded-2xl bg-[#edf9f3] p-3">
                   <div className="text-sm text-[#534b4a]">보충 필요 2건</div>
-                  <div className="mt-1 text-xs text-[#756c6b]">완료 처리 전</div>
+                  <div className="mt-1 text-sm text-[#756c6b]">완료 처리 전</div>
                 </div>
               </div>
             </div>
@@ -83,8 +83,8 @@ export function WelcomeHero() {
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold tracking-[-0.03em] text-[#2b2323]">주요 기능 미리보기</h2>
-          <span className="text-xs text-[#8a7c7a]">선생님 하루를 더 편하게</span>
+          <h2 className="card-title text-[#2b2323]">주요 기능 미리보기</h2>
+          <span className="text-sm text-[#8a7c7a]">선생님 하루를 더 편하게</span>
         </div>
         <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
           {features.map(({ icon: Icon, label }) => (

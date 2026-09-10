@@ -61,7 +61,7 @@ function LoginForm() {
         <div className="mb-6 flex flex-col items-center text-center">
           <div className="flex items-center gap-2">
             <Doodle kind="flower" className="h-5 w-5 text-[#c9a9c4]" />
-            <h1 className="font-display text-2xl font-semibold tracking-[-0.01em] text-[#2a2323]">
+            <h1 className="page-title text-[#2a2323]">
               강사 일지
             </h1>
             <Doodle kind="leaf" className="h-5 w-5 text-[#9dbfa8]" />
@@ -77,7 +77,7 @@ function LoginForm() {
               <input
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className="w-full bg-transparent text-sm outline-none placeholder:text-[#a79996]"
+                className="w-full bg-transparent text-base outline-none placeholder:text-[#a79996]"
                 placeholder="teacher@example.com"
                 type="email"
                 autoComplete="email"
@@ -93,7 +93,7 @@ function LoginForm() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 type="password"
-                className="w-full bg-transparent text-sm outline-none placeholder:text-[#a79996]"
+                className="w-full bg-transparent text-base outline-none placeholder:text-[#a79996]"
                 placeholder="••••••••"
                 autoComplete="current-password"
               />

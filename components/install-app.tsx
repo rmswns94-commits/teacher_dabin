@@ -43,7 +43,7 @@ export function InstallAppButton() {
 
   if (isStandalone) {
     return (
-      <div className="flex items-center justify-center gap-1.5 px-3 py-1 text-[11px] text-[#8a8a93]">
+      <div className="flex items-center justify-center gap-1.5 px-3 py-1 text-sm text-[#8a8a93]">
         <Smartphone className="h-3.5 w-3.5" />
         앱으로 사용 중이에요
       </div>
@@ -90,11 +90,11 @@ export function InstallAppButton() {
           className="fixed inset-0 z-[60] flex items-center justify-center bg-[#26262b]/35 px-4"
         >
           <div className="w-full max-w-sm rounded-2xl border border-[#e6e6ea] bg-white p-6 shadow-xl">
-            <div className="text-base font-bold text-[#232327]">앱처럼 사용하기</div>
-            <p className="mt-1.5 text-xs text-[#6b6b74]">
+            <div className="card-title text-[#232327]">앱처럼 사용하기</div>
+            <p className="mt-1.5 text-sm text-[#6b6b74]">
               홈 화면에 추가하면 더 빠르게 강사 일지를 열 수 있어요.
             </p>
-            <ol className="mt-4 space-y-2.5 text-sm leading-6 text-[#3c3c45]">
+            <ol className="mt-4 space-y-2.5 text-sm leading-5 text-[#3c3c45]">
               <li>
                 1. Safari 아래의 <strong>공유</strong> 버튼을 눌러주세요.
               </li>
@@ -105,7 +105,7 @@ export function InstallAppButton() {
                 3. 오른쪽 위 <strong>&ldquo;추가&rdquo;</strong>를 눌러주세요.
               </li>
             </ol>
-            <p className="mt-3 text-xs leading-5 text-[#8a8a93]">
+            <p className="mt-3 text-sm leading-5 text-[#8a8a93]">
               설치하면 홈 화면에서 강사 일지를 바로 열 수 있어요.
             </p>
             <button

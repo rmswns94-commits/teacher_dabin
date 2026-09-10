@@ -61,7 +61,7 @@ export function ExcelExportButton({ date }: { date: string | null }) {
         <FileSpreadsheet className="h-4 w-4" />
         {isExporting ? "엑셀을 만들고 있어요..." : "엑셀 내보내기"}
       </Button>
-      {error ? <span className="max-w-64 text-right text-xs text-[#a26660]">{error}</span> : null}
+      {error ? <span className="max-w-64 text-right text-sm text-[#a26660]">{error}</span> : null}
     </div>
   );
 }

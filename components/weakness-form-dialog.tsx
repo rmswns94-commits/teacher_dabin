@@ -98,8 +98,8 @@ export function WeaknessFormDialog({
       }}
     >
       <div className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-        <div className="font-display text-lg font-semibold text-[#2a2323]">{heading}</div>
-        <p className="mt-1 text-xs text-[#8a7b77]">
+        <div className="card-title text-[#2a2323]">{heading}</div>
+        <p className="mt-1 text-sm text-[#8a7b77]">
           {studentName} 학생이 자주 헷갈리는 부분을 적어두고, 다음에 다시 확인해요.
         </p>
 
@@ -113,7 +113,7 @@ export function WeaknessFormDialog({
                 aria-pressed={category === value}
                 onClick={() => setCategory(value)}
                 className={cn(
-                  "min-h-[38px] rounded-xl border px-2 py-1.5 text-xs font-medium transition",
+                  "min-h-[38px] rounded-xl border px-2 py-1.5 text-sm font-medium transition",
                   category === value
                     ? categoryChipActiveClass[value]
                     : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
@@ -132,7 +132,7 @@ export function WeaknessFormDialog({
             onChange={(event) => setTitle(event.target.value)}
             maxLength={120}
             placeholder="3인칭 단수 s를 자주 빠뜨려요"
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#e3b9c9]"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none focus:border-[#e3b9c9]"
           />
         </label>
 
@@ -144,7 +144,7 @@ export function WeaknessFormDialog({
             rows={2}
             maxLength={500}
             placeholder="He play → He plays 같은 오류가 반복돼요."
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#e3b9c9]"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#e3b9c9]"
           />
         </label>
 
@@ -154,10 +154,10 @@ export function WeaknessFormDialog({
             type="date"
             value={reviewDueDate}
             onChange={(event) => setReviewDueDate(event.target.value)}
-            className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+            className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none"
           />
           {dueDateHint && reviewDueDate && reviewDueDate === defaultReviewDueDate ? (
-            <span className="mt-1 block text-[11px] text-[#8a7b77]">
+            <span className="mt-1 block text-sm text-[#8a7b77]">
               {dueDateHint} ({formatKoreanDate(reviewDueDate, true)}) — 바꿀 수 있어요.
             </span>
           ) : null}

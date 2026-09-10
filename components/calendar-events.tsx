@@ -53,7 +53,7 @@ function EventFormDialog({
       aria-label={title}
     >
       <div className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-        <div className="font-display text-lg font-semibold text-[#2a2323]">{title}</div>
+        <div className="card-title text-[#2a2323]">{title}</div>
 
         <label className="mt-4 block">
           <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">일정 이름</span>
@@ -63,7 +63,7 @@ function EventFormDialog({
             maxLength={100}
             autoFocus
             placeholder="중2 기말고사"
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#e3b9c9] placeholder:text-[#a79996]"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none focus:border-[#e3b9c9] placeholder:text-[#a79996]"
           />
         </label>
 
@@ -72,7 +72,7 @@ function EventFormDialog({
           <select
             value={values.eventType}
             onChange={(event) => update({ eventType: event.target.value })}
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none"
           >
             {calendarEventTypes.map((type) => (
               <option key={type} value={type}>{calendarEventMeta[type].label}</option>
@@ -87,7 +87,7 @@ function EventFormDialog({
               type="date"
               value={values.startDate}
               onChange={(event) => update({ startDate: event.target.value })}
-              className="rounded-2xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none"
+              className="rounded-2xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
               aria-label="시작일"
             />
             <span className="text-sm text-[#8a7b77]">~</span>
@@ -95,11 +95,11 @@ function EventFormDialog({
               type="date"
               value={values.endDate}
               onChange={(event) => update({ endDate: event.target.value })}
-              className="rounded-2xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none"
+              className="rounded-2xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
               aria-label="종료일 (하루짜리면 비워두세요)"
             />
           </div>
-          <p className="mt-1 text-xs text-[#a79996]">하루짜리 일정이면 종료일은 비워두세요.</p>
+          <p className="mt-1 text-sm text-[#a79996]">하루짜리 일정이면 종료일은 비워두세요.</p>
         </div>
 
         <label className="mt-3 block">
@@ -107,7 +107,7 @@ function EventFormDialog({
           <select
             value={values.groupId}
             onChange={(event) => update({ groupId: event.target.value })}
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none"
           >
             <option value="">전체 일정</option>
             {groups.map((group) => (
@@ -124,7 +124,7 @@ function EventFormDialog({
             rows={2}
             maxLength={500}
             placeholder="시험기간에는 숙제량 조절"
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#e3b9c9] placeholder:text-[#a79996]"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#e3b9c9] placeholder:text-[#a79996]"
           />
         </label>
 
@@ -276,17 +276,17 @@ export function CalendarEventItem({
         aria-expanded={expanded}
         className="flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left transition hover:bg-[#fdf6f8]"
       >
-        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", meta.badge)}>
+        <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", meta.badge)}>
           {meta.label}
         </span>
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#2d2928]">
           {event.title}
         </span>
-        <span className="shrink-0 text-xs tabular-nums text-[#8a7b77]">{rangeLabel}</span>
+        <span className="shrink-0 text-sm tabular-nums text-[#8a7b77]">{rangeLabel}</span>
       </button>
 
       {expanded ? (
-        <div className="border-t border-dashed border-[#f4e2e8] px-3 py-2.5 text-xs leading-5 text-[#655d5d]">
+        <div className="border-t border-dashed border-[#f4e2e8] px-3 py-2.5 text-sm leading-5 text-[#655d5d]">
           <div>기간 · {rangeLabel}</div>
           <div>대상 · {event.group?.name ?? "전체 일정"}</div>
           {event.memo ? <div className="whitespace-pre-line">메모 · {event.memo}</div> : null}
@@ -299,7 +299,7 @@ export function CalendarEventItem({
                 setError("");
                 setEditing(true);
               }}
-              className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-[#564d4d] transition hover:bg-[#faf0f2]"
+              className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-[#564d4d] transition hover:bg-[#faf0f2]"
             >
               <Pencil className="h-3 w-3" aria-hidden /> 수정
             </button>
@@ -307,7 +307,7 @@ export function CalendarEventItem({
               type="button"
               onClick={remove}
               disabled={isPending}
-              className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-[#8f625f] transition hover:bg-[#fdf4f1]"
+              className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-[#8f625f] transition hover:bg-[#fdf4f1]"
             >
               <Trash2 className="h-3 w-3" aria-hidden /> 삭제
             </button>

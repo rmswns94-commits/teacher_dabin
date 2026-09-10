@@ -83,7 +83,7 @@ export function TodoCreateDialog({
           }}
         >
           <div className="w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-            <div className="font-display text-lg font-semibold text-[#2a2323]">할 일 추가</div>
+            <div className="card-title text-[#2a2323]">할 일 추가</div>
             <p className="mt-1 text-sm text-[#8a7b77]">수업 그룹과 할 일을 선택해주세요.</p>
 
             <div className="mt-4 space-y-3.5">
@@ -92,7 +92,7 @@ export function TodoCreateDialog({
                 <select
                   value={groupId}
                   onChange={(event) => setGroupId(event.target.value)}
-                  className="w-full min-w-0 rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] md:text-sm"
+                  className="w-full min-w-0 rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] md:text-base"
                 >
                   <option value="">그룹 선택</option>
                   {groups.map((group) => (
@@ -113,9 +113,9 @@ export function TodoCreateDialog({
                   rows={4}
                   maxLength={300}
                   placeholder={"중2 기말 대비\n백발백중 프린트 출력\n단어시험지 20부 준비"}
-                  className="min-h-[110px] w-full min-w-0 rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996] md:text-sm"
+                  className="min-h-[110px] w-full min-w-0 rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996] md:text-base"
                 />
-                <span className="mt-1 block text-[11px] text-[#a79996]">
+                <span className="mt-1 block text-sm text-[#a79996]">
                   Enter로 줄을 바꿔 여러 줄로 적을 수 있어요. 하나의 할 일로 등록돼요.
                 </span>
               </label>
@@ -128,9 +128,9 @@ export function TodoCreateDialog({
                   type="date"
                   value={dueDate}
                   onChange={(event) => setDueDate(event.target.value)}
-                  className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] md:text-sm"
+                  className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] md:text-base"
                 />
-                <span className="mt-1 block text-[11px] text-[#a79996]">
+                <span className="mt-1 block text-sm text-[#a79996]">
                   오늘이 기본이에요. 미래 날짜로 등록하면 그 날짜부터 목록에 나타나요.
                 </span>
               </label>

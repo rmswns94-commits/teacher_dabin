@@ -19,7 +19,7 @@ function BriefingLines({ lines }: { lines: SectionLine[] }) {
       {lines.map((line) => (
         <div
           key={line.key}
-          className="min-w-0 whitespace-pre-line break-words text-[13px] leading-5 text-[#453b3b]"
+          className="body-text min-w-0 whitespace-pre-line break-words text-[#453b3b]"
         >
           {line.text}
         </div>
@@ -41,7 +41,9 @@ function BriefingSection({
 }) {
   return (
     <div className="min-w-0">
-      <div className={`flex items-center gap-1.5 text-xs font-semibold ${titleClass}`}>
+      {/* 섹션 제목 = 16px/600 (앱 공통 section-title). 이모지는 baseline이 흔들리지 않게
+          flex items-center로 붙인다. */}
+      <div className={`section-title flex items-center gap-1.5 ${titleClass}`}>
         <span aria-hidden>{icon}</span> {title}
       </div>
       <div className="mt-1.5">{children}</div>
@@ -179,15 +181,15 @@ export async function ClassBriefing({
           <CardTitle className="flex items-center gap-2">
             <span aria-hidden>{group.icon ?? "📘"}</span> {group.name} 수업 브리핑
           </CardTitle>
-          <span className="rounded-full bg-[#efe8fb] px-2.5 py-1 text-xs font-medium tabular-nums text-[#5d4ba5]">
+          <span className="rounded-full bg-[#efe8fb] px-2.5 py-1 text-sm font-medium tabular-nums text-[#5d4ba5]">
             {isNow ? "지금 수업 중" : `${startTime} 시작`}
           </span>
         </div>
-        <p className="mt-1 text-xs text-[#8a7b77]">오늘 체크할 것</p>
+        <p className="secondary-text mt-1 text-[#8a7b77]">오늘 체크할 것</p>
       </CardHeader>
       <CardContent>
         {!hasAnything ? (
-          <div className="rounded-2xl bg-[#f6f1ec] p-3 text-sm text-[#655d5d]">
+          <div className="body-text rounded-2xl bg-[#f6f1ec] p-3 text-[#655d5d]">
             오늘은 특별히 체크할 것이 없어요. 좋은 수업 되세요 🌿
           </div>
         ) : (
@@ -199,32 +201,32 @@ export async function ClassBriefing({
                 {todoLines.length > 0 ? (
                   <BriefingLines lines={todoLines} />
                 ) : (
-                  <p className="text-[13px] leading-5 text-[#a79996]">준비할 일이 없어요</p>
+                  <p className="secondary-text text-[#a79996]">준비할 일이 없어요</p>
                 )}
               </BriefingSection>
 
               <BriefingSection icon="📚" title="오늘 진도" titleClass="text-[#3c6478]">
                 {planText ? (
-                  <div className="min-w-0 whitespace-pre-line break-words text-[13px] leading-5 text-[#453b3b]">
+                  <div className="body-text min-w-0 whitespace-pre-line break-words text-[#453b3b]">
                     {planText}
                   </div>
                 ) : (
-                  <p className="text-[13px] leading-5 text-[#a79996]">적어둔 계획이 없어요</p>
+                  <p className="secondary-text text-[#a79996]">적어둔 계획이 없어요</p>
                 )}
               </BriefingSection>
 
               <BriefingSection icon="📒" title="지난 숙제" titleClass="text-[#8a6828]">
                 {previousHomework ? (
                   <>
-                    <div className="min-w-0 whitespace-pre-line break-words text-[13px] leading-5 text-[#453b3b]">
+                    <div className="body-text min-w-0 whitespace-pre-line break-words text-[#453b3b]">
                       {previousHomework}
                     </div>
                     {homeworkStatusText ? (
-                      <p className="mt-1 text-[11px] leading-4 text-[#8a7b77]">{homeworkStatusText}</p>
+                      <p className="caption-text mt-1 text-[#8a7b77]">{homeworkStatusText}</p>
                     ) : null}
                   </>
                 ) : (
-                  <p className="text-[13px] leading-5 text-[#a79996]">지난 숙제가 없어요</p>
+                  <p className="secondary-text text-[#a79996]">지난 숙제가 없어요</p>
                 )}
               </BriefingSection>
             </div>

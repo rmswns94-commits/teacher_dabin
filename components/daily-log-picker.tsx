@@ -30,7 +30,7 @@ export function DailyLogPicker({
       className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end lg:grid-cols-[200px_minmax(220px,320px)_auto]"
     >
       <label className="block min-w-0">
-        <span className="mb-1.5 block text-xs font-medium text-[#7c6d69]">날짜</span>
+        <span className="mb-1.5 block text-sm font-medium text-[#7c6d69]">날짜</span>
         <input
           type="date"
           name="date"
@@ -40,18 +40,18 @@ export function DailyLogPicker({
               submit();
             }
           }}
-          className="min-h-[42px] w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-sm outline-none"
+          className="min-h-[42px] w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-base outline-none"
           required
         />
       </label>
 
       <label className="block min-w-0">
-        <span className="mb-1.5 block text-xs font-medium text-[#7c6d69]">수업 그룹</span>
+        <span className="mb-1.5 block text-sm font-medium text-[#7c6d69]">수업 그룹</span>
         <select
           name="groupId"
           defaultValue={groupId}
           onChange={submit}
-          className="min-h-[42px] w-full min-w-0 rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-sm outline-none"
+          className="min-h-[42px] w-full min-w-0 rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-base outline-none"
           required
         >
           <option value="">그룹 선택</option>

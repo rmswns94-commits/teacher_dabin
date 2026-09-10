@@ -100,7 +100,7 @@ function StudentFormDialog({
       }}
     >
       <div className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-        <div className="font-display text-lg font-semibold text-[#2a2323]">학생 등록</div>
+        <div className="card-title text-[#2a2323]">학생 등록</div>
 
         <label className="mt-4 block">
           <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">이름</span>
@@ -110,7 +110,7 @@ function StudentFormDialog({
             maxLength={60}
             autoFocus
             placeholder="김다빈"
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#e3b9c9] placeholder:text-[#a79996]"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none focus:border-[#e3b9c9] placeholder:text-[#a79996]"
           />
         </label>
 
@@ -122,7 +122,7 @@ function StudentFormDialog({
             <select
               value={grade}
               onChange={(event) => setGrade(event.target.value)}
-              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none"
             >
               {gradeOptions.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -135,7 +135,7 @@ function StudentFormDialog({
             <select
               value={gender}
               onChange={(event) => setGender(event.target.value)}
-              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none"
             >
               <option value="">성별 선택</option>
               <option value="male">{genderLabels.male}</option>
@@ -150,7 +150,7 @@ function StudentFormDialog({
               value={birthDate}
               max={todayDateString()}
               onChange={(event) => setBirthDate(event.target.value)}
-              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none"
             />
           </label>
 
@@ -161,7 +161,7 @@ function StudentFormDialog({
               onChange={(event) => setSchool(event.target.value)}
               maxLength={80}
               placeholder="OO중학교"
-              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#e3b9c9] placeholder:text-[#a79996]"
+              className="w-full min-w-0 max-w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none focus:border-[#e3b9c9] placeholder:text-[#a79996]"
             />
           </label>
         </div>
@@ -169,7 +169,7 @@ function StudentFormDialog({
         <div className="mt-3">
           <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">소속 수업 그룹 (선택)</span>
           {groups.length === 0 ? (
-            <p className="text-xs text-[#a79996]">아직 만든 수업 그룹이 없어요. 나중에 배정할 수 있어요.</p>
+            <p className="text-sm text-[#a79996]">아직 만든 수업 그룹이 없어요. 나중에 배정할 수 있어요.</p>
           ) : (
             <div className="max-h-36 space-y-1 overflow-y-auto rounded-2xl border border-[#ece0db] bg-white p-2">
               {groups.map((group) => {
@@ -212,7 +212,7 @@ function StudentFormDialog({
             rows={2}
             maxLength={500}
             placeholder="단어 암기 점검 필요"
-            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#e3b9c9] placeholder:text-[#a79996]"
+            className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#e3b9c9] placeholder:text-[#a79996]"
           />
         </label>
 
@@ -276,7 +276,7 @@ export function StudentCreateDialog({
 
   return (
     <div className="flex items-center gap-3">
-      {savedMessage ? <span className="text-xs text-[#3d7f64]">{savedMessage}</span> : null}
+      {savedMessage ? <span className="text-sm text-[#3d7f64]">{savedMessage}</span> : null}
       <Button
         type="button"
         className="gap-2"

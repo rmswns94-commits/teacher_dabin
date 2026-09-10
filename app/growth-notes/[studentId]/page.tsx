@@ -115,7 +115,7 @@ export default async function GrowthNoteDetailPage({
               {note.groupNames.map((name) => (
                 <span
                   key={name}
-                  className="rounded-full bg-[#f3eefa] px-2.5 py-1 text-[11px] font-medium text-[#6d5aa8]"
+                  className="rounded-full bg-[#f3eefa] px-2.5 py-1 text-xs font-medium text-[#6d5aa8]"
                 >
                   {name}
                 </span>
@@ -148,9 +148,9 @@ export default async function GrowthNoteDetailPage({
           <div className="mt-5 space-y-4">
             {/* 1. 이번 주의 성장 배지 */}
             <section className="rounded-3xl border border-[#e5efe8] bg-[#f6fbf8] p-5">
-              <h2 className="text-sm font-bold text-[#2f6d54]">이번 주의 성장 배지</h2>
+              <h2 className="section-title text-[#2f6d54]">이번 주의 성장 배지</h2>
               {note.badges.length === 0 ? (
-                <p className="mt-3 text-[15px] leading-7 text-[#3d7f64]">
+                <p className="body-text mt-3 text-[#3d7f64]">
                   이번 주에도 새로운 성장 기록이 차곡차곡 쌓이고 있어요 🌱
                 </p>
               ) : (
@@ -161,8 +161,8 @@ export default async function GrowthNoteDetailPage({
                         {badge.emoji}
                       </span>
                       <div>
-                        <div className="text-[15px] font-bold text-[#2f6d54]">{badge.label}</div>
-                        <div className="text-sm leading-6 text-[#3d7f64]">{badge.sentence}</div>
+                        <div className="card-title text-[#2f6d54]">{badge.label}</div>
+                        <div className="text-sm leading-5 text-[#3d7f64]">{badge.sentence}</div>
                       </div>
                     </li>
                   ))}
@@ -172,8 +172,8 @@ export default async function GrowthNoteDetailPage({
 
             {/* 2. 이번 주의 한마디 */}
             <section className="rounded-3xl border border-[#eae2f5] bg-[#faf7ff] p-5">
-              <h2 className="text-sm font-bold text-[#6d5aa8]">💜 이번 주의 한마디</h2>
-              <p className="mt-2 text-[16px] font-medium leading-8 text-[#4d3f7a]">
+              <h2 className="section-title text-[#6d5aa8]">💜 이번 주의 한마디</h2>
+              <p className="body-text mt-2 font-medium text-[#4d3f7a]">
                 &ldquo;{note.encouragement}&rdquo;
               </p>
             </section>
@@ -181,13 +181,13 @@ export default async function GrowthNoteDetailPage({
             {/* 2.5. 이번 주 선생님의 칭찬 — Teacher가 [칭찬 한표]로 직접 남긴 코멘트 원문만 */}
             {note.teacherPraises.length > 0 ? (
               <section className="rounded-3xl border border-[#f0e3ea] bg-[#fffafc] p-5">
-                <h2 className="text-sm font-bold text-[#9c5577]">💌 이번 주 선생님의 칭찬</h2>
+                <h2 className="section-title text-[#9c5577]">💌 이번 주 선생님의 칭찬</h2>
                 {note.teacherPraises.length === 1 ? (
-                  <p className="mt-2 text-[16px] font-medium leading-8 text-[#7a4a62]">
+                  <p className="body-text mt-2 font-medium text-[#7a4a62]">
                     &ldquo;{note.teacherPraises[0]}&rdquo;
                   </p>
                 ) : (
-                  <ul className="mt-3 space-y-2 text-[15px] leading-7 text-[#7a4a62]">
+                  <ul className="body-text mt-3 space-y-2 text-[#7a4a62]">
                     {note.teacherPraises.map((text) => (
                       <li key={text}>💜 {text}</li>
                     ))}
@@ -199,8 +199,8 @@ export default async function GrowthNoteDetailPage({
             {/* 3. 이번 주 잘한 일 */}
             {note.goodThings.length > 0 ? (
               <section className="rounded-3xl border border-[#f2e8d9] bg-[#fffaf1] p-5">
-                <h2 className="text-sm font-bold text-[#8a6828]">⭐ 이번 주 잘한 일</h2>
-                <ul className="mt-3 space-y-2 text-[15px] leading-7 text-[#6d5420]">
+                <h2 className="section-title text-[#8a6828]">⭐ 이번 주 잘한 일</h2>
+                <ul className="body-text mt-3 space-y-2 text-[#6d5420]">
                   {note.goodThings.map((text) => (
                     <li key={text}>⭐ {text}</li>
                   ))}
@@ -211,18 +211,18 @@ export default async function GrowthNoteDetailPage({
             {/* 4. 숙제 / 꾸준함 */}
             {note.homework ? (
               <section className="rounded-3xl border border-[#efe4de] bg-[#fffdfb] p-5">
-                <h2 className="text-sm font-bold text-[#4d3a3a]">📚 이번 주 숙제</h2>
+                <h2 className="section-title text-[#4d3a3a]">📚 이번 주 숙제</h2>
                 <div className="mt-2 text-xl font-bold tabular-nums text-[#3a2f2c]">
                   {note.homework.completed} / {note.homework.evaluated} 완료
                 </div>
-                <p className="mt-1 text-sm leading-6 text-[#6b5d58]">{note.homework.sentence}</p>
+                <p className="mt-1 text-sm leading-5 text-[#6b5d58]">{note.homework.sentence}</p>
               </section>
             ) : null}
 
             {/* 5. 단어 성장 */}
             {note.vocab ? (
               <section className="rounded-3xl border border-[#e8e2f5] bg-[#fbfaff] p-5">
-                <h2 className="text-sm font-bold text-[#54479c]">📝 단어 성장</h2>
+                <h2 className="section-title text-[#54479c]">📝 단어 성장</h2>
                 <div className="mt-2 text-xl font-bold tabular-nums text-[#54479c]">
                   {/* 하락일 때는 화살표 없이 중립 표시 — 부정 강조 금지 */}
                   {note.vocab.rise !== null
@@ -230,7 +230,7 @@ export default async function GrowthNoteDetailPage({
                     : note.vocab.percents.join(" · ")}
                 </div>
                 {note.vocab.sentence ? (
-                  <p className="mt-1 text-sm leading-6 text-[#6d5fae]">{note.vocab.sentence}</p>
+                  <p className="mt-1 text-sm leading-5 text-[#6d5fae]">{note.vocab.sentence}</p>
                 ) : null}
               </section>
             ) : null}
@@ -238,12 +238,12 @@ export default async function GrowthNoteDetailPage({
             {/* 6. 출석 */}
             {note.attendance ? (
               <section className="rounded-3xl border border-[#e5efe8] bg-[#fbfdfc] p-5">
-                <h2 className="text-sm font-bold text-[#2f6d54]">🏫 이번 주 출석</h2>
+                <h2 className="section-title text-[#2f6d54]">🏫 이번 주 출석</h2>
                 <div className="mt-2 text-xl font-bold tabular-nums text-[#2f6d54]">
                   {note.attendance.attended} / {note.attendance.total}
                 </div>
                 {note.attendance.sentence ? (
-                  <p className="mt-1 text-sm leading-6 text-[#3d7f64]">{note.attendance.sentence}</p>
+                  <p className="mt-1 text-sm leading-5 text-[#3d7f64]">{note.attendance.sentence}</p>
                 ) : null}
               </section>
             ) : null}
@@ -251,10 +251,10 @@ export default async function GrowthNoteDetailPage({
             {/* 7. 선생님이 발견한 멋진 모습 */}
             {note.teacherHighlights.length > 0 ? (
               <section className="rounded-3xl border border-[#f0e3ea] bg-[#fffafc] p-5">
-                <h2 className="text-sm font-bold text-[#9c5577]">💜 선생님이 발견한 멋진 모습</h2>
+                <h2 className="section-title text-[#9c5577]">💜 선생님이 발견한 멋진 모습</h2>
                 <ul className="mt-3 space-y-2">
                   {note.teacherHighlights.map((text) => (
-                    <li key={text} className="text-[15px] leading-7 text-[#7a4a62]">
+                    <li key={text} className="body-text text-[#7a4a62]">
                       &ldquo;{text}&rdquo;
                     </li>
                   ))}
@@ -265,8 +265,8 @@ export default async function GrowthNoteDetailPage({
             {/* 8. 다음 주 작은 목표 */}
             {note.nextGoals.length > 0 ? (
               <section className="rounded-3xl border border-[#efe4de] bg-[#fffdfb] p-5">
-                <h2 className="text-sm font-bold text-[#4d3a3a]">🎯 다음 주 작은 목표</h2>
-                <ul className="mt-3 space-y-2 text-[15px] leading-7 text-[#6b5d58]">
+                <h2 className="section-title text-[#4d3a3a]">🎯 다음 주 작은 목표</h2>
+                <ul className="body-text mt-3 space-y-2 text-[#6b5d58]">
                   {note.nextGoals.map((text) => (
                     <li key={text}>• {text}</li>
                   ))}

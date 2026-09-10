@@ -229,7 +229,7 @@ export default async function GroupsPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="font-medium text-[#232327]">{group.name}</div>
-                        <div className="mt-0.5 text-xs text-[#8a8a93]">
+                        <div className="mt-0.5 text-sm text-[#8a8a93]">
                           {formatGrade(group.grade)}
                           {group.memo ? ` · ${group.memo}` : ""}
                         </div>

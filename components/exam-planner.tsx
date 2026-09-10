@@ -122,7 +122,7 @@ function PlanForm({
   return (
     <div className="space-y-3">
       <label className="block min-w-0">
-        <span className="mb-1 block text-xs font-semibold text-[#7c6d69]">날짜</span>
+        <span className="mb-1 block text-sm font-semibold text-[#7c6d69]">날짜</span>
         <input
           type="date"
           value={planDate}
@@ -130,13 +130,13 @@ function PlanForm({
             setPlanDate(event.target.value);
             onDirtyChange(true);
           }}
-          className="min-h-[44px] w-full min-w-0 max-w-full rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none"
+          className="min-h-[44px] w-full min-w-0 max-w-full rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
           aria-label="계획 날짜"
         />
       </label>
 
       <label className="block min-w-0">
-        <span className="mb-1 block text-xs font-semibold text-[#7c6d69]">할 내용</span>
+        <span className="mb-1 block text-sm font-semibold text-[#7c6d69]">할 내용</span>
         {/* 여러 줄 입력: Enter = 줄바꿈 (form submit 아님 — 저장은 아래 버튼으로만).
             onChange에서 값 재작성 없음 — newline/IME 조합이 그대로 보존된다. */}
         <textarea
@@ -148,7 +148,7 @@ function PlanForm({
           rows={4}
           maxLength={500}
           placeholder={"백발백중 문법 오답 풀이\n이그잼포유 관계대명사\n객관식 문제 숙제"}
-          className="min-h-[110px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-[#c9b9e8]"
+          className="min-h-[110px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base leading-6 outline-none focus:border-[#c9b9e8]"
         />
       </label>
 
@@ -182,7 +182,7 @@ function PlanForm({
           type="button"
           disabled={isPending}
           onClick={onDelete}
-          className="min-h-[40px] w-full rounded-xl px-3 text-xs text-[#8f625f] transition hover:bg-[#fff5f2]"
+          className="min-h-[40px] w-full rounded-xl px-3 text-sm text-[#8f625f] transition hover:bg-[#fff5f2]"
         >
           이 계획 삭제
         </button>
@@ -341,11 +341,11 @@ export function ExamPlanner({
       {/* ── compact header: 월 + 이동 + D-Day + 진행률 + 계획 추가 (별도 대형 카드 금지) ── */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 pb-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-xl font-semibold tracking-[-0.01em] text-[#2b2323]">
+          <h2 className="card-title text-[#2b2323]">
             {monthLabel(month)}
           </h2>
           <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${dday.className}`}
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${dday.className}`}
           >
             {dday.label}
           </span>
@@ -373,7 +373,7 @@ export function ExamPlanner({
         <div className="ml-auto flex items-center gap-3">
           {totalCount > 0 ? (
             <div className="flex items-center gap-2" aria-label={`시험 대비 진행률 ${percent}%`}>
-              <span className="text-xs tabular-nums text-[#564d4d]">
+              <span className="text-sm tabular-nums text-[#564d4d]">
                 시험 대비 <span className="font-semibold text-[#2b2323]">{completedCount}/{totalCount}</span> · {percent}%
               </span>
               <div className="hidden h-1.5 w-24 overflow-hidden rounded-full bg-[#efe8e2] @min-[560px]:block">
@@ -392,7 +392,7 @@ export function ExamPlanner({
                 setSheetMode({ type: "add" });
                 setFormError("");
               }}
-              className="flex min-h-[40px] items-center gap-1 rounded-xl border border-[#ddd0ec] bg-[#f9f5fd] px-3 text-xs font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
+              className="flex min-h-[40px] items-center gap-1 rounded-xl border border-[#ddd0ec] bg-[#f9f5fd] px-3 text-sm font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
             >
               <Plus className="h-3.5 w-3.5" /> 계획 추가
             </button>
@@ -401,11 +401,11 @@ export function ExamPlanner({
       </div>
 
       {toggleError ? (
-        <p className="px-1 pb-2 text-xs text-[#a2665f]">{toggleError}</p>
+        <p className="px-1 pb-2 text-sm text-[#a2665f]">{toggleError}</p>
       ) : null}
 
       {plansFailed ? (
-        <div className="mb-3 rounded-2xl border border-[#f0d9d5] bg-[#fff9f7] px-4 py-2.5 text-sm leading-6 text-[#7f5d57]">
+        <div className="mb-3 rounded-2xl border border-[#f0d9d5] bg-[#fff9f7] px-4 py-2.5 text-sm leading-5 text-[#7f5d57]">
           시험 대비 계획을 불러오지 못했어요. 새로고침해도 계속되면 Supabase SQL Editor에서{" "}
           <code>20260907_create_exam_prep_plans.sql</code> 적용 여부를 확인해주세요.
         </div>
@@ -424,7 +424,7 @@ export function ExamPlanner({
               <div
                 key={label}
                 className={cn(
-                  "px-1 text-center text-[10px] font-bold tracking-[0.08em] @min-[540px]:text-[11px]",
+                  "px-1 text-center text-xs font-semibold tracking-[0.04em]",
                   index === 0 || index === 6 ? WEEKEND_TEXT : "text-[#4a4a55]",
                 )}
               >
@@ -473,7 +473,7 @@ export function ExamPlanner({
                     <div className="flex min-w-0 flex-col items-center gap-0.5">
                       <span
                         className={cn(
-                          "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums",
+                          "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums",
                           isToday
                             ? "bg-[#8b7ae6] text-white"
                             : dayIndex === 0 || dayIndex === 6
@@ -484,7 +484,7 @@ export function ExamPlanner({
                         {dayNum}
                       </span>
                       {date === examStart ? (
-                        <span className="hidden max-w-full truncate rounded-full bg-[#fbdcda] px-2 py-0.5 text-[10px] font-semibold text-[#c05a50] @min-[540px]:block">
+                        <span className="hidden max-w-full truncate rounded-full bg-[#fbdcda] px-2 py-0.5 text-xs font-semibold text-[#c05a50] @min-[540px]:block">
                           {examTypeLabel}
                         </span>
                       ) : inExamPeriod ? (
@@ -497,7 +497,7 @@ export function ExamPlanner({
                       // (button에 직접 준 text-* 유틸리티는 unlayered 규칙에 밀려 적용되지 않음).
                       // 계획은 truncate/line-clamp/+N 없이 전부 표시 — 내용이 많으면 셀(주 row)이
                       // 자연스럽게 늘어난다 (min-h만 있고 max-h/내부 scroll 없음).
-                      <div className="mt-px space-y-0.5 text-[11px] leading-[14px]">
+                      <div className="mt-px space-y-0.5 text-sm leading-tight">
                         {/* 아주 좁은 컨테이너(모바일)만 본문 대신 개수 marker —
                             날짜를 탭하면 Sheet에서 전체 multiline 본문을 확인한다 */}
                         <span className="mx-auto inline-flex rounded-full bg-[#d9efe3] px-2 py-0.5 font-medium text-[#3d7f64] @min-[540px]:hidden">
@@ -571,10 +571,10 @@ export function ExamPlanner({
             >
               <div className="flex items-start justify-between gap-2 border-b border-[#f0e7e2] px-4 py-3">
                 <div>
-                  <div className="text-[15px] font-semibold text-[#2b2323]">
+                  <div className="card-title text-[#2b2323]">
                     {formatKoreanDate(sheetDate, true)}
                   </div>
-                  <div className="mt-0.5 text-[11px] text-[#8a7b77]">
+                  <div className="mt-0.5 text-sm text-[#8a7b77]">
                     {sheetMode.type === "add"
                       ? "계획 추가"
                       : sheetMode.type === "edit"
@@ -640,7 +640,7 @@ export function ExamPlanner({
                       </div>
                     )}
 
-                    {formError ? <p className="text-xs text-[#a2665f]">{formError}</p> : null}
+                    {formError ? <p className="text-sm text-[#a2665f]">{formError}</p> : null}
 
                     {!readOnly ? (
                       <button

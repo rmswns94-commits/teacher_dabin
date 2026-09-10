@@ -62,7 +62,7 @@ export function AttendanceExcelButton({ month, hasData }: { month: string; hasDa
         <FileSpreadsheet className="h-4 w-4" />
         {isExporting ? "출석부를 만들고 있어요..." : "출석부 엑셀 내보내기"}
       </Button>
-      {error ? <span className="max-w-64 text-right text-xs text-[#a26660]">{error}</span> : null}
+      {error ? <span className="max-w-64 text-right text-sm text-[#a26660]">{error}</span> : null}
     </div>
   );
 }

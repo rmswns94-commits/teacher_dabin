@@ -159,7 +159,7 @@ export default async function GroupDetailPage({
           <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
             <span className="font-medium text-[#4d3a3a]">최근 체크</span>
             {latestLog ? (
-              <span className="text-xs text-[#8a7b77]">
+              <span className="text-sm text-[#8a7b77]">
                 ({formatKoreanDate(latestLog.class_date)} 수업 기준)
               </span>
             ) : null}
@@ -233,7 +233,7 @@ export default async function GroupDetailPage({
                     <input
                       name="name"
                       defaultValue={group.name}
-                      className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8]"
+                      className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8]"
                       required
                     />
                   </label>
@@ -243,7 +243,7 @@ export default async function GroupDetailPage({
                     <select
                       name="grade"
                       defaultValue={group.grade}
-                      className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none"
+                      className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none"
                     >
                       {gradeOptions.map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>
@@ -264,7 +264,7 @@ export default async function GroupDetailPage({
                     name="highlightMemo"
                     defaultValue={group.highlight_memo ?? ""}
                     rows={3}
-                    className="w-full rounded-2xl border border-[#e8ddf3] bg-[#fbf8ff] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                    className="w-full rounded-2xl border border-[#e8ddf3] bg-[#fbf8ff] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                     placeholder="이번 주 Unit 3 마무리 예정. 민수 단어 테스트 재확인."
                   />
                 </label>
@@ -275,7 +275,7 @@ export default async function GroupDetailPage({
                     name="memo"
                     defaultValue={group.memo ?? ""}
                     rows={2}
-                    className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                    className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                     placeholder="화 · 목 오후 6시"
                   />
                 </label>
@@ -284,7 +284,7 @@ export default async function GroupDetailPage({
                   <div className="mb-1 flex items-center gap-2 text-sm font-medium text-[#4d3a3a]">
                     <CalendarClock className="h-4 w-4 text-[#6652b9]" /> 수업 시간
                   </div>
-                  <p className="mb-3 text-xs text-[#8a7b77]">
+                  <p className="mb-3 text-sm text-[#8a7b77]">
                     추가/삭제 버튼은 바로 저장되고, 선택만 해둔 시간은 아래 저장 버튼으로도 함께
                     저장돼요.
                   </p>
@@ -312,7 +312,7 @@ export default async function GroupDetailPage({
           <>
             <div className="grid gap-4 md:grid-cols-3">
               <Card className="p-4">
-                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-[#8b7b77]">
+                <div className="flex items-center gap-2 section-title text-[#8b7b77]">
                   <BookOpen className="h-3.5 w-3.5 text-[#6652b9]" /> 현재 진도
                 </div>
                 {latestProgress ? (
@@ -320,7 +320,7 @@ export default async function GroupDetailPage({
                     <div className="mt-2 line-clamp-3 whitespace-pre-line text-base font-semibold leading-6 text-[#2a2323]">
                       {latestProgress.default_progress || latestProgress.title || "진도 미입력"}
                     </div>
-                    <div className="mt-1 text-xs text-[#8a7b77]">
+                    <div className="mt-1 text-sm text-[#8a7b77]">
                       최근 수업 {formatKoreanDate(latestProgress.class_date)}
                     </div>
                   </>
@@ -330,15 +330,15 @@ export default async function GroupDetailPage({
               </Card>
 
               <Card className="p-4">
-                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-[#8b7b77]">
+                <div className="flex items-center gap-2 section-title text-[#8b7b77]">
                   <Users className="h-3.5 w-3.5 text-[#3e7d6b]" /> 학생
                 </div>
                 <div className="mt-2 text-base font-semibold text-[#2a2323]">{members.length}명</div>
-                <div className="mt-1 text-xs text-[#8a7b77]">{gradeDisplay[group.grade]}</div>
+                <div className="mt-1 text-sm text-[#8a7b77]">{gradeDisplay[group.grade]}</div>
               </Card>
 
               <Card className="p-4">
-                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-[#8b7b77]">
+                <div className="flex items-center gap-2 section-title text-[#8b7b77]">
                   <BookMarked className="h-3.5 w-3.5 text-[#a2686b]" /> 교재
                 </div>
                 {textbooks.length > 0 ? (
@@ -350,7 +350,7 @@ export default async function GroupDetailPage({
                       ) : null}
                     </div>
                     {textbooks.length > 1 ? (
-                      <div className="mt-1 text-xs leading-5 text-[#8a7b77]">
+                      <div className="mt-1 text-sm leading-5 text-[#8a7b77]">
                         {textbooks.slice(1).join(" · ")}
                       </div>
                     ) : null}
@@ -414,7 +414,7 @@ export default async function GroupDetailPage({
                               {formatTextbookLinked(linkedContextLabel(item), item.text)}
                             </span>
                             {item.dueDate ? (
-                              <span className="ml-auto shrink-0 rounded-full bg-[#eef2fb] px-2 py-0.5 text-[10px] font-medium text-[#5b6fae]">
+                              <span className="ml-auto shrink-0 rounded-full bg-[#eef2fb] px-2 py-0.5 text-xs font-medium text-[#5b6fae]">
                                 📅 {formatKoreanDate(item.dueDate)}
                               </span>
                             ) : null}
@@ -436,7 +436,7 @@ export default async function GroupDetailPage({
 
                 {suggestions.length > 0 ? (
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs text-[#8a7b77]">추천:</span>
+                    <span className="text-sm text-[#8a7b77]">추천:</span>
                     {suggestions.map((text) => (
                       <form key={text} action={addPreparationItemAction.bind(null, id)}>
                         <input type="hidden" name="text" value={text} />
@@ -459,7 +459,7 @@ export default async function GroupDetailPage({
                     rows={2}
                     maxLength={300}
                     placeholder={"준비 항목 추가 (예: Unit 3 단어 테스트)\nEnter로 여러 줄도 가능해요"}
-                    className="min-h-[62px] min-w-0 flex-1 rounded-xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-sm outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                    className="min-h-[62px] min-w-0 flex-1 rounded-xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                     required
                   />
                   <PendingButton variant="secondary" size="sm" pendingText="추가 중..." className="gap-1">
@@ -480,20 +480,20 @@ export default async function GroupDetailPage({
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <Card className="p-4">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#6d5aa8]">
+                <div className="flex items-center gap-2 section-title text-[#6d5aa8]">
                   <NotebookTabs className="h-3.5 w-3.5" /> 지난 숙제
                 </div>
-                <div className="mt-2 whitespace-pre-line text-sm leading-6 text-[#3d3450]">
+                <div className="mt-2 whitespace-pre-line text-sm leading-5 text-[#3d3450]">
                   {latestProgress?.homework || (
                     <span className="text-[#9a8db5]">지난 숙제 기록이 없어요.</span>
                   )}
                 </div>
               </Card>
               <Card className="p-4">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#3e7d6b]">
+                <div className="flex items-center gap-2 section-title text-[#3e7d6b]">
                   <CircleArrowRight className="h-3.5 w-3.5" /> 다음 수업
                 </div>
-                <div className="mt-2 whitespace-pre-line text-sm leading-6 text-[#33473f]">
+                <div className="mt-2 whitespace-pre-line text-sm leading-5 text-[#33473f]">
                   {latestProgress?.next_lesson_plan || (
                     <span className="text-[#9a8db5]">아직 다음 수업 계획이 없어요.</span>
                   )}
@@ -527,7 +527,7 @@ export default async function GroupDetailPage({
                             <div className="mt-1 text-sm text-[#564d4d]">{log.title}</div>
                           ) : null}
                           {log.default_progress ? (
-                            <div className="mt-1 flex items-start gap-1.5 text-xs text-[#8a7b77]">
+                            <div className="mt-1 flex items-start gap-1.5 text-sm text-[#8a7b77]">
                               <BookOpen className="mt-0.5 h-3 w-3 shrink-0" />
                               <span className="line-clamp-2 whitespace-pre-line">
                                 {log.default_progress}
@@ -572,12 +572,12 @@ export default async function GroupDetailPage({
                     </summary>
                     <div className="space-y-3 border-t border-[#f0e7e2] p-3">
                       {availableToAdd.length === 0 ? (
-                        <div className="text-xs text-[#8a7b77]">추가 가능한 학생이 없어요.</div>
+                        <div className="text-sm text-[#8a7b77]">추가 가능한 학생이 없어요.</div>
                       ) : (
                         <form action={addStudentToGroupAction.bind(null, id)} className="flex gap-2">
                           <select
                             name="studentId"
-                            className="flex-1 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm outline-none"
+                            className="flex-1 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
                             required
                           >
                             <option value="">학생 선택</option>
@@ -602,7 +602,7 @@ export default async function GroupDetailPage({
                               <form action={removeStudentFromGroupAction.bind(null, id, student.id)}>
                                 <button
                                   type="submit"
-                                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-[#8f625f] transition hover:bg-[#fdf4f1]"
+                                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-[#8f625f] transition hover:bg-[#fdf4f1]"
                                 >
                                   <X className="h-3 w-3" /> 제외
                                 </button>

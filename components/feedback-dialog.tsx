@@ -67,14 +67,14 @@ export function FeedbackDialog() {
         >
           <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
             {sent ? (
-              <div className="py-6 text-center text-sm leading-6 text-[#3d6d58]">
+              <div className="py-6 text-center text-sm leading-5 text-[#3d6d58]">
                 의견 고마워요 🌷
                 <br />더 편하게 쓸 수 있도록 참고할게요.
               </div>
             ) : (
               <>
                 <div className="text-base font-semibold text-[#2a2323]">피드백 보내기 💌</div>
-                <p className="mt-1 text-xs text-[#8a7b77]">어떤 점이 불편했나요?</p>
+                <p className="mt-1 text-sm text-[#8a7b77]">어떤 점이 불편했나요?</p>
 
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {categories.map((item) => (
@@ -101,7 +101,7 @@ export function FeedbackDialog() {
                   rows={4}
                   maxLength={2000}
                   placeholder="자유롭게 적어주세요. 작은 불편함도 큰 도움이 돼요."
-                  className="mt-3 w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                  className="mt-3 w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
                   aria-label="피드백 내용"
                 />
 

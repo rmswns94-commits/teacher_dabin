@@ -86,7 +86,7 @@ export function DailyLogDeleteButton({
               </div>
             </div>
 
-            <p className="mt-3 text-sm leading-6 text-[#7f5d57]">
+            <p className="mt-3 text-sm leading-5 text-[#7f5d57]">
               삭제하면 이 수업일지에 연결된 학생별 출결·평가·칭찬 기록과 아직 처리하지 않은 보충
               항목이 함께 삭제돼요. 이미 완료한 보충수업 이력은 남아요.
             </p>

@@ -61,7 +61,7 @@ function TimeZone({
 }) {
   return (
     <div className="min-w-0">
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8a7fb8]">
+      <div className="caption-text flex items-center gap-1.5 font-semibold uppercase tracking-[0.06em] text-[#8a7fb8]">
         {icon}
         {label}
       </div>
@@ -70,12 +70,12 @@ function TimeZone({
           {big}
         </span>
         {badge ? (
-          <span className="rounded-full bg-[#fdf3e4] px-2 py-0.5 text-[11px] font-medium text-[#94702f]">
+          <span className="rounded-full bg-[#fdf3e4] px-2 py-0.5 text-xs font-medium text-[#94702f]">
             {badge}
           </span>
         ) : null}
       </div>
-      <div className="mt-1 text-xs tabular-nums text-[#8a7b77]">{sub}</div>
+      <div className="mt-1 text-sm tabular-nums text-[#8a7b77]">{sub}</div>
       {progress !== undefined ? (
         <>
           <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-[#efe9f9]">
@@ -85,7 +85,7 @@ function TimeZone({
             />
           </div>
           {progressLabel ? (
-            <div className="mt-1 text-[10px] tabular-nums text-[#a79bc4]">{progressLabel}</div>
+            <div className="mt-1 text-sm tabular-nums text-[#a79bc4]">{progressLabel}</div>
           ) : null}
         </>
       ) : null}
@@ -97,8 +97,8 @@ function MessageZone({ title, sub }: { title: string; sub: string }) {
   return (
     <div className="relative min-w-0 sm:border-l sm:border-[#eee7f7] sm:pl-5">
       <Sparkles aria-hidden className="pointer-events-none absolute right-0 top-0 h-4 w-4 text-[#d3c4ef]" />
-      <div className="text-[15px] font-semibold leading-6 text-[#4a3f66]">{title}</div>
-      <p className="mt-1 text-xs leading-5 text-[#8a7fa8]">{sub}</p>
+      <div className="section-title text-[#4a3f66]">{title}</div>
+      <p className="mt-1 text-sm leading-5 text-[#8a7fa8]">{sub}</p>
     </div>
   );
 }

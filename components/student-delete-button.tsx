@@ -47,7 +47,7 @@ export function StudentDeleteButton({
         <Trash2 className="h-4 w-4" />
         {isPending ? "삭제 중..." : "학생 삭제"}
       </Button>
-      {error ? <p className="text-xs text-[#a2665f]">{error}</p> : null}
+      {error ? <p className="text-sm text-[#a2665f]">{error}</p> : null}
     </div>
   );
 }

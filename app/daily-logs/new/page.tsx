@@ -178,18 +178,18 @@ export default async function NewDailyLogPage({
               <Card className="mb-5 border-[#e8ddf3] bg-[#fbf8ff]">
                 <CardContent className="grid gap-4 p-4 md:grid-cols-2">
                   <div>
-                    <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#6d5aa8]">
+                    <div className="flex items-center gap-1.5 section-title text-[#6d5aa8]">
                       <NotebookTabs className="h-3.5 w-3.5" /> 지난 숙제 ({formatKoreanDate(lastLesson.class_date)})
                     </div>
-                    <div className="mt-2 whitespace-pre-line text-sm leading-6 text-[#3d3450]">
+                    <div className="mt-2 whitespace-pre-line text-sm leading-5 text-[#3d3450]">
                       {lastLesson.homework || "지난 숙제 기록이 없어요."}
                     </div>
                   </div>
                   <div>
-                    <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#3e7d6b]">
+                    <div className="flex items-center gap-1.5 section-title text-[#3e7d6b]">
                       <CircleArrowRight className="h-3.5 w-3.5" /> 지난 시간에 적어둔 오늘 계획
                     </div>
-                    <div className="mt-2 whitespace-pre-line text-sm leading-6 text-[#33473f]">
+                    <div className="mt-2 whitespace-pre-line text-sm leading-5 text-[#33473f]">
                       {lastLesson.next_lesson_plan || "적어둔 계획이 없어요."}
                     </div>
                   </div>

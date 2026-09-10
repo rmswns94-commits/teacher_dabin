@@ -217,12 +217,12 @@ export default async function DashboardPage() {
           <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
             <div className="flex items-end gap-3">
               <div>
-                <h1 className="font-display text-[26px] font-semibold leading-snug tracking-[-0.01em] text-[#2d2928] md:text-3xl">
+                <h1 className="page-title text-[#2d2928]">
                   안녕하세요,
                   <br />
                   {displayName} 선생님 <span aria-hidden>🌷</span>
                 </h1>
-                <p className="mt-2 flex items-center gap-1.5 text-sm text-[#7b746f]">
+                <p className="secondary-text mt-2 flex items-center gap-1.5 text-[#7b746f]">
                   오늘도 하나씩 준비해볼까요?
                   <Doodle kind="leaf" className="h-4 w-4 text-[#9dbfa8]" />
                 </p>
@@ -244,11 +244,11 @@ export default async function DashboardPage() {
               <Tape />
             <Card className="border-[#e8ddf3] bg-gradient-to-br from-[#fbf8ff] to-[#fdf9f4]">
               <CardContent className="p-5">
-                <div className="font-display text-lg font-semibold text-[#2a2323]">환영해요 🌷</div>
-                <p className="mt-2 text-sm leading-6 text-[#564d4d]">
+                <div className="card-title text-[#2a2323]">환영해요 🌷</div>
+                <p className="body-text mt-2 text-[#564d4d]">
                   먼저 수업 그룹을 만들면 나머지가 자연스럽게 이어져요.
                 </p>
-                <ol className="mt-3 space-y-1 text-sm text-[#655d5d]">
+                <ol className="body-text mt-3 space-y-1 text-[#655d5d]">
                   <li>① 수업 그룹 만들기 (요일·시간·교재까지 한 번에)</li>
                   <li>② 학생 등록하고 그룹에 추가하기</li>
                   <li>③ 오늘 수업 기록하기</li>
@@ -282,13 +282,13 @@ export default async function DashboardPage() {
 
               <div className="relative p-6 md:p-7">
                 {allDoneToday ? (
-                  <div className="mb-3 inline-block rounded-full bg-white/75 px-3 py-1.5 text-sm text-[#3d6d58]">
+                  <div className="secondary-text mb-3 inline-block rounded-full bg-white/75 px-3 py-1.5 text-[#3d6d58]">
                     오늘 수업은 모두 끝났어요 ✨
                   </div>
                 ) : null}
 
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8b7ae6]">
+                  <div className="caption-text flex items-center gap-2 font-semibold uppercase tracking-[0.06em] text-[#8b7ae6]">
                     {isCurrentClass ? (
                       <>
                         <CirclePlay className="h-3.5 w-3.5" /> Current class
@@ -301,7 +301,7 @@ export default async function DashboardPage() {
                     <Doodle kind="sparkle" className="h-4 w-4 text-[#c5b6e3]" />
                   </div>
                   {/* 오늘 날짜 — 카드 우측 상단 */}
-                  <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium tabular-nums text-[#6d5aa8]">
+                  <span className="secondary-text rounded-full bg-white/70 px-2.5 py-1 font-medium tabular-nums text-[#6d5aa8]">
                     {formatKoreanDate(today)} ({DAY_LABELS[dayOfWeekOf(today)]})
                   </span>
                 </div>
@@ -314,11 +314,11 @@ export default async function DashboardPage() {
                       <span className="flex min-w-0 items-baseline gap-1.5">
                         <Link
                           href={`/groups/${hero.group.id}`}
-                          className="min-w-0 truncate text-2xl font-semibold tracking-[-0.02em] text-[#2d2928] hover:underline"
+                          className="min-w-0 truncate text-2xl font-bold tracking-[-0.01em] text-[#2d2928] hover:underline"
                         >
                           {hero.group.name}
                         </Link>
-                        <ExamPeriodMark show={isExamPeriodGroup(hero.group.id)} className="text-xs" />
+                        <ExamPeriodMark show={isExamPeriodGroup(hero.group.id)} className="text-sm" />
                       </span>
                       <NextClassCountdown
                         startEpoch={hero.startEpoch}
@@ -327,7 +327,7 @@ export default async function DashboardPage() {
                       />
                     </div>
 
-                    <div className="mt-1.5 text-[15px] tabular-nums text-[#665b5a]">
+                    <div className="secondary-text mt-1.5 tabular-nums text-[#665b5a]">
                       {occurrenceDateLabel(hero)} · {formatTimeRange(hero.schedule.start_time, hero.schedule.end_time)}
                     </div>
 
@@ -405,7 +405,7 @@ export default async function DashboardPage() {
 
           {showEndedNudge && lastEnded ? (
             <Card className="mt-4">
-              <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
+              <CardContent className="secondary-text flex flex-wrap items-center justify-between gap-3 p-4">
                 <span className="text-[#564d4d]">
                   <strong className="text-[#2b2323]">{lastEnded.group.name}</strong> 수업이 끝났어요.
                 </span>
@@ -469,14 +469,14 @@ export default async function DashboardPage() {
                       >
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-sm font-semibold text-[#2b2323]">
+                            <span className="text-base font-semibold text-[#2b2323]">
                               {exam.school ?? exam.title}
                             </span>
                             {exam.school ? (
-                              <span className="text-xs text-[#8a7b77]">{exam.title}</span>
+                              <span className="secondary-text text-[#8a7b77]">{exam.title}</span>
                             ) : null}
                           </div>
-                          <div className="mt-0.5 text-xs tabular-nums text-[#8a7b77]">
+                          <div className="secondary-text mt-0.5 tabular-nums text-[#8a7b77]">
                             {exam.dateLabel}
                             {exam.groupName ? ` · ${exam.groupName}` : ""}
                           </div>
@@ -507,13 +507,13 @@ export default async function DashboardPage() {
                   <div className="flex items-center justify-between gap-3">
                     <CardTitle>Today class</CardTitle>
                     {overview.todayLogs.length > 0 ? (
-                      <span className="text-xs tabular-nums text-[#8a7b77]">{overview.todayLogs.length}개</span>
+                      <span className="secondary-text tabular-nums text-[#8a7b77]">{overview.todayLogs.length}개</span>
                     ) : null}
                   </div>
                 </CardHeader>
                 <CardContent>
                   {overview.todayLogs.length === 0 ? (
-                    <div className="rounded-2xl bg-[#faf5f0] p-4 text-sm text-[#655d5d]">
+                    <div className="body-text rounded-2xl bg-[#faf5f0] p-4 text-[#655d5d]">
                       아직 오늘 작성한 수업일지가 없어요 ☁️
                     </div>
                   ) : (
@@ -531,10 +531,10 @@ export default async function DashboardPage() {
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-medium text-[#2d2928]">{log.group?.name ?? "수업"}</span>
+                              <span className="text-base font-medium text-[#2d2928]">{log.group?.name ?? "수업"}</span>
                               <DailyLogStatusBadge status={log.status} />
                             </div>
-                            <div className="mt-1 flex items-center gap-1.5 text-xs">
+                            <div className="mt-1 flex items-center gap-1.5 text-sm">
                               <span className="rounded-full bg-[#e4f4ec] px-2 py-0.5 tabular-nums text-[#3d7f64]">
                                 출석 {log.attendanceCounts.present}
                               </span>
@@ -568,8 +568,8 @@ export default async function DashboardPage() {
                     {backlog.map((item) => (
                       <Link key={item.key} href={item.href} className="block">
                         <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-2 transition hover:bg-[#f2edf9]">
-                          <span className="text-sm text-[#2d2928]">{item.title}</span>
-                          <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-medium ${item.badgeClass}`}>
+                          <span className="body-text text-[#2d2928]">{item.title}</span>
+                          <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${item.badgeClass}`}>
                             {item.badge}
                           </span>
                         </div>
@@ -590,11 +590,11 @@ export default async function DashboardPage() {
                     {dueWeaknesses.map((weakness) => (
                       <Link key={weakness.id} href={`/students/${weakness.student_id}`} className="block">
                         <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-2 transition hover:bg-[#f2edf9]">
-                          <span className="min-w-0 truncate text-sm text-[#2d2928]">
+                          <span className="body-text min-w-0 truncate text-[#2d2928]">
                             <span className="font-medium">{weakness.student?.name ?? "학생"}</span>
                             <span className="text-[#8a7b77]"> · {weakness.title}</span>
                           </span>
-                          <span className="shrink-0 rounded-full bg-[#fdf3e4] px-2 py-1 text-[10px] font-medium text-[#94702f]">
+                          <span className="shrink-0 rounded-full bg-[#fdf3e4] px-2 py-1 text-xs font-medium text-[#94702f]">
                             {weaknessCategoryLabels[weakness.category]}
                           </span>
                         </div>
@@ -606,12 +606,12 @@ export default async function DashboardPage() {
 
               {followUp ? (
                 <Card>
-                  <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
+                  <CardContent className="secondary-text flex flex-wrap items-center justify-between gap-3 p-4">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a8968f]">
+                      <span className="caption-text font-semibold uppercase tracking-[0.06em] text-[#a8968f]">
                         그 다음
                       </span>
-                      <Link href={`/groups/${followUp.group.id}`} className="min-w-0 truncate font-medium text-[#2b2323] hover:underline">
+                      <Link href={`/groups/${followUp.group.id}`} className="min-w-0 truncate text-base font-medium text-[#2b2323] hover:underline">
                         {followUp.group.name}
                       </Link>
                       <ExamPeriodMark show={isExamPeriodGroup(followUp.group.id)} />

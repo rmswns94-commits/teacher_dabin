@@ -31,7 +31,8 @@ const CardTitle = React.forwardRef<
   <h3
     ref={ref}
     className={cn(
-      "inline-flex w-fit items-center gap-1.5 text-sm font-bold tracking-[-0.01em] text-[#2b2b31]",
+      // card-title = 18px/600 (globals.css의 semantic 클래스 — 앱 전체 카드 제목 공통)
+      "card-title inline-flex w-fit items-center gap-1.5 text-[#2b2b31]",
       className,
     )}
     {...props}

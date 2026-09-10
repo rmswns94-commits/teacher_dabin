@@ -156,7 +156,7 @@ export default async function AttendancePage({
             className="mb-5 rounded-3xl border border-[#d5e6f3] bg-gradient-to-b from-[#e2f0fa] via-[#edf5fb] to-[#eef6ef] p-3 shadow-sm sm:p-4"
           >
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1 pb-1">
-              <h2 className="text-xl font-semibold tracking-[-0.01em] text-[#2b2323]">
+              <h2 className="card-title text-[#2b2323]">
                 {monthLabel(month)}
               </h2>
               <div className="flex items-center gap-1">
@@ -190,7 +190,7 @@ export default async function AttendancePage({
                   <div
                     key={label}
                     className={cn(
-                      "px-1 text-center text-[10px] font-bold tracking-[0.08em] sm:text-[11px]",
+                      "px-1 text-center text-xs font-semibold tracking-[0.04em]",
                       index === 0 || index === 6 ? WEEKEND_TEXT : "text-[#4a4a55]",
                     )}
                   >
@@ -242,7 +242,7 @@ export default async function AttendancePage({
                         <div className="flex min-w-0 flex-col items-center gap-0.5">
                           <span
                             className={cn(
-                              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums",
+                              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums",
                               isToday
                                 ? "bg-[#8b7ae6] text-white"
                                 : isWeekend
@@ -259,7 +259,7 @@ export default async function AttendancePage({
                                   <span
                                     key={status}
                                     className={cn(
-                                      "max-w-full truncate text-[10px] font-semibold leading-[14px] tabular-nums sm:text-[11px] sm:leading-4",
+                                      "max-w-full truncate text-sm font-semibold leading-tight tabular-nums sm:text-sm sm:leading-5",
                                       countTextColors[status],
                                     )}
                                   >
@@ -290,7 +290,7 @@ export default async function AttendancePage({
             </div>
 
             {entries.length === 0 ? (
-              <div className="mt-3 flex items-center justify-center gap-2 rounded-2xl bg-white/70 px-3 py-2.5 text-center text-xs text-[#6c7f92]">
+              <div className="mt-3 flex items-center justify-center gap-2 rounded-2xl bg-white/70 px-3 py-2.5 text-center text-sm text-[#6c7f92]">
                 <ClipboardCheck className="h-3.5 w-3.5 text-[#8fabc6]" aria-hidden />
                 이번 달에는 아직 출결 기록이 없어요. 수업일지를 작성 완료하면 여기에 반영돼요.
               </div>
@@ -300,7 +300,7 @@ export default async function AttendancePage({
           {selectedDate ? (
             <div className="mt-6">
               <div className="flex flex-wrap items-baseline gap-2">
-                <h2 className="text-xl font-semibold text-[#2d2928]">
+                <h2 className="card-title text-[#2d2928]">
                   {formatKoreanDate(selectedDate, true)}
                 </h2>
                 {selectedEntries.length > 0 ? (
@@ -317,7 +317,7 @@ export default async function AttendancePage({
                 </Card>
               ) : (
                 <>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm">
                     {ATTENDANCE_ORDER.map((status) => (
                       <span
                         key={status}
@@ -341,7 +341,7 @@ export default async function AttendancePage({
                               {section.groupName}
                             </span>
                             {section.timeLabel ? (
-                              <span className="text-xs tabular-nums text-[#8a7b77]">
+                              <span className="text-sm tabular-nums text-[#8a7b77]">
                                 {section.timeLabel}
                               </span>
                             ) : null}
@@ -356,7 +356,7 @@ export default async function AttendancePage({
                                 <span className="font-medium text-[#2d2928]">
                                   {entry.studentName}
                                 </span>
-                                <span className="rounded-full bg-[#f2effc] px-2 py-0.5 text-[10px] text-[#5f54b8]">
+                                <span className="rounded-full bg-[#f2effc] px-2 py-0.5 text-xs text-[#5f54b8]">
                                   {gradeDisplay[entry.studentGrade as keyof typeof gradeDisplay] ??
                                     entry.studentGrade}
                                 </span>

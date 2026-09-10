@@ -162,7 +162,7 @@ export default async function MonthlyReflectionsPage({
                       {bullets.map((text, index) => (
                         <li
                           key={index}
-                          className="flex gap-2 whitespace-pre-wrap break-words text-sm leading-6 text-[#4a4160]"
+                          className="flex gap-2 whitespace-pre-wrap break-words text-sm leading-5 text-[#4a4160]"
                         >
                           <span aria-hidden className="shrink-0">•</span>
                           <span className="min-w-0">{text}</span>
@@ -175,7 +175,7 @@ export default async function MonthlyReflectionsPage({
 
               {/* 날짜별 회고 history — 최신 날짜부터, 펼치면 반별 원문 (truncate 없음) */}
               <div>
-                <h2 className="mb-2.5 text-base font-bold text-[#2b2323]">날짜별 회고</h2>
+                <h2 className="card-title mb-2.5 text-[#2b2323]">날짜별 회고</h2>
                 <div className="space-y-2.5">
                   {dates.map((date) => {
                     const classes = sortedClassesOf(date);
@@ -186,7 +186,7 @@ export default async function MonthlyReflectionsPage({
                           <span className="font-semibold text-[#2d2928]">
                             {formatKoreanDate(date, true)}
                           </span>
-                          <span className="flex items-center gap-1.5 text-xs font-medium text-[#5c4ca8]">
+                          <span className="flex items-center gap-1.5 text-sm font-medium text-[#5c4ca8]">
                             {classes.length}개 반 · 펼쳐보기
                             <ChevronDown
                               className="h-3.5 w-3.5 transition group-open:rotate-180"
@@ -212,7 +212,7 @@ export default async function MonthlyReflectionsPage({
                                 </span>
                                 <Link
                                   href={`/daily-logs/${row.id}`}
-                                  className="flex shrink-0 items-center gap-0.5 text-xs font-medium text-[#5c4ca8] hover:underline"
+                                  className="flex shrink-0 items-center gap-0.5 text-sm font-medium text-[#5c4ca8] hover:underline"
                                 >
                                   일지 보기 <ChevronRight className="h-3.5 w-3.5" aria-hidden />
                                 </Link>
@@ -242,13 +242,13 @@ export default async function MonthlyReflectionsPage({
                                     >
                                       <div
                                         className={cn(
-                                          "text-[11px] font-semibold",
+                                          "text-sm font-semibold",
                                           section.labelClass,
                                         )}
                                       >
                                         {section.classLabel}
                                       </div>
-                                      <div className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-[#4a4160]">
+                                      <div className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-[#4a4160]">
                                         {value}
                                       </div>
                                     </div>

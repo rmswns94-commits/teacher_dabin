@@ -58,7 +58,7 @@ export function TodoDeleteButton({
         >
           <div className="w-full max-w-xs rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
             <div className="font-semibold text-[#2a2323]">이 할 일을 삭제할까요?</div>
-            <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-[#655d5d]">{text}</p>
+            <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-5 text-[#655d5d]">{text}</p>
             <div className="mt-4 flex justify-end gap-2">
               <Button
                 type="button"

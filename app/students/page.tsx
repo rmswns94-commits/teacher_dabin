@@ -220,12 +220,12 @@ export default async function StudentsPage({
           <PageHeader title="학생" description="학생 한 명 한 명의 최근 모습을 확인해요." />
 
           {params.saved ? (
-            <div className="mb-4 rounded-2xl border border-[#d8ebe0] bg-[#f0faf5] px-4 py-3 text-sm text-[#2f6d54]">
+            <div className="mb-4 rounded-2xl border border-[#d8ebe0] bg-[#f0faf5] px-4 py-3 secondary-text text-[#2f6d54]">
               학생 정보를 수정했어요.
             </div>
           ) : null}
           {params.deleted ? (
-            <div className="mb-4 rounded-2xl border border-[#e9d8d3] bg-[#faf3f0] px-4 py-3 text-sm text-[#7f5d57]">
+            <div className="mb-4 rounded-2xl border border-[#e9d8d3] bg-[#faf3f0] px-4 py-3 secondary-text text-[#7f5d57]">
               학생을 삭제했어요.
             </div>
           ) : null}
@@ -241,7 +241,7 @@ export default async function StudentsPage({
                 <input
                   defaultValue={params.q ?? ""}
                   name="q"
-                  className="flex-1 border-none bg-transparent text-sm text-[#433d3d] outline-none placeholder:text-[#9b8e8a]"
+                  className="flex-1 border-none bg-transparent text-base text-[#433d3d] outline-none placeholder:text-[#9b8e8a]"
                   placeholder="학생 이름 또는 학교 이름 검색"
                 />
                 <Button type="submit" variant="secondary" size="sm">
@@ -276,7 +276,7 @@ export default async function StudentsPage({
                   key={filter.key}
                   href={filterHref(filter.key)}
                   className={cn(
-                    "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                    "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition",
                     isActive
                       ? "border-[#e3c9d6] bg-[#fbeff4] text-[#a05a7c]"
                       : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
@@ -301,7 +301,7 @@ export default async function StudentsPage({
                   href={sortHref(sortOption.key)}
                   title={isActive ? "다시 누르면 반대로 정렬돼요" : undefined}
                   className={cn(
-                    "flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                    "flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm font-medium transition",
                     isActive
                       ? "border-[#d3c8ec] bg-[#f2edf9] text-[#5c4ca8]"
                       : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
@@ -317,7 +317,7 @@ export default async function StudentsPage({
 
           {activeStudents.length === 0 && !q ? (
             <Card>
-              <CardContent className="flex flex-col items-start gap-3 p-6 text-sm text-[#655d5d]">
+              <CardContent className="body-text flex flex-col items-start gap-3 p-6 text-[#655d5d]">
                 아직 등록된 학생이 없어요 🌱
                 <br />첫 학생을 등록하고 수업 기록을 시작해볼까요?
                 <StudentCreateDialog groups={groupOptions} label="첫 학생 등록하기" />
@@ -325,7 +325,7 @@ export default async function StudentsPage({
             </Card>
           ) : visibleStudents.length === 0 ? (
             <Card>
-              <CardContent className="p-6 text-sm text-[#655d5d]">{emptyMessage}</CardContent>
+              <CardContent className="body-text p-6 text-[#655d5d]">{emptyMessage}</CardContent>
             </Card>
           ) : (
             <div className="space-y-2.5">
@@ -349,8 +349,8 @@ export default async function StudentsPage({
 
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <span className="font-semibold text-[#2d2928]">{student.name}</span>
-                            <span className="text-xs text-[#8a7b77]">
+                            <span className="text-base font-semibold text-[#2d2928]">{student.name}</span>
+                            <span className="secondary-text text-[#8a7b77]">
                               {[
                                 formatGrade(student.grade),
                                 student.gender ? genderShortLabels[student.gender] : "",
@@ -359,7 +359,7 @@ export default async function StudentsPage({
                                 .join(" · ")}
                             </span>
                             {student.birth_date ? (
-                              <span className="flex items-center gap-0.5 text-xs tabular-nums text-[#b08fa0]">
+                              <span className="flex items-center gap-0.5 text-sm tabular-nums text-[#b08fa0]">
                                 <Cake className="h-3 w-3" aria-hidden />
                                 {formatShortMonthDay(student.birth_date)}
                               </span>
@@ -371,17 +371,17 @@ export default async function StudentsPage({
                               studentGroups.map((name) => (
                                 <span
                                   key={name}
-                                  className="rounded-full bg-[#f2edf9] px-2 py-0.5 text-[11px] text-[#5f54b8]"
+                                  className="rounded-full bg-[#f2edf9] px-2 py-0.5 text-xs text-[#5f54b8]"
                                 >
                                   {name}
                                 </span>
                               ))
                             ) : (
-                              <span className="rounded-full bg-[#f3ece3] px-2 py-0.5 text-[11px] text-[#8a7460]">
+                              <span className="rounded-full bg-[#f3ece3] px-2 py-0.5 text-xs text-[#8a7460]">
                                 미배정
                               </span>
                             )}
-                            <span className="text-[11px] text-[#a89a95]">
+                            <span className="secondary-text text-[#a89a95]">
                               {status.latestDate
                                 ? `최근 수업 · ${formatKoreanDate(status.latestDate)}`
                                 : "최근 30일 수업 기록 없음"}
@@ -389,7 +389,7 @@ export default async function StudentsPage({
                           </div>
 
                           {status.latestComment ? (
-                            <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-[#564d4d]">
+                            <p className="secondary-text mt-1.5 line-clamp-2 text-[#564d4d]">
                               “{status.latestComment}”
                             </p>
                           ) : null}
@@ -400,7 +400,7 @@ export default async function StudentsPage({
                                 <span
                                   key={badge.label}
                                   className={cn(
-                                    "rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums",
+                                    "rounded-full px-2 py-0.5 text-xs font-medium tabular-nums",
                                     badge.className,
                                   )}
                                 >
@@ -422,7 +422,7 @@ export default async function StudentsPage({
 
           {archivedStudents.length > 0 && !q && !activeFilter ? (
             <details className="mt-6">
-              <summary className="cursor-pointer text-sm font-medium text-[#756a67]">
+              <summary className="section-title cursor-pointer font-medium text-[#756a67]">
                 보관된 학생 {archivedStudents.length}명 보기
               </summary>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -430,7 +430,7 @@ export default async function StudentsPage({
                   <Link key={student.id} href={`/students/${student.id}`} className="block">
                     <div className="flex min-h-11 items-center justify-between rounded-xl border border-[#ece0db] bg-white/70 px-3 py-2 text-sm text-[#8a7b77] transition hover:bg-[#faf6f3]">
                       <span>{student.name}</span>
-                      <span className="text-xs">{formatGrade(student.grade)}</span>
+                      <span className="secondary-text">{formatGrade(student.grade)}</span>
                     </div>
                   </Link>
                 ))}

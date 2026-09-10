@@ -20,10 +20,10 @@ export default function GlobalError({
     <div className="flex min-h-screen items-center justify-center bg-[#f7f3ee] px-4">
       <Card className="w-full max-w-sm">
         <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
-          <div className="font-display text-lg font-semibold text-[#2a2323]">
+          <div className="card-title text-[#2a2323]">
             문제가 발생했어요
           </div>
-          <p className="text-sm leading-6 text-[#655d5d]">
+          <p className="text-sm leading-5 text-[#655d5d]">
             잠시 후 다시 시도해주세요.
             <br />
             같은 문제가 반복되면 피드백으로 알려주세요.
