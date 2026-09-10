@@ -202,6 +202,8 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
             dueDate: hw.due_date,
             textbook: hw.textbook ?? "",
             school: hw.school ?? "",
+            // 저장된 대상(null=공통) 그대로 복원 — 그룹에서 빠진 학생이어도 공통으로 바꾸지 않는다
+            assignedStudentId: hw.assigned_student_id ?? "",
           }))}
           // 시험 기간 context — 새 항목의 기본 context 결정용 (기존 항목은 저장 필드 보존).
           // 학교 목록 source = 이 그룹 소속 학생들의 students.school (이미 조회한 멤버 재사용)

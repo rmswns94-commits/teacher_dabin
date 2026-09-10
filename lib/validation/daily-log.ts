@@ -61,6 +61,8 @@ export const homeworkAssignmentSchema = z.object({
   textbook: shortText(100, "숙제 교재"),
   // 시험 기간 ON 당시 학교 context (textbook과 배타적 — 폼이 한쪽만 채운다)
   school: shortText(100, "숙제 학교"),
+  // 숙제 대상 학생 — 빈 문자열/null = 반 공통. 실제 소속 검증은 서버(save)에서 한다.
+  assignedStudentId: z.string().uuid().nullable().optional().or(z.literal("")),
 });
 
 // 교재별 섹션(진도/다음 수업 계획) — 작성 시점 교재 이름 스냅샷 + 여러 줄 내용

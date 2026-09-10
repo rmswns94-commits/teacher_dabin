@@ -7,7 +7,11 @@ import { AttendanceBadge, DailyLogStatusBadge, MakeupStatusBadge } from "@/compo
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate } from "@/lib/dates";
-import { buildHomeworkMirror } from "@/lib/homework-assignments";
+import {
+  formatHomeworkDisplay,
+  homeworkAudienceLabel,
+  isDerivedHomeworkMirror,
+} from "@/lib/homework-assignments";
 import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import {
@@ -155,9 +159,13 @@ export function LessonLogDetail({
                       <div className="text-sm font-semibold text-[#ad8c53]">
                         {formatKoreanDate(hw.due_date)}까지
                       </div>
-                      {/* 교재/학교 context가 연결된 숙제는 "이름 - 내용" (없으면 내용만) */}
+                      {/* 대상(공통/학생) + 교재·학교 context — 공용 formatter 하나로 조립 */}
                       <div className="body-text mt-0.5 whitespace-pre-wrap break-words text-[#5c4a2e]">
-                        {formatTextbookLinked(linkedContextLabel(hw), hw.content)}
+                        {formatHomeworkDisplay({
+                          audienceLabel: homeworkAudienceLabel(hw.assignedStudentName),
+                          contextLabel: linkedContextLabel(hw),
+                          content: hw.content,
+                        })}
                       </div>
                     </div>
                   ))}
@@ -165,18 +173,17 @@ export function LessonLogDetail({
               </div>
             ) : null}
             {detail.homework &&
-            // 구조화 숙제의 파생 mirror 텍스트는 중복이라 숨긴다 (진짜 legacy 메모만 표시)
-            !(
-              detail.homeworkAssignments.length > 0 &&
-              detail.homework ===
-                buildHomeworkMirror(
-                  detail.homeworkAssignments.map((hw) => ({
-                    content: hw.content,
-                    dueDate: hw.due_date,
-                    textbook: hw.textbook,
-                    school: hw.school,
-                  })),
-                )
+            // 구조화 숙제의 파생 mirror 텍스트는 중복이라 숨긴다 (진짜 legacy 메모만 표시).
+            // 대상 라벨이 없던 옛 mirror 형식도 인식한다 — 과거 일지에 중복 블록이 생기지 않게.
+            !isDerivedHomeworkMirror(
+              detail.homework,
+              detail.homeworkAssignments.map((hw) => ({
+                content: hw.content,
+                dueDate: hw.due_date,
+                textbook: hw.textbook,
+                school: hw.school,
+                assignedStudentName: hw.assignedStudentName,
+              })),
             ) ? (
               <div className="rounded-2xl bg-[#fdf6ec] p-3.5">
                 <div className="flex items-center gap-1.5 section-title text-[#94702f]">

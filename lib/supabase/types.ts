@@ -174,6 +174,9 @@ export type DailyLogHomeworkAssignmentRecord = {
   due_date: string; // "YYYY-MM-DD" (KST date-only)
   textbook: string | null; // 연결 교재 이름 스냅샷 (없으면 null — content만 표시)
   school: string | null; // 시험 기간 ON 당시 학교 context 이름 스냅샷 (textbook과 배타적)
+  // 숙제 대상: null = 반 공통, uuid = 그 학생 한 명 ("공통"용 가짜 학생 row는 만들지 않는다).
+  // 학생이 삭제되면 on delete set null로 공통이 아니라 "연결 끊김"이 되지만, 기록 자체는 남는다.
+  assigned_student_id: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;

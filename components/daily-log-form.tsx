@@ -39,6 +39,7 @@ import { WeaknessFormDialog, type WeaknessFormValues } from "@/components/weakne
 import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comments";
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate } from "@/lib/dates";
+import { sortByKoreanName } from "@/lib/korean-sort";
 import { nextClassDateAfter } from "@/lib/schedule";
 import { vocabWordKey } from "@/lib/vocab";
 import { currentEpochMs } from "@/lib/todo-window";
@@ -170,7 +171,15 @@ type DraftPayload = {
   homework: string;
   homeworkDueDate: string;
   // 오늘 숙제(구조화) — draft 단계에서는 payload에만 유지 (row 생성 없음)
-  homeworkAssignments: { id: string | null; content: string; dueDate: string; textbook: string; school: string }[];
+  homeworkAssignments: {
+    id: string | null;
+    content: string;
+    dueDate: string;
+    textbook: string;
+    school: string;
+    // 숙제 대상 학생 id — "" = 공통 (draft에도 그대로 실려 복원된다)
+    assignedStudentId: string;
+  }[];
   nextLessonPlan: string;
   nextPlanDate: string;
   // 교재별 진도/다음 수업 계획 — [{ name, text }] (내용 있는 교재만)
@@ -199,6 +208,8 @@ type AssignmentItem = {
   dueDate: string;
   textbook: string;
   school: string;
+  // 숙제 대상: "" = 공통, 그 외 = 학생 id (이름이 아니라 id가 identity)
+  assignedStudentId: string;
 };
 
 function restoredAssignments(value: unknown): AssignmentItem[] | null {
@@ -207,7 +218,16 @@ function restoredAssignments(value: unknown): AssignmentItem[] | null {
   }
   return value
     .filter(
-      (item): item is { id?: unknown; content: string; dueDate: string; textbook?: unknown; school?: unknown } =>
+      (
+        item,
+      ): item is {
+        id?: unknown;
+        content: string;
+        dueDate: string;
+        textbook?: unknown;
+        school?: unknown;
+        assignedStudentId?: unknown;
+      } =>
         Boolean(item) &&
         typeof (item as { content?: unknown }).content === "string" &&
         typeof (item as { dueDate?: unknown }).dueDate === "string",
@@ -219,6 +239,7 @@ function restoredAssignments(value: unknown): AssignmentItem[] | null {
       dueDate: item.dueDate,
       textbook: typeof item.textbook === "string" ? item.textbook : "",
       school: typeof item.school === "string" ? item.school : "",
+      assignedStudentId: typeof item.assignedStudentId === "string" ? item.assignedStudentId : "",
     }));
 }
 
@@ -525,7 +546,15 @@ export function DailyLogForm({
     reflectionNext?: string;
   };
   // 오늘 숙제(구조화) — 수정 화면에서 기존 row 복원용 (id 기반 sync)
-  initialAssignments?: { id: string; content: string; dueDate: string; textbook?: string | null; school?: string | null }[];
+  initialAssignments?: {
+    id: string;
+    content: string;
+    dueDate: string;
+    textbook?: string | null;
+    school?: string | null;
+    // 저장된 숙제 대상 학생 id (없으면 공통) — Edit 화면 hydrate용
+    assignedStudentId?: string | null;
+  }[];
   // 같은 그룹 직전 completed 일지의 "다음에 다르게 해볼 것" — 회고 카드에 리마인드로 표시
   previousReflection?: { classDate: string; reflectionNext: string } | null;
 }) {
@@ -603,6 +632,7 @@ export function DailyLogForm({
         dueDate: item.dueDate,
         textbook: item.textbook ?? "",
         school: item.school ?? "",
+        assignedStudentId: item.assignedStudentId ?? "",
       })),
   );
   // legacy free-text 숙제: 구조화 row가 있는 일지는 homework 필드가 파생 mirror라 폼에 싣지 않는다
@@ -747,13 +777,16 @@ export function DailyLogForm({
       homework,
       homeworkDueDate,
       // key(렌더용)는 제외 — draft payload/스냅샷에는 저장 데이터만
-      homeworkAssignments: assignments.map(({ id, content, dueDate, textbook, school: hwSchool }) => ({
-        id,
-        content,
-        dueDate,
-        textbook,
-        school: hwSchool,
-      })),
+      homeworkAssignments: assignments.map(
+        ({ id, content, dueDate, textbook, school: hwSchool, assignedStudentId }) => ({
+          id,
+          content,
+          dueDate,
+          textbook,
+          school: hwSchool,
+          assignedStudentId,
+        }),
+      ),
       nextLessonPlan,
       nextPlanDate,
       // 교재별 섹션 — 내용 있는 교재만 [{name,text}]로 (draft 복원 대칭)
@@ -1169,6 +1202,73 @@ export function DailyLogForm({
     );
   };
 
+  // 숙제 대상 후보 — 현재 선택된 그룹 학생만 (전체 학생 목록 사용 금지).
+  // 시험 기간 ON + 학교 context가 정해진 숙제는 그 학교 학생만 (다른 학교 학생이 섞이지 않게).
+  // 이미 조회돼 prop으로 들어온 students를 그대로 쓰므로 숙제 개수와 무관하게 추가 쿼리 0.
+  const homeworkAudienceOptions = (schoolContext: string) => {
+    // 학교 칸이 비어 있어도 화면에는 단일 학교가 표시되므로(schoolContextControl과 같은 규칙)
+    // 후보도 그 학교 기준으로 맞춘다 — 보이는 것과 고를 수 있는 것이 어긋나지 않게.
+    const school = (schoolContext.trim() || (examPeriod ? schools[0] ?? "" : "")).trim();
+    const pool =
+      examPeriod && school
+        ? students.filter((student) => (student.school?.trim() ?? "") === school)
+        : students;
+    return sortByKoreanName(
+      pool,
+      (student) => student.name,
+      (student) => student.studentId,
+    );
+  };
+
+  // 대상 학생 Select — 첫 option은 항상 "공통"(가짜 학생 row가 아니라 빈 값).
+  // 저장된 대상이 현재 후보에 없으면(그룹/학교가 바뀐 과거 항목) 그 항목만 앞에 보존 표시한다.
+  const audienceControl = (
+    value: string,
+    schoolContext: string,
+    onChange: (next: string) => void,
+    ariaLabel: string,
+  ) => {
+    const options = homeworkAudienceOptions(schoolContext);
+    const savedOutsider =
+      value && !options.some((student) => student.studentId === value)
+        ? students.find((student) => student.studentId === value)
+        : null;
+    return (
+      <label className="form-label flex items-center gap-2 text-[#7c6d69]">
+        <span className="shrink-0">학생</span>
+        <select
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          aria-label={ariaLabel}
+          className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#dfe4ee] bg-[#f5f7fb] px-2.5 py-1.5 text-base font-medium text-[#4a5568] outline-none"
+        >
+          <option value="">공통</option>
+          {savedOutsider ? (
+            <option key={savedOutsider.studentId} value={savedOutsider.studentId}>
+              {savedOutsider.name}
+            </option>
+          ) : null}
+          {options.map((student) => (
+            <option key={student.studentId} value={student.studentId}>
+              {student.name}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  };
+
+  // 학교 context가 바뀌면 그 학교 학생이 아닌 대상은 공통으로 되돌린다 —
+  // 다른 학교 숙제에 남의 학교 학생 id가 몰래 남지 않게 (작성 중 입력에만 적용).
+  const audienceForSchool = (studentId: string, nextSchool: string) => {
+    if (!studentId) {
+      return "";
+    }
+    return homeworkAudienceOptions(nextSchool).some((student) => student.studentId === studentId)
+      ? studentId
+      : "";
+  };
+
   // [전체 학생에게 적용] — 버튼 한 번으로 진도를 전 학생에게.
   // 결석 학생은 기존 정책대로 놓친 진도 기본값으로만 채운다.
   // 시험 기간 ON + 학교별 진도가 있으면: 학생마다 "자기 학교(Student.school)" 진도만 적용
@@ -1292,13 +1392,17 @@ export function DailyLogForm({
         memo,
         homework,
         homeworkDueDate: homework.trim() ? homeworkDueDate : "",
-        homeworkAssignments: cleanedAssignments.map(({ id, content, dueDate, textbook, school: hwSchool }) => ({
-          id,
-          content,
-          dueDate,
-          textbook,
-          school: hwSchool,
-        })),
+        homeworkAssignments: cleanedAssignments.map(
+          ({ id, content, dueDate, textbook, school: hwSchool, assignedStudentId }) => ({
+            id,
+            content,
+            dueDate,
+            textbook,
+            school: hwSchool,
+            // "" = 공통 → 서버에서 null로 저장 (소유 검증도 서버에서)
+            assignedStudentId: assignedStudentId || null,
+          }),
+        ),
         nextLessonPlan: derivedNextLessonPlan,
         nextPlanDate: derivedNextLessonPlan.trim() ? nextPlanDate : "",
         textbookProgress: progressSections,
@@ -1690,7 +1794,16 @@ export function DailyLogForm({
                           item.school,
                           (next) =>
                             setAssignments((prev) =>
-                              prev.map((it) => (it.key === item.key ? { ...it, school: next } : it)),
+                              prev.map((it) =>
+                                it.key === item.key
+                                  ? {
+                                      ...it,
+                                      school: next,
+                                      // 새 학교 학생이 아니면 대상은 공통으로 안전하게 reset
+                                      assignedStudentId: audienceForSchool(it.assignedStudentId, next),
+                                    }
+                                  : it,
+                              ),
                             ),
                           `숙제 ${index + 1} 학교 선택`,
                         )
@@ -1718,6 +1831,18 @@ export function DailyLogForm({
                           </select>
                         </label>
                       ) : null}
+                      {/* 대상 학생 — 교재/학교 바로 아래. 기본값 공통, 교재 변경과는 독립 */}
+                      {audienceControl(
+                        item.assignedStudentId,
+                        item.school,
+                        (next) =>
+                          setAssignments((prev) =>
+                            prev.map((it) =>
+                              it.key === item.key ? { ...it, assignedStudentId: next } : it,
+                            ),
+                          ),
+                        `숙제 ${index + 1} 학생 선택`,
+                      )}
                       <textarea
                         value={item.content}
                         onChange={(event) => {
@@ -1780,6 +1905,8 @@ export function DailyLogForm({
                         // 시험 기간 ON: 학교 context(학생 학교 1개면 자동) / OFF: 교재 context
                         textbook: examPeriod ? "" : textbooks.length === 1 ? textbooks[0] : "",
                         school: examPeriod && schools.length === 1 ? schools[0] : "",
+                        // 숙제 대상 기본값은 항상 공통 — Teacher가 고르지 않으면 반 전체 숙제
+                        assignedStudentId: "",
                       },
                     ])
                   }

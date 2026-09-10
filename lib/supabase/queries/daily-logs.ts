@@ -95,6 +95,11 @@ export type StudentLessonLogWithStudent = StudentLessonLogRecord & {
   student: Pick<StudentRecord, "id" | "name" | "grade" | "school"> | null;
 };
 
+// 숙제 row + 대상 학생 이름(relation embed). 표시는 이름, identity는 assigned_student_id다.
+export type HomeworkAssignmentWithAudience = DailyLogHomeworkAssignmentRecord & {
+  assignedStudentName: string | null;
+};
+
 export type DailyLogDetail = DailyLogRecord & {
   // textbook: 수업 제목 옆 "교재 LIST" 보조 버튼용 (줄바꿈 구분 여러 권 — 그룹 상세와 동일 포맷)
   // is_exam_period: 시험 기간 context용 (edit 화면의 새 항목 기본 context 결정 —
@@ -102,8 +107,9 @@ export type DailyLogDetail = DailyLogRecord & {
   group: Pick<ClassGroupRecord, "id" | "name" | "grade" | "textbook" | "is_exam_period"> | null;
   lessonLogs: StudentLessonLogWithStudent[];
   makeups: MakeupLessonRecord[];
-  // 오늘 숙제(구조화) — 완료일 ASC. migration 미적용/조회 실패 시 [] (화면은 항상 뜬다)
-  homeworkAssignments: DailyLogHomeworkAssignmentRecord[];
+  // 오늘 숙제(구조화) — 완료일 ASC. migration 미적용/조회 실패 시 [] (화면은 항상 뜬다).
+  // assignedStudentName은 relation embed로 함께 받는다 (숙제마다 학생 쿼리 금지 — N+1 없음).
+  homeworkAssignments: HomeworkAssignmentWithAudience[];
   // 이 일지의 "해야 할 일" linked Todo들 (공용 preparation 항목 — 복제 아님, 같은 row 상태).
   // 삭제(dismissed)된 항목은 제외. 조회 실패 시 [] (화면은 항상 뜬다)
   linkedTasks: { id: string; text: string; textbook: string | null; school: string | null; dueDate: string | null; completed: boolean }[];
@@ -166,11 +172,14 @@ export async function getDailyLogDetailForCurrentUser(
     }
   }
 
-  // 오늘 숙제(구조화) — 일지당 batch 1쿼리 (항목별 반복 쿼리 없음), 미적용/실패 시 []
-  let homeworkAssignments: DailyLogHomeworkAssignmentRecord[] = [];
+  // 오늘 숙제(구조화) — 일지당 batch 1쿼리 (항목별 반복 쿼리 없음), 미적용/실패 시 [].
+  // 대상 학생 이름은 같은 쿼리의 relation embed로 받는다 (숙제가 N개여도 학생 쿼리 추가 0).
+  let homeworkAssignments: HomeworkAssignmentWithAudience[] = [];
   const { data: hwRows, error: hwError } = await supabase
     .from("daily_log_homework_assignments")
-    .select("id, user_id, daily_log_id, content, due_date, textbook, school, sort_order, created_at, updated_at")
+    .select(
+      "id, user_id, daily_log_id, content, due_date, textbook, school, assigned_student_id, sort_order, created_at, updated_at, assigned_student:students(id, name)",
+    )
     .eq("user_id", user.id)
     .eq("daily_log_id", dailyLogId)
     .order("due_date", { ascending: true })
@@ -184,7 +193,13 @@ export async function getDailyLogDetailForCurrentUser(
       });
     }
   } else {
-    homeworkAssignments = (hwRows ?? []) as DailyLogHomeworkAssignmentRecord[];
+    homeworkAssignments = (hwRows ?? []).map((row) => {
+      const { assigned_student: student, ...rest } = row as DailyLogHomeworkAssignmentRecord & {
+        assigned_student?: { id: string; name: string } | { id: string; name: string }[] | null;
+      };
+      const linked = Array.isArray(student) ? student[0] : student;
+      return { ...rest, assignedStudentName: linked?.name ?? null };
+    });
   }
 
   // 해야 할 일 linked Todo들 — 그룹 preparation_items에서 이 일지 소유 항목 조회 (batch jsonb 1쿼리)
@@ -437,7 +452,15 @@ async function syncHomeworkAssignments(
   supabase: NonNullable<Awaited<ReturnType<typeof createServerSupabaseClient>>>,
   userId: string,
   dailyLogId: string,
-  items: { id?: string | null; content: string; dueDate: string; textbook?: string | null; school?: string | null }[],
+  items: {
+    id?: string | null;
+    content: string;
+    dueDate: string;
+    textbook?: string | null;
+    school?: string | null;
+    // 이미 소유 검증을 통과한 값만 들어온다 (null = 공통)
+    assignedStudentId?: string | null;
+  }[],
 ) {
   const { data: existingRows, error: readError } = await supabase
     .from("daily_log_homework_assignments")
@@ -486,6 +509,7 @@ async function syncHomeworkAssignments(
     due_date: item.dueDate,
     textbook: item.textbook?.trim() || null,
     school: item.school?.trim() || null,
+    assigned_student_id: item.assignedStudentId ?? null,
     sort_order: index,
   }));
 
@@ -718,22 +742,42 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   }
 
   const studentIds = input.students.map((entry) => entry.studentId);
+  // 숙제 대상으로 지정된 학생도 같은 조회에 포함한다 — 숙제가 N개여도 쿼리는 이 1개뿐.
+  // 이름까지 같이 받아 mirror 텍스트(지난 숙제)에 쓴다 (학생별 추가 조회 없음).
+  const homeworkStudentIds = (input.homeworkAssignments ?? [])
+    .map((item) => item.assignedStudentId?.trim() || null)
+    .filter((id): id is string => Boolean(id));
+  const lookupStudentIds = [...new Set([...studentIds, ...homeworkStudentIds])];
   const { data: ownedStudents, error: ownedError } = await supabase
     .from("students")
-    .select("id")
+    .select("id, name")
     .eq("user_id", user.id)
-    .in("id", studentIds);
+    .in("id", lookupStudentIds);
 
-  if (ownedError || (ownedStudents ?? []).length !== new Set(studentIds).size) {
+  const ownedStudentRows = (ownedStudents ?? []) as { id: string; name: string }[];
+  const ownedStudentIds = new Set(ownedStudentRows.map((row) => row.id));
+  if (ownedError || !studentIds.every((id) => ownedStudentIds.has(id))) {
     throw new Error("학생 정보를 확인하지 못했어요. 다시 시도해주세요.");
   }
+  const studentNameById = new Map(ownedStudentRows.map((row) => [row.id, row.name]));
 
   const vocabTotal = input.vocabTotal ? Number(input.vocabTotal) : null;
 
   // 오늘 숙제(구조화): legacy free-text가 비어 있으면 homework 필드에 파생 mirror 텍스트를
   // 기록한다 — 지난 숙제 카드/브리핑/그룹 요약 등 기존 소비처가 코드 변경 없이 계속 동작.
   // homework_due_date는 legacy 입력이 있을 때만 유지 → mirror는 Todo 연동을 발동시키지 않는다.
-  const homeworkAssignments = input.homeworkAssignments ?? [];
+  // 숙제 대상: 이 강사 소유 학생일 때만 연결하고, 아니면 공통(null)으로 떨어뜨린다.
+  // client가 보낸 id를 그대로 믿지 않는다 — 남의 학생 id가 들어와도 절대 연결되지 않는다.
+  // (그룹에서 빠진 학생이라도 소유 학생이면 링크를 유지한다 — 과거 일지 수정 시 대상 보존)
+  const homeworkAssignments = (input.homeworkAssignments ?? []).map((item) => {
+    const requested = item.assignedStudentId?.trim() || null;
+    const assignedStudentId = requested && ownedStudentIds.has(requested) ? requested : null;
+    return {
+      ...item,
+      assignedStudentId,
+      assignedStudentName: assignedStudentId ? studentNameById.get(assignedStudentId) ?? null : null,
+    };
+  });
   const legacyHomework = input.homework?.trim() || "";
 
   // 해야 할 일 다중 항목 정규화 — 내용 없는 항목(교재/날짜만)은 저장/Todo 대상이 아니다
