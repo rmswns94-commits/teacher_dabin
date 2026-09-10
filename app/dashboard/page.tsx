@@ -198,32 +198,17 @@ export default async function DashboardPage() {
   const showEndedNudge = Boolean(lastEnded && endedGroupLog?.status !== "completed");
 
   const draftToday = overview.todayLogs.filter((log) => log.status === "draft");
-  const todayMakeups = overview.openMakeups.filter((makeup) => makeup.scheduled_date === overview.today);
-  const unscheduledMakeups = overview.openMakeups.filter((makeup) => makeup.status === "required");
 
-  const backlog = [
-    ...draftToday.map((log) => ({
-      key: `draft-${log.id}`,
-      href: `/daily-logs/${log.id}/edit`,
-      title: `${log.group?.name ?? "수업"} 일지 마저 작성하기`,
-      badge: "작성 중",
-      badgeClass: "bg-[#fdf3e4] text-[#94702f]",
-    })),
-    ...todayMakeups.map((makeup) => ({
-      key: `today-${makeup.id}`,
-      href: "/makeups",
-      title: `${makeup.student?.name ?? "학생"} 보충수업 (오늘 예정)`,
-      badge: "오늘",
-      badgeClass: "bg-[#eaf3f0] text-[#3d7c68]",
-    })),
-    ...unscheduledMakeups.map((makeup) => ({
-      key: `required-${makeup.id}`,
-      href: "/makeups",
-      title: `${makeup.student?.name ?? "학생"} 보충 일정 정하기`,
-      badge: "대기",
-      badgeClass: "bg-[#fff1ee] text-[#a86a5d]",
-    })),
-  ];
+  // 밀린 일에는 실제 미완료 업무(작성 중 일지)만 — 보충 수업 관련 항목(일정 미정/오늘 예정)은
+  // Makeup row를 synthetic item으로 변환하던 표시였고 이제 넣지 않는다 (문자열 필터가 아니라
+  // 변환 자체를 제거 — Makeup 데이터/workflow는 보충 수업 탭·사이드바 badge에서 기존 그대로).
+  const backlog = draftToday.map((log) => ({
+    key: `draft-${log.id}`,
+    href: `/daily-logs/${log.id}/edit`,
+    title: `${log.group?.name ?? "수업"} 일지 마저 작성하기`,
+    badge: "작성 중",
+    badgeClass: "bg-[#fdf3e4] text-[#94702f]",
+  }));
 
   return (
     <AppShell>
