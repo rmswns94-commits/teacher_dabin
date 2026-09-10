@@ -146,28 +146,28 @@ export async function ClassBriefing({
     }
   }
 
-  // 📝 지난 숙제 (마지막 completed 일지 기준)
+  // 📒 지난 숙제 — 직전 수업(lastLog)에서 내준 숙제 내용.
+  // lastLog는 이미 class-end cutoff가 적용된 "직전 finalized 일지"라, 오늘 일지를
+  // 수업 전에 미리 완료해도 수업 종료 전에는 여기 반영되지 않는다 (기존 lock 그대로).
+  // homework 텍스트는 저장 당시의 mirror(여러 건은 줄바꿈, "교재/학교 - 내용" 포함)라
+  // 과거 context가 그대로 남는다 — 현재 시험 모드/교재로 다시 계산하지 않는다.
+  const previousHomework = lastLog?.homework?.trim() ?? "";
+
+  // 지난 숙제를 얼마나 해왔는지 (제출 현황) — 숙제 내용 아래 보조 줄
   const missingNames = (lastLog?.rows ?? [])
     .filter((row) => row.homework_status === "missing")
     .map((row) => nameById.get(row.student_id) ?? "학생");
   const partialCount = (lastLog?.rows ?? []).filter(
     (row) => row.homework_status === "partial",
   ).length;
-  const homeworkLines: SectionLine[] = [];
-  if (missingNames.length > 0 || partialCount > 0) {
-    homeworkLines.push({
-      key: "hw-summary",
-      text: [
-        missingNames.length > 0 ? `미제출 ${missingNames.length}명 (${missingNames.slice(0, 3).join(", ")}${missingNames.length > 3 ? " 외" : ""})` : "",
-        partialCount > 0 ? `일부 ${partialCount}명` : "",
-      ]
-        .filter(Boolean)
-        .join(" · "),
-    });
-    if (lastLog?.homework) {
-      homeworkLines.push({ key: "hw-text", text: `숙제: ${lastLog.homework}` });
-    }
-  }
+  const homeworkStatusText = [
+    missingNames.length > 0
+      ? `미제출 ${missingNames.length}명 (${missingNames.slice(0, 3).join(", ")}${missingNames.length > 3 ? " 외" : ""})`
+      : "",
+    partialCount > 0 ? `일부 ${partialCount}명` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   // 🚫 지난 수업 결석
   const absentNames = (lastLog?.rows ?? [])
@@ -187,14 +187,12 @@ export async function ClassBriefing({
     text: `${exam.title} · ${exam.badge}`,
   }));
 
+  // 준비할 일 · 오늘 진도 · 지난 숙제는 항상 자리를 지킨다 (내용이 없으면 안내 문구).
+  // 내용 유무로 열이 밀려 배치가 흔들리지 않게 하기 위함.
+  const extraSections =
+    weaknessLines.length > 0 || vocabLines.length > 0 || absentNames.length > 0 || examLines.length > 0;
   const hasAnything =
-    todoLines.length > 0 ||
-    weaknessLines.length > 0 ||
-    vocabLines.length > 0 ||
-    homeworkLines.length > 0 ||
-    absentNames.length > 0 ||
-    Boolean(planText) ||
-    examLines.length > 0;
+    todoLines.length > 0 || Boolean(planText) || Boolean(previousHomework) || extraSections;
 
   return (
     <Card className="mt-4 border-[#e8ddf3] bg-[#fdfbf8]">
@@ -215,53 +213,75 @@ export async function ClassBriefing({
             오늘은 특별히 체크할 것이 없어요. 좋은 수업 되세요 🌿
           </div>
         ) : (
-          <div className="grid gap-x-8 gap-y-4 md:grid-cols-2 xl:grid-cols-3">
-            {todoLines.length > 0 ? (
+          <div className="space-y-4">
+            {/* 준비할 일 · 오늘 진도 · 지난 숙제 — 넓으면 3열, 좁으면 자연스럽게 쌓인다
+                (가운데 진도가 길어지기 쉬워 조금 넓게. 고정 px 없음) */}
+            <div className="grid gap-x-8 gap-y-4 md:grid-cols-2 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,1fr)]">
               <BriefingSection icon="✅" title="준비할 일" titleClass="text-[#3e7d6b]">
-                <CompactLines lines={todoLines} unit="개" />
+                {todoLines.length > 0 ? (
+                  <CompactLines lines={todoLines} unit="개" />
+                ) : (
+                  <p className="text-[13px] leading-5 text-[#a79996]">준비할 일이 없어요</p>
+                )}
               </BriefingSection>
-            ) : null}
 
-            {weaknessLines.length > 0 ? (
-              <BriefingSection icon="⚠️" title="복습 필요" titleClass="text-[#94702f]">
-                <CompactLines lines={weaknessLines} />
-              </BriefingSection>
-            ) : null}
-
-            {vocabLines.length > 0 ? (
-              <BriefingSection icon="🔤" title="단어" titleClass="text-[#54479c]">
-                <CompactLines lines={vocabLines} />
-              </BriefingSection>
-            ) : null}
-
-            {homeworkLines.length > 0 ? (
-              <BriefingSection icon="📝" title="지난 숙제" titleClass="text-[#8a6828]">
-                <CompactLines lines={homeworkLines} unit="개" />
-              </BriefingSection>
-            ) : null}
-
-            {absentNames.length > 0 ? (
-              <BriefingSection
-                icon="🚫"
-                title={`지난 수업 결석 (${formatKoreanDate(lastLog?.class_date)})`}
-                titleClass="text-[#a26660]"
-              >
-                <CompactLines lines={absentNames} />
-              </BriefingSection>
-            ) : null}
-
-            {planText ? (
               <BriefingSection icon="📚" title="오늘 진도" titleClass="text-[#3c6478]">
-                <div className="line-clamp-3 whitespace-pre-line text-[13px] leading-5 text-[#453b3b]">
-                  {planText}
-                </div>
+                {planText ? (
+                  <div className="min-w-0 whitespace-pre-line break-words text-[13px] leading-5 text-[#453b3b]">
+                    {planText}
+                  </div>
+                ) : (
+                  <p className="text-[13px] leading-5 text-[#a79996]">적어둔 계획이 없어요</p>
+                )}
               </BriefingSection>
-            ) : null}
 
-            {examLines.length > 0 ? (
-              <BriefingSection icon="🗓️" title="시험" titleClass="text-[#a05a7c]">
-                <CompactLines lines={examLines} unit="건" />
+              <BriefingSection icon="📒" title="지난 숙제" titleClass="text-[#8a6828]">
+                {previousHomework ? (
+                  <>
+                    <div className="min-w-0 whitespace-pre-line break-words text-[13px] leading-5 text-[#453b3b]">
+                      {previousHomework}
+                    </div>
+                    {homeworkStatusText ? (
+                      <p className="mt-1 text-[11px] leading-4 text-[#8a7b77]">{homeworkStatusText}</p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-[13px] leading-5 text-[#a79996]">지난 숙제가 없어요</p>
+                )}
               </BriefingSection>
+            </div>
+
+            {/* 부가 정보 — 있을 때만 (기존 섹션/디자인 그대로) */}
+            {extraSections ? (
+              <div className="grid gap-x-8 gap-y-4 border-t border-dashed border-[#f0e7e2] pt-3 md:grid-cols-2 xl:grid-cols-3">
+                {weaknessLines.length > 0 ? (
+                  <BriefingSection icon="⚠️" title="복습 필요" titleClass="text-[#94702f]">
+                    <CompactLines lines={weaknessLines} />
+                  </BriefingSection>
+                ) : null}
+
+                {vocabLines.length > 0 ? (
+                  <BriefingSection icon="🔤" title="단어" titleClass="text-[#54479c]">
+                    <CompactLines lines={vocabLines} />
+                  </BriefingSection>
+                ) : null}
+
+                {absentNames.length > 0 ? (
+                  <BriefingSection
+                    icon="🚫"
+                    title={`지난 수업 결석 (${formatKoreanDate(lastLog?.class_date)})`}
+                    titleClass="text-[#a26660]"
+                  >
+                    <CompactLines lines={absentNames} />
+                  </BriefingSection>
+                ) : null}
+
+                {examLines.length > 0 ? (
+                  <BriefingSection icon="🗓️" title="시험" titleClass="text-[#a05a7c]">
+                    <CompactLines lines={examLines} unit="건" />
+                  </BriefingSection>
+                ) : null}
+              </div>
             ) : null}
           </div>
         )}

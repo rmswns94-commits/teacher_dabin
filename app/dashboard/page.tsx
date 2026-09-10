@@ -1,14 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import {
-  BookOpenCheck,
-  CalendarDays,
-  CirclePlay,
-  Clock3,
-  ListTodo,
-  NotebookPen,
-  NotebookTabs,
-} from "lucide-react";
+import { CalendarDays, CirclePlay, Clock3, ListTodo, NotebookPen } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { ClassBriefing, ClassBriefingSkeleton } from "@/components/class-briefing";
@@ -39,7 +31,7 @@ import {
 } from "@/lib/schedule";
 import { getDisplayName } from "@/lib/supabase/auth";
 import { getDashboardOverview, getDashboardStats } from "@/lib/supabase/queries/dashboard";
-import { getCurrentUserGroups, getGroupLatestProgress } from "@/lib/supabase/queries/groups";
+import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getDueWeaknessesForCurrentUser } from "@/lib/supabase/queries/weaknesses";
 import { weaknessCategoryLabels } from "@/lib/validation/weakness";
 import type { PreparationItem } from "@/lib/supabase/types";
@@ -145,11 +137,8 @@ export default async function DashboardPage() {
   // 수업 종료시각 전에는 직전 수업이 그대로 고정된다 (요일별 schedule로 계산된 endEpoch 기준,
   // 그룹/occurrence별 독립 — 수업 종료 후에는 hero가 다음 occurrence로 넘어가며 오늘 일지가
   // lesson_date < cutoff 를 만족해 새 previous source가 된다). status 조작/데이터 복제 없음.
+  // 이 cutoff는 브리핑(오늘 진도/지난 숙제)이 직전 수업 데이터를 고를 때 쓴다.
   const previousBefore = hero ? previousLessonSourceCutoff(hero, currentEpochMs()) : null;
-  const latestProgress =
-    focusGroup && previousBefore
-      ? await getGroupLatestProgress(focusGroup.id, previousBefore)
-      : null;
 
   // To do list는 read-only summary: 수업 그룹 상세에서 Teacher가 실제 등록한
   // preparation_items만 보여준다 (Dashboard 직접 입력/추천 생성 없음).
@@ -508,32 +497,8 @@ export default async function DashboardPage() {
                 </Card>
               ) : null}
 
-              {focusGroup && (latestProgress?.next_lesson_plan || latestProgress?.homework) ? (
-                <Card>
-                  <CardContent className="grid gap-4 p-4 md:grid-cols-2">
-                    <div>
-                      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#3e7d6b]">
-                        <BookOpenCheck className="h-3.5 w-3.5" /> 오늘 수업 계획
-                      </div>
-                      <div className="mt-2 whitespace-pre-line text-sm leading-6 text-[#33473f]">
-                        {latestProgress?.next_lesson_plan || (
-                          <span className="text-[#9a8db5]">적어둔 계획이 없어요.</span>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#6d5aa8]">
-                        <NotebookTabs className="h-3.5 w-3.5" /> 지난 숙제
-                      </div>
-                      <div className="mt-2 whitespace-pre-line text-sm leading-6 text-[#3d3450]">
-                        {latestProgress?.homework || (
-                          <span className="text-[#9a8db5]">지난 숙제 기록이 없어요.</span>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : null}
+              {/* 오늘 수업 계획 / 지난 숙제는 독립 카드 대신 수업 브리핑 안에서 함께 본다
+                  (같은 직전 수업 source — 중복 표시 제거). 일지의 다음 수업 계획 기능 자체는 그대로. */}
             </div>
 
             <div className="space-y-4">
