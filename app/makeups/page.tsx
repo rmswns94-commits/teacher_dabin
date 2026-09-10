@@ -51,6 +51,7 @@ export default async function MakeupsPage() {
 
   // 보충 일정 다이얼로그의 "정규 수업과 겹침" 경고용
   const slots: TeacherSlot[] = schedules.map((slot) => ({
+    groupId: slot.group_id,
     day_of_week: slot.day_of_week,
     start_time: slot.start_time,
     end_time: slot.end_time,

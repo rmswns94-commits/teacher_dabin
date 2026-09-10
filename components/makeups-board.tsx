@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatKoreanDate } from "@/lib/dates";
+import { groupPendingMakeups } from "@/lib/makeup-grouping";
 import { DAY_LABELS, formatTimeHM } from "@/lib/schedule";
 
 export type MakeupRow = {
@@ -39,6 +40,8 @@ export type MakeupRow = {
 };
 
 export type TeacherSlot = {
+  // 결석일 요일 ↔ 그 그룹 수업시간 매칭용 (일정이 필요한 보충 그룹 헤더)
+  groupId: string | null;
   day_of_week: number;
   start_time: string;
   end_time: string;
@@ -772,6 +775,9 @@ export function MakeupsBoard({
   const required = bySearch
     .filter((row) => row.status === "required")
     .sort((a, b) => a.absenceDate.localeCompare(b.absenceDate));
+  // 결석 날짜 → 원래 수업 그룹 계층 (표시 전용 — predicate/데이터는 그대로).
+  // 대기 보충은 많아야 수십 건이라 렌더마다 계산해도 부담이 없다 (memo 불필요).
+  const requiredSections = groupPendingMakeups(required, slots);
   const scheduled = bySearch
     .filter((row) => row.status === "scheduled")
     .sort(
@@ -925,7 +931,38 @@ export function MakeupsBoard({
           {required.length === 0 ? (
             <p className="text-sm text-[#8a8a93]">일정을 잡아야 할 보충이 없어요.</p>
           ) : (
-            <div className="grid gap-3 lg:grid-cols-2">{required.map(cardOf)}</div>
+            // 결석 날짜 → 그 결석이 난 원래 수업 그룹 → 학생 카드 (표시 계층만 변경)
+            <div className="space-y-5">
+              {requiredSections.map((section) => (
+                <div key={section.absenceDate ?? "unknown-date"}>
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <h3 className="text-sm font-semibold text-[#2d2928]">
+                      {section.absenceDate
+                        ? formatKoreanDate(section.absenceDate, true)
+                        : "결석일 미확인"}
+                    </h3>
+                    <span className="text-xs tabular-nums text-[#8a8a93]">{section.count}건</span>
+                  </div>
+
+                  <div className="mt-2 space-y-4">
+                    {section.groups.map((group) => (
+                      <div key={group.groupId ?? "no-group"}>
+                        <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 pl-0.5 text-xs text-[#655d5d]">
+                          <span className="font-medium text-[#4c4c55]">
+                            {group.groupName ?? "반 정보 없음"}
+                          </span>
+                          {group.timeLabel ? (
+                            <span className="tabular-nums text-[#8a8a93]">· {group.timeLabel}</span>
+                          ) : null}
+                          <span className="tabular-nums text-[#a79996]">· {group.rows.length}명</span>
+                        </div>
+                        <div className="grid gap-3 lg:grid-cols-2">{group.rows.map(cardOf)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </section>
       ) : null}
