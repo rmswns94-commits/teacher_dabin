@@ -18,7 +18,6 @@ import {
   addMonths,
   buildMonthGrid,
   dayOfWeekOf,
-  monthLabel,
   monthRange,
   parseMonthParam,
 } from "@/lib/calendar";
@@ -68,55 +67,6 @@ const MONTH_NAMES_EN = [
   "NOVEMBER",
   "DECEMBER",
 ];
-
-// 참고용 미니 달력 (인접 달) — 클릭하면 그 달로 이동
-function MiniCalendar({ month, href }: { month: string; href: string }) {
-  const weeks = buildMonthGrid(month);
-  const monthNum = Number(month.slice(5));
-
-  return (
-    <Link
-      href={href}
-      aria-label={`${monthLabel(month)}로 이동`}
-      className="block rounded-2xl border border-[#e9e3f5] bg-white px-2.5 py-2 transition hover:border-[#cfc4f0] hover:bg-[#faf8ff]"
-    >
-      <span className="flex items-baseline gap-1.5">
-        <span className="text-sm font-bold tabular-nums text-[#6d5aa8]">
-          {String(monthNum).padStart(2, "0")}
-        </span>
-        <span className="text-xs font-medium tracking-[0.04em] text-[#a49bc4]">
-          {MONTH_NAMES_EN[monthNum - 1].slice(0, 3)}
-        </span>
-      </span>
-      <span className="mt-1 grid w-[112px] grid-cols-7 text-center text-sm leading-tight tabular-nums text-[#8a8a93]">
-        {WEEKDAY_HEADERS.map((day, i) => (
-          <span
-            key={day}
-            className={cn(
-              "font-semibold text-[#b0a8c9]",
-              i === 0 && "text-[#d0908f]",
-              i === 6 && "text-[#8fa0cf]",
-            )}
-          >
-            {day}
-          </span>
-        ))}
-        {weeks.flat().map((date, i) =>
-          date ? (
-            <span
-              key={date}
-              className={cn(i % 7 === 0 && "text-[#c98a89]", i % 7 === 6 && "text-[#8698c7]")}
-            >
-              {Number(date.slice(8))}
-            </span>
-          ) : (
-            <span key={`e-${i}`} />
-          ),
-        )}
-      </span>
-    </Link>
-  );
-}
 
 function buildQuery(params: {
   month: string;
@@ -399,16 +349,6 @@ export default async function DailyLogsPage({
                   </div>
                 </div>
 
-                <div className="hidden gap-2.5 md:flex">
-                  <MiniCalendar
-                    month={addMonths(month, -1)}
-                    href={buildQuery({ month: addMonths(month, -1), groupId, status })}
-                  />
-                  <MiniCalendar
-                    month={addMonths(month, 1)}
-                    href={buildQuery({ month: addMonths(month, 1), groupId, status })}
-                  />
-                </div>
               </div>
 
               {/* 요일 헤더 */}
