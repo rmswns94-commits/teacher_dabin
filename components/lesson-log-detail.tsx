@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BookOpen, CheckCheck, CircleArrowRight, NotebookTabs, PencilLine } from "lucide-react";
 
 import { DailyLogDeleteButton } from "@/components/daily-log-delete-button";
+import { ExpandableList } from "@/components/expandable-list";
 import { AttendanceBadge, DailyLogStatusBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -147,9 +148,10 @@ export function LessonLogDetail({
                     · {detail.homeworkAssignments.length}개
                   </span>
                 </div>
-                <ul className="mt-1.5 space-y-2.5">
+                {/* 목록형 preview: 7개 초과면 접기 — 개수 표시(N개)는 전체 기준 그대로 */}
+                <ExpandableList className="mt-1.5 space-y-2.5">
                   {detail.homeworkAssignments.map((hw) => (
-                    <li key={hw.id} className="min-w-0">
+                    <div key={hw.id} className="min-w-0">
                       <div className="text-xs font-semibold text-[#ad8c53]">
                         {formatKoreanDate(hw.due_date)}까지
                       </div>
@@ -157,9 +159,9 @@ export function LessonLogDetail({
                       <div className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-6 text-[#5c4a2e]">
                         {formatTextbookLinked(linkedContextLabel(hw), hw.content)}
                       </div>
-                    </li>
+                    </div>
                   ))}
-                </ul>
+                </ExpandableList>
               </div>
             ) : null}
             {detail.homework &&
@@ -211,9 +213,9 @@ export function LessonLogDetail({
                     · {detail.linkedTasks.length}개
                   </span>
                 </div>
-                <ul className="mt-1.5 space-y-2">
+                <ExpandableList className="mt-1.5 space-y-2">
                   {detail.linkedTasks.map((task) => (
-                    <li key={task.id} className="min-w-0">
+                    <div key={task.id} className="min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#8a7ba8]">
                         {task.dueDate ? (
                           <span className="tabular-nums">{formatKoreanDate(task.dueDate)}</span>
@@ -231,9 +233,9 @@ export function LessonLogDetail({
                       <div className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-6 text-[#4a4160]">
                         {formatTextbookLinked(linkedContextLabel(task), task.text)}
                       </div>
-                    </li>
+                    </div>
                   ))}
-                </ul>
+                </ExpandableList>
               </div>
             ) : null}
           </div>

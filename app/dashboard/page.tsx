@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDaysStr, dayOfWeekOf, daysBetween } from "@/lib/calendar";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { DashboardTodoCard } from "@/components/dashboard-todo-card";
+import { ExpandableList } from "@/components/expandable-list";
 import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
 import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
 import { currentEpochMs } from "@/lib/todo-window";
@@ -459,7 +460,8 @@ export default async function DashboardPage() {
                       </span>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-2">
+                  <CardContent>
+                    <ExpandableList className="space-y-2">
                     {upcomingExams.map((exam) => (
                       <div
                         key={exam.id}
@@ -490,6 +492,7 @@ export default async function DashboardPage() {
                         </span>
                       </div>
                     ))}
+                    </ExpandableList>
                   </CardContent>
                 </Card>
               ) : null}
@@ -532,13 +535,14 @@ export default async function DashboardPage() {
                     ) : null}
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-1.5">
+                <CardContent>
                   {overview.todayLogs.length === 0 ? (
                     <div className="rounded-2xl bg-[#faf5f0] p-4 text-sm text-[#655d5d]">
                       아직 오늘 작성한 수업일지가 없어요 ☁️
                     </div>
                   ) : (
-                    overview.todayLogs.map((log) => (
+                    <ExpandableList className="space-y-1.5">
+                    {overview.todayLogs.map((log) => (
                       <Link key={log.id} href={`/daily-logs/${log.id}`} className="block">
                         <div className="flex items-start gap-3 rounded-xl px-2 py-2.5 transition hover:bg-[#f2edf9]">
                           <span
@@ -572,7 +576,8 @@ export default async function DashboardPage() {
                           </div>
                         </div>
                       </Link>
-                    ))
+                    ))}
+                    </ExpandableList>
                   )}
                 </CardContent>
               </Card>
@@ -582,7 +587,8 @@ export default async function DashboardPage() {
                   <CardHeader className="pb-2">
                     <CardTitle>밀린 일</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-1.5">
+                  <CardContent>
+                    <ExpandableList className="space-y-1.5">
                     {backlog.map((item) => (
                       <Link key={item.key} href={item.href} className="block">
                         <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-2 transition hover:bg-[#f2edf9]">
@@ -593,6 +599,7 @@ export default async function DashboardPage() {
                         </div>
                       </Link>
                     ))}
+                    </ExpandableList>
                   </CardContent>
                 </Card>
               ) : null}

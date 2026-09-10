@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Check, ListTodo } from "lucide-react";
 
 import { togglePreparationItemAction } from "@/app/groups/actions";
+import { ExpandableList } from "@/components/expandable-list";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { groupIconOf } from "@/lib/group-icons";
 import {
@@ -151,9 +152,10 @@ export function DashboardTodoCard({
         ) : null}
 
         {visibleChecklist.length > 0 && focusGroup ? (
-          <ul className="divide-y divide-dashed divide-[#f4e2e8]">
+          // 목록형 Card 공통 preview: 7개 초과면 접기 (완료 toggle state는 데이터 기준 — 무관)
+          <ExpandableList className="divide-y divide-dashed divide-[#f4e2e8]">
             {visibleChecklist.map((item) => (
-              <li key={item.id}>
+              <div key={item.id}>
                 <ToggleRow groupId={focusGroup.id} itemId={item.id} completed={item.completed}>
                   <span
                     className={
@@ -165,9 +167,9 @@ export function DashboardTodoCard({
                     {item.text}
                   </span>
                 </ToggleRow>
-              </li>
+              </div>
             ))}
-          </ul>
+          </ExpandableList>
         ) : null}
 
         {/* 날짜 있는 To Do(다음 수업 계획/직접 등록) — 그 반의 수업 window(또는 all-day fallback) 동안만 */}
@@ -182,9 +184,9 @@ export function DashboardTodoCard({
             <div className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8a7fb8]">
               오늘의 할 일
             </div>
-            <ul className="divide-y divide-dashed divide-[#f4e2e8]">
+            <ExpandableList className="divide-y divide-dashed divide-[#f4e2e8]">
               {visiblePlans.map((item) => (
-                <li key={`${item.groupId}:${item.id}`}>
+                <div key={`${item.groupId}:${item.id}`}>
                   <ToggleRow groupId={item.groupId} itemId={item.id} completed={item.completed}>
                     <span className="min-w-0 flex-1">
                       <span className="block text-[11px] text-[#8a7b77]">
@@ -202,9 +204,9 @@ export function DashboardTodoCard({
                       </span>
                     </span>
                   </ToggleRow>
-                </li>
+                </div>
               ))}
-            </ul>
+            </ExpandableList>
           </div>
         ) : null}
 

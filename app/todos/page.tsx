@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Check, ChevronLeft, ChevronRight, ListChecks } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { ExpandableList } from "@/components/expandable-list";
 import { PageHeader } from "@/components/page-header";
 import { TodayRefresher } from "@/components/today-refresher";
 import { TodoCreateDialog } from "@/components/todo-create-dialog";
@@ -82,7 +83,7 @@ function TodoItemRow({
   metaClass: string;
 }) {
   return (
-    <li className="flex items-center gap-1">
+    <div className="flex items-center gap-1">
       {/* 완료 toggle = completed 저장 (row 유지) — Dashboard/그룹 상세와 같은 항목이 함께 바뀐다 */}
       <form
         action={togglePreparationItemAction.bind(null, groupId, item.id)}
@@ -125,7 +126,7 @@ function TodoItemRow({
         </button>
       </form>
       <TodoDeleteButton groupId={groupId} itemId={item.id} text={formatTextbookLinked(linkedContextLabel(item), item.text)} />
-    </li>
+    </div>
   );
 }
 
@@ -442,7 +443,8 @@ export default async function TodayTodosPage({
                     <Card key={group.id}>
                       <CardContent className="p-4">
                         {groupHeader(group, time, "오늘 수업")}
-                        <ul className="mt-1 divide-y divide-dashed divide-[#f4e2e8]">
+                        {/* 목록형 Card 공통 preview — 7개 초과면 접기 (미완료+완료 합산 개수 기준) */}
+                        <ExpandableList className="mt-1 divide-y divide-dashed divide-[#f4e2e8]">
                           {items.map(({ item, isPastDue }) => (
                             <TodoItemRow
                               key={item.id}
@@ -469,7 +471,7 @@ export default async function TodayTodosPage({
                               metaClass="text-[#b0a39f]"
                             />
                           ))}
-                        </ul>
+                        </ExpandableList>
                       </CardContent>
                     </Card>
                   ))}
@@ -489,7 +491,7 @@ export default async function TodayTodosPage({
                 <Card key={group.id}>
                   <CardContent className="p-4">
                     {groupHeader(group, time, "이날 수업")}
-                    <ul className="mt-1 divide-y divide-dashed divide-[#f4e2e8]">
+                    <ExpandableList className="mt-1 divide-y divide-dashed divide-[#f4e2e8]">
                       {items.map((item) => (
                         <TodoItemRow
                           key={item.id}
@@ -500,7 +502,7 @@ export default async function TodayTodosPage({
                           metaClass={item.completed ? "text-[#b0a39f]" : "text-[#a79996]"}
                         />
                       ))}
-                    </ul>
+                    </ExpandableList>
                   </CardContent>
                 </Card>
               ))}
