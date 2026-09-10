@@ -10,7 +10,6 @@ import { sortByKoreanName } from "@/lib/korean-sort";
 import { dedupeVocabWords } from "@/lib/vocab";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type {
-  AttendanceStatus,
   PreparationItem,
   ClassGroupRecord,
   DailyLogHomeworkAssignmentRecord,
@@ -28,71 +27,6 @@ function pickOne<T>(value: unknown): T | null {
   }
 
   return (value ?? null) as T | null;
-}
-
-export type DailyLogListItem = DailyLogRecord & {
-  group: Pick<ClassGroupRecord, "id" | "name" | "grade"> | null;
-  attendanceCounts: {
-    present: number;
-    late: number;
-    early_leave: number;
-    absent: number;
-    total: number;
-  };
-};
-
-export async function getCurrentUserDailyLogs(filters?: {
-  groupId?: string;
-  date?: string;
-  status?: DailyLogStatus;
-}) {
-  const supabase = await createServerSupabaseClient();
-  const user = await getServerUser();
-
-  if (!supabase || !user) {
-    return [] as DailyLogListItem[];
-  }
-
-  let query = supabase
-    .from("daily_logs")
-    .select("*, class_groups(id, name, grade), student_lesson_logs(attendance)")
-    .eq("user_id", user.id)
-    .order("class_date", { ascending: false })
-    .order("created_at", { ascending: false });
-
-  if (filters?.groupId) {
-    query = query.eq("group_id", filters.groupId);
-  }
-
-  if (filters?.date) {
-    query = query.eq("class_date", filters.date);
-  }
-
-  if (filters?.status) {
-    query = query.eq("status", filters.status);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("getCurrentUserDailyLogs error", error);
-    return [] as DailyLogListItem[];
-  }
-
-  return (data ?? []).map((row) => {
-    const lessonLogs = (row.student_lesson_logs ?? []) as { attendance: AttendanceStatus }[];
-    const counts = { present: 0, late: 0, early_leave: 0, absent: 0, total: lessonLogs.length };
-
-    for (const log of lessonLogs) {
-      counts[log.attendance] += 1;
-    }
-
-    return {
-      ...(row as unknown as DailyLogRecord),
-      group: pickOne<Pick<ClassGroupRecord, "id" | "name" | "grade">>(row.class_groups),
-      attendanceCounts: counts,
-    };
-  });
 }
 
 // 캘린더 한 달치 마커/반 목록용 경량 데이터. 학생별 기록은 포함하지 않는다.
@@ -300,11 +234,6 @@ const LINKED_ID_PREFIX = {
   daily_log_task: "task",
 } as const;
 
-// 일지의 "해야 할 일" linked Todo id — Edit/Detail에서 같은 항목을 안정적으로 찾는 identity
-export function taskPreparationItemId(dailyLogId: string) {
-  return `${LINKED_ID_PREFIX.daily_log_task}-${dailyLogId}`;
-}
-
 // createIfMissing=false: 기존 linked 항목이 있을 때만 갱신/제거하고, 없으면 새로 만들지 않는다.
 // (다음 수업 계획은 이제 "계획 데이터"이고 Todo는 "해야 할 일"이 담당 — legacy nlp 항목이
 // 이미 있는 일지는 기존 동작대로 계속 갱신하되, 새 일지부터는 nlp Todo를 만들지 않는다)
@@ -500,33 +429,6 @@ async function syncDailyLogTaskTodos(
 const HW_MISSING_TABLE_CODES = new Set(["42P01", "PGRST205"]);
 const HW_MIGRATION_MESSAGE =
   "오늘 숙제 기능의 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20260909_create_daily_log_homework_assignments.sql을 실행한 뒤 다시 시도해주세요.";
-
-// 일지의 구조화 숙제 조회 (완료일 ASC → 등록 순). 실패/미적용 시 [] — 화면은 항상 뜬다.
-export async function getHomeworkAssignmentsForDailyLog(dailyLogId: string) {
-  const supabase = await createServerSupabaseClient();
-  const user = await getServerUser();
-
-  if (!supabase || !user) {
-    return [] as DailyLogHomeworkAssignmentRecord[];
-  }
-
-  const { data, error } = await supabase
-    .from("daily_log_homework_assignments")
-    .select("id, user_id, daily_log_id, content, due_date, textbook, school, sort_order, created_at, updated_at")
-    .eq("user_id", user.id)
-    .eq("daily_log_id", dailyLogId)
-    .order("due_date", { ascending: true })
-    .order("sort_order", { ascending: true });
-
-  if (error) {
-    if (!HW_MISSING_TABLE_CODES.has(error.code ?? "")) {
-      console.error("getHomeworkAssignmentsForDailyLog error", { code: error.code, message: error.message });
-    }
-    return [] as DailyLogHomeworkAssignmentRecord[];
-  }
-
-  return (data ?? []) as DailyLogHomeworkAssignmentRecord[];
-}
 
 // 구조화 숙제 sync — id 기반 idempotent 교체 (문자열 비교 없음):
 // 기존 row 조회 → 제출된 id는 update(upsert), 새 항목은 새 uuid insert, 빠진 id는 delete.
@@ -1527,94 +1429,8 @@ export async function getPreviousReflectionNext(
 
 // ── 수업 회고 모아보기 ─────────────────────────────────────────
 
-export type ReflectionLogRow = {
-  id: string;
-  class_date: string;
-  reflection_good: string | null;
-  reflection_hard: string | null;
-  reflection_next: string | null;
-  group: Pick<ClassGroupRecord, "id" | "name" | "icon"> | null;
-};
-
 export const REFLECTION_NOT_EMPTY =
   "reflection_good.not.is.null,reflection_hard.not.is.null,reflection_next.not.is.null";
-
-// 회고가 하나라도 적힌 일지만 최신순으로 (draft 일지의 회고도 포함 — 회고는 일지 상태와
-// 무관한 강사 기록). migration 미적용 등 조회 실패 시 failed로 표시하고 화면은 뜨게 한다.
-export async function getReflectionLogs(options: { groupId?: string; limit?: number } = {}) {
-  const supabase = await createServerSupabaseClient();
-  const user = await getServerUser();
-
-  if (!supabase || !user) {
-    return { rows: [] as ReflectionLogRow[], hasMore: false, failed: false };
-  }
-
-  const limit = Math.min(Math.max(options.limit ?? 60, 1), 500);
-
-  let query = supabase
-    .from("daily_logs")
-    .select(
-      "id, class_date, reflection_good, reflection_hard, reflection_next, class_groups(id, name, icon)",
-    )
-    .eq("user_id", user.id)
-    .or(REFLECTION_NOT_EMPTY)
-    .order("class_date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(limit + 1);
-
-  if (options.groupId) {
-    query = query.eq("group_id", options.groupId);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("getReflectionLogs error", error);
-    return { rows: [] as ReflectionLogRow[], hasMore: false, failed: true };
-  }
-
-  const rows = (data ?? []).map((row) => ({
-    id: row.id as string,
-    class_date: row.class_date as string,
-    reflection_good: row.reflection_good as string | null,
-    reflection_hard: row.reflection_hard as string | null,
-    reflection_next: row.reflection_next as string | null,
-    group: pickOne<Pick<ClassGroupRecord, "id" | "name" | "icon">>(row.class_groups),
-  }));
-
-  return { rows: rows.slice(0, limit), hasMore: rows.length > limit, failed: false };
-}
-
-// 요약 카운트: 전체 회고 수 + 이번 달 회고 수 (head count 2번 — row 데이터 미전송)
-export async function getReflectionCounts(monthStart: string) {
-  const supabase = await createServerSupabaseClient();
-  const user = await getServerUser();
-
-  if (!supabase || !user) {
-    return { total: 0, thisMonth: 0 };
-  }
-
-  const [totalResult, monthResult] = await Promise.all([
-    supabase
-      .from("daily_logs")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .or(REFLECTION_NOT_EMPTY),
-    supabase
-      .from("daily_logs")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .or(REFLECTION_NOT_EMPTY)
-      .gte("class_date", monthStart),
-  ]);
-
-  if (totalResult.error || monthResult.error) {
-    console.error("getReflectionCounts error", totalResult.error ?? monthResult.error);
-    return { total: 0, thisMonth: 0 };
-  }
-
-  return { total: totalResult.count ?? 0, thisMonth: monthResult.count ?? 0 };
-}
 
 // 이전 일지의 공통 필드만 update (학생 평가/칭찬은 기존 전체 수정 화면 재사용).
 // group/date는 바꾸지 않으므로 중복 일지 가드와 충돌할 일이 없다.
