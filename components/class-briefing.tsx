@@ -11,41 +11,19 @@ const MISTAKE_WINDOW_DAYS = 30;
 
 type SectionLine = { key: string; text: string };
 
-// 항목이 많으면 앞 몇 개만 보여주고 나머지는 <details>로 접는다 (client JS 불필요).
-function CompactLines({
-  lines,
-  max = 3,
-  unit = "명",
-}: {
-  lines: SectionLine[];
-  max?: number;
-  unit?: string;
-}) {
-  const visible = lines.slice(0, max);
-  const rest = lines.slice(max);
-
+// 브리핑 전용 줄 목록 — 수업 직전에 훑어보는 화면이라 항상 전부 보여준다
+// (접기/더 보기 없음, 개수 제한 없음). 다른 카드의 미리보기 정책과는 무관하다.
+function BriefingLines({ lines }: { lines: SectionLine[] }) {
   return (
     <div className="space-y-1">
-      {visible.map((line) => (
-        <div key={line.key} className="text-[13px] leading-5 text-[#453b3b]">
+      {lines.map((line) => (
+        <div
+          key={line.key}
+          className="min-w-0 whitespace-pre-line break-words text-[13px] leading-5 text-[#453b3b]"
+        >
           {line.text}
         </div>
       ))}
-      {rest.length > 0 ? (
-        <details>
-          <summary className="cursor-pointer text-xs text-[#8a7b77] hover:text-[#564d4d]">
-            +{rest.length}
-            {unit} 더 보기
-          </summary>
-          <div className="mt-1 space-y-1">
-            {rest.map((line) => (
-              <div key={line.key} className="text-[13px] leading-5 text-[#453b3b]">
-                {line.text}
-              </div>
-            ))}
-          </div>
-        </details>
-      ) : null}
     </div>
   );
 }
@@ -216,10 +194,10 @@ export async function ClassBriefing({
           <div className="space-y-4">
             {/* 준비할 일 · 오늘 진도 · 지난 숙제 — 넓으면 3열, 좁으면 자연스럽게 쌓인다
                 (가운데 진도가 길어지기 쉬워 조금 넓게. 고정 px 없음) */}
-            <div className="grid gap-x-8 gap-y-4 md:grid-cols-2 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,1fr)]">
+            <div className="space-y-4">
               <BriefingSection icon="✅" title="준비할 일" titleClass="text-[#3e7d6b]">
                 {todoLines.length > 0 ? (
-                  <CompactLines lines={todoLines} unit="개" />
+                  <BriefingLines lines={todoLines} />
                 ) : (
                   <p className="text-[13px] leading-5 text-[#a79996]">준비할 일이 없어요</p>
                 )}
@@ -256,13 +234,13 @@ export async function ClassBriefing({
               <div className="grid gap-x-8 gap-y-4 border-t border-dashed border-[#f0e7e2] pt-3 md:grid-cols-2 xl:grid-cols-3">
                 {weaknessLines.length > 0 ? (
                   <BriefingSection icon="⚠️" title="복습 필요" titleClass="text-[#94702f]">
-                    <CompactLines lines={weaknessLines} />
+                    <BriefingLines lines={weaknessLines} />
                   </BriefingSection>
                 ) : null}
 
                 {vocabLines.length > 0 ? (
                   <BriefingSection icon="🔤" title="단어" titleClass="text-[#54479c]">
-                    <CompactLines lines={vocabLines} />
+                    <BriefingLines lines={vocabLines} />
                   </BriefingSection>
                 ) : null}
 
@@ -272,13 +250,13 @@ export async function ClassBriefing({
                     title={`지난 수업 결석 (${formatKoreanDate(lastLog?.class_date)})`}
                     titleClass="text-[#a26660]"
                   >
-                    <CompactLines lines={absentNames} />
+                    <BriefingLines lines={absentNames} />
                   </BriefingSection>
                 ) : null}
 
                 {examLines.length > 0 ? (
                   <BriefingSection icon="🗓️" title="시험" titleClass="text-[#a05a7c]">
-                    <CompactLines lines={examLines} unit="건" />
+                    <BriefingLines lines={examLines} />
                   </BriefingSection>
                 ) : null}
               </div>
