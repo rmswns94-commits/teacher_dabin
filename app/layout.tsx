@@ -27,7 +27,7 @@ const hiMelody = Hi_Melody({
 export const metadata: Metadata = {
   title: "강사 일지",
   applicationName: "강사 일지",
-  description: "따뜻한 수업 기록 도우미 — 학생 관리와 영어 수업 자료를 한 번에 정리하는 웹앱",
+  description: "따뜻한 수업 기록 도우미 — 수업 일지와 학생 관리를 한 번에 정리하는 웹앱",
   // Private beta: 검색엔진 노출을 막는다 (보안 수단이 아니라 노출 최소화 목적).
   robots: { index: false, follow: false },
   // iOS 홈 화면 설치(standalone) 지원. statusBarStyle은 밝은 배경과 자연스러운 default.

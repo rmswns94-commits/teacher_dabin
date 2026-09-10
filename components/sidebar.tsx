@@ -9,7 +9,6 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
-  FileText,
   FolderKanban,
   Heart,
   Home,
@@ -118,10 +117,6 @@ const navSections: { label: string; items: NavItem[] }[] = [
       { label: "교육 철학", href: "/pretty-words", icon: Heart },
       { label: "수업 회고", href: "/reflections", icon: Sparkles },
     ],
-  },
-  {
-    label: "수업 자료",
-    items: [{ label: "영어 지문", href: "/passages", icon: FileText }],
   },
 ];
 

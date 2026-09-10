@@ -9,8 +9,6 @@ const features = [
   { icon: NotebookPen, label: "수업 일지" },
   { icon: BookText, label: "출결 관리" },
   { icon: Sparkles, label: "보충수업 체크" },
-  { icon: BookText, label: "영어 지문 정리" },
-  { icon: NotebookPen, label: "문제 세트 관리" },
 ];
 
 export function WelcomeHero() {
