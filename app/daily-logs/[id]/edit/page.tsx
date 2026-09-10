@@ -75,6 +75,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
         studentId: lessonLog.student!.id,
         name: lessonLog.student!.name,
         grade: lessonLog.student!.grade,
+        school: lessonLog.student!.school,
         entry: {
           attendance: lessonLog.attendance,
           progress: lessonLog.progress ?? "",
@@ -117,7 +118,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
 
   for (const member of currentMembers) {
     if (!member.archived && !knownIds.has(member.id)) {
-      students.push({ studentId: member.id, name: member.name, grade: member.grade });
+      students.push({ studentId: member.id, name: member.name, grade: member.grade, school: member.school });
     }
   }
 
@@ -199,7 +200,13 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
             // mirror 부분을 떼고 "기타 메모"만 폼에 싣는다 (구조화는 textbookProgress로 복원).
             defaultProgress: stripDerivedPrefix(
               mergeLegacyLessonContent(log.default_progress, log.lesson_content),
-              buildTextbookSectionsText(log.textbook_progress ?? []),
+              // mirror 순서: 교재 진도 → 학교 진도 (폼 합성과 동일 — 결정적 왕복)
+              [
+                buildTextbookSectionsText(log.textbook_progress ?? []),
+                buildTextbookSectionsText(log.school_progress ?? []),
+              ]
+                .filter(Boolean)
+                .join("\n\n"),
             ),
             memo: log.memo ?? "",
             homework: log.homework ?? "",
@@ -215,9 +222,11 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
                 .join("\n\n"),
             ),
             nextPlanDate: log.next_plan_date ?? "",
-            // 교재별 진도/계획 + 학교 계획 스냅샷 복원
+            // 교재별 진도/계획 + 학교 진도/계획 스냅샷 복원 (저장된 context 우선 —
+            // 현재 시험 기간 OFF여도 과거 학교 기록은 학교 편집기로 hydrate)
             textbookProgress: log.textbook_progress ?? [],
             textbookPlans: log.textbook_plans ?? [],
+            schoolProgress: log.school_progress ?? [],
             schoolPlans: log.school_plans ?? [],
             // 해야 할 일 — 일지 row가 source (Todo 삭제/완료와 무관하게 폼 복원).
             // 다중 항목(tasks)이 있으면 그것, 없으면 legacy 단일 필드를 폼이 항목 1개로 변환

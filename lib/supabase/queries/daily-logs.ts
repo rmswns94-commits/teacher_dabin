@@ -158,7 +158,7 @@ export async function getMonthlyLogMarkers(
 }
 
 export type StudentLessonLogWithStudent = StudentLessonLogRecord & {
-  student: Pick<StudentRecord, "id" | "name" | "grade"> | null;
+  student: Pick<StudentRecord, "id" | "name" | "grade" | "school"> | null;
 };
 
 export type DailyLogDetail = DailyLogRecord & {
@@ -190,7 +190,7 @@ export async function getDailyLogDetailForCurrentUser(
 
   const { data, error } = await supabase
     .from("daily_logs")
-    .select("*, class_groups(id, name, grade, textbook, is_exam_period), student_lesson_logs(*, students(id, name, grade))")
+    .select("*, class_groups(id, name, grade, textbook, is_exam_period), student_lesson_logs(*, students(id, name, grade, school))")
     .eq("id", dailyLogId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -209,7 +209,7 @@ export async function getDailyLogDetailForCurrentUser(
   const lessonLogs = sortByKoreanName(
     ((data.student_lesson_logs ?? []) as Record<string, unknown>[]).map((row) => ({
       ...(row as unknown as StudentLessonLogRecord),
-      student: pickOne<Pick<StudentRecord, "id" | "name" | "grade">>(row.students),
+      student: pickOne<Pick<StudentRecord, "id" | "name" | "grade" | "school">>(row.students),
     })),
     (log) => log.student?.name ?? "",
     (log) => log.student?.id ?? log.id,
@@ -882,6 +882,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     // "교재명 - 내용" mirror(+기타 메모)가 담겨 legacy 소비처와 호환된다
     textbook_progress: (input.textbookProgress ?? []).length > 0 ? input.textbookProgress : null,
     textbook_plans: (input.textbookPlans ?? []).length > 0 ? input.textbookPlans : null,
+    school_progress: (input.schoolProgress ?? []).length > 0 ? input.schoolProgress : null,
     school_plans: (input.schoolPlans ?? []).length > 0 ? input.schoolPlans : null,
     vocab_total: vocabTotal,
     reflection_good: input.reflectionGood?.trim() || null,

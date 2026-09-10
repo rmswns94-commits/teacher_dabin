@@ -206,6 +206,8 @@ export default async function NewDailyLogPage({
                 studentId: student.id,
                 name: student.name,
                 grade: student.grade,
+                // 시험 기간 [전체 학생에게 적용]의 학교 매칭용 (학생 학교 = 적용 대상 기준)
+                school: student.school,
               }))}
               previousReflection={
                 prevReflection

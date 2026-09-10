@@ -145,7 +145,8 @@ export type DailyLogRecord = {
   // 이 구조에서 파생된 "교재명 - 내용" mirror(+기타 메모)로 기록된다 (legacy 소비처 호환).
   textbook_progress: { name: string; text: string }[] | null;
   textbook_plans: { name: string; text: string }[] | null;
-  // 학교 context 다음 수업 계획 (시험 기간 ON 당시 작성 — name=학교명 스냅샷)
+  // 학교 context 진도/다음 수업 계획 (시험 기간 ON 당시 작성 — name=학교명 스냅샷)
+  school_progress: { name: string; text: string }[] | null;
   school_plans: { name: string; text: string }[] | null;
   reflection_good: string | null; // 수업 회고: 잘된 점 (강사 전용 — 학생/성장노트 노출 금지)
   reflection_hard: string | null; // 수업 회고: 아쉬웠던 점
