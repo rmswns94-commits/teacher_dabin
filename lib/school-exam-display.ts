@@ -37,6 +37,26 @@ export function examDdayInfo(today: string, startDate: string, endDate: string):
   return { label: "종료", className: "bg-[#f4f4f6] text-[#8a8a93]", ended: true };
 }
 
+// Daily Log 시험 대비 미리보기용: 학교 하나의 "보여줄 시험" 선택.
+// - school_name 정확 일치만 (substring/fuzzy 금지 — Student.school과 같은 텍스트 도메인)
+// - 진행 중/다가오는 시험만 (end_date >= today) — 과거 시험을 임의로 선택하지 않는다
+// - 같은 학교에 여러 시험이면 Group 학년과 일치하는 시험 우선, 그다음 시작일이 가까운 순
+export function resolveExamForSchool<
+  T extends { school_name: string; grade: string; event: { start_date: string; end_date: string } | null },
+>(exams: T[], school: string, groupGrade: string | null | undefined, today: string): T | null {
+  const candidates = exams.filter(
+    (exam) => exam.event && exam.school_name === school && exam.event.end_date >= today,
+  );
+
+  candidates.sort((a, b) => {
+    const gradeRankA = a.grade === groupGrade ? 0 : 1;
+    const gradeRankB = b.grade === groupGrade ? 0 : 1;
+    return gradeRankA - gradeRankB || a.event!.start_date.localeCompare(b.event!.start_date);
+  });
+
+  return candidates[0] ?? null;
+}
+
 export function formatExamPeriod(startDate: string, endDate: string) {
   return endDate > startDate
     ? `${formatKoreanDate(startDate, true)} ~ ${formatKoreanDate(endDate)}`

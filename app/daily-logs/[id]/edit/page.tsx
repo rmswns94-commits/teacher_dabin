@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
+import { DailyLogExamPreview } from "@/components/daily-log-exam-preview";
 import { DailyLogForm, type DailyLogFormStudent } from "@/components/daily-log-form";
 import { DailyLogPicker } from "@/components/daily-log-picker";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatKoreanDate } from "@/lib/dates";
+import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { sortByKoreanName } from "@/lib/korean-sort";
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import { buildTextbookSectionsText, stripDerivedPrefix, uniqueSchoolList } from "@/lib/textbooks";
@@ -17,6 +18,7 @@ import {
 } from "@/lib/supabase/queries/daily-logs";
 import { getCurrentUserGroups, getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
 import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
+import { getDailyLogExamPreviewEntries } from "@/lib/supabase/queries/school-exams";
 import { getVocabMistakesForDailyLog } from "@/lib/supabase/queries/vocab-mistakes";
 
 export default async function EditDailyLogPage({ params }: { params: Promise<{ id: string }> }) {
@@ -130,6 +132,16 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
     (student) => student.studentId,
   );
 
+  // 시험 기간 ON: 학교별 시험 대비 캘린더 read-only 미리보기 (새 작성 화면과 동일 —
+  // 현재 그룹 학생 학교 기준. 저장된 일지 데이터는 어떤 것도 변환/복제하지 않는다)
+  const memberSchools = uniqueSchoolList(
+    currentMembers.filter((member) => !member.archived).map((member) => member.school),
+  );
+  const examPreviewEntries =
+    log.group?.is_exam_period && memberSchools.length > 0
+      ? await getDailyLogExamPreviewEntries(memberSchools, log.group?.grade, todayDateString())
+      : [];
+
   return (
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
@@ -155,6 +167,11 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
               />
             </CardContent>
           </Card>
+        ) : null}
+
+        {/* 시험 기간 ON: 학교별 시험 대비 캘린더 미리보기 — 폼과 형제 트리 (remount 무관) */}
+        {examPreviewEntries.length > 0 ? (
+          <DailyLogExamPreview entries={examPreviewEntries} today={todayDateString()} />
         ) : null}
 
         <DailyLogForm

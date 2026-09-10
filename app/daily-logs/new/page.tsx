@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { CircleArrowRight, NotebookTabs } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { DailyLogExamPreview } from "@/components/daily-log-exam-preview";
 import { DailyLogForm } from "@/components/daily-log-form";
 import { DailyLogPicker } from "@/components/daily-log-picker";
 import { LessonHistoryWorkspace } from "@/components/lesson-history-panel";
@@ -27,6 +28,7 @@ import {
   getGroupStudentsForCurrentUser,
 } from "@/lib/supabase/queries/groups";
 import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
+import { getDailyLogExamPreviewEntries } from "@/lib/supabase/queries/school-exams";
 
 export default async function NewDailyLogPage({
   searchParams,
@@ -82,6 +84,20 @@ export default async function NewDailyLogPage({
   const selectedGroup = requestedGroupId
     ? groups.find((group) => group.id === requestedGroupId)
     : undefined;
+
+  // 시험 기간 ON: 그룹 학생 학교들의 기존 시험 대비(시험+플래너 계획)를 read-only 미리보기로.
+  // batch 2쿼리 — 학교 수와 무관, Daily Log에 아무것도 복제/생성하지 않는다.
+  const examPreviewSchools = selectedGroup?.is_exam_period
+    ? uniqueSchoolList(
+        groupStudentsRaw.filter((student) => !student.archived).map((student) => student.school),
+      )
+    : [];
+  // 시험 선택/D-day 기준은 오늘(KST) — "지금 곧 있을 시험"을 참고하는 기능이라
+  // 과거 날짜 일지를 작성 중이어도 현재 기준 upcoming 시험을 보여준다
+  const examPreviewEntries =
+    examPreviewSchools.length > 0
+      ? await getDailyLogExamPreviewEntries(examPreviewSchools, selectedGroup?.grade, todayDateString())
+      : [];
   // 학생 평가 목록은 항상 이름 가나다순 (membership 생성순이 아니라)
   // — 폼 로드 전에 정렬해 두므로 작성 중 재정렬/remount가 없다.
   const groupStudents = selectedGroup
@@ -152,6 +168,12 @@ export default async function NewDailyLogPage({
           </Card>
         ) : (
           <>
+            {/* 시험 기간 ON: 학교별 시험 대비 캘린더 read-only 미리보기 — 폼과 형제 트리라
+                학교/월/날짜 선택이 폼 state에 영향을 주지 않는다 (OFF면 렌더 자체가 없음) */}
+            {examPreviewEntries.length > 0 ? (
+              <DailyLogExamPreview entries={examPreviewEntries} today={todayDateString()} />
+            ) : null}
+
             {lastLesson && (lastLesson.homework || lastLesson.next_lesson_plan) ? (
               <Card className="mb-5 border-[#e8ddf3] bg-[#fbf8ff]">
                 <CardContent className="grid gap-4 p-4 md:grid-cols-2">

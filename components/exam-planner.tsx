@@ -199,6 +199,7 @@ export function ExamPlanner({
   today,
   initialPlans,
   plansFailed = false,
+  readOnly = false,
 }: {
   examId: string;
   examStart: string;
@@ -208,6 +209,9 @@ export function ExamPlanner({
   initialPlans: ExamPrepPlanRecord[];
   // 계획 조회 자체가 실패한 상태 (0개 empty와 구분 — 조용히 위장하지 않는다)
   plansFailed?: boolean;
+  // read-only 참고 모드 (Daily Log 상단 미리보기) — 같은 DB row/완료 상태를 보여주되
+  // 완료 toggle/추가/수정/삭제 진입을 전부 막는다 (날짜 Sheet는 읽기 전용으로 열림)
+  readOnly?: boolean;
 }) {
   const [plans, setPlans] = useState<ExamPrepPlanRecord[]>(initialPlans);
   const [month, setMonth] = useState(today.slice(0, 7));
@@ -380,17 +384,19 @@ export function ExamPlanner({
               </div>
             </div>
           ) : null}
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedDate((prev) => prev ?? today);
-              setSheetMode({ type: "add" });
-              setFormError("");
-            }}
-            className="flex min-h-[40px] items-center gap-1 rounded-xl border border-[#ddd0ec] bg-[#f9f5fd] px-3 text-xs font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
-          >
-            <Plus className="h-3.5 w-3.5" /> 계획 추가
-          </button>
+          {!readOnly ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedDate((prev) => prev ?? today);
+                setSheetMode({ type: "add" });
+                setFormError("");
+              }}
+              className="flex min-h-[40px] items-center gap-1 rounded-xl border border-[#ddd0ec] bg-[#f9f5fd] px-3 text-xs font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
+            >
+              <Plus className="h-3.5 w-3.5" /> 계획 추가
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -502,12 +508,17 @@ export function ExamPlanner({
                             <CheckCircle
                               completed={plan.completed}
                               title={plan.title}
+                              disabled={readOnly}
                               onToggle={() => toggleCompleted(plan)}
                               size="cell"
                             />
                             <button
                               type="button"
                               onClick={(event) => {
+                                if (readOnly) {
+                                  // 읽기 모드: 수정 대신 셀 클릭(openList)으로 전파 — 내용 확인만
+                                  return;
+                                }
                                 // title 탭 = 수정 Sheet (완료 toggle과 별개 action)
                                 event.stopPropagation();
                                 setSelectedDate(date);
@@ -586,7 +597,9 @@ export function ExamPlanner({
                   <div className="space-y-3">
                     {sheetPlans.length === 0 ? (
                       <p className="rounded-xl bg-[#f8f3ef] p-3 text-sm text-[#655d5d]">
-                        이 날짜에는 아직 계획이 없어요. 시험 대비 계획을 등록해보세요.
+                        {readOnly
+                          ? "이 날짜에는 등록된 시험 대비 계획이 없어요."
+                          : "이 날짜에는 아직 계획이 없어요. 시험 대비 계획을 등록해보세요."}
                       </p>
                     ) : (
                       <div className="space-y-0.5">
@@ -595,12 +608,16 @@ export function ExamPlanner({
                             <CheckCircle
                               completed={plan.completed}
                               title={plan.title}
+                              disabled={readOnly}
                               onToggle={() => toggleCompleted(plan)}
                               size="sheet"
                             />
                             <button
                               type="button"
                               onClick={() => {
+                                if (readOnly) {
+                                  return; // 읽기 모드: 수정 Sheet 진입 없음
+                                }
                                 setSheetMode({ type: "edit", planId: plan.id });
                                 setFormError("");
                               }}
@@ -625,16 +642,18 @@ export function ExamPlanner({
 
                     {formError ? <p className="text-xs text-[#a2665f]">{formError}</p> : null}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSheetMode({ type: "add" });
-                        setFormError("");
-                      }}
-                      className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#ddd0ec] bg-[#fbf9fd] text-sm font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
-                    >
-                      <Plus className="h-4 w-4" /> 계획 추가
-                    </button>
+                    {!readOnly ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSheetMode({ type: "add" });
+                          setFormError("");
+                        }}
+                        className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#ddd0ec] bg-[#fbf9fd] text-sm font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
+                      >
+                        <Plus className="h-4 w-4" /> 계획 추가
+                      </button>
+                    ) : null}
                   </div>
                 ) : sheetMode.type === "add" ? (
                   <PlanForm

@@ -1,4 +1,6 @@
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
+import { resolveExamForSchool } from "@/lib/school-exam-display";
+import { getExamPrepPlansByExamIds } from "@/lib/supabase/queries/exam-plans";
 import { examTypeLabels } from "@/lib/validation/school-exam";
 import { gradeDisplay } from "@/lib/grades";
 import type {
@@ -102,6 +104,50 @@ function mapExamRow(row: Record<string, unknown>): SchoolExamListItem {
       .filter((student): student is { id: string; name: string } => Boolean(student))
       .sort((a, b) => a.name.localeCompare(b.name, "ko")),
   };
+}
+
+// 시험 기간 ON Daily Log 상단 미리보기용: 그룹 학생 학교들의 "보여줄 시험 + 계획"을
+// batch 2쿼리(시험 목록 embed 1 + 계획 in() 1)로 조립한다 — 학교 수와 무관 (N+1 금지).
+// 시험 선택은 resolveExamForSchool (school_name 정확 일치 + 진행중/다가오는 것만 +
+// Group 학년 우선). read-only 조회 — 어떤 row도 생성/복제하지 않는다.
+export async function getDailyLogExamPreviewEntries(
+  schools: string[],
+  groupGrade: string | null | undefined,
+  today: string,
+) {
+  if (schools.length === 0) {
+    return [];
+  }
+
+  const { rows } = await getSchoolExams();
+  const examBySchool = new Map(
+    schools.map((school) => [school, resolveExamForSchool(rows, school, groupGrade, today)]),
+  );
+  const examIds = [...examBySchool.values()]
+    .filter((exam): exam is SchoolExamListItem => Boolean(exam))
+    .map((exam) => exam.id);
+  const { byExamId, failed } = await getExamPrepPlansByExamIds(examIds);
+
+  return schools.map((school) => {
+    const exam = examBySchool.get(school) ?? null;
+    return {
+      school,
+      exam:
+        exam && exam.event
+          ? {
+              id: exam.id,
+              grade: exam.grade,
+              examYear: exam.exam_year,
+              semester: exam.semester,
+              examType: exam.exam_type,
+              startDate: exam.event.start_date,
+              endDate: exam.event.end_date,
+              plans: byExamId.get(exam.id) ?? [],
+              plansFailed: failed,
+            }
+          : null,
+    };
+  });
 }
 
 export async function getSchoolExamById(examId: string) {

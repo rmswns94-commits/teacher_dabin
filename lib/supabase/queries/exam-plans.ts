@@ -65,6 +65,41 @@ export async function getExamPlanCountsByExamIds(examIds: string[]) {
   return counts;
 }
 
+// 여러 시험의 계획 전체를 in() 1쿼리 batch — Daily Log 시험 대비 미리보기용
+// (학교 수만큼 반복 쿼리 금지). 실패 시 failed=true (empty로 위장하지 않는다).
+export async function getExamPrepPlansByExamIds(
+  examIds: string[],
+): Promise<{ byExamId: Map<string, ExamPrepPlanRecord[]>; failed: boolean }> {
+  const byExamId = new Map<string, ExamPrepPlanRecord[]>();
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user || examIds.length === 0) {
+    return { byExamId, failed: false };
+  }
+
+  const { data, error } = await supabase
+    .from("exam_prep_plans")
+    .select("*")
+    .eq("user_id", user.id)
+    .in("school_exam_id", examIds)
+    .order("plan_date", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    if (!MISSING_TABLE_CODES.has(error.code ?? "")) {
+      logPlanError("getExamPrepPlansByExamIds", error);
+    }
+    return { byExamId, failed: true };
+  }
+
+  for (const row of (data ?? []) as ExamPrepPlanRecord[]) {
+    byExamId.set(row.school_exam_id, [...(byExamId.get(row.school_exam_id) ?? []), row]);
+  }
+
+  return { byExamId, failed: false };
+}
+
 // 계획 0개는 정상(empty)이고 error가 아니다. 진짜 쿼리 실패만 failed로 구분해
 // UI가 empty 상태로 위장하지 않고 안내를 보여줄 수 있게 한다.
 export async function getExamPrepPlans(
