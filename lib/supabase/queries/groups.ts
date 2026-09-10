@@ -2,7 +2,13 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
-import type { ClassGroupRecord, PreparationItem, StudentGrade, StudentRecord } from "@/lib/supabase/types";
+import type {
+  ClassGroupRecord,
+  ExamTextbook,
+  PreparationItem,
+  StudentGrade,
+  StudentRecord,
+} from "@/lib/supabase/types";
 
 // cache(): AppShell(사이드바)과 페이지가 같은 요청 안에서 그룹 목록을 각각 조회해도
 // 실제 쿼리는 1회만 나간다. cache는 인자별로 엔트리가 갈리므로(false/true가 각각 1쿼리)
@@ -290,6 +296,138 @@ export async function setGroupExamPeriod(groupId: string, isExamPeriod: boolean)
     console.error("setGroupExamPeriod error", { code: error.code, message: error.message });
     throw new Error("시험 기간 상태를 저장하지 못했어요. 다시 시도해주세요.");
   }
+
+  return true;
+}
+
+// ── 시험 대비용 교재 (class_groups.exam_textbooks jsonb) ─────────────────
+// 일반 교재(textbook text)와 저장 위치가 분리돼 서로를 건드리지 않는다.
+// 읽기 → 수정 → 쓰기 한 벌로 처리하고, 항상 소유자(user_id) 조건을 함께 건다.
+const EXAM_TEXTBOOK_MISSING_COLUMN = new Set(["42703", "PGRST204"]);
+const EXAM_TEXTBOOK_MIGRATION_MESSAGE =
+  "시험 대비용 교재 기능의 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20260911_add_exam_textbooks.sql을 실행한 뒤 다시 시도해주세요.";
+
+async function loadExamTextbooks(groupId: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  const { data, error } = await supabase
+    .from("class_groups")
+    .select("exam_textbooks")
+    .eq("id", groupId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("loadExamTextbooks error", { code: error.code, message: error.message });
+    throw new Error(
+      EXAM_TEXTBOOK_MISSING_COLUMN.has(error.code ?? "")
+        ? EXAM_TEXTBOOK_MIGRATION_MESSAGE
+        : "시험 대비용 교재를 불러오지 못했어요. 다시 시도해주세요.",
+    );
+  }
+
+  if (!data) {
+    throw new Error("수업 그룹을 찾을 수 없어요.");
+  }
+
+  const books = ((data as { exam_textbooks: ExamTextbook[] | null }).exam_textbooks ?? []).filter(
+    (book): book is ExamTextbook => Boolean(book?.id && typeof book.name === "string"),
+  );
+
+  return { supabase, user, books };
+}
+
+async function saveExamTextbooks(
+  supabase: NonNullable<Awaited<ReturnType<typeof createServerSupabaseClient>>>,
+  userId: string,
+  groupId: string,
+  books: ExamTextbook[],
+) {
+  const { error } = await supabase
+    .from("class_groups")
+    .update({ exam_textbooks: books })
+    .eq("id", groupId)
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("saveExamTextbooks error", { code: error.code, message: error.message });
+    throw new Error(
+      EXAM_TEXTBOOK_MISSING_COLUMN.has(error.code ?? "")
+        ? EXAM_TEXTBOOK_MIGRATION_MESSAGE
+        : "시험 대비용 교재를 저장하지 못했어요. 다시 시도해주세요.",
+    );
+  }
+
+  return true;
+}
+
+// 같은 그룹 안에서 같은 이름(공백/대소문자 무시)은 한 번만 — 중복 등록 방지
+const sameBookName = (a: string, b: string) =>
+  a.trim().replace(/\s+/g, " ").toLowerCase() === b.trim().replace(/\s+/g, " ").toLowerCase();
+
+export async function addExamTextbook(groupId: string, name: string) {
+  const trimmed = name.trim();
+
+  if (!trimmed) {
+    throw new Error("교재 이름을 입력해주세요.");
+  }
+
+  const { supabase, user, books } = await loadExamTextbooks(groupId);
+
+  if (books.some((book) => sameBookName(book.name, trimmed))) {
+    throw new Error("이미 등록된 교재예요.");
+  }
+
+  await saveExamTextbooks(supabase, user.id, groupId, [
+    ...books,
+    { id: globalThis.crypto.randomUUID(), name: trimmed },
+  ]);
+
+  return true;
+}
+
+export async function renameExamTextbook(groupId: string, bookId: string, name: string) {
+  const trimmed = name.trim();
+
+  if (!trimmed) {
+    throw new Error("교재 이름을 입력해주세요.");
+  }
+
+  const { supabase, user, books } = await loadExamTextbooks(groupId);
+
+  if (!books.some((book) => book.id === bookId)) {
+    throw new Error("교재를 찾을 수 없어요.");
+  }
+
+  if (books.some((book) => book.id !== bookId && sameBookName(book.name, trimmed))) {
+    throw new Error("이미 등록된 교재예요.");
+  }
+
+  await saveExamTextbooks(
+    supabase,
+    user.id,
+    groupId,
+    books.map((book) => (book.id === bookId ? { ...book, name: trimmed } : book)),
+  );
+
+  return true;
+}
+
+// id가 정확히 일치하는 항목만 제거 — 일반 교재/다른 그룹에는 영향이 없다
+export async function removeExamTextbook(groupId: string, bookId: string) {
+  const { supabase, user, books } = await loadExamTextbooks(groupId);
+
+  await saveExamTextbooks(
+    supabase,
+    user.id,
+    groupId,
+    books.filter((book) => book.id !== bookId),
+  );
 
   return true;
 }

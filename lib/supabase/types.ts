@@ -43,6 +43,10 @@ export type PreparationItem = {
   dismissed?: boolean;
 };
 
+// 시험 대비용 교재 한 권 — id는 등록 시 발급하는 안정 식별자(이름 변경/삭제 기준).
+// 일반 교재(class_groups.textbook)와 저장 위치가 분리돼 서로 영향을 주지 않는다.
+export type ExamTextbook = { id: string; name: string };
+
 export type ClassGroupRecord = {
   id: string;
   user_id: string;
@@ -53,6 +57,9 @@ export type ClassGroupRecord = {
   textbook: string | null;
   school: string | null; // 그룹 학교 이름 (선택 — 시험 기간 ON일 때 숙제/계획/할 일 context)
   is_exam_period: boolean; // 시험 기간 ON/OFF (Teacher가 직접 해제할 때까지 유지, 기본 OFF)
+  // 시험 대비용 교재 (일반 textbook과 별개 — OFF로 돌려도 지우지 않는다).
+  // 시험 기간 ON이면 수업일지 Excel의 교재 셀이 이 목록을 쓴다 (0개면 "시험 대비" fallback).
+  exam_textbooks: ExamTextbook[] | null;
   highlight_memo: string | null;
   preparation_items: PreparationItem[];
   archived: boolean;

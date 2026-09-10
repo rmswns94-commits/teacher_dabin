@@ -4,11 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  addExamTextbook,
   addStudentToGroup,
   archiveGroup,
   createGroupWithDetails,
   getGroupByIdForCurrentUser,
+  removeExamTextbook,
   removeStudentFromGroup,
+  renameExamTextbook,
   restoreGroup,
   setGroupExamPeriod,
   updateGroup,
@@ -130,6 +133,76 @@ export async function setExamPeriodAction(groupId: string, isExamPeriod: boolean
   // 어느 경로에서든 stale 없이 반영되게 layout 단위로 revalidate한다
   // (서버 재렌더만 — 작성 중인 클라이언트 폼 state를 건드리지 않는다)
   revalidatePath("/", "layout");
+  return { success: true as const };
+}
+
+// ── 시험 대비용 교재 (등록/이름 수정/삭제) ─────────────────────────────
+// 일반 교재(class_groups.textbook)와 별개 저장이라 서로 영향을 주지 않는다.
+// 소유 검증은 쿼리 계층이 user_id 조건으로 처리한다 (client가 보낸 값 신뢰 없음).
+type ExamTextbookResult = { error: string } | { success: true };
+
+const examTextbookError = (error: unknown, fallback: string): ExamTextbookResult => ({
+  error: error instanceof Error && error.message ? error.message : fallback,
+});
+
+function revalidateExamTextbooks(groupId: string) {
+  revalidatePath(`/groups/${groupId}`);
+  // 교재 셀 source가 바뀌므로 일지/내보내기 화면도 최신 상태로
+  revalidatePath("/daily-logs");
+}
+
+export async function addExamTextbookAction(
+  groupId: string,
+  name: string,
+): Promise<ExamTextbookResult> {
+  if (typeof groupId !== "string" || !groupId || typeof name !== "string") {
+    return { error: "교재를 등록하지 못했어요. 다시 시도해주세요." };
+  }
+
+  try {
+    await addExamTextbook(groupId, name);
+  } catch (error) {
+    return examTextbookError(error, "교재를 등록하지 못했어요. 다시 시도해주세요.");
+  }
+
+  revalidateExamTextbooks(groupId);
+  return { success: true as const };
+}
+
+export async function renameExamTextbookAction(
+  groupId: string,
+  bookId: string,
+  name: string,
+): Promise<ExamTextbookResult> {
+  if (typeof groupId !== "string" || !groupId || typeof bookId !== "string" || !bookId || typeof name !== "string") {
+    return { error: "교재를 수정하지 못했어요. 다시 시도해주세요." };
+  }
+
+  try {
+    await renameExamTextbook(groupId, bookId, name);
+  } catch (error) {
+    return examTextbookError(error, "교재를 수정하지 못했어요. 다시 시도해주세요.");
+  }
+
+  revalidateExamTextbooks(groupId);
+  return { success: true as const };
+}
+
+export async function removeExamTextbookAction(
+  groupId: string,
+  bookId: string,
+): Promise<ExamTextbookResult> {
+  if (typeof groupId !== "string" || !groupId || typeof bookId !== "string" || !bookId) {
+    return { error: "교재를 삭제하지 못했어요. 다시 시도해주세요." };
+  }
+
+  try {
+    await removeExamTextbook(groupId, bookId);
+  } catch (error) {
+    return examTextbookError(error, "교재를 삭제하지 못했어요. 다시 시도해주세요.");
+  }
+
+  revalidateExamTextbooks(groupId);
   return { success: true as const };
 }
 

@@ -9,6 +9,7 @@ import {
 } from "@/lib/excel/teacher-log-export";
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
+import type { ExamTextbook } from "@/lib/supabase/types";
 
 // 선택한 날짜에 앱에서 실제 작성된 Daily Log들을 기존 교사일지 Excel 양식으로 내보낸다.
 // - App Daily Log가 source of truth (예정 수업을 임의 생성하지 않음)
@@ -17,6 +18,30 @@ import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server
 // - 파일은 서버에 저장하지 않고 즉시 다운로드로만 반환
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
+
+// 교재 셀 값 — 시험 기간 ON이면 시험 대비용 교재, 아니면 일반 교재.
+// 여러 권은 일반 교재(class_groups.textbook)와 같은 줄바꿈 표기로 이어 붙인다.
+// 시험 기간 ON인데 등록된 교재가 없을 때만 기존 "시험 대비" 문구로 대체한다
+// (표시용 fallback — DB에는 저장하지 않는다).
+export function examTextbookCell(
+  group: {
+    textbook: string | null;
+    is_exam_period: boolean | null;
+    exam_textbooks?: ExamTextbook[] | null;
+  } | null,
+) {
+  const regular = group?.textbook?.trim() ?? "";
+
+  if (!group?.is_exam_period) {
+    return regular;
+  }
+
+  const examBooks = (group.exam_textbooks ?? [])
+    .map((book) => book?.name?.trim() ?? "")
+    .filter(Boolean);
+
+  return examBooks.length > 0 ? examBooks.join("\n") : "시험 대비";
+}
 
 // YYYY-MM-DD 형식 + 실제 달력에 존재하는 날짜인지 (2026-13-40 같은 값 거부).
 // UTC 정오 고정으로 파싱해 timezone 밀림 없이 검증한다.
@@ -56,7 +81,10 @@ export async function GET(request: Request) {
   // 선택 날짜의 Daily Log만 조회 (전체 기간 조회 금지)
   const { data: logRows, error: logError } = await supabase
     .from("daily_logs")
-    .select("id, group_id, status, default_progress, lesson_content, class_groups(id, name, textbook, is_exam_period)")
+    // 교재 셀 결정에 필요한 그룹 필드까지 embed 1쿼리로 (그룹마다 추가 조회 없음)
+    .select(
+      "id, group_id, status, default_progress, lesson_content, class_groups(id, name, textbook, is_exam_period, exam_textbooks)",
+    )
     .eq("user_id", user.id)
     .eq("class_date", date);
 
@@ -76,7 +104,13 @@ export async function GET(request: Request) {
   const logs: LogRow[] = (logRows ?? []).map((row) => {
     const groups = row.class_groups as unknown;
     const group = (Array.isArray(groups) ? groups[0] : groups) as
-      | { id: string; name: string; textbook: string | null; is_exam_period: boolean | null }
+      | {
+          id: string;
+          name: string;
+          textbook: string | null;
+          is_exam_period: boolean | null;
+          exam_textbooks: ExamTextbook[] | null;
+        }
       | null;
 
     return {
@@ -84,9 +118,10 @@ export async function GET(request: Request) {
       status: row.status,
       progress: mergeLegacyLessonContent(row.default_progress, row.lesson_content),
       groupName: group?.name ?? "수업 그룹",
-      // 시험 기간 ON인 그룹은 교재 셀에 정확히 "시험 대비" (학교명 아님 — export 시점의
-      // 현재 그룹 상태 기준: historical snapshot이 아니라 의도된 동작). OFF면 기존 교재 그대로.
-      textbook: group?.is_exam_period ? "시험 대비" : group?.textbook?.trim() ?? "",
+      // 교재 셀은 export 시점의 그룹 상태 기준 (historical snapshot 아님 — 기존 정책 유지).
+      // 시험 기간 ON: 등록된 시험 대비용 교재 이름들, 하나도 없으면 "시험 대비" fallback.
+      // OFF: 기존 일반 교재 그대로. 그룹마다 독립 (하나가 ON이어도 다른 그룹은 영향 없음).
+      textbook: examTextbookCell(group),
     };
   });
 

@@ -27,6 +27,7 @@ import { HighlightCard } from "@/components/highlight-card";
 import { PageHeader } from "@/components/page-header";
 import { ScheduleSetEditor } from "@/components/schedule-set-editor";
 import { GuardedForm } from "@/components/unsaved-guard";
+import { ExamTextbooksEditor } from "@/components/exam-textbooks-editor";
 import { TextbookFieldsEditor } from "@/components/textbook-fields-editor";
 import { PendingButton } from "@/components/pending-button";
 import { DailyLogStatusBadge } from "@/components/status-badge";
@@ -357,6 +358,14 @@ export default async function GroupDetailPage({
                 ) : (
                   <div className="mt-2 text-sm text-[#8a7b77]">아직 등록된 교재가 없어요.</div>
                 )}
+
+                {/* 시험 기간 ON일 때만 시험 대비용 교재 관리 (OFF여도 데이터는 그대로 보관).
+                    일반 교재는 위 목록 그대로 — 두 목록은 서로 영향을 주지 않는다. */}
+                {group.is_exam_period ? (
+                  <div className="mt-4 border-t border-dashed border-[#f0e2d8] pt-3">
+                    <ExamTextbooksEditor groupId={id} books={group.exam_textbooks ?? []} />
+                  </div>
+                ) : null}
               </Card>
             </div>
 
