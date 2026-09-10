@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* 다크 모드 색상 오버라이드 (자동 생성 — scratchpad/generate-dark-theme.mjs로 재생성) */
+@import "./theme-dark.generated.css";
 
 :root {
   --background: #f6f6f7;
@@ -18,6 +20,30 @@
   --diary-ink: #2d2928;
   --diary-muted: #7b746f;
   --diary-border: #eadfd8;
+}
+
+/* 다크 모드 — 따뜻한 charcoal 기반 (순검정 금지), 라벤더 accent 유지.
+   html.dark 클래스로 전환 (설정 > 화면 설정 — light/dark/system, 저장은 localStorage).
+   개별 컴포넌트 색은 theme-dark.generated.css의 hex별 오버라이드가 담당한다. */
+.dark {
+  color-scheme: dark;
+  --background: #1d1a1d;
+  --foreground: #d9d5d3;
+  --diary-lavender: #201a34;
+  --diary-lavender-strong: #8b7ae6;
+  --diary-lilac: #291f40;
+  --diary-cream: #312718;
+  --diary-peach: #38251b;
+  --diary-pink: #362127;
+  --diary-mint: #21332a;
+  --diary-warm-gray: #2a2623;
+  --diary-ink: #c8c5c4;
+  --diary-muted: #b4b2b1;
+  --diary-border: #382f29;
+}
+
+.dark body {
+  color: var(--foreground);
 }
 
 @theme inline {

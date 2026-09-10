@@ -48,12 +48,23 @@ export const viewport: Viewport = {
   themeColor: "#ffffff",
 };
 
+// 첫 페인트 전에 저장된 테마를 적용하는 스크립트 (FOUC 방지 — head에서 동기 실행).
+// 저장값 없음 = 기존 사용자와 동일한 라이트. "system"일 때만 OS prefers-color-scheme을
+// 따르고, OS 설정 변경도 실시간 반영한다. SSR에서는 localStorage에 접근하지 않는다.
+const themeInitScript = `(function(){try{var k="dabin-theme";var c=document.documentElement.classList;var m=window.matchMedia("(prefers-color-scheme: dark)");function apply(){var t=localStorage.getItem(k);var d=t==="dark"||(t==="system"&&m.matches);d?c.add("dark"):c.remove("dark");}apply();m.addEventListener("change",apply);window.addEventListener("storage",apply);}catch(e){}})();`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="ko"
+      // 테마 클래스는 head 스크립트가 hydration 전에 붙인다 — 서버 markup과의
+      // class 차이는 의도된 것 (테마 기능 표준 패턴)
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} ${hiMelody.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className="min-h-full text-[#2d2928]">
         <ServiceWorkerRegistration />
         <NavHistoryTracker />

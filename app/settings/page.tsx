@@ -3,6 +3,7 @@ import { FeedbackDialog } from "@/components/feedback-dialog";
 import { InstallAppButton } from "@/components/install-app";
 import { LogoutButton } from "@/components/logout-button";
 import { PageHeader } from "@/components/page-header";
+import { ThemeModeControl } from "@/components/theme-mode-control";
 import { Card, CardContent } from "@/components/ui/card";
 import { getDisplayName } from "@/lib/supabase/auth";
 import { getServerUser } from "@/lib/supabase/server";
@@ -35,6 +36,21 @@ export default async function SettingsPage() {
                   {email ? (
                     <div className="truncate text-xs text-[#8a8a93]">{email}</div>
                   ) : null}
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+
+          <section className="mt-6">
+            <h2 className="text-sm font-semibold text-[#8f5470]">화면 설정</h2>
+            <Card className="mt-2">
+              <CardContent className="p-4">
+                <div className="text-sm font-medium text-[#2d2928]">화면 모드</div>
+                <p className="mt-0.5 text-xs text-[#8a7b77]">
+                  라이트 · 다크 · 시스템 중에서 고를 수 있어요.
+                </p>
+                <div className="mt-3">
+                  <ThemeModeControl />
                 </div>
               </CardContent>
             </Card>
