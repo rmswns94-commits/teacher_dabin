@@ -1,12 +1,6 @@
 import { todayDateString } from "@/lib/dates";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
-import type {
-  AttendanceStatus,
-  ClassGroupRecord,
-  DailyLogRecord,
-  MakeupLessonRecord,
-  StudentRecord,
-} from "@/lib/supabase/types";
+import type { AttendanceStatus, ClassGroupRecord, DailyLogRecord } from "@/lib/supabase/types";
 
 function pickOne<T>(value: unknown): T | null {
   if (Array.isArray(value)) {
@@ -16,7 +10,9 @@ function pickOne<T>(value: unknown): T | null {
   return (value ?? null) as T | null;
 }
 
-export type TodayLogSummary = DailyLogRecord & {
+// 대시보드 Today class 카드가 실제로 쓰는 필드만. daily_logs에는 진도/계획/회고 같은
+// 긴 text와 jsonb가 여러 개라 select("*")로 받으면 화면에 안 쓰는 데이터를 매번 실어 온다.
+export type TodayLogSummary = Pick<DailyLogRecord, "id" | "status" | "group_id" | "class_date"> & {
   group: Pick<ClassGroupRecord, "id" | "name"> | null;
   attendanceCounts: {
     present: number;
@@ -27,10 +23,6 @@ export type TodayLogSummary = DailyLogRecord & {
   };
 };
 
-export type OpenMakeupSummary = MakeupLessonRecord & {
-  student: Pick<StudentRecord, "id" | "name"> | null;
-};
-
 export async function getDashboardOverview() {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
@@ -39,34 +31,23 @@ export async function getDashboardOverview() {
   const empty = {
     today,
     todayLogs: [] as TodayLogSummary[],
-    openMakeups: [] as OpenMakeupSummary[],
   };
 
   if (!supabase || !user) {
     return empty;
   }
 
-  const [logsResult, makeupsResult] = await Promise.all([
-    supabase
-      .from("daily_logs")
-      .select("*, class_groups(id, name), student_lesson_logs(attendance)")
-      .eq("user_id", user.id)
-      .eq("class_date", today)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("makeup_lessons")
-      .select("*, students(id, name)")
-      .eq("user_id", user.id)
-      .in("status", ["required", "scheduled"])
-      .order("scheduled_date", { ascending: true }),
-  ]);
+  // 보충은 대시보드의 "오늘 보충 수업" 카드가 getTodayScheduledMakeups로 따로 읽는다.
+  // 예전에 여기서도 열린 보충을 전부 받아왔지만 화면에서 쓰이지 않아 제거했다 (왕복 1회 절약).
+  const logsResult = await supabase
+    .from("daily_logs")
+    .select("id, status, group_id, class_date, class_groups(id, name), student_lesson_logs(attendance)")
+    .eq("user_id", user.id)
+    .eq("class_date", today)
+    .order("created_at", { ascending: false });
 
   if (logsResult.error) {
     console.error("getDashboardOverview logs error", logsResult.error);
-  }
-
-  if (makeupsResult.error) {
-    console.error("getDashboardOverview makeups error", makeupsResult.error);
   }
 
   const todayLogs = (logsResult.data ?? []).map((row) => {
@@ -78,18 +59,16 @@ export async function getDashboardOverview() {
     }
 
     return {
-      ...(row as unknown as DailyLogRecord),
+      id: row.id as string,
+      status: row.status as DailyLogRecord["status"],
+      group_id: row.group_id as string,
+      class_date: row.class_date as string,
       group: pickOne<Pick<ClassGroupRecord, "id" | "name">>(row.class_groups),
       attendanceCounts: counts,
     };
   });
 
-  const openMakeups = (makeupsResult.data ?? []).map((row) => ({
-    ...(row as unknown as MakeupLessonRecord),
-    student: pickOne<Pick<StudentRecord, "id" | "name">>(row.students),
-  }));
-
-  return { today, todayLogs, openMakeups };
+  return { today, todayLogs };
 }
 
 export async function getDashboardStats() {

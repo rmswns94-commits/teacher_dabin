@@ -148,6 +148,11 @@ function NavLink({
   return (
     <Link
       href={href}
+      // 사이드바는 모든 페이지에 상주해서 화면 안에 링크가 항상 들어와 있다.
+      // 기본 prefetch면 페이지를 열 때마다 메뉴 수만큼 RSC 요청이 나가고, 그 요청 하나하나가
+      // 서버에서 해당 라우트의 layout(사이드바 쿼리 포함)을 다시 렌더한다 — 첫 로딩이 그만큼 늦어진다.
+      // 라우트 TTFB가 150ms 안팎이라 클릭 후 바로 이동해도 충분히 빠르다.
+      prefetch={false}
       className={cn(
         "flex items-center gap-3 rounded-xl px-3 py-2.5 text-base font-medium transition-all",
         isActive
@@ -229,6 +234,7 @@ export function Sidebar({
       >
         <Link
           href={item.href}
+          prefetch={false}
           className={cn(
             "flex flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-base font-medium",
             inGroupsSection ? "text-[#232327]" : "text-[#3c3c45]",
@@ -266,6 +272,7 @@ export function Sidebar({
               <li key={group.id}>
                 <Link
                   href={`/groups/${group.id}`}
+                  prefetch={false}
                   aria-current={groupActive ? "page" : undefined}
                   className={cn(
                     "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-normal transition-all",

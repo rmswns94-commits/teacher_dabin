@@ -66,6 +66,10 @@ export async function saveDailyLogAction(input: DailyLogFormInput & { draftId?: 
   revalidatePath(`/daily-logs/${dailyLogId}`);
   revalidatePath("/makeups");
   revalidatePath("/dashboard");
+  // 일지 저장은 오늘 할 일 화면의 두 source를 모두 바꾼다 —
+  // 숙제(완료일 기준으로 그 날짜에 표시)와 [수업 기록 완료] 시 만들어지는 해야 할 일 Todo.
+  // 이 경로가 빠져 있으면 /todos만 stale해질 수 있다.
+  revalidatePath("/todos");
   // 관찰값(질문/배려/노력 등) 변경이 성장노트 주간 판정에 바로 반영되게 한다
   revalidatePath("/growth-notes", "layout");
 
@@ -116,6 +120,8 @@ export async function deleteWritingDraftAction(input: { kind: "log" | "autosave"
 
   revalidatePath("/daily-logs");
   revalidatePath("/dashboard");
+  // draft 일지에도 숙제/해야 할 일이 딸려 있을 수 있어 오늘 할 일 화면도 함께 갱신
+  revalidatePath("/todos");
   if (input.kind === "log") {
     // draft 일지 row는 출결/미처리 보충/칭찬 정리를 동반하므로 관련 화면도 갱신
     revalidatePath("/makeups");
@@ -146,6 +152,8 @@ export async function deleteDailyLogAction(dailyLogId: string) {
   revalidatePath("/dashboard");
   revalidatePath("/students");
   revalidatePath("/groups");
+  // 일지를 지우면 딸린 숙제/해야 할 일도 사라지므로 오늘 할 일 화면도 갱신
+  revalidatePath("/todos");
   // 삭제된 출결/평가/칭찬이 성장노트 주간 판정·칭찬 요약에 stale하게 남지 않게
   revalidatePath("/growth-notes", "layout");
 
