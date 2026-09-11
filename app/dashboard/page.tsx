@@ -32,6 +32,8 @@ import {
 import { getDisplayName } from "@/lib/supabase/auth";
 import { getDashboardOverview, getDashboardStats } from "@/lib/supabase/queries/dashboard";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
+import { getTodayScheduledMakeups } from "@/lib/supabase/queries/makeups";
+import { TodayMakeupsCard } from "@/components/today-makeups-card";
 import { getDueWeaknessesForCurrentUser } from "@/lib/supabase/queries/weaknesses";
 import { weaknessCategoryLabels } from "@/lib/validation/weakness";
 import type { PreparationItem } from "@/lib/supabase/types";
@@ -78,7 +80,7 @@ function occurrenceDateLabel(occ: ClassOccurrence<ScheduleGroupInfo>) {
 export default async function DashboardPage() {
   const user = await getServerUser();
   const today = todayDateString();
-  const [stats, overview, schedules, examEvents, allGroups, dueWeaknesses] = await Promise.all([
+  const [stats, overview, schedules, examEvents, allGroups, dueWeaknesses, todayMakeups] = await Promise.all([
     getDashboardStats(),
     getDashboardOverview(),
     getCurrentUserSchedulesWithGroup(),
@@ -88,6 +90,8 @@ export default async function DashboardPage() {
     getCurrentUserGroups(),
     // 복습 큐: due 지난 active 약점만 batch 1쿼리 (학생별 쿼리 금지)
     getDueWeaknessesForCurrentUser(today, 6),
+    // 오늘 보충 수업 카드 — 학생/원래 반까지 embed한 1쿼리 (보충 건마다 조회하지 않는다)
+    getTodayScheduledMakeups(today),
   ]);
   const displayName = getDisplayName(user);
 
@@ -622,6 +626,10 @@ export default async function DashboardPage() {
                   </CardContent>
                 </Card>
               ) : null}
+
+              {/* 오늘 보충 수업 — "그 다음" 카드 바로 아래. 오늘 잡혀 있는 미완료 보충만 보여주고,
+                  하나도 없으면 카드 자체가 렌더되지 않는다 (컴포넌트에서 null 반환). */}
+              <TodayMakeupsCard makeups={todayMakeups} today={today} />
             </div>
           </div>
 

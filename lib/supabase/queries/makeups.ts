@@ -1,5 +1,6 @@
 import { cache } from "react";
 
+import { formatTimeHM } from "@/lib/schedule";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type { ClassGroupRecord, MakeupLessonRecord, StudentRecord } from "@/lib/supabase/types";
 
@@ -415,6 +416,83 @@ export async function getMonthlyScheduledMakeups(monthStart: string, monthEnd: s
       missed_progress: (row.missed_progress as string | null) ?? null,
       student: pickOne<Pick<StudentRecord, "id" | "name">>(row.students),
       group: directGroup ?? pickOne<Pick<ClassGroupRecord, "id" | "name">>(dailyLog?.class_groups),
+    };
+  });
+}
+
+// Dashboard "오늘 보충 수업" 카드용 — 오늘 실제로 해야 하는 보충만.
+// status=scheduled(=일정이 잡힌 미완료) + scheduled_date=오늘. 일정이 필요한 보충(required)·
+// 완료·취소는 애초에 조회하지 않는다. 학생/원래 반은 relation embed라 건수와 무관하게 1쿼리.
+export type TodayScheduledMakeup = {
+  id: string;
+  studentName: string;
+  groupName: string | null;
+  startTime: string | null; // "HH:MM"
+  endTime: string | null;
+  scheduledDate: string;
+  missedProgress: string | null;
+  comment: string | null;
+};
+
+export async function getTodayScheduledMakeups(today: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as TodayScheduledMakeup[];
+  }
+
+  const columns =
+    "id, scheduled_date, start_time, end_time, missed_progress, comment, students(id, name)";
+  const primary = await supabase
+    .from("makeup_lessons")
+    .select(
+      `${columns}, direct_group:class_groups!makeup_lessons_group_id_fkey(id, name), student_lesson_logs(daily_logs(class_groups(id, name)))`,
+    )
+    .eq("user_id", user.id)
+    .eq("status", "scheduled")
+    .eq("scheduled_date", today)
+    .order("start_time", { ascending: true, nullsFirst: false });
+
+  let data: Record<string, unknown>[] | null = primary.data;
+  let error = primary.error;
+
+  if (error && SCHEMA_MISMATCH_CODES.has(error.code ?? "")) {
+    // migration 적용 전 fallback (직접 등록 group relation 없음)
+    const fallback = await supabase
+      .from("makeup_lessons")
+      .select(`${columns}, student_lesson_logs(daily_logs(class_groups(id, name)))`)
+      .eq("user_id", user.id)
+      .eq("status", "scheduled")
+      .eq("scheduled_date", today)
+      .order("start_time", { ascending: true, nullsFirst: false });
+    data = fallback.data;
+    error = fallback.error;
+  }
+
+  if (error) {
+    console.error("getTodayScheduledMakeups error", error);
+    return [] as TodayScheduledMakeup[];
+  }
+
+  return (data ?? []).map((row) => {
+    const lessonLog = pickOne<{ daily_logs: unknown }>(row.student_lesson_logs);
+    const dailyLog = pickOne<{ class_groups: unknown }>(lessonLog?.daily_logs);
+    const directGroup = pickOne<Pick<ClassGroupRecord, "id" | "name">>(
+      (row as { direct_group?: unknown }).direct_group,
+    );
+    const group = directGroup ?? pickOne<Pick<ClassGroupRecord, "id" | "name">>(dailyLog?.class_groups);
+    const student = pickOne<Pick<StudentRecord, "id" | "name">>(row.students);
+
+    return {
+      id: row.id as string,
+      studentName: student?.name ?? "학생",
+      groupName: group?.name ?? null,
+      startTime: row.start_time ? formatTimeHM(row.start_time as string) : null,
+      endTime: row.end_time ? formatTimeHM(row.end_time as string) : null,
+      scheduledDate: row.scheduled_date as string,
+      missedProgress: (row.missed_progress as string | null) ?? null,
+      comment: (row.comment as string | null) ?? null,
     };
   });
 }
