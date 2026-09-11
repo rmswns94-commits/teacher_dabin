@@ -179,6 +179,8 @@ export default async function GroupsPage() {
       latestStatus: latest?.status ?? null,
       attendanceLabel: attendanceParts.length > 0 ? attendanceParts.join(" · ") : null,
       prepCount,
+      // 시험 대비 표시는 group row가 이미 들고 있는 값 그대로 (카드마다 추가 조회 없음)
+      isExamPeriod: group.is_exam_period ?? false,
       examLabel,
       examThisWeek,
       sortKey: occ ? occ.startEpoch : Number.MAX_SAFE_INTEGER,

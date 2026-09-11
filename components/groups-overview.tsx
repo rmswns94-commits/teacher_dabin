@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BookOpen, CalendarDays, ChevronRight, Clock3, Search } from "lucide-react";
 import { useState } from "react";
 
+import { ExamPeriodMark } from "@/components/exam-period-mark";
 import { Card } from "@/components/ui/card";
 import { groupIconOf } from "@/lib/group-icons";
 
@@ -27,6 +28,8 @@ export type GroupCardData = {
   latestStatus: "draft" | "completed" | null;
   attendanceLabel: string | null;
   prepCount: number;
+  // 시험 대비 ON/OFF (class_groups.is_exam_period 그대로 — 시험 record 유무와 무관)
+  isExamPeriod: boolean;
   examLabel: string | null;
   examThisWeek: boolean;
   sortKey: number;
@@ -97,6 +100,9 @@ function GroupCard({ group }: { group: GroupCardData }) {
               <span className="rounded-full bg-[#f0f0f3] px-2 py-0.5 text-xs font-medium text-[#4c4c55]">
                 {group.gradeLabel}
               </span>
+              {/* 시험 대비 ON — 학년 badge 바로 옆. 사이드바/대시보드와 같은 컴포넌트를 쓰므로
+                  판정 기준(class_groups.is_exam_period)이 세 화면에서 하나로 유지된다. */}
+              <ExamPeriodMark show={group.isExamPeriod} variant="badge" />
               {group.isNow ? (
                 <span className="rounded-full bg-[#efe8fb] px-2 py-0.5 text-xs font-medium text-[#5d4ba5]">
                   지금 수업 중
