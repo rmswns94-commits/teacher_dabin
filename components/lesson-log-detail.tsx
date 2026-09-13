@@ -12,7 +12,12 @@ import {
   homeworkAudienceLabel,
   isDerivedHomeworkMirror,
 } from "@/lib/homework-assignments";
-import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
+import {
+  buildTextbookSectionsText,
+  formatTextbookLinked,
+  linkedContextLabel,
+  stripDerivedPrefix,
+} from "@/lib/textbooks";
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import {
   effortLevelLabels,
@@ -72,6 +77,28 @@ export function LessonLogDetail({
 
   const vocabRows = detail.lessonLogs.filter((log) => log.vocab_correct !== null);
   const parentNoteRows = detail.lessonLogs.filter((log) => log.parent_note);
+
+  // PHASE 2 — 혼합(학교+교재) 진도 일지의 공통 진도 구획 표시.
+  // 학교/교재 구조화 진도가 "둘 다" 저장돼 있고, default_progress가 결정적 mirror 합성
+  // 그대로일 때만 시험 대비/일반 수업으로 나눠 보여준다. 그 외(단일 context, legacy free-text,
+  // 외부 수정된 텍스트)는 기존 raw 표시 그대로 — 저장 데이터를 어떤 것도 재해석/변환하지 않고,
+  // structured와 raw를 중복 표시하지 않는다. 과거 일지의 저장 스냅샷 label이 그대로 쓰인다
+  // (현재 그룹의 시험 대상 설정과 무관 — Finalized 기록 불변).
+  const mergedProgress =
+    mergeLegacyLessonContent(detail.default_progress, detail.lesson_content) ?? "";
+  const schoolProgressSections = (detail.school_progress ?? []).filter((s) => s.text.trim());
+  const textbookProgressSections = (detail.textbook_progress ?? []).filter((s) => s.text.trim());
+  const progressMirror = [
+    buildTextbookSectionsText(textbookProgressSections),
+    buildTextbookSectionsText(schoolProgressSections),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const progressExtraMemo = stripDerivedPrefix(mergedProgress, progressMirror);
+  const showMixedProgress =
+    schoolProgressSections.length > 0 &&
+    textbookProgressSections.length > 0 &&
+    (mergedProgress === progressMirror || mergedProgress.startsWith(`${progressMirror}\n\n`));
 
   return (
     <Card>
@@ -134,10 +161,52 @@ export function LessonLogDetail({
             <div className="flex items-center gap-1.5 section-title text-[#3e7d6b]">
               <BookOpen className="h-3.5 w-3.5" aria-hidden /> 공통 진도
             </div>
-            <div className="body-text mt-1.5 whitespace-pre-line font-medium text-[#2a2323]">
-              {mergeLegacyLessonContent(detail.default_progress, detail.lesson_content) ||
-                "기록된 진도가 없어요."}
-            </div>
+            {showMixedProgress ? (
+              <div className="mt-1.5 space-y-2.5">
+                <div>
+                  <div className="caption-text font-semibold text-[#a2643c]">시험 대비</div>
+                  <div className="mt-0.5 space-y-1.5">
+                    {schoolProgressSections.map((section) => (
+                      <div key={`sc-${section.name}`}>
+                        <div className="secondary-text font-semibold text-[#7f6f68]">
+                          🏫 {section.name}
+                        </div>
+                        <div className="body-text whitespace-pre-line font-medium text-[#2a2323]">
+                          {section.text}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="caption-text font-semibold text-[#6652b9]">일반 수업</div>
+                  <div className="mt-0.5 space-y-1.5">
+                    {textbookProgressSections.map((section) => (
+                      <div key={`tb-${section.name}`}>
+                        <div className="secondary-text font-semibold text-[#7f6f68]">
+                          📘 {section.name}
+                        </div>
+                        <div className="body-text whitespace-pre-line font-medium text-[#2a2323]">
+                          {section.text}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {progressExtraMemo ? (
+                  <div>
+                    <div className="caption-text font-semibold text-[#8b7b77]">기타 메모</div>
+                    <div className="body-text mt-0.5 whitespace-pre-line font-medium text-[#2a2323]">
+                      {progressExtraMemo}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="body-text mt-1.5 whitespace-pre-line font-medium text-[#2a2323]">
+                {mergedProgress || "기록된 진도가 없어요."}
+              </div>
+            )}
           </div>
         </div>
 

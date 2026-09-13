@@ -6,6 +6,8 @@ import {
   resolveDailyLogTaskDueDate,
 } from "@/lib/daily-log-tasks";
 import { buildHomeworkMirror } from "@/lib/homework-assignments";
+import { resolveProgressMode, scopedMissedProgressCandidate } from "@/lib/progress-mode";
+import { buildTextbookSectionsText, stripDerivedPrefix } from "@/lib/textbooks";
 import { sortByKoreanName } from "@/lib/korean-sort";
 import { dedupeVocabWords } from "@/lib/vocab";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
@@ -104,7 +106,11 @@ export type DailyLogDetail = DailyLogRecord & {
   // textbook: 수업 제목 옆 "교재 LIST" 보조 버튼용 (줄바꿈 구분 여러 권 — 그룹 상세와 동일 포맷)
   // is_exam_period: 시험 기간 context용 (edit 화면의 새 항목 기본 context 결정 —
   // 학교 목록은 그룹 컬럼이 아니라 그룹 소속 학생들의 students.school에서 유도한다)
-  group: Pick<ClassGroupRecord, "id" | "name" | "grade" | "textbook" | "is_exam_period"> | null;
+  // exam_target_schools: PHASE 2 혼합 진도 모드 판정용 (null = legacy 미설정)
+  group: Pick<
+    ClassGroupRecord,
+    "id" | "name" | "grade" | "textbook" | "is_exam_period" | "exam_target_schools"
+  > | null;
   lessonLogs: StudentLessonLogWithStudent[];
   makeups: MakeupLessonRecord[];
   // 오늘 숙제(구조화) — 완료일 ASC. migration 미적용/조회 실패 시 [] (화면은 항상 뜬다).
@@ -130,7 +136,7 @@ export async function getDailyLogDetailForCurrentUser(
 
   const { data, error } = await supabase
     .from("daily_logs")
-    .select("*, class_groups(id, name, grade, textbook, is_exam_period), student_lesson_logs(*, students(id, name, grade, school))")
+    .select("*, class_groups(id, name, grade, textbook, is_exam_period, exam_target_schools), student_lesson_logs(*, students(id, name, grade, school))")
     .eq("id", dailyLogId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -855,9 +861,10 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     throw new Error("로그인이 필요합니다.");
   }
 
+  // is_exam_period/exam_target_schools: 결석 보충 스냅샷 fallback의 scope 판정용 (mixed 모드)
   const { data: group } = await supabase
     .from("class_groups")
-    .select("id")
+    .select("id, is_exam_period, exam_target_schools")
     .eq("id", input.groupId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -865,6 +872,11 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   if (!group) {
     throw new Error("수업 그룹을 찾을 수 없어요.");
   }
+  const groupRow = group as {
+    id: string;
+    is_exam_period: boolean;
+    exam_target_schools: string[] | null;
+  };
 
   // 중복 방지: 같은 user + 그룹 + 날짜의 일지는 draft/completed 무관 1개만.
   // 수정 저장은 자기 자신(dailyLogId)을 제외하고 검사한다 (날짜 변경 케이스 포함).
@@ -901,16 +913,50 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   const lookupStudentIds = [...new Set([...studentIds, ...homeworkStudentIds])];
   const { data: ownedStudents, error: ownedError } = await supabase
     .from("students")
-    .select("id, name")
+    .select("id, name, school")
     .eq("user_id", user.id)
     .in("id", lookupStudentIds);
 
-  const ownedStudentRows = (ownedStudents ?? []) as { id: string; name: string }[];
+  const ownedStudentRows = (ownedStudents ?? []) as {
+    id: string;
+    name: string;
+    school: string | null;
+  }[];
   const ownedStudentIds = new Set(ownedStudentRows.map((row) => row.id));
   if (ownedError || !studentIds.every((id) => ownedStudentIds.has(id))) {
     throw new Error("학생 정보를 확인하지 못했어요. 다시 시도해주세요.");
   }
   const studentNameById = new Map(ownedStudentRows.map((row) => [row.id, row.name]));
+  const studentSchoolById = new Map(ownedStudentRows.map((row) => [row.id, row.school]));
+
+  // 결석 보충 스냅샷의 공통 진도 fallback — mixed 모드에서는 학생 몫의 진도만 서버에서 다시
+  // 계산한다 (시험 학생 → 자기 학교 진도, 일반 학생 → 일반 교재 mirror. client 값을 그대로
+  // 믿지 않고 학교는 DB의 students.school 기준). regular/legacy_exam은 기존 전체 mirror 정책.
+  // 기타 메모는 mirror 합성이 결정적이므로 default_progress에서 prefix를 떼어 복원한다.
+  const progressMode = resolveProgressMode(
+    groupRow.is_exam_period,
+    groupRow.exam_target_schools,
+  );
+  const savedProgressMirror = [
+    buildTextbookSectionsText(input.textbookProgress ?? []),
+    buildTextbookSectionsText(input.schoolProgress ?? []),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const progressExtraMemo = stripDerivedPrefix(
+    input.defaultProgress?.trim() ?? "",
+    savedProgressMirror,
+  );
+  const missedProgressFallback = (studentId: string) =>
+    progressMode === "mixed"
+      ? scopedMissedProgressCandidate({
+          studentSchool: studentSchoolById.get(studentId),
+          targetSchools: groupRow.exam_target_schools ?? [],
+          schoolSections: input.schoolProgress ?? [],
+          textbookSections: input.textbookProgress ?? [],
+          extraMemo: progressExtraMemo,
+        })
+      : input.defaultProgress?.trim() ?? "";
 
   const vocabTotal = input.vocabTotal ? Number(input.vocabTotal) : null;
 
@@ -1191,7 +1237,8 @@ export async function saveDailyLog(input: DailyLogFormInput) {
         student_id: entry.studentId,
         student_lesson_log_id: lessonLogId,
         original_class_date: input.classDate,
-        missed_progress: entry.missedProgress?.trim() || input.defaultProgress?.trim() || null,
+        // 직접 입력값 우선 — 비어 있으면 모드별 scope의 공통 진도 후보 (mixed: 교차 스냅샷 금지)
+        missed_progress: entry.missedProgress?.trim() || missedProgressFallback(entry.studentId) || null,
         status: (scheduledDate ? "scheduled" : "required") as MakeupLessonRecord["status"],
         scheduled_date: scheduledDate,
       };

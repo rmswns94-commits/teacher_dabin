@@ -134,12 +134,21 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
 
   // 시험 기간 ON: 학교별 시험 대비 캘린더 read-only 미리보기 (새 작성 화면과 동일 —
   // 현재 그룹 학생 학교 기준. 저장된 일지 데이터는 어떤 것도 변환/복제하지 않는다)
+  // PHASE 2: 시험 대상 학교가 설정된 그룹은 대상 학교만 미리보기에 표시
+  // (legacy null은 기존대로 전체 — 자동 mixed 전환 없음)
   const memberSchools = uniqueSchoolList(
     currentMembers.filter((member) => !member.archived).map((member) => member.school),
   );
+  const editTargetSet = new Set(
+    (log.group?.exam_target_schools ?? []).map((name) => name.trim()),
+  );
+  const examPreviewSchools =
+    log.group?.exam_target_schools == null
+      ? memberSchools
+      : memberSchools.filter((school) => editTargetSet.has(school.trim()));
   const examPreviewEntries =
-    log.group?.is_exam_period && memberSchools.length > 0
-      ? await getDailyLogExamPreviewEntries(memberSchools, log.group?.grade, todayDateString())
+    log.group?.is_exam_period && examPreviewSchools.length > 0
+      ? await getDailyLogExamPreviewEntries(examPreviewSchools, log.group?.grade, todayDateString())
       : [];
 
   return (
@@ -208,9 +217,10 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           // 시험 기간 context — 새 항목의 기본 context 결정용 (기존 항목은 저장 필드 보존).
           // 학교 목록 source = 이 그룹 소속 학생들의 students.school (이미 조회한 멤버 재사용)
           examPeriod={log.group?.is_exam_period ?? false}
-          schools={uniqueSchoolList(
-            currentMembers.filter((member) => !member.archived).map((member) => member.school),
-          )}
+          schools={memberSchools}
+          // PHASE 2 혼합 진도 — 그룹의 시험 대상 학교 설정 (null = legacy, 기존 방식 유지).
+          // 기존 저장 항목은 저장 필드가 identity라 설정과 무관하게 그대로 hydrate/보존된다.
+          examTargetSchools={log.group?.exam_target_schools ?? null}
           initial={{
             title: log.title ?? "",
             // migration 미적용 legacy row도 수업 내용을 잃지 않게 병합해 편집한다

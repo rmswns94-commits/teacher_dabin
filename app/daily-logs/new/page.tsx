@@ -87,10 +87,19 @@ export default async function NewDailyLogPage({
 
   // 시험 기간 ON: 그룹 학생 학교들의 기존 시험 대비(시험+플래너 계획)를 read-only 미리보기로.
   // batch 2쿼리 — 학교 수와 무관, Daily Log에 아무것도 복제/생성하지 않는다.
+  // PHASE 2: 시험 대상 학교가 설정된 그룹은 대상 학교만 미리보기에 표시한다
+  // (시험을 안 보는 학교는 제외 — 데이터/저장은 불변, 표시 필터만).
+  // legacy(exam_target_schools null)는 기존대로 학생 학교 전체.
+  const memberSchoolList = uniqueSchoolList(
+    groupStudentsRaw.filter((student) => !student.archived).map((student) => student.school),
+  );
+  const examTargetSet = new Set(
+    (selectedGroup?.exam_target_schools ?? []).map((name) => name.trim()),
+  );
   const examPreviewSchools = selectedGroup?.is_exam_period
-    ? uniqueSchoolList(
-        groupStudentsRaw.filter((student) => !student.archived).map((student) => student.school),
-      )
+    ? selectedGroup.exam_target_schools === null
+      ? memberSchoolList
+      : memberSchoolList.filter((school) => examTargetSet.has(school.trim()))
     : [];
   // 시험 선택/D-day 기준은 오늘(KST) — "지금 곧 있을 시험"을 참고하는 기능이라
   // 과거 날짜 일지를 작성 중이어도 현재 기준 upcoming 시험을 보여준다
@@ -211,9 +220,9 @@ export default async function NewDailyLogPage({
               // 시험 기간 ON이면 숙제/다음 계획/해야 할 일이 학교 context를 쓴다.
               // 학교 목록 source = 이 그룹 소속 학생들의 students.school (추가 쿼리 0)
               examPeriod={selectedGroup.is_exam_period}
-              schools={uniqueSchoolList(
-                groupStudentsRaw.filter((student) => !student.archived).map((student) => student.school),
-              )}
+              schools={memberSchoolList}
+              // PHASE 2 혼합 진도 — 그룹의 시험 대상 학교 설정 (null = legacy, 기존 방식 유지)
+              examTargetSchools={selectedGroup.exam_target_schools}
               draft={
                 draftRow
                   ? { id: draftRow.id, updatedAt: draftRow.updated_at, payload: draftRow.payload }

@@ -30,6 +30,11 @@ import { useHistoryImport } from "@/components/lesson-history-panel";
 import { registerDirtyCheck } from "@/components/unsaved-guard";
 import { buildTextbookSectionsText, formatTextbookLinked, joinDerivedText } from "@/lib/textbooks";
 import {
+  activeTargetSchools,
+  resolveProgressMode,
+  scopedMissedProgressCandidate,
+} from "@/lib/progress-mode";
+import {
   autosaveDailyLogDraftAction,
   discardDailyLogDraftAction,
   saveDailyLogAction,
@@ -494,6 +499,7 @@ export function DailyLogForm({
   textbooks = [],
   examPeriod = false,
   schools = [],
+  examTargetSchools = null,
 }: {
   dailyLogId?: string;
   classDate: string;
@@ -511,6 +517,10 @@ export function DailyLogForm({
   // (null/빈 값 제외, 중복 제거, 가나다순 — 페이지가 uniqueSchoolList로 만들어 전달).
   // 비어 있으면 "등록된 학교가 없어요" 안내만 — 작성/저장은 그대로 가능(가짜 값 생성 없음).
   schools?: string[];
+  // PHASE 1에 저장된 그룹의 시험 대상 학교 (class_groups.exam_target_schools).
+  // null = legacy 미설정 — 시험 기간 ON이어도 기존 전체 학교별 방식을 유지한다(자동 mixed 전환 금지).
+  // 배열 = 혼합 모드: 대상 학교만 학교별 진도, 나머지 학생은 일반 교재별 진도.
+  examTargetSchools?: string[] | null;
   // 서버에서 발견한 자동 임시저장 draft (있으면 복구 배너 표시 — 자동 덮어쓰기 없음)
   draft?: { id: string; updatedAt: string; payload: unknown } | null;
   // [수업 일지 작성하기] resume 진입: 10분 창과 무관하게 draft를 즉시 전체 복원
@@ -1141,17 +1151,52 @@ export function DailyLogForm({
   })();
   const showStructuredPlans = planTextbookNames.length > 0 || planSchoolNames.length > 0;
 
-  // 진도 편집기 구성 — 계획과 동일 정책: 시험 기간 ON이면 학교별(학생 학교 목록) 편집기가
-  // 기본이고, 이미 내용이 있는 교재 진도는 보존 표시 (자동 변환/삭제 없음). OFF이면 교재가
-  // 기본, 내용 있는 학교 진도(과거 ON draft/기록)는 함께 표시.
-  const progressTextbookNames = examPeriod
-    ? textbooks.filter((name) => (textbookProgressMap[name] ?? "").trim())
-    : textbooks;
+  // PHASE 2 — 진도 모드 판정 (조건 순서 규약: OFF → 대상 설정됨(mixed) → legacy).
+  // OFF이면 저장된 target이 남아 있어도 무시하고 기존 교재별 진도 그대로.
+  const progressMode = resolveProgressMode(examPeriod, examTargetSchools);
+  const progressTargetSchools = examTargetSchools ?? [];
+  // 시험 진도 입력 대상 = 저장된 target ∩ 현재 학생 학교 (가나다 유지, 학생 0명 stale target 제외
+  // — 설정 자체는 삭제하지 않는다, 관리는 그룹 상세에서)
+  const examInputSchools = activeTargetSchools(progressTargetSchools, schools);
+  // 일반 수업 진도 대상 학생 존재 여부 — 대상 학교와 trim 정확 일치하지 않는 학생(학교 미등록 포함)
+  const targetSchoolSet = new Set(progressTargetSchools.map((name) => name.trim()).filter(Boolean));
+  const hasRegularStudents =
+    progressMode === "mixed" &&
+    students.some((student) => !targetSchoolSet.has(student.school?.trim() ?? ""));
+  // 학교별 현재 학생 수 (시험 진도 입력의 "N명" 캡션용 — 이미 로드된 students로만 계산, 추가 쿼리 0)
+  const studentCountBySchool = new Map<string, number>();
+  for (const student of students) {
+    const key = student.school?.trim();
+    if (key) {
+      studentCountBySchool.set(key, (studentCountBySchool.get(key) ?? 0) + 1);
+    }
+  }
+
+  // 진도 편집기 구성 — 계획과 동일 정책: 이미 내용이 있는 반대 context는 보존 표시(자동 변환/삭제 없음).
+  //   regular(OFF)   : 교재 편집기 전체 + 내용 있는 학교 진도(과거 ON draft/기록) 보존 표시
+  //   legacy_exam    : 학교 편집기(학생 학교 전체) + 내용 있는 교재 진도 보존 표시 (PHASE 1 이전 방식)
+  //   mixed          : 시험 대상 학교 편집기 + (일반 학생이 있으면) 교재 편집기 전체 —
+  //                    내용 있는 비대상 학교/교재 항목은 보존 표시
+  const progressTextbookNames =
+    progressMode === "regular" || (progressMode === "mixed" && hasRegularStudents)
+      ? textbooks
+      : textbooks.filter((name) => (textbookProgressMap[name] ?? "").trim());
   const progressSchoolNames = (() => {
+    if (progressMode === "mixed") {
+      // 활성 target 먼저(가나다), 이어서 내용이 남아 있는 다른 학교 키
+      // (설정 변경 전 draft/기록 보존 — filter로 지우지 않는다)
+      const names = [...examInputSchools];
+      for (const name of Object.keys(schoolProgressMap)) {
+        if ((schoolProgressMap[name] ?? "").trim() && !names.includes(name)) {
+          names.push(name);
+        }
+      }
+      return names;
+    }
     const names = Object.keys(schoolProgressMap).filter((name) =>
       (schoolProgressMap[name] ?? "").trim(),
     );
-    if (examPeriod) {
+    if (progressMode === "legacy_exam") {
       for (const name of schools) {
         if (!names.includes(name)) {
           names.push(name);
@@ -1161,6 +1206,62 @@ export function DailyLogForm({
     return names;
   })();
   const showStructuredProgress = progressTextbookNames.length > 0 || progressSchoolNames.length > 0;
+
+  // 진도 textarea 렌더러 — regular/legacy/mixed 세 모드가 같은 요소를 공유한다.
+  // key는 이름 스냅샷(`tb-`/`sc-` prefix)으로 모드/표시 순서와 무관한 stable identity —
+  // 입력 중 리스트가 재계산돼도 remount가 없어 한글 IME 조합이 끊기지 않는다 (index 키 금지).
+  const textbookProgressField = (name: string) => (
+    <label key={`tb-${name}`} className="block min-w-0">
+      <span className="form-label mb-1 flex items-center gap-1.5 font-semibold text-[#6652b9]">
+        <span aria-hidden>📘</span>
+        <span className="min-w-0 truncate">{name}</span>
+      </span>
+      <textarea
+        value={textbookProgressMap[name] ?? ""}
+        onChange={(event) => {
+          const value = event.target.value;
+          setTextbookProgressMap((prev) => ({ ...prev, [name]: value }));
+        }}
+        rows={3}
+        aria-label={`${name} 진도`}
+        className="min-h-[76px] w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+        placeholder={"p.42~47\n관계대명사 주격 (여러 줄로 쓸 수 있어요)"}
+      />
+    </label>
+  );
+  const schoolProgressField = (name: string) => {
+    // mixed에서만 캡션: 활성 target은 현재 학생 수, 비대상(설정 변경 전 draft 등)은 보존 안내
+    const isActiveTarget = progressMode === "mixed" && examInputSchools.includes(name);
+    const preservedOnly = progressMode === "mixed" && !isActiveTarget;
+    const count = studentCountBySchool.get(name.trim()) ?? 0;
+    return (
+      <label key={`sc-${name}`} className="block min-w-0">
+        <span className="form-label mb-1 flex items-center gap-1.5 font-semibold text-[#a2643c]">
+          <span aria-hidden>🏫</span>
+          <span className="min-w-0 truncate">{name}</span>
+          {isActiveTarget && count > 0 ? (
+            <span className="caption-text shrink-0 font-normal text-[#a79996]">· {count}명</span>
+          ) : null}
+          {preservedOnly ? (
+            <span className="caption-text shrink-0 font-normal text-[#a79996]">
+              · 기존 작성 진도 — 저장 시 그대로 보존돼요
+            </span>
+          ) : null}
+        </span>
+        <textarea
+          value={schoolProgressMap[name] ?? ""}
+          onChange={(event) => {
+            const value = event.target.value;
+            setSchoolProgressMap((prev) => ({ ...prev, [name]: value }));
+          }}
+          rows={3}
+          aria-label={`${name} 진도`}
+          className="min-h-[76px] w-full rounded-2xl border border-[#e8c9b0] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#e0b28c] placeholder:text-[#a79996]"
+          placeholder={"중간고사 문법 범위 1~3과\n(여러 줄로 쓸 수 있어요)"}
+        />
+      </label>
+    );
+  };
 
   // 학교 context 컨트롤: 학생 학교가 여러 개면 Select(ON에서만), 1개면 자동 chip,
   // 0개면 안내 chip (작성/저장은 가능 — 가짜 값 저장 없음). 과거 스냅샷 school은
@@ -1271,9 +1372,38 @@ export function DailyLogForm({
 
   // [전체 학생에게 적용] — 버튼 한 번으로 진도를 전 학생에게.
   // 결석 학생은 기존 정책대로 놓친 진도 기본값으로만 채운다.
-  // 시험 기간 ON + 학교별 진도가 있으면: 학생마다 "자기 학교(Student.school)" 진도만 적용
+  // mixed: 시험 대상 학교 학생 → 자기 학교 진도만, 일반 학생(비대상/학교 미등록) → 일반 교재
+  // 진도 mirror만 — 교차 적용 금지, 자기 몫 진도가 비어 있으면 미변경.
+  // legacy_exam + 학교별 진도가 있으면: 기존 정책 그대로 — 학생마다 "자기 학교" 진도만 적용
   // (student_id 기준 매칭 — 다른 학교 진도를 섞지 않고, 학교 미등록/해당 학교 진도 없음은 미변경).
   const applyDefaultProgress = () => {
+    if (progressMode === "mixed") {
+      const studentById = new Map(students.map((student) => [student.studentId, student]));
+      setEntries((prev) =>
+        Object.fromEntries(
+          Object.entries(prev).map(([studentId, entry]) => {
+            const applied = scopedMissedProgressCandidate({
+              studentSchool: studentById.get(studentId)?.school,
+              targetSchools: progressTargetSchools,
+              schoolSections: schoolProgressSections,
+              textbookSections: progressSections,
+              extraMemo: defaultProgress,
+            });
+            if (!applied) {
+              return [studentId, entry]; // 자기 몫의 진도 없음 → 교차/임의 적용 없음
+            }
+            return [
+              studentId,
+              entry.attendance === "absent"
+                ? { ...entry, missedProgress: entry.missedProgress || applied }
+                : { ...entry, progress: applied },
+            ];
+          }),
+        ),
+      );
+      return;
+    }
+
     if (examPeriod && schoolProgressSections.length > 0) {
       const textBySchool = new Map(schoolProgressSections.map((s) => [s.name, s.text]));
       const schoolByStudent = new Map(
@@ -1673,57 +1803,76 @@ export function DailyLogForm({
               attribute 변경이라 폼 remount/draft identity에 영향이 없다 */}
           <div id="progress" className="scroll-mt-4 rounded-2xl bg-[#f5f2ff] p-3">
             {showStructuredProgress ? (
-              // 진도: 시험 기간 OFF = 그룹 교재마다, ON = 학생 학교마다 독립 textarea
-              // (둘 다 name 키 — 순서와 무관, 반대 context의 기존 내용은 보존 표시).
+              // 진도 편집기 3모드 (조건 순서 규약 — resolveProgressMode):
+              //   regular(OFF)  = 그룹 교재마다 textarea (+ 과거 학교 진도 보존 표시)
+              //   mixed         = "시험 대비 진도"(대상 학교) + "일반 수업 진도"(교재) 두 구획
+              //   legacy_exam   = 학생 학교마다 textarea (PHASE 1 이전 방식 유지 + 설정 안내)
               // 저장 시 "이름 - 내용" mirror가 공통 진도로 합성되고, [전체 학생에게 적용]은
-              // OFF면 전체 mirror를, ON이면 학생별 자기 학교 진도만 적용한다.
+              // 모드별 scope로만 적용된다 (교차 적용 없음).
               <div className="block">
                 <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
-                  <BookOpen className="h-3.5 w-3.5" /> {examPeriod ? "학교별 진도" : "교재별 진도"}
+                  <BookOpen className="h-3.5 w-3.5" />{" "}
+                  {progressMode === "mixed"
+                    ? "오늘 진도"
+                    : progressMode === "legacy_exam"
+                      ? "학교별 진도"
+                      : "교재별 진도"}
                 </span>
-                <div className="space-y-2.5">
-                  {progressTextbookNames.map((name) => (
-                    <label key={`tb-${name}`} className="block min-w-0">
-                      <span className="form-label mb-1 flex items-center gap-1.5 font-semibold text-[#6652b9]">
-                        <span aria-hidden>📘</span>
-                        <span className="min-w-0 truncate">{name}</span>
-                      </span>
-                      <textarea
-                        value={textbookProgressMap[name] ?? ""}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          setTextbookProgressMap((prev) => ({ ...prev, [name]: value }));
-                        }}
-                        rows={3}
-                        aria-label={`${name} 진도`}
-                        className="min-h-[76px] w-full rounded-2xl border border-[#e2d8f3] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
-                        placeholder={"p.42~47\n관계대명사 주격 (여러 줄로 쓸 수 있어요)"}
-                      />
-                    </label>
-                  ))}
-                  {progressSchoolNames.map((name) => (
-                    <label key={`sc-${name}`} className="block min-w-0">
-                      <span className="form-label mb-1 flex items-center gap-1.5 font-semibold text-[#a2643c]">
-                        <span aria-hidden>🏫</span>
-                        <span className="min-w-0 truncate">{name}</span>
-                      </span>
-                      <textarea
-                        value={schoolProgressMap[name] ?? ""}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          setSchoolProgressMap((prev) => ({ ...prev, [name]: value }));
-                        }}
-                        rows={3}
-                        aria-label={`${name} 진도`}
-                        className="min-h-[76px] w-full rounded-2xl border border-[#e8c9b0] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#e0b28c] placeholder:text-[#a79996]"
-                        placeholder={"중간고사 문법 범위 1~3과\n(여러 줄로 쓸 수 있어요)"}
-                      />
-                    </label>
-                  ))}
-                </div>
+                {progressMode === "legacy_exam" ? (
+                  // legacy: 시험 대비 ON + 대상 학교 미설정 — 자동 mixed 전환 없이 안내만
+                  <div className="secondary-text mb-2 rounded-xl bg-[#fdf1e6] px-3 py-2 text-[#a2643c]">
+                    시험 대상 학교가 아직 설정되지 않았어요. 현재는 기존 방식으로 학교별 진도를
+                    표시하고 있어요.{" "}
+                    <Link
+                      href={`/groups/${group.id}`}
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      수업 그룹에서 설정
+                    </Link>
+                  </div>
+                ) : null}
+                {progressMode === "mixed" ? (
+                  <div className="space-y-3">
+                    {progressSchoolNames.length > 0 ? (
+                      <div>
+                        <div className="form-label mb-1.5 font-semibold text-[#a2643c]">
+                          시험 대비 진도
+                        </div>
+                        <div className="space-y-2.5">
+                          {progressSchoolNames.map((name) => schoolProgressField(name))}
+                        </div>
+                      </div>
+                    ) : null}
+                    {progressTextbookNames.length > 0 || hasRegularStudents ? (
+                      <div>
+                        <div className="form-label mb-1.5 font-semibold text-[#6652b9]">
+                          일반 수업 진도
+                        </div>
+                        {progressTextbookNames.length > 0 ? (
+                          <div className="space-y-2.5">
+                            {progressTextbookNames.map((name) => textbookProgressField(name))}
+                          </div>
+                        ) : (
+                          // 일반 학생은 있는데 그룹의 일반 교재가 0개 —
+                          // 시험 대비용 교재를 일반 진도로 끌어오지 않는다
+                          <div className="secondary-text rounded-xl bg-[#f8f3ef] px-3 py-2 text-[#7f6f68]">
+                            등록된 일반 교재가 없어요. 수업 그룹에서 교재를 등록하면 여기에 진도를
+                            쓸 수 있어요.
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {progressTextbookNames.map((name) => textbookProgressField(name))}
+                    {progressSchoolNames.map((name) => schoolProgressField(name))}
+                  </div>
+                )}
                 <label className="mt-3 block">
                   <span className="form-label mb-1 block text-[#7c6d69]">
-                    기타 진도 메모 (선택 — {examPeriod ? "학교" : "교재"} 외 내용)
+                    기타 진도 메모 (선택 —{" "}
+                    {progressMode === "mixed" ? "학교·교재" : examPeriod ? "학교" : "교재"} 외 내용)
                   </span>
                   <textarea
                     value={defaultProgress}
@@ -1735,7 +1884,12 @@ export function DailyLogForm({
                   />
                 </label>
                 <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
-                  {examPeriod && progressSchoolNames.length > 0 ? (
+                  {progressMode === "mixed" && progressSchoolNames.length > 0 ? (
+                    <span className="secondary-text text-[#a2643c]">
+                      시험 대상 학교 학생에게는 학교 진도, 나머지 학생에게는 일반 교재 진도가
+                      적용돼요.
+                    </span>
+                  ) : progressMode === "legacy_exam" && progressSchoolNames.length > 0 ? (
                     <span className="secondary-text text-[#a2643c]">
                       시험 기간에는 학생의 학교에 맞는 진도가 적용돼요.
                     </span>
@@ -2216,6 +2370,19 @@ export function DailyLogForm({
           const entry = entries[student.studentId];
           const isAbsent = entry.attendance === "absent";
           const isExpanded = expanded[student.studentId];
+          // 결석 시 "놓친 진도" 기본 후보 — mixed에서는 학생 몫의 진도만
+          // (시험 대상 학생 → 자기 학교 진도, 일반 학생 → 일반 교재 mirror. 교차 스냅샷 금지).
+          // regular/legacy_exam은 기존 전체 mirror 정책 그대로.
+          const missedCandidate =
+            progressMode === "mixed"
+              ? scopedMissedProgressCandidate({
+                  studentSchool: student.school,
+                  targetSchools: progressTargetSchools,
+                  schoolSections: schoolProgressSections,
+                  textbookSections: progressSections,
+                  extraMemo: defaultProgress,
+                })
+              : derivedDefaultProgress.trim();
 
           return (
             <Card key={student.studentId} className="p-4">
@@ -2301,16 +2468,16 @@ export function DailyLogForm({
                       maxLength={1000}
                       className="min-h-[96px] w-full min-w-0 max-w-full rounded-xl border border-[#f0ddd8] bg-white px-3 py-2 text-base leading-6 outline-none focus:border-[#e3bcb4] placeholder:text-[#b5a29e]"
                       placeholder={
-                        derivedDefaultProgress.trim()
-                          ? `공통 진도: ${derivedDefaultProgress.trim()}`
+                        missedCandidate
+                          ? `공통 진도: ${missedCandidate}`
                           : "관계대명사 주격 개념\nGrammar Inside p.42~45\n5과 단어시험"
                       }
                     />
                     <span className="secondary-text mt-1 block text-[#a68e88]">
-                      {entry.missedProgress && entry.missedProgress === derivedDefaultProgress.trim()
+                      {entry.missedProgress && entry.missedProgress === missedCandidate
                         ? "수업일지의 진도를 자동으로 가져왔어요. 필요하면 수정할 수 있어요."
                         : !entry.missedProgress
-                          ? derivedDefaultProgress.trim()
+                          ? missedCandidate
                             ? "비워두면 저장할 때 공통 진도가 자동으로 들어가요."
                             : "수업 진도가 아직 입력되지 않았어요. 직접 입력할 수 있어요."
                           : null}
@@ -2334,7 +2501,7 @@ export function DailyLogForm({
                               // 사용자가 이미 적어둔 값은 덮어쓰지 않는다.
                               updateEntry(student.studentId, {
                                 needsMakeup: true,
-                                missedProgress: entry.missedProgress || derivedDefaultProgress.trim(),
+                                missedProgress: entry.missedProgress || missedCandidate,
                               })
                             }
                             className={cn(
