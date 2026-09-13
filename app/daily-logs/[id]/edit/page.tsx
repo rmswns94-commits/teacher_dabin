@@ -188,6 +188,9 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           classDate={log.class_date}
           group={{ id: log.group_id, name: log.group?.name ?? "수업 그룹", grade: log.group?.grade }}
           students={sortedStudents}
+          currentHomeworkStudents={currentMembers.filter((member) => !member.archived).map((member) => ({
+            studentId: member.id, name: member.name, grade: member.grade, school: member.school,
+          }))}
           scheduleDays={groupSchedules.map((slot) => slot.day_of_week)}
           // 수업 제목 옆 교재 LIST (제목 삽입 보조 — 저장된 제목을 자동 변경하지 않는다)
           textbooks={(log.group?.textbook ?? "")
@@ -213,6 +216,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
             school: hw.school ?? "",
             // 저장된 대상(null=공통) 그대로 복원 — 그룹에서 빠진 학생이어도 공통으로 바꾸지 않는다
             assignedStudentId: hw.assigned_student_id ?? "",
+            assignedStudentName: hw.assignedStudentName,
           }))}
           // 시험 기간 context — 새 항목의 기본 context 결정용 (기존 항목은 저장 필드 보존).
           // 학교 목록 source = 이 그룹 소속 학생들의 students.school (이미 조회한 멤버 재사용)

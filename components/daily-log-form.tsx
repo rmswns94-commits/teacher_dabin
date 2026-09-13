@@ -506,6 +506,7 @@ export function DailyLogForm({
   classDate: initialClassDate,
   group,
   students,
+  currentHomeworkStudents = students,
   scheduleDays = [],
   draft = null,
   forceRestoreDraft = false,
@@ -522,6 +523,7 @@ export function DailyLogForm({
   classDate: string;
   group: { id: string; name: string; grade?: string };
   students: DailyLogFormStudent[];
+  currentHomeworkStudents?: DailyLogFormStudent[];
   // 그룹 시간표 요일 (다음 수업 계획 기본 날짜 계산용 — 없으면 날짜 직접 선택)
   scheduleDays?: number[];
   // 이 그룹의 교재 목록 (class_groups.textbook 줄바꿈 구분 — 수업 제목 옆 "교재 LIST" 보조 버튼용.
@@ -581,6 +583,7 @@ export function DailyLogForm({
     school?: string | null;
     // 저장된 숙제 대상 학생 id (없으면 공통) — Edit 화면 hydrate용
     assignedStudentId?: string | null;
+    assignedStudentName?: string | null;
   }[];
   // 같은 그룹 직전 completed 일지의 "다음에 다르게 해볼 것" — 회고 카드에 리마인드로 표시
   previousReflection?: { classDate: string; reflectionNext: string } | null;
@@ -822,7 +825,7 @@ export function DailyLogForm({
       textbookProgress: textbooks
         .filter((name) => (textbookProgressMap[name] ?? "").trim())
         .map((name) => ({ name, text: textbookProgressMap[name] })),
-      textbookPlans: textbooks
+      textbookPlans: [...new Set([...textbooks, ...Object.keys(textbookPlanMap)])]
         .filter((name) => (textbookPlanMap[name] ?? "").trim())
         .map((name) => ({ name, text: textbookPlanMap[name] })),
       schoolProgress: Object.keys(schoolProgressMap)
@@ -1120,7 +1123,7 @@ export function DailyLogForm({
   const progressSections = textbooks
     .filter((name) => (textbookProgressMap[name] ?? "").trim())
     .map((name) => ({ name, text: textbookProgressMap[name].trim() }));
-  const planSections = textbooks
+  const planSections = [...new Set([...textbooks, ...Object.keys(textbookPlanMap)])]
     .filter((name) => (textbookPlanMap[name] ?? "").trim())
     .map((name) => ({ name, text: textbookPlanMap[name].trim() }));
   // 학교 context 진도/계획 섹션 — map에 있는 모든 키(과거 draft의 다른 학교명 포함) 중 내용 있는 것
@@ -1162,10 +1165,12 @@ export function DailyLogForm({
   const examInputSchools = activeTargetSchools(progressTargetSchools, schools);
   // 학생 분류 — PHASE 2 canonical helper 재사용 (시험 = target trim 정확 일치, 미등록 = 일반).
   // 진도/숙제/다음 계획/할 일이 전부 같은 분류를 공유한다 (중복 분류 로직 금지).
-  const { examStudents: examModeStudents, regularStudents: regularModeStudents } =
-    classifyStudentsByExamTarget(students, progressTargetSchools);
+  const { regularStudents: regularModeStudents } =
+    classifyStudentsByExamTarget(currentHomeworkStudents, progressTargetSchools);
   const regularStudentIdSet = new Set(regularModeStudents.map((student) => student.studentId));
-  const hasRegularStudents = progressMode === "mixed" && regularModeStudents.length > 0;
+  const hasRegularHomeworkStudents = progressMode === "mixed" && regularModeStudents.length > 0;
+  const hasRegularStudents = progressMode === "mixed" &&
+    classifyStudentsByExamTarget(students, progressTargetSchools).regularStudents.length > 0;
   // 학교별 현재 학생 수 (시험 진도 입력의 "N명" 캡션용 — 이미 로드된 students로만 계산, 추가 쿼리 0)
   const studentCountBySchool = new Map<string, number>();
   for (const student of students) {
@@ -1181,9 +1186,9 @@ export function DailyLogForm({
   //   mixed          : 시험 대상 학교 편집기 + (일반 학생이 있으면) 교재 편집기 전체 —
   //                    내용 있는 비대상 학교/교재 계획은 보존 표시 (자동 변환/삭제 없음)
   const planTextbookNames =
-    progressMode === "regular" || (progressMode === "mixed" && hasRegularStudents)
-      ? textbooks
-      : textbooks.filter((name) => (textbookPlanMap[name] ?? "").trim());
+    progressMode === "regular" || (progressMode === "mixed" && hasRegularHomeworkStudents)
+      ? [...new Set([...textbooks, ...Object.keys(textbookPlanMap).filter((name) => (textbookPlanMap[name] ?? "").trim())])]
+      : Object.keys(textbookPlanMap).filter((name) => (textbookPlanMap[name] ?? "").trim());
   const planSchoolNames = (() => {
     if (progressMode === "mixed") {
       const names = [...examInputSchools];
@@ -1362,7 +1367,7 @@ export function DailyLogForm({
     // 저장된 값이 목록에 없으면(과거 스냅샷) 앞에 보존 표시한다 — 기록 불변.
     schoolOptions: string[] = schools,
   ) => {
-    if (examPeriod && schoolOptions.length > 1) {
+    if (examPeriod && (schoolOptions.length > 1 || (schoolOptions.length === 1 && value !== schoolOptions[0]))) {
       const options =
         value && !schoolOptions.includes(value) ? [value, ...schoolOptions] : schoolOptions;
       return (
@@ -1414,7 +1419,7 @@ export function DailyLogForm({
         schoolContext.trim() || (examInputSchools.length === 1 ? examInputSchools[0] : "")
       ).trim();
       return sortByKoreanName(
-        school ? studentsOfSchool(students, school) : examModeStudents,
+        school ? studentsOfSchool(currentHomeworkStudents, school) : [],
         (student) => student.name,
         (student) => student.studentId,
       );
@@ -1423,8 +1428,8 @@ export function DailyLogForm({
     const school = (schoolContext.trim() || (examPeriod ? schools[0] ?? "" : "")).trim();
     const pool =
       examPeriod && school
-        ? students.filter((student) => (student.school?.trim() ?? "") === school)
-        : students;
+        ? currentHomeworkStudents.filter((student) => (student.school?.trim() ?? "") === school)
+        : currentHomeworkStudents;
     return sortByKoreanName(
       pool,
       (student) => student.name,
@@ -1444,7 +1449,10 @@ export function DailyLogForm({
     const options = homeworkAudienceOptions(schoolContext, section);
     const savedOutsider =
       value && !options.some((student) => student.studentId === value)
-        ? students.find((student) => student.studentId === value)
+        ? students.find((student) => student.studentId === value) ?? {
+            studentId: value,
+            name: initialAssignments.find((item) => item.assignedStudentId === value)?.assignedStudentName ?? "기존 지정 학생",
+          }
         : null;
     return (
       <label className="form-label flex items-center gap-2 text-[#7c6d69]">
@@ -1522,7 +1530,7 @@ export function DailyLogForm({
               `숙제 ${index + 1} 학교 선택`,
               section === "exam" ? examInputSchools : schools,
             )
-          ) : textbooks.length > 0 ? (
+          ) : textbooks.length > 0 || item.textbook ? (
             // 숙제별 교재 연결(선택) — 같은 교재로 여러 숙제 가능, 자동 생성 없음
             <label className="form-label flex items-center gap-2 text-[#7c6d69]">
               <span className="shrink-0">교재</span>
@@ -1538,7 +1546,7 @@ export function DailyLogForm({
                 className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 py-1.5 text-base font-medium text-[#6652b9] outline-none"
               >
                 <option value="">교재 없음 / 기타</option>
-                {textbooks.map((name) => (
+                {[...new Set([...(item.textbook ? [item.textbook] : []), ...textbooks])].map((name) => (
                   <option key={name} value={name}>
                     {name}
                   </option>
@@ -1656,7 +1664,7 @@ export function DailyLogForm({
               `할 일 ${index + 1} 학교 선택`,
               section === "exam" ? examInputSchools : schools,
             )
-          ) : textbooks.length > 0 ? (
+          ) : textbooks.length > 0 || task.textbook ? (
             <label className="form-label flex items-center gap-2 text-[#7c6d69]">
               <span className="shrink-0">교재</span>
               <select
@@ -1671,7 +1679,7 @@ export function DailyLogForm({
                 className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 py-1.5 text-base font-medium text-[#5d4ba5] outline-none"
               >
                 <option value="">교재 없음 / 기타</option>
-                {textbooks.map((name) => (
+                {[...new Set([...(task.textbook ? [task.textbook] : []), ...textbooks])].map((name) => (
                   <option key={name} value={name}>
                     {name}
                   </option>
@@ -2356,7 +2364,7 @@ export function DailyLogForm({
                         </div>
                       </div>
                     ) : null}
-                    {regularAssignmentRows.length > 0 || hasRegularStudents ? (
+                    {regularAssignmentRows.length > 0 || hasRegularHomeworkStudents ? (
                       <div>
                         <div className="form-label mb-1.5 font-semibold text-[#6652b9]">
                           일반 수업 숙제
@@ -2365,7 +2373,7 @@ export function DailyLogForm({
                           {regularAssignmentRows.map(({ item, index }) =>
                             renderAssignmentItem(item, index),
                           )}
-                          {hasRegularStudents ? (
+                          {hasRegularHomeworkStudents ? (
                             <button
                               type="button"
                               onClick={() => addAssignment("regular")}
@@ -2456,7 +2464,7 @@ export function DailyLogForm({
                           </div>
                         </div>
                       ) : null}
-                      {planTextbookNames.length > 0 || hasRegularStudents ? (
+                      {planTextbookNames.length > 0 || hasRegularHomeworkStudents ? (
                         <div>
                           <div className="form-label mb-1.5 font-semibold text-[#6652b9]">
                             일반 수업 계획
@@ -2554,14 +2562,14 @@ export function DailyLogForm({
                           </div>
                         </div>
                       ) : null}
-                      {regularTaskRows.length > 0 || hasRegularStudents ? (
+                      {regularTaskRows.length > 0 || hasRegularHomeworkStudents ? (
                         <div>
                           <div className="form-label mb-1.5 font-semibold text-[#6652b9]">
                             일반 수업 할 일
                           </div>
                           <div className="space-y-2">
                             {regularTaskRows.map(({ item, index }) => renderTaskItem(item, index))}
-                            {hasRegularStudents ? (
+                            {hasRegularHomeworkStudents ? (
                               <button
                                 type="button"
                                 onClick={() => addTask("regular")}
