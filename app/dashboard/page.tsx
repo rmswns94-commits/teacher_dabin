@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { CalendarDays, CirclePlay, Clock3, ListTodo, NotebookPen } from "lucide-react";
+import { BookCheck, BookOpen, CalendarDays, CirclePlay, Clock3, ListTodo, NotebookPen, UserCheck } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { ClassBriefing, ClassBriefingSkeleton } from "@/components/class-briefing";
@@ -190,6 +190,15 @@ export default async function DashboardPage() {
   const heroTodayLog = hero
     ? overview.todayLogs.find((log) => log.group_id === hero.group.id)
     : undefined;
+  // 빠른 실행(출결/진도/수업일지)의 공용 목적지 — 하나의 resolver만 쓴다.
+  // 오늘 이 그룹 일지가 있으면 그 일지 수정 화면(draft/완료 모두 기존 정책 그대로),
+  // 없으면 그룹+오늘 날짜가 지정된 새 작성 화면 (기존 "수업일지 열기" CTA와 동일 규칙).
+  // 출결/진도는 같은 주소에 hash만 붙여 섹션 위치만 다르다 — 별도 판별 로직 없음.
+  const heroLogHref = hero
+    ? heroTodayLog
+      ? `/daily-logs/${heroTodayLog.id}/edit`
+      : `/daily-logs/new?groupId=${hero.group.id}&date=${today}`
+    : null;
 
   // A class finished today but its log isn't completed yet → nudge to write it.
   const lastEnded = scheduleOverview.endedToday.at(-1) ?? null;
@@ -336,20 +345,45 @@ export default async function DashboardPage() {
                     </div>
 
                     <div className="mt-5">
-                      {isCurrentClass ? (
-                        <Button className="gap-2" asChild>
-                          <Link
-                            // 오늘 수업 카드의 일지 identity = user + 이 그룹 + 오늘(KST).
-                            // date를 명시해 서버 fallback에 의존하지 않는다.
-                            href={
-                              heroTodayLog
-                                ? `/daily-logs/${heroTodayLog.id}/edit`
-                                : `/daily-logs/new?groupId=${hero.group.id}&date=${today}`
-                            }
-                          >
-                            <NotebookPen className="h-4 w-4" /> 수업일지 열기 →
-                          </Link>
-                        </Button>
+                      {isCurrentClass && heroLogHref ? (
+                        // 빠른 실행 — 수업 중 핵심 작업 4개로 1클릭 이동.
+                        // 이미 계산된 hero.group.id + today만 쓰므로 버튼 표시를 위한 추가 쿼리 0.
+                        // 표시 조건은 기존 Current Class 판정(isCurrentClass) 그대로 — 다음 수업에는 안 뜬다.
+                        <div>
+                          <div className="mb-2 flex items-center gap-2">
+                            <span className="caption-text font-semibold uppercase tracking-[0.06em] text-[#8b7ae6]">
+                              빠른 실행
+                            </span>
+                            {/* 일지 상태 — 이미 조회된 todayLogs만 사용 (추가 쿼리 없음) */}
+                            {heroTodayLog ? (
+                              <DailyLogStatusBadge status={heroTodayLog.status} />
+                            ) : (
+                              <span className="caption-text text-[#a79996]">일지 미작성</span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button variant="secondary" size="sm" className="gap-1.5" asChild>
+                              <Link href={`${heroLogHref}#attendance`}>
+                                <UserCheck className="h-4 w-4" aria-hidden /> 출결
+                              </Link>
+                            </Button>
+                            <Button variant="secondary" size="sm" className="gap-1.5" asChild>
+                              <Link href="/todos">
+                                <BookCheck className="h-4 w-4" aria-hidden /> 숙제 확인
+                              </Link>
+                            </Button>
+                            <Button variant="secondary" size="sm" className="gap-1.5" asChild>
+                              <Link href={`${heroLogHref}#progress`}>
+                                <BookOpen className="h-4 w-4" aria-hidden /> 진도 기록
+                              </Link>
+                            </Button>
+                            <Button size="sm" className="gap-1.5" asChild>
+                              <Link href={heroLogHref}>
+                                <NotebookPen className="h-4 w-4" aria-hidden /> 수업일지
+                              </Link>
+                            </Button>
+                          </div>
+                        </div>
                       ) : (
                         <Button className="gap-2" asChild>
                           <Link href={`/groups/${hero.group.id}`}>

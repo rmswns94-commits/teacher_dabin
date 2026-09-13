@@ -1669,7 +1669,9 @@ export function DailyLogForm({
             </div>
           </div>
 
-          <div className="rounded-2xl bg-[#f5f2ff] p-3">
+          {/* 대시보드 빠른 실행 [진도 기록]의 hash 목적지 — id/scroll-margin만 추가한
+              attribute 변경이라 폼 remount/draft identity에 영향이 없다 */}
+          <div id="progress" className="scroll-mt-4 rounded-2xl bg-[#f5f2ff] p-3">
             {showStructuredProgress ? (
               // 진도: 시험 기간 OFF = 그룹 교재마다, ON = 학생 학교마다 독립 textarea
               // (둘 다 name 키 — 순서와 무관, 반대 context의 기존 내용은 보존 표시).
@@ -2208,7 +2210,8 @@ export function DailyLogForm({
           </div>
       </Card>
 
-      <div className="space-y-3">
+      {/* 대시보드 빠른 실행 [출결]의 hash 목적지 — 학생별 출결 버튼이 이 목록 안에 있다 */}
+      <div id="attendance" className="scroll-mt-4 space-y-3">
         {students.map((student) => {
           const entry = entries[student.studentId];
           const isAbsent = entry.attendance === "absent";
