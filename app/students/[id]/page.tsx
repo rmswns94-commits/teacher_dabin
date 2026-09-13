@@ -407,6 +407,11 @@ export default async function StudentDetailPage({
                             <span className="min-w-0 whitespace-pre-line break-words">{lesson.progress}</span>
                           </div>
                         ) : null}
+                        {typeof lesson.online_review_completed === "boolean" ? (
+                          <div className="mt-1 text-sm text-[#564d4d]">
+                            온라인 복습 {lesson.online_review_completed ? "완료" : "미완료"}
+                          </div>
+                        ) : null}
                         {lesson.homework_status ||
                         lesson.vocab_correct !== null ||
                         lesson.focus_level ||

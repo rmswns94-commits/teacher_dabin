@@ -85,6 +85,7 @@ export type DailyLogFormStudent = {
     improvements: string;
     memo: string;
     homeworkStatus?: string;
+    onlineReviewCompleted?: boolean | null;
     vocabCorrect?: string;
     vocabRetest?: boolean;
     focusLevel?: string;
@@ -114,6 +115,7 @@ type EntryState = {
   makeupScheduledDate: string;
   makeupCompleted: boolean;
   homeworkStatus: string;
+  onlineReviewCompleted: boolean | null;
   vocabCorrect: string;
   vocabRetest: boolean;
   vocabMistakes: string[];
@@ -142,6 +144,7 @@ function initEntry(student: DailyLogFormStudent): EntryState {
     makeupScheduledDate: makeupOpen ? makeup?.scheduledDate ?? "" : "",
     makeupCompleted: makeup?.status === "completed",
     homeworkStatus: student.entry?.homeworkStatus ?? "",
+    onlineReviewCompleted: student.entry?.onlineReviewCompleted ?? null,
     vocabCorrect: student.entry?.vocabCorrect ?? "",
     vocabRetest: student.entry?.vocabRetest ?? false,
     vocabMistakes: student.vocabMistakes ?? [],
@@ -341,16 +344,18 @@ function SegmentedToggle({
   options,
   onChange,
   activeClass,
+  wideLabel = false,
 }: {
   label: string;
   value: string;
   options: readonly { value: string; label: string }[];
   onChange: (next: string) => void;
   activeClass: string;
+  wideLabel?: boolean;
 }) {
   return (
     <div className="flex items-center gap-2" role="group" aria-label={label}>
-      <span className="form-label w-8 shrink-0 font-semibold text-[#7c6d69]">{label}</span>
+      <span className={cn("form-label shrink-0 font-semibold text-[#7c6d69]", !wideLabel && "w-8")}>{label}</span>
       <div className="flex gap-1">
         {options.map((option) => (
           <button
@@ -1984,6 +1989,7 @@ export function DailyLogForm({
             needsMakeup: entry.needsMakeup,
             makeupScheduledDate: entry.makeupScheduledDate,
             homeworkStatus: entry.homeworkStatus as "" | "completed" | "partial" | "missing",
+            onlineReviewCompleted: entry.onlineReviewCompleted ?? null,
             vocabCorrect: entry.vocabCorrect,
             vocabRetest: entry.vocabRetest,
             vocabMistakes: entry.vocabMistakes,
@@ -2861,6 +2867,17 @@ export function DailyLogForm({
                                 ? "border-[#ecd9b4] bg-[#fdf3e4] text-[#8a6828]"
                                 : "border-[#bfe3d2] bg-[#edf9f3] text-[#2f6d54]"
                           }
+                        />
+
+                        <SegmentedToggle
+                          label="온라인 복습"
+                          wideLabel
+                          value={entry.onlineReviewCompleted === true ? "completed" : entry.onlineReviewCompleted === false ? "incomplete" : ""}
+                          options={[{ value: "completed", label: "완료" }, { value: "incomplete", label: "미완료" }]}
+                          onChange={(next) => updateEntry(student.studentId, { onlineReviewCompleted: next === "" ? null : next === "completed" })}
+                          activeClass={entry.onlineReviewCompleted === false
+                            ? "border-[#f0ccc7] bg-[#fff0ef] text-[#96534c]"
+                            : "border-[#bfe3d2] bg-[#edf9f3] text-[#2f6d54]"}
                         />
 
                         <div className="flex items-center gap-2" role="group" aria-label={`${student.name} 단어시험`}>

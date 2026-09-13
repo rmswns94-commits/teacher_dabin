@@ -1173,6 +1173,8 @@ export async function saveDailyLog(input: DailyLogFormInput) {
       strengths: isAbsent ? null : entry.strengths?.trim() || null,
       improvements: isAbsent ? null : entry.improvements?.trim() || null,
       memo: entry.memo?.trim() || null,
+      // 온라인 복습은 수업 출결과 독립적이며, 미평가는 NULL로 유지한다.
+      online_review_completed: entry.onlineReviewCompleted ?? null,
       // 초등 quick check: 결석 학생은 그날 수업 기반 평가를 남기지 않는다.
       homework_status: isAbsent ? null : entry.homeworkStatus || null,
       vocab_correct: isAbsent || !entry.vocabCorrect ? null : Number(entry.vocabCorrect),
@@ -1195,7 +1197,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
 
   if (lessonError || !savedLessonLogs) {
     console.error("saveDailyLog lesson upsert error", lessonError);
-    throw new Error("학생 기록 일부를 저장하지 못했어요. 저장 버튼을 다시 눌러주세요.");
+    throw new Error(schemaMismatchMessage(lessonError) ?? "학생 기록 일부를 저장하지 못했어요. 저장 버튼을 다시 눌러주세요.");
   }
 
   const lessonLogIdByStudent = new Map(savedLessonLogs.map((row) => [row.student_id, row.id]));

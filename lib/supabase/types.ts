@@ -201,6 +201,7 @@ export type StudentLessonLogRecord = {
   improvements: string | null;
   memo: string | null;
   homework_status: HomeworkStatus | null;
+  online_review_completed: boolean | null;
   vocab_correct: number | null;
   vocab_retest: boolean;
   focus_level: FocusLevel | null;

@@ -27,6 +27,7 @@ export const studentLessonEntrySchema = z.object({
   makeupScheduledDate: dateString.optional().or(z.literal("")),
   // 학생 평가 quick check — 모든 학년 공통 (전부 optional — 입력 안 한 값은 null로 저장)
   homeworkStatus: z.enum(["completed", "partial", "missing"]).optional().or(z.literal("")),
+  onlineReviewCompleted: z.boolean().nullable().optional(),
   vocabCorrect: numberString.optional().or(z.literal("")),
   vocabRetest: z.boolean().optional(),
   // 단어시험 틀린 단어: 빈 문자열/같은 시험 내 중복(정규화 기준)은 서버에서 걸러 저장된다.

@@ -338,6 +338,11 @@ export function LessonLogDetail({
                   ))}
                 </div>
 
+                {typeof lessonLog.online_review_completed === "boolean" ? (
+                  <div className="secondary-text mt-1 text-[#564d4d]">
+                    온라인 복습 {lessonLog.online_review_completed ? "완료" : "미완료"}
+                  </div>
+                ) : null}
                 {lessonLog.attendance === "absent" ? (
                   <div className="body-text mt-1.5 rounded-xl bg-[#fff5f2] p-2.5 text-[#8a5d52]">
                     {/* Teacher가 입력한 줄바꿈 그대로 전체 표시 (truncate/clamp 없음) */}

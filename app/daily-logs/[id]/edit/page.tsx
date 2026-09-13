@@ -85,6 +85,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           improvements: lessonLog.improvements ?? "",
           memo: lessonLog.memo ?? "",
           homeworkStatus: lessonLog.homework_status ?? "",
+          onlineReviewCompleted: lessonLog.online_review_completed ?? null,
           vocabCorrect: lessonLog.vocab_correct === null ? "" : String(lessonLog.vocab_correct),
           vocabRetest: lessonLog.vocab_retest,
           focusLevel: lessonLog.focus_level ?? "",
