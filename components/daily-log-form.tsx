@@ -31,8 +31,11 @@ import { registerDirtyCheck } from "@/components/unsaved-guard";
 import { buildTextbookSectionsText, formatTextbookLinked, joinDerivedText } from "@/lib/textbooks";
 import {
   activeTargetSchools,
+  classifyStudentsByExamTarget,
+  mixedItemSection,
   resolveProgressMode,
   scopedMissedProgressCandidate,
+  studentsOfSchool,
 } from "@/lib/progress-mode";
 import {
   autosaveDailyLogDraftAction,
@@ -215,6 +218,9 @@ type AssignmentItem = {
   school: string;
   // 숙제 대상: "" = 공통, 그 외 = 학생 id (이름이 아니라 id가 identity)
   assignedStudentId: string;
+  // mixed 모드 구획 표시(시험/일반) — 클라이언트/draft 전용, DB row에는 저장하지 않는다.
+  // 저장된 항목은 school/textbook 저장 필드로 구획을 파생한다 (mixedItemSection).
+  section?: "exam" | "regular";
 };
 
 function restoredAssignments(value: unknown): AssignmentItem[] | null {
@@ -245,6 +251,11 @@ function restoredAssignments(value: unknown): AssignmentItem[] | null {
       textbook: typeof item.textbook === "string" ? item.textbook : "",
       school: typeof item.school === "string" ? item.school : "",
       assignedStudentId: typeof item.assignedStudentId === "string" ? item.assignedStudentId : "",
+      // 구형 draft에는 없는 필드 — 없으면 저장 필드로 파생 (자동 변환 없음)
+      ...(() => {
+        const section = (item as { section?: unknown }).section;
+        return section === "exam" || section === "regular" ? { section } : {};
+      })(),
     }));
 }
 
@@ -256,6 +267,8 @@ type TaskFormItem = {
   school: string;
   content: string;
   dueDate: string;
+  // mixed 모드 구획 표시 — 숙제와 동일한 클라이언트/draft 전용 필드 (Todo/일지 저장에는 미포함)
+  section?: "exam" | "regular";
 };
 
 function restoredTasks(value: unknown): TaskFormItem[] | null {
@@ -276,6 +289,10 @@ function restoredTasks(value: unknown): TaskFormItem[] | null {
       school: typeof item.school === "string" ? item.school : "",
       content: item.content,
       dueDate: typeof item.dueDate === "string" ? item.dueDate : "",
+      ...(() => {
+        const section = (item as { section?: unknown }).section;
+        return section === "exam" || section === "regular" ? { section } : {};
+      })(),
     }));
 }
 
@@ -786,15 +803,17 @@ export function DailyLogForm({
       memo,
       homework,
       homeworkDueDate,
-      // key(렌더용)는 제외 — draft payload/스냅샷에는 저장 데이터만
+      // key(렌더용)는 제외 — draft payload/스냅샷에는 저장 데이터만.
+      // section은 mixed 구획 복원용으로 draft에만 싣는다 (서버 저장 payload에는 미포함)
       homeworkAssignments: assignments.map(
-        ({ id, content, dueDate, textbook, school: hwSchool, assignedStudentId }) => ({
+        ({ id, content, dueDate, textbook, school: hwSchool, assignedStudentId, section }) => ({
           id,
           content,
           dueDate,
           textbook,
           school: hwSchool,
           assignedStudentId,
+          ...(section ? { section } : {}),
         }),
       ),
       nextLessonPlan,
@@ -812,13 +831,14 @@ export function DailyLogForm({
       schoolPlans: Object.keys(schoolPlanMap)
         .filter((name) => (schoolPlanMap[name] ?? "").trim())
         .map((name) => ({ name, text: schoolPlanMap[name] })),
-      // 해야 할 일 다중 항목 (key 제외 — stable id만)
-      tasks: tasks.map(({ id, textbook, school: taskSchool, content, dueDate }) => ({
+      // 해야 할 일 다중 항목 (key 제외 — stable id만; section은 draft 복원 전용)
+      tasks: tasks.map(({ id, textbook, school: taskSchool, content, dueDate, section }) => ({
         id,
         textbook,
         school: taskSchool,
         content,
         dueDate,
+        ...(section ? { section } : {}),
       })),
       vocabTotal,
       reflectionGood,
@@ -1129,18 +1149,53 @@ export function DailyLogForm({
 
   // 항목의 context 판별 — 저장된 필드가 identity: school이 있으면 학교 context(과거 ON 기록 보존),
   // 없고 시험 기간 ON+교재도 없으면(신규 ON 항목) 학교 context. 그 외에는 교재 context.
+  // (regular/legacy 모드용 — mixed 구획 판정은 아래 assignmentSection/taskSection)
   const isSchoolContextItem = (item: { textbook: string; school: string }) =>
     Boolean(item.school) || (examPeriod && !item.textbook);
 
-  // 다음 수업 계획 편집기 구성 — 시험 기간 ON이면 학교별(학생 학교 목록) 편집기가 기본이고,
-  // 이미 내용이 있는 교재 계획은 데이터 보존을 위해 함께 표시한다 (자동 변환/삭제 없음).
-  // OFF이면 교재 편집기가 기본, 내용 있는 학교 계획(과거 ON draft)은 함께 표시.
-  const planTextbookNames = examPeriod
-    ? textbooks.filter((name) => (textbookPlanMap[name] ?? "").trim())
-    : textbooks;
+  // PHASE 2 — 진도 모드 판정 (조건 순서 규약: OFF → 대상 설정됨(mixed) → legacy).
+  // OFF이면 저장된 target이 남아 있어도 무시하고 기존 교재별 진도 그대로.
+  const progressMode = resolveProgressMode(examPeriod, examTargetSchools);
+  const progressTargetSchools = examTargetSchools ?? [];
+  // 시험 진도 입력 대상 = 저장된 target ∩ 현재 학생 학교 (가나다 유지, 학생 0명 stale target 제외
+  // — 설정 자체는 삭제하지 않는다, 관리는 그룹 상세에서)
+  const examInputSchools = activeTargetSchools(progressTargetSchools, schools);
+  // 학생 분류 — PHASE 2 canonical helper 재사용 (시험 = target trim 정확 일치, 미등록 = 일반).
+  // 진도/숙제/다음 계획/할 일이 전부 같은 분류를 공유한다 (중복 분류 로직 금지).
+  const { examStudents: examModeStudents, regularStudents: regularModeStudents } =
+    classifyStudentsByExamTarget(students, progressTargetSchools);
+  const regularStudentIdSet = new Set(regularModeStudents.map((student) => student.studentId));
+  const hasRegularStudents = progressMode === "mixed" && regularModeStudents.length > 0;
+  // 학교별 현재 학생 수 (시험 진도 입력의 "N명" 캡션용 — 이미 로드된 students로만 계산, 추가 쿼리 0)
+  const studentCountBySchool = new Map<string, number>();
+  for (const student of students) {
+    const key = student.school?.trim();
+    if (key) {
+      studentCountBySchool.set(key, (studentCountBySchool.get(key) ?? 0) + 1);
+    }
+  }
+
+  // 다음 수업 계획 편집기 구성 — PHASE 3: 진도와 동일한 모드별 정책.
+  //   regular(OFF)   : 교재 편집기 전체 + 내용 있는 학교 계획(과거 ON draft) 보존 표시
+  //   legacy_exam    : 학교 편집기(학생 학교 전체) + 내용 있는 교재 계획 보존 표시 (기존 방식)
+  //   mixed          : 시험 대상 학교 편집기 + (일반 학생이 있으면) 교재 편집기 전체 —
+  //                    내용 있는 비대상 학교/교재 계획은 보존 표시 (자동 변환/삭제 없음)
+  const planTextbookNames =
+    progressMode === "regular" || (progressMode === "mixed" && hasRegularStudents)
+      ? textbooks
+      : textbooks.filter((name) => (textbookPlanMap[name] ?? "").trim());
   const planSchoolNames = (() => {
+    if (progressMode === "mixed") {
+      const names = [...examInputSchools];
+      for (const name of Object.keys(schoolPlanMap)) {
+        if ((schoolPlanMap[name] ?? "").trim() && !names.includes(name)) {
+          names.push(name);
+        }
+      }
+      return names;
+    }
     const names = Object.keys(schoolPlanMap).filter((name) => (schoolPlanMap[name] ?? "").trim());
-    if (examPeriod) {
+    if (progressMode === "legacy_exam") {
       for (const name of schools) {
         if (!names.includes(name)) {
           names.push(name);
@@ -1151,26 +1206,59 @@ export function DailyLogForm({
   })();
   const showStructuredPlans = planTextbookNames.length > 0 || planSchoolNames.length > 0;
 
-  // PHASE 2 — 진도 모드 판정 (조건 순서 규약: OFF → 대상 설정됨(mixed) → legacy).
-  // OFF이면 저장된 target이 남아 있어도 무시하고 기존 교재별 진도 그대로.
-  const progressMode = resolveProgressMode(examPeriod, examTargetSchools);
-  const progressTargetSchools = examTargetSchools ?? [];
-  // 시험 진도 입력 대상 = 저장된 target ∩ 현재 학생 학교 (가나다 유지, 학생 0명 stale target 제외
-  // — 설정 자체는 삭제하지 않는다, 관리는 그룹 상세에서)
-  const examInputSchools = activeTargetSchools(progressTargetSchools, schools);
-  // 일반 수업 진도 대상 학생 존재 여부 — 대상 학교와 trim 정확 일치하지 않는 학생(학교 미등록 포함)
-  const targetSchoolSet = new Set(progressTargetSchools.map((name) => name.trim()).filter(Boolean));
-  const hasRegularStudents =
-    progressMode === "mixed" &&
-    students.some((student) => !targetSchoolSet.has(student.school?.trim() ?? ""));
-  // 학교별 현재 학생 수 (시험 진도 입력의 "N명" 캡션용 — 이미 로드된 students로만 계산, 추가 쿼리 0)
-  const studentCountBySchool = new Map<string, number>();
-  for (const student of students) {
-    const key = student.school?.trim();
-    if (key) {
-      studentCountBySchool.set(key, (studentCountBySchool.get(key) ?? 0) + 1);
-    }
-  }
+  // mixed 구획 판정 — 저장 필드(school/textbook) 우선, 작성 중 항목은 section 플래그
+  const assignmentSection = (item: AssignmentItem) => mixedItemSection(item, regularStudentIdSet);
+  const taskSection = (item: TaskFormItem) => mixedItemSection(item, regularStudentIdSet);
+
+  // 다음 수업 계획 textarea 렌더러 — 진도와 동일하게 세 모드가 같은 요소를 공유
+  // (key = 이름 스냅샷, 순서/구획 재배치에도 remount 없음 — IME 보호)
+  const textbookPlanField = (name: string) => (
+    <label key={`tb-${name}`} className="block min-w-0">
+      <span className="form-label mb-1 flex items-center gap-1.5 font-semibold text-[#3e7d6b]">
+        <span aria-hidden>📘</span>
+        <span className="min-w-0 truncate">{name}</span>
+      </span>
+      <textarea
+        value={textbookPlanMap[name] ?? ""}
+        onChange={(event) => {
+          const value = event.target.value;
+          setTextbookPlanMap((prev) => ({ ...prev, [name]: value }));
+        }}
+        rows={2}
+        aria-label={`${name} 다음 수업 계획`}
+        className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+        placeholder={"p.51~55\n관계대명사 목적격"}
+      />
+    </label>
+  );
+  const schoolPlanField = (name: string) => {
+    // mixed에서 비대상(설정 변경 전 draft 등) 학교 계획은 보존 캡션과 함께 표시
+    const preservedOnly = progressMode === "mixed" && !examInputSchools.includes(name);
+    return (
+      <label key={`sc-${name}`} className="block min-w-0">
+        <span className="form-label mb-1 flex items-center gap-1.5 font-semibold text-[#a2643c]">
+          <span aria-hidden>🏫</span>
+          <span className="min-w-0 truncate">{name}</span>
+          {preservedOnly ? (
+            <span className="caption-text shrink-0 font-normal text-[#a79996]">
+              · 기존 작성 계획 — 저장 시 그대로 보존돼요
+            </span>
+          ) : null}
+        </span>
+        <textarea
+          value={schoolPlanMap[name] ?? ""}
+          onChange={(event) => {
+            const value = event.target.value;
+            setSchoolPlanMap((prev) => ({ ...prev, [name]: value }));
+          }}
+          rows={2}
+          aria-label={`${name} 다음 수업 계획`}
+          className="w-full rounded-2xl border border-[#e8c9b0] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#e0b28c] placeholder:text-[#a79996]"
+          placeholder={"중간고사 서술형 대비\n(시험 기간 계획)"}
+        />
+      </label>
+    );
+  };
 
   // 진도 편집기 구성 — 계획과 동일 정책: 이미 내용이 있는 반대 context는 보존 표시(자동 변환/삭제 없음).
   //   regular(OFF)   : 교재 편집기 전체 + 내용 있는 학교 진도(과거 ON draft/기록) 보존 표시
@@ -1270,9 +1358,13 @@ export function DailyLogForm({
     value: string,
     onChange: (next: string) => void,
     ariaLabel: string,
+    // 선택 가능한 학교 목록 — 기본은 학생 학교 전체(legacy), mixed 시험 구획은 활성 target만.
+    // 저장된 값이 목록에 없으면(과거 스냅샷) 앞에 보존 표시한다 — 기록 불변.
+    schoolOptions: string[] = schools,
   ) => {
-    if (examPeriod && schools.length > 1) {
-      const options = value && !schools.includes(value) ? [value, ...schools] : schools;
+    if (examPeriod && schoolOptions.length > 1) {
+      const options =
+        value && !schoolOptions.includes(value) ? [value, ...schoolOptions] : schoolOptions;
       return (
         <label className="form-label flex items-center gap-2 text-[#7c6d69]">
           <span className="shrink-0">학교</span>
@@ -1292,7 +1384,7 @@ export function DailyLogForm({
         </label>
       );
     }
-    const label = value || schools[0] || "";
+    const label = value || schoolOptions[0] || "";
     return (
       <div className="form-label flex items-center gap-2 text-[#7c6d69]">
         <span className="shrink-0">학교</span>
@@ -1306,9 +1398,28 @@ export function DailyLogForm({
   // 숙제 대상 후보 — 현재 선택된 그룹 학생만 (전체 학생 목록 사용 금지).
   // 시험 기간 ON + 학교 context가 정해진 숙제는 그 학교 학생만 (다른 학교 학생이 섞이지 않게).
   // 이미 조회돼 prop으로 들어온 students를 그대로 쓰므로 숙제 개수와 무관하게 추가 쿼리 0.
-  const homeworkAudienceOptions = (schoolContext: string) => {
-    // 학교 칸이 비어 있어도 화면에는 단일 학교가 표시되므로(schoolContextControl과 같은 규칙)
-    // 후보도 그 학교 기준으로 맞춘다 — 보이는 것과 고를 수 있는 것이 어긋나지 않게.
+  const homeworkAudienceOptions = (schoolContext: string, section?: "exam" | "regular") => {
+    // mixed: 구획이 학생 후보를 결정한다 — 시험 숙제는 그 학교 학생만, 일반 숙제는 일반 학생만
+    // (시험 학생이 일반 후보에, 다른 학교 학생이 시험 후보에 절대 섞이지 않는다).
+    if (progressMode === "mixed" && section) {
+      if (section === "regular") {
+        return sortByKoreanName(
+          regularModeStudents,
+          (student) => student.name,
+          (student) => student.studentId,
+        );
+      }
+      // 시험 구획 — 학교 칸이 비어 있어도 단일 활성 target이면 그 학교가 표시되므로 후보도 맞춘다
+      const school = (
+        schoolContext.trim() || (examInputSchools.length === 1 ? examInputSchools[0] : "")
+      ).trim();
+      return sortByKoreanName(
+        school ? studentsOfSchool(students, school) : examModeStudents,
+        (student) => student.name,
+        (student) => student.studentId,
+      );
+    }
+    // regular/legacy — 기존 규칙 그대로: ON+학교면 그 학교 학생만, 아니면 그룹 전체
     const school = (schoolContext.trim() || (examPeriod ? schools[0] ?? "" : "")).trim();
     const pool =
       examPeriod && school
@@ -1328,8 +1439,9 @@ export function DailyLogForm({
     schoolContext: string,
     onChange: (next: string) => void,
     ariaLabel: string,
+    section?: "exam" | "regular",
   ) => {
-    const options = homeworkAudienceOptions(schoolContext);
+    const options = homeworkAudienceOptions(schoolContext, section);
     const savedOutsider =
       value && !options.some((student) => student.studentId === value)
         ? students.find((student) => student.studentId === value)
@@ -1361,14 +1473,293 @@ export function DailyLogForm({
 
   // 학교 context가 바뀌면 그 학교 학생이 아닌 대상은 공통으로 되돌린다 —
   // 다른 학교 숙제에 남의 학교 학생 id가 몰래 남지 않게 (작성 중 입력에만 적용).
-  const audienceForSchool = (studentId: string, nextSchool: string) => {
+  const audienceForSchool = (studentId: string, nextSchool: string, section?: "exam" | "regular") => {
     if (!studentId) {
       return "";
     }
-    return homeworkAudienceOptions(nextSchool).some((student) => student.studentId === studentId)
+    return homeworkAudienceOptions(nextSchool, section).some(
+      (student) => student.studentId === studentId,
+    )
       ? studentId
       : "";
   };
+
+  // ── PHASE 3: 숙제/할 일 항목 렌더러 — 단일 목록(regular/legacy)과 mixed 두 구획이
+  // 같은 요소를 공유한다. key는 item.key(stable), index는 전체 배열 기준(구획으로 나눠도
+  // aria 라벨이 겹치지 않게). mixed 시험 구획의 학교 options는 활성 target만,
+  // 일반 구획은 일반 교재 select — 저장된 비대상 학교/과거 값은 보존 표시된다. ──
+  const renderAssignmentItem = (item: AssignmentItem, index: number) => {
+    const section = progressMode === "mixed" ? assignmentSection(item) : null;
+    const useSchoolControl = section ? section === "exam" : isSchoolContextItem(item);
+    return (
+      <div
+        key={item.key}
+        className="min-w-0 rounded-2xl border border-[#ece0db] bg-[#fffdfb] p-2.5"
+      >
+        {/* 내용 칸 아래에 완료일 카드가 오는 세로 배치 (화면 폭과 무관) */}
+        <div className="flex min-w-0 flex-col gap-2">
+          {useSchoolControl ? (
+            // 학교 context — mixed 시험 구획은 활성 target만, legacy는 학생 학교 전체
+            schoolContextControl(
+              item.school,
+              (next) =>
+                setAssignments((prev) =>
+                  prev.map((it) =>
+                    it.key === item.key
+                      ? {
+                          ...it,
+                          school: next,
+                          // 새 학교 학생이 아니면 대상은 공통으로 안전하게 reset
+                          assignedStudentId: audienceForSchool(
+                            it.assignedStudentId,
+                            next,
+                            section ?? undefined,
+                          ),
+                        }
+                      : it,
+                  ),
+                ),
+              `숙제 ${index + 1} 학교 선택`,
+              section === "exam" ? examInputSchools : schools,
+            )
+          ) : textbooks.length > 0 ? (
+            // 숙제별 교재 연결(선택) — 같은 교재로 여러 숙제 가능, 자동 생성 없음
+            <label className="form-label flex items-center gap-2 text-[#7c6d69]">
+              <span className="shrink-0">교재</span>
+              <select
+                value={item.textbook}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setAssignments((prev) =>
+                    prev.map((it) => (it.key === item.key ? { ...it, textbook: value } : it)),
+                  );
+                }}
+                aria-label={`숙제 ${index + 1} 교재 선택`}
+                className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 py-1.5 text-base font-medium text-[#6652b9] outline-none"
+              >
+                <option value="">교재 없음 / 기타</option>
+                {textbooks.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {/* 대상 학생 — 교재/학교 바로 아래. 기본값 공통, 교재 변경과는 독립.
+              mixed: 시험 구획 = 그 학교 학생만, 일반 구획 = 일반 학생만 */}
+          {audienceControl(
+            item.assignedStudentId,
+            item.school,
+            (next) =>
+              setAssignments((prev) =>
+                prev.map((it) => (it.key === item.key ? { ...it, assignedStudentId: next } : it)),
+              ),
+            `숙제 ${index + 1} 학생 선택`,
+            section ?? undefined,
+          )}
+          <textarea
+            value={item.content}
+            onChange={(event) => {
+              const value = event.target.value;
+              setAssignments((prev) =>
+                prev.map((it) => (it.key === item.key ? { ...it, content: value } : it)),
+              );
+            }}
+            rows={2}
+            maxLength={500}
+            aria-label={`숙제 ${index + 1} 내용`}
+            placeholder={"백발백중 5과 문법 문제\n(여러 줄로 적을 수 있어요)"}
+            className="min-h-[58px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+          />
+          <div className="flex min-w-0 items-center justify-between gap-1.5">
+            <span className="flex min-h-[38px] min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-sm font-medium text-[#6652b9]">
+              <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <input
+                type="date"
+                aria-label={`숙제 ${index + 1} 완료일`}
+                value={item.dueDate}
+                min={addDaysStr(classDate, 1)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setAssignments((prev) =>
+                    prev.map((it) => (it.key === item.key ? { ...it, dueDate: value } : it)),
+                  );
+                }}
+                className="w-full min-w-0 max-w-[140px] bg-transparent text-base font-medium text-[#6652b9] outline-none"
+              />
+            </span>
+            <button
+              type="button"
+              onClick={() => setAssignments((prev) => prev.filter((it) => it.key !== item.key))}
+              aria-label={`숙제 ${index + 1} 삭제`}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#b5a29e] transition hover:bg-[#fdf4f1] hover:text-[#8f625f]"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // 숙제 추가 — mixed는 구획별 entry point(잘못된 context 선택 방지), 그 외는 기존 규칙.
+  // id는 추가 시점 발급(첫 저장부터 같은 id로 insert — idempotent sync), 대상 기본값은 공통.
+  const addAssignment = (section?: "exam" | "regular") =>
+    setAssignments((prev) => [
+      ...prev,
+      {
+        key: globalThis.crypto.randomUUID(),
+        id: globalThis.crypto.randomUUID(),
+        content: "",
+        // 기본 완료일 = 이 그룹의 다음 실제 수업일 (시간표 없으면 빈 값 — 직접 선택)
+        dueDate: nextClassDateAfter(scheduleDays, classDate) ?? "",
+        textbook:
+          section === "exam"
+            ? ""
+            : section === "regular" || !examPeriod
+              ? textbooks.length === 1
+                ? textbooks[0]
+                : ""
+              : "",
+        school:
+          section === "exam"
+            ? examInputSchools.length === 1
+              ? examInputSchools[0]
+              : ""
+            : section === "regular"
+              ? ""
+              : examPeriod && schools.length === 1
+                ? schools[0]
+                : "",
+        assignedStudentId: "",
+        ...(section ? { section } : {}),
+      },
+    ]);
+
+  const renderTaskItem = (task: TaskFormItem, index: number) => {
+    const section = progressMode === "mixed" ? taskSection(task) : null;
+    const useSchoolControl = section ? section === "exam" : isSchoolContextItem(task);
+    return (
+      <div
+        key={task.key}
+        className="min-w-0 rounded-2xl border border-[#e2d8f3] bg-[#fbf9ff] p-2.5"
+      >
+        <div className="flex min-w-0 flex-col gap-2">
+          {useSchoolControl ? (
+            schoolContextControl(
+              task.school,
+              (next) =>
+                setTasks((prev) =>
+                  prev.map((it) => (it.key === task.key ? { ...it, school: next } : it)),
+                ),
+              `할 일 ${index + 1} 학교 선택`,
+              section === "exam" ? examInputSchools : schools,
+            )
+          ) : textbooks.length > 0 ? (
+            <label className="form-label flex items-center gap-2 text-[#7c6d69]">
+              <span className="shrink-0">교재</span>
+              <select
+                value={task.textbook}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setTasks((prev) =>
+                    prev.map((it) => (it.key === task.key ? { ...it, textbook: value } : it)),
+                  );
+                }}
+                aria-label={`할 일 ${index + 1} 교재 선택`}
+                className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 py-1.5 text-base font-medium text-[#5d4ba5] outline-none"
+              >
+                <option value="">교재 없음 / 기타</option>
+                {textbooks.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <textarea
+            value={task.content}
+            onChange={(event) => {
+              const value = event.target.value;
+              setTasks((prev) =>
+                prev.map((it) => (it.key === task.key ? { ...it, content: value } : it)),
+              );
+            }}
+            rows={2}
+            maxLength={1000}
+            aria-label={`할 일 ${index + 1} 내용`}
+            className="min-h-[58px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+            placeholder={"프린트 출력\n(여러 줄로 적을 수 있어요)"}
+          />
+          <div className="flex min-w-0 items-center justify-between gap-1.5">
+            <span className="flex min-h-[38px] min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-sm font-medium text-[#5d4ba5]">
+              <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <input
+                type="date"
+                aria-label={`할 일 ${index + 1} 날짜 선택 (선택 사항)`}
+                value={task.dueDate}
+                min={classDate || undefined}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setTasks((prev) =>
+                    prev.map((it) => (it.key === task.key ? { ...it, dueDate: value } : it)),
+                  );
+                }}
+                className="w-full min-w-0 max-w-[140px] bg-transparent text-base font-medium text-[#5d4ba5] outline-none"
+              />
+            </span>
+            <button
+              type="button"
+              onClick={() => setTasks((prev) => prev.filter((it) => it.key !== task.key))}
+              aria-label={`할 일 ${index + 1} 삭제`}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#b5a29e] transition hover:bg-[#fdf4f1] hover:text-[#8f625f]"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // 할 일 추가 — 숙제와 동일한 구획별 entry point. Task에 학생 selector는 없다(Teacher 작업).
+  const addTask = (section?: "exam" | "regular") =>
+    setTasks((prev) => [
+      ...prev,
+      {
+        key: globalThis.crypto.randomUUID(),
+        // stable id를 추가 시점에 발급 — Todo 소유 identity (삭제/재정렬에도 안정)
+        id: globalThis.crypto.randomUUID(),
+        textbook: "",
+        school:
+          section === "exam"
+            ? examInputSchools.length === 1
+              ? examInputSchools[0]
+              : ""
+            : section === "regular"
+              ? ""
+              : examPeriod && schools.length === 1
+                ? schools[0]
+                : "",
+        content: "",
+        dueDate: "",
+        ...(section ? { section } : {}),
+      },
+    ]);
+
+  // mixed 구획별 목록 — index는 전체 배열 기준을 유지한다 (aria 라벨/삭제 대상이 어긋나지 않게)
+  const indexedAssignments = assignments.map((item, index) => ({ item, index }));
+  const examAssignmentRows = indexedAssignments.filter(
+    ({ item }) => assignmentSection(item) === "exam",
+  );
+  const regularAssignmentRows = indexedAssignments.filter(
+    ({ item }) => assignmentSection(item) === "regular",
+  );
+  const indexedTasks = tasks.map((item, index) => ({ item, index }));
+  const examTaskRows = indexedTasks.filter(({ item }) => taskSection(item) === "exam");
+  const regularTaskRows = indexedTasks.filter(({ item }) => taskSection(item) === "regular");
 
   // [전체 학생에게 적용] — 버튼 한 번으로 진도를 전 학생에게.
   // 결석 학생은 기존 정책대로 놓친 진도 기본값으로만 채운다.
@@ -1937,139 +2328,69 @@ export function DailyLogForm({
                   (지난 숙제를 해왔는지는 위 학생별 "숙제" 평가에서 — 서로 다른 기능)
                   Teacher Todo/캘린더 자동 생성 없음. draft 단계에서는 payload로만 유지. */}
               <div className="space-y-2">
-                {assignments.map((item, index) => (
-                  <div
-                    key={item.key}
-                    className="min-w-0 rounded-2xl border border-[#ece0db] bg-[#fffdfb] p-2.5"
-                  >
-                    {/* 내용 칸 아래에 완료일 카드가 오는 세로 배치 (화면 폭과 무관) */}
-                    <div className="flex min-w-0 flex-col gap-2">
-                      {isSchoolContextItem(item) ? (
-                        // 시험 기간 학교 context — 학생 학교가 여러 개면 Select, 1개면 자동
-                        schoolContextControl(
-                          item.school,
-                          (next) =>
-                            setAssignments((prev) =>
-                              prev.map((it) =>
-                                it.key === item.key
-                                  ? {
-                                      ...it,
-                                      school: next,
-                                      // 새 학교 학생이 아니면 대상은 공통으로 안전하게 reset
-                                      assignedStudentId: audienceForSchool(it.assignedStudentId, next),
-                                    }
-                                  : it,
-                              ),
-                            ),
-                          `숙제 ${index + 1} 학교 선택`,
-                        )
-                      ) : textbooks.length > 0 ? (
-                        // 숙제별 교재 연결(선택) — 같은 교재로 여러 숙제 가능, 자동 생성 없음
-                        <label className="form-label flex items-center gap-2 text-[#7c6d69]">
-                          <span className="shrink-0">교재</span>
-                          <select
-                            value={item.textbook}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setAssignments((prev) =>
-                                prev.map((it) => (it.key === item.key ? { ...it, textbook: value } : it)),
-                              );
-                            }}
-                            aria-label={`숙제 ${index + 1} 교재 선택`}
-                            className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 py-1.5 text-base font-medium text-[#6652b9] outline-none"
-                          >
-                            <option value="">교재 없음 / 기타</option>
-                            {textbooks.map((name) => (
-                              <option key={name} value={name}>
-                                {name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ) : null}
-                      {/* 대상 학생 — 교재/학교 바로 아래. 기본값 공통, 교재 변경과는 독립 */}
-                      {audienceControl(
-                        item.assignedStudentId,
-                        item.school,
-                        (next) =>
-                          setAssignments((prev) =>
-                            prev.map((it) =>
-                              it.key === item.key ? { ...it, assignedStudentId: next } : it,
-                            ),
-                          ),
-                        `숙제 ${index + 1} 학생 선택`,
-                      )}
-                      <textarea
-                        value={item.content}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          setAssignments((prev) =>
-                            prev.map((it) => (it.key === item.key ? { ...it, content: value } : it)),
-                          );
-                        }}
-                        rows={2}
-                        maxLength={500}
-                        aria-label={`숙제 ${index + 1} 내용`}
-                        placeholder={"백발백중 5과 문법 문제\n(여러 줄로 적을 수 있어요)"}
-                        className="min-h-[58px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
-                      />
-                      <div className="flex min-w-0 items-center justify-between gap-1.5">
-                        <span className="flex min-h-[38px] min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-sm font-medium text-[#6652b9]">
-                          <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                          <input
-                            type="date"
-                            aria-label={`숙제 ${index + 1} 완료일`}
-                            value={item.dueDate}
-                            min={addDaysStr(classDate, 1)}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setAssignments((prev) =>
-                                prev.map((it) => (it.key === item.key ? { ...it, dueDate: value } : it)),
-                              );
-                            }}
-                            className="w-full min-w-0 max-w-[140px] bg-transparent text-base font-medium text-[#6652b9] outline-none"
-                          />
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setAssignments((prev) => prev.filter((it) => it.key !== item.key))
-                          }
-                          aria-label={`숙제 ${index + 1} 삭제`}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#b5a29e] transition hover:bg-[#fdf4f1] hover:text-[#8f625f]"
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden />
-                        </button>
+                {progressMode === "mixed" ? (
+                  // PHASE 3 mixed — 구획 자체가 context를 결정한다 (매 항목마다 시험/일반을
+                  // 고르게 하지 않는다 — 잘못된 context 선택 방지). 시험 구획은 활성 target
+                  // 학교가 있을 때만, 일반 구획은 일반 학생이 있을 때만 추가 버튼을 제공하고,
+                  // 저장된 항목은 구획 조건과 무관하게 항상 표시된다 (숨김/삭제 없음).
+                  <>
+                    {examAssignmentRows.length > 0 || examInputSchools.length > 0 ? (
+                      <div>
+                        <div className="form-label mb-1.5 font-semibold text-[#a2643c]">
+                          시험 대비 숙제
+                        </div>
+                        <div className="space-y-2">
+                          {examAssignmentRows.map(({ item, index }) =>
+                            renderAssignmentItem(item, index),
+                          )}
+                          {examInputSchools.length > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => addAssignment("exam")}
+                              aria-label="시험 대비 숙제 추가"
+                              className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#e8c9b0] bg-white text-sm font-medium text-[#a2643c] transition hover:bg-[#fdf7f1]"
+                            >
+                              <Plus className="h-4 w-4" aria-hidden /> 숙제 추가
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setAssignments((prev) => [
-                      ...prev,
-                      {
-                        key: globalThis.crypto.randomUUID(),
-                        // id를 추가 시점에 발급 — 첫 저장부터 이 id로 insert되므로
-                        // 재저장/수정에도 row id가 안정적으로 유지된다 (idempotent sync)
-                        id: globalThis.crypto.randomUUID(),
-                        content: "",
-                        // 기본 완료일 = 이 그룹의 다음 실제 수업일 (시간표 없으면 빈 값 — 직접 선택)
-                        dueDate: nextClassDateAfter(scheduleDays, classDate) ?? "",
-                        // 시험 기간 ON: 학교 context(학생 학교 1개면 자동) / OFF: 교재 context
-                        textbook: examPeriod ? "" : textbooks.length === 1 ? textbooks[0] : "",
-                        school: examPeriod && schools.length === 1 ? schools[0] : "",
-                        // 숙제 대상 기본값은 항상 공통 — Teacher가 고르지 않으면 반 전체 숙제
-                        assignedStudentId: "",
-                      },
-                    ])
-                  }
-                  className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#d9c8f0] bg-white text-sm font-medium text-[#6652b9] transition hover:bg-[#faf7ff]"
-                >
-                  <Plus className="h-4 w-4" aria-hidden /> 숙제 추가
-                </button>
+                    ) : null}
+                    {regularAssignmentRows.length > 0 || hasRegularStudents ? (
+                      <div>
+                        <div className="form-label mb-1.5 font-semibold text-[#6652b9]">
+                          일반 수업 숙제
+                        </div>
+                        <div className="space-y-2">
+                          {regularAssignmentRows.map(({ item, index }) =>
+                            renderAssignmentItem(item, index),
+                          )}
+                          {hasRegularStudents ? (
+                            <button
+                              type="button"
+                              onClick={() => addAssignment("regular")}
+                              aria-label="일반 수업 숙제 추가"
+                              className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#d9c8f0] bg-white text-sm font-medium text-[#6652b9] transition hover:bg-[#faf7ff]"
+                            >
+                              <Plus className="h-4 w-4" aria-hidden /> 숙제 추가
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    {assignments.map((item, index) => renderAssignmentItem(item, index))}
+                    <button
+                      type="button"
+                      onClick={() => addAssignment()}
+                      className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#d9c8f0] bg-white text-sm font-medium text-[#6652b9] transition hover:bg-[#faf7ff]"
+                    >
+                      <Plus className="h-4 w-4" aria-hidden /> 숙제 추가
+                    </button>
+                  </>
+                )}
                 <p className="secondary-text text-[#a79996]">
                   숙제마다 완료일을 다르게 정할 수 있어요. 기본값은 다음 수업일이에요.
                 </p>
@@ -2120,46 +2441,46 @@ export function DailyLogForm({
               </span>
               {showStructuredPlans ? (
                 // 교재/학교별 다음 수업 계획 — name 키 구조 (계획은 Todo가 아니다).
-                // 시험 기간 ON이면 학교 편집기가 기본, 기존 교재 계획 내용은 보존 표시.
+                // mixed = 시험 대비/일반 수업 두 구획(진도와 동일 정책), legacy = 학교 편집기 기본,
+                // OFF = 교재 편집기 기본 — 반대 context의 기존 내용은 항상 보존 표시.
                 <div className="space-y-2.5">
-                  {planTextbookNames.map((name) => (
-                    <label key={`tb-${name}`} className="block min-w-0">
-                      <span className="form-label mb-1 flex items-center gap-1.5 font-semibold text-[#3e7d6b]">
-                        <span aria-hidden>📘</span>
-                        <span className="min-w-0 truncate">{name}</span>
-                      </span>
-                      <textarea
-                        value={textbookPlanMap[name] ?? ""}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          setTextbookPlanMap((prev) => ({ ...prev, [name]: value }));
-                        }}
-                        rows={2}
-                        aria-label={`${name} 다음 수업 계획`}
-                        className="w-full rounded-2xl border border-[#ece0db] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
-                        placeholder={"p.51~55\n관계대명사 목적격"}
-                      />
-                    </label>
-                  ))}
-                  {planSchoolNames.map((name) => (
-                    <label key={`sc-${name}`} className="block min-w-0">
-                      <span className="form-label mb-1 flex items-center gap-1.5 font-semibold text-[#a2643c]">
-                        <span aria-hidden>🏫</span>
-                        <span className="min-w-0 truncate">{name}</span>
-                      </span>
-                      <textarea
-                        value={schoolPlanMap[name] ?? ""}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          setSchoolPlanMap((prev) => ({ ...prev, [name]: value }));
-                        }}
-                        rows={2}
-                        aria-label={`${name} 다음 수업 계획`}
-                        className="w-full rounded-2xl border border-[#e8c9b0] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#e0b28c] placeholder:text-[#a79996]"
-                        placeholder={"중간고사 서술형 대비\n(시험 기간 계획)"}
-                      />
-                    </label>
-                  ))}
+                  {progressMode === "mixed" ? (
+                    <div className="space-y-3">
+                      {planSchoolNames.length > 0 ? (
+                        <div>
+                          <div className="form-label mb-1.5 font-semibold text-[#a2643c]">
+                            시험 대비 계획
+                          </div>
+                          <div className="space-y-2.5">
+                            {planSchoolNames.map((name) => schoolPlanField(name))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {planTextbookNames.length > 0 || hasRegularStudents ? (
+                        <div>
+                          <div className="form-label mb-1.5 font-semibold text-[#6652b9]">
+                            일반 수업 계획
+                          </div>
+                          {planTextbookNames.length > 0 ? (
+                            <div className="space-y-2.5">
+                              {planTextbookNames.map((name) => textbookPlanField(name))}
+                            </div>
+                          ) : (
+                            // 일반 학생은 있는데 일반 교재 0개 — 시험 대비용 교재를 끌어오지 않는다
+                            <div className="secondary-text rounded-xl bg-[#f8f3ef] px-3 py-2 text-[#7f6f68]">
+                              등록된 일반 교재가 없어요. 수업 그룹에서 교재를 등록하면 여기에
+                              계획을 쓸 수 있어요.
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <>
+                      {planTextbookNames.map((name) => textbookPlanField(name))}
+                      {planSchoolNames.map((name) => schoolPlanField(name))}
+                    </>
+                  )}
                   <label className="block">
                     <span className="form-label mb-1 block text-[#7c6d69]">
                       기타 계획 메모 (선택)
@@ -2210,109 +2531,62 @@ export function DailyLogForm({
                   <CheckCheck className="h-3.5 w-3.5 text-[#5d4ba5]" /> 해야 할 일
                 </span>
                 <div className="space-y-2">
-                  {tasks.map((task, index) => (
-                    <div
-                      key={task.key}
-                      className="min-w-0 rounded-2xl border border-[#e2d8f3] bg-[#fbf9ff] p-2.5"
-                    >
-                      <div className="flex min-w-0 flex-col gap-2">
-                        {isSchoolContextItem(task) ? (
-                          schoolContextControl(
-                            task.school,
-                            (next) =>
-                              setTasks((prev) =>
-                                prev.map((it) => (it.key === task.key ? { ...it, school: next } : it)),
-                              ),
-                            `할 일 ${index + 1} 학교 선택`,
-                          )
-                        ) : textbooks.length > 0 ? (
-                          <label className="form-label flex items-center gap-2 text-[#7c6d69]">
-                            <span className="shrink-0">교재</span>
-                            <select
-                              value={task.textbook}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                setTasks((prev) =>
-                                  prev.map((it) => (it.key === task.key ? { ...it, textbook: value } : it)),
-                                );
-                              }}
-                              aria-label={`할 일 ${index + 1} 교재 선택`}
-                              className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 py-1.5 text-base font-medium text-[#5d4ba5] outline-none"
-                            >
-                              <option value="">교재 없음 / 기타</option>
-                              {textbooks.map((name) => (
-                                <option key={name} value={name}>
-                                  {name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        ) : null}
-                        <textarea
-                          value={task.content}
-                          onChange={(event) => {
-                            const value = event.target.value;
-                            setTasks((prev) =>
-                              prev.map((it) => (it.key === task.key ? { ...it, content: value } : it)),
-                            );
-                          }}
-                          rows={2}
-                          maxLength={1000}
-                          aria-label={`할 일 ${index + 1} 내용`}
-                          className="min-h-[58px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
-                          placeholder={"프린트 출력\n(여러 줄로 적을 수 있어요)"}
-                        />
-                        <div className="flex min-w-0 items-center justify-between gap-1.5">
-                          <span className="flex min-h-[38px] min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 text-sm font-medium text-[#5d4ba5]">
-                            <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                            <input
-                              type="date"
-                              aria-label={`할 일 ${index + 1} 날짜 선택 (선택 사항)`}
-                              value={task.dueDate}
-                              min={classDate || undefined}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                setTasks((prev) =>
-                                  prev.map((it) => (it.key === task.key ? { ...it, dueDate: value } : it)),
-                                );
-                              }}
-                              className="w-full min-w-0 max-w-[140px] bg-transparent text-base font-medium text-[#5d4ba5] outline-none"
-                            />
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setTasks((prev) => prev.filter((it) => it.key !== task.key))}
-                            aria-label={`할 일 ${index + 1} 삭제`}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#b5a29e] transition hover:bg-[#fdf4f1] hover:text-[#8f625f]"
-                          >
-                            <Trash2 className="h-4 w-4" aria-hidden />
-                          </button>
+                  {progressMode === "mixed" ? (
+                    // PHASE 3 mixed — 할 일도 구획별 entry point (숙제와 동일 정책)
+                    <>
+                      {examTaskRows.length > 0 || examInputSchools.length > 0 ? (
+                        <div>
+                          <div className="form-label mb-1.5 font-semibold text-[#a2643c]">
+                            시험 대비 할 일
+                          </div>
+                          <div className="space-y-2">
+                            {examTaskRows.map(({ item, index }) => renderTaskItem(item, index))}
+                            {examInputSchools.length > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => addTask("exam")}
+                                aria-label="시험 대비 할 일 추가"
+                                className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#e8c9b0] bg-white text-sm font-medium text-[#a2643c] transition hover:bg-[#fdf7f1]"
+                              >
+                                <Plus className="h-4 w-4" aria-hidden /> 할 일 추가
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setTasks((prev) => [
-                        ...prev,
-                        {
-                          key: globalThis.crypto.randomUUID(),
-                          // stable id를 추가 시점에 발급 — Todo 소유 identity (삭제/재정렬에도 안정)
-                          id: globalThis.crypto.randomUUID(),
-                          // 시험 기간 ON: 새 항목은 학교 context (학생 학교 1개면 자동)
-                          textbook: "",
-                          school: examPeriod && schools.length === 1 ? schools[0] : "",
-                          content: "",
-                          dueDate: "",
-                        },
-                      ])
-                    }
-                    className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#d9c8f0] bg-white text-sm font-medium text-[#5d4ba5] transition hover:bg-[#faf7ff]"
-                  >
-                    <Plus className="h-4 w-4" aria-hidden /> 할 일 추가
-                  </button>
+                      ) : null}
+                      {regularTaskRows.length > 0 || hasRegularStudents ? (
+                        <div>
+                          <div className="form-label mb-1.5 font-semibold text-[#6652b9]">
+                            일반 수업 할 일
+                          </div>
+                          <div className="space-y-2">
+                            {regularTaskRows.map(({ item, index }) => renderTaskItem(item, index))}
+                            {hasRegularStudents ? (
+                              <button
+                                type="button"
+                                onClick={() => addTask("regular")}
+                                aria-label="일반 수업 할 일 추가"
+                                className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#d9c8f0] bg-white text-sm font-medium text-[#5d4ba5] transition hover:bg-[#faf7ff]"
+                              >
+                                <Plus className="h-4 w-4" aria-hidden /> 할 일 추가
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      {tasks.map((task, index) => renderTaskItem(task, index))}
+                      <button
+                        type="button"
+                        onClick={() => addTask()}
+                        className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#d9c8f0] bg-white text-sm font-medium text-[#5d4ba5] transition hover:bg-[#faf7ff]"
+                      >
+                        <Plus className="h-4 w-4" aria-hidden /> 할 일 추가
+                      </button>
+                    </>
+                  )}
                 </div>
                 <p className="secondary-text mt-1 text-[#a79996]">
                   수업 기록을 완료하면 내용이 있는 항목마다 오늘 할 일에 하나씩 등록돼요. 날짜를

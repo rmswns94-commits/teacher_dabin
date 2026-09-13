@@ -73,6 +73,48 @@ export function activeTargetSchools(
   return memberSchools.filter((school) => targets.has(school.trim()));
 }
 
+// 한 학교의 현재 학생만 — trim 정확 일치 (숙제 대상 후보 등 매핑용)
+export function studentsOfSchool<T extends { school?: string | null }>(
+  students: readonly T[],
+  school: string,
+): T[] {
+  const name = school.trim();
+  if (!name) {
+    return [];
+  }
+  return students.filter((student) => (student.school?.trim() ?? "") === name);
+}
+
+// PHASE 3 — mixed 모드에서 숙제/할 일 항목이 속하는 구획 판정.
+// 저장 필드가 identity: school이 있으면 시험 측, textbook이 있으면 일반 측
+// (과거 draft/기록의 비대상 학교도 시험 측에 보존 표시 — 자동 변환/삭제 없음).
+// 명시 section(작성 중 클라이언트 상태/draft 전용 — DB에는 저장하지 않는다)이 있으면 우선.
+// 둘 다 비어 있으면: 대상 학생이 일반 학생이면 일반 측, 아니면 기존(legacy) 규칙과
+// 동일하게 시험 측 — 애매한 항목이 사라지지 않고 항상 어느 한 구획에 보인다.
+export function mixedItemSection(
+  item: {
+    school?: string | null;
+    textbook?: string | null;
+    section?: "exam" | "regular" | null;
+    assignedStudentId?: string | null;
+  },
+  regularStudentIds: ReadonlySet<string>,
+): "exam" | "regular" {
+  if (item.section === "exam" || item.section === "regular") {
+    return item.section;
+  }
+  if (item.school?.trim()) {
+    return "exam";
+  }
+  if (item.textbook?.trim()) {
+    return "regular";
+  }
+  if (item.assignedStudentId && regularStudentIds.has(item.assignedStudentId)) {
+    return "regular";
+  }
+  return "exam";
+}
+
 // Mixed Mode에서 학생 1명에게 적용/스냅샷할 진도 후보 — 교차 적용 방지가 목적.
 //   시험 학생 → 자기 학교의 시험 진도만 (+ 기타 메모)
 //   일반 학생 → 일반 교재 진도 mirror만 (+ 기타 메모)
