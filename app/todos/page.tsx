@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { ExpandableList } from "@/components/expandable-list";
 import { PageHeader } from "@/components/page-header";
 import { TodayRefresher } from "@/components/today-refresher";
+import { HomeworkCompletionButton } from "@/components/homework-completion-button";
 import { TodoCreateDialog } from "@/components/todo-create-dialog";
 import { TodoDeleteButton } from "@/components/todo-delete-button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,7 +18,8 @@ import {
   monthRange,
   parseMonthParam,
 } from "@/lib/calendar";
-import { formatKoreanDate, todayDateString } from "@/lib/dates";
+import { formatKoreanDate, formatShortMonthDay, todayDateString } from "@/lib/dates";
+import { shouldShowHomeworkOnSelectedDate } from "@/lib/homework-visibility";
 import { groupIconOf } from "@/lib/group-icons";
 import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
 import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
@@ -133,10 +135,8 @@ function TodoItemRow({
   );
 }
 
-// 숙제 줄 — Todo가 아니라 "그 날짜가 완료일인 숙제"를 읽어 보여주는 read-only 항목이다.
-// 체크박스/삭제 버튼이 없다: 숙제에는 완료 상태가 없고, Todo의 완료/삭제 핸들러를
-// 숙제에 연결하지 않는다 (숙제 수정/삭제는 수업 일지 편집에서).
-function HomeworkItemRow({ homework }: { homework: DueHomeworkItem }) {
+// 숙제 완료는 원본 숙제 액션만 사용한다. 이월해도 원래 마감일/ID는 그대로다.
+function HomeworkItemRow({ homework, today }: { homework: DueHomeworkItem; today?: string }) {
   const checked = homework.completed;
   const label = formatHomeworkDisplay({
     audienceLabel: homeworkAudienceLabel(homework.assignedStudentName),
@@ -152,9 +152,8 @@ function HomeworkItemRow({ homework }: { homework: DueHomeworkItem }) {
         action={toggleHomeworkCompletionAction.bind(null, homework.id)}
         className="min-w-0 flex-1"
       >
-        <button
-          type="submit"
-          aria-pressed={checked}
+        <HomeworkCompletionButton
+          checked={checked}
           className={cn(
             "flex min-h-11 w-full items-start gap-2.5 rounded-xl px-2 py-1.5 text-left transition",
             checked ? "hover:bg-[#f4f9f6]" : "hover:bg-[#fdf6ec]",
@@ -186,9 +185,10 @@ function HomeworkItemRow({ homework }: { homework: DueHomeworkItem }) {
             </span>
             <span className={cn("secondary-text mt-0.5 block", checked ? "text-[#b0a39f]" : "text-[#a5854a]")}>
               숙제{checked ? " · 완료" : ""}
+              {today && homework.dueDate < today ? ` · ${formatShortMonthDay(homework.dueDate)} 마감` : ""}
             </span>
           </span>
-        </button>
+        </HomeworkCompletionButton>
       </form>
       {/* 숙제 삭제는 수업 일지 편집에서 — 여기서는 원본 일지로 가는 링크만 둔다 */}
       <Link
@@ -225,6 +225,7 @@ export default async function TodayTodosPage({
       rangeStart: range.start,
       rangeEnd: range.end,
       extraDates: [today, selectedDate],
+      carryForwardToday: isTodaySelected ? today : undefined,
     }),
   ]);
   const activeGroups = groups.filter((group) => !group.archived);
@@ -232,10 +233,16 @@ export default async function TodayTodosPage({
   // (날짜, 그룹)별 숙제 — 보관된 그룹의 숙제는 Todo와 같은 기준으로 제외한다.
   // 저장된 sort_order 순서를 그대로 유지한다 (학생 이름으로 재정렬하지 않는다).
   const homeworkByDateGroup = new Map<string, DueHomeworkItem[]>();
+  const todayHomeworkByGroup = new Map<string, DueHomeworkItem[]>();
   const homeworkCountByDate = new Map<string, { total: number; done: number }>();
   for (const homework of dueHomework) {
     if (!homework.groupId || !activeGroupIds.has(homework.groupId)) {
       continue;
+    }
+    if (shouldShowHomeworkOnSelectedDate(homework, today, today)) {
+      const items = todayHomeworkByGroup.get(homework.groupId) ?? [];
+      items.push(homework);
+      todayHomeworkByGroup.set(homework.groupId, items);
     }
     const key = `${homework.dueDate}|${homework.groupId}`;
     homeworkByDateGroup.set(key, [...(homeworkByDateGroup.get(key) ?? []), homework]);
@@ -248,6 +255,10 @@ export default async function TodayTodosPage({
     homeworkCountByDate.set(homework.dueDate, count);
   }
   const homeworkOf = (date: string, groupId: string) => homeworkByDateGroup.get(`${date}|${groupId}`) ?? [];
+  for (const items of todayHomeworkByGroup.values()) {
+    // 완료해도 같은 위치 유지: 접힌 목록에서 체크 직후 항목이 사라지지 않게 한다.
+    items.sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.sortOrder - b.sortOrder);
+  }
 
   // 요일별 그룹 수업 시간 (표시/정렬용) — 오늘·선택 날짜에서 공유
   const timeByGroupForDow = (dow: number) => {
@@ -267,7 +278,7 @@ export default async function TodayTodosPage({
 
   // ── 캘린더 marker: 표시 월의 due_date별 Todo 수 (완료 포함 — 그 날짜에 있었던 기록 유지,
   //    dismissed 삭제 항목 제외). 이미 받은 preparation_items를 접을 뿐 추가 쿼리 없음 ──
-  // 숙제도 그날 이 페이지에 뜨는 항목이므로 Todo와 함께 센다 (완료해도 total 유지).
+  // 숙제도 원래 due_date에만 센다 (이월 날짜에 복제하지 않고, 완료해도 total 유지).
   const markerByDate = new Map<string, { total: number; done: number }>();
   for (const [date, count] of homeworkCountByDate) {
     if (date < range.start || date > range.end) {
@@ -312,8 +323,8 @@ export default async function TodayTodosPage({
       // 오늘(KST) 완료한 항목은 당일 동안 취소선으로 유지 — 다시 눌러 즉시 원복 가능.
       // legacy(completed=true, completedAt 없음)는 완료 이력으로 취급해 표시하지 않는다.
       const doneToday = visible.filter((item) => isCompletedToday(item, today));
-      // 오늘이 완료일인 숙제 (carry-over 없음 — 숙제는 날짜에 맞는 것만 보여준다)
-      const homework = homeworkOf(today, group.id);
+      // 미완료는 원래 마감일 순으로 이월, 오늘 완료한 숙제는 당일 유지.
+      const homework = todayHomeworkByGroup.get(group.id) ?? [];
 
       return { group, items, doneToday, homework, time: todayTimeByGroup.get(group.id) ?? null };
     })
@@ -601,7 +612,7 @@ export default async function TodayTodosPage({
                           ))}
                           {/* 오늘이 완료일인 숙제 — Todo와 같은 목록에 두되 key는 source로 구분 */}
                           {homework.map((hw) => (
-                            <HomeworkItemRow key={`homework:${hw.id}`} homework={hw} />
+                            <HomeworkItemRow key={`homework:${hw.id}`} homework={hw} today={today} />
                           ))}
                         </ExpandableList>
                       </CardContent>

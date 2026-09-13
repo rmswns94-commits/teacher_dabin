@@ -14,6 +14,6 @@ export function kstDateOfTimestamp(iso: string) {
 
 // 오늘(KST) 완료한 항목인지 — legacy(completed=true, completedAt 없음)는 과거 완료 이력으로
 // 취급해 false (임의 backfill 금지, 오늘 화면에 재노출하지 않는다).
-export function isCompletedToday(item: PreparationItem, today: string) {
+export function isCompletedToday(item: Pick<PreparationItem, "completed" | "completedAt">, today: string) {
   return Boolean(item.completed && item.completedAt && kstDateOfTimestamp(item.completedAt) === today);
 }

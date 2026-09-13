@@ -6,6 +6,7 @@ import {
   resolveDailyLogTaskDueDate,
 } from "@/lib/daily-log-tasks";
 import { buildHomeworkMirror } from "@/lib/homework-assignments";
+import { homeworkTodayFilter } from "@/lib/homework-visibility";
 import { resolveProgressMode, scopedMissedProgressCandidate } from "@/lib/progress-mode";
 import { buildTextbookSectionsText, stripDerivedPrefix } from "@/lib/textbooks";
 import { sortByKoreanName } from "@/lib/korean-sort";
@@ -463,12 +464,13 @@ export type DueHomeworkItem = {
   sortOrder: number;
 };
 
-// 달력에 보이는 기간 + 오늘/선택 날짜를 한 번에 받는다 (날짜 칸마다 쿼리 금지).
+// 달력 기간 + 선택 날짜 + 요청 시 오늘 이월/오늘 완료 후보를 한 번에 받는다.
 // 학생 이름/그룹은 relation embed라 숙제가 N개여도 추가 쿼리가 없다.
 export async function getDueHomeworkForCurrentUser(window: {
   rangeStart: string;
   rangeEnd: string;
   extraDates?: string[];
+  carryForwardToday?: string;
 }): Promise<DueHomeworkItem[]> {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
@@ -483,6 +485,7 @@ export async function getDueHomeworkForCurrentUser(window: {
   const orFilter = [
     `and(due_date.gte.${window.rangeStart},due_date.lte.${window.rangeEnd})`,
     ...extras.map((date) => `due_date.eq.${date}`),
+    ...(window.carryForwardToday ? [homeworkTodayFilter(window.carryForwardToday)] : []),
   ].join(",");
 
   const { data, error } = await supabase
@@ -492,6 +495,7 @@ export async function getDueHomeworkForCurrentUser(window: {
     )
     .eq("user_id", user.id)
     .or(orFilter)
+    .not("due_date", "is", null)
     .order("due_date", { ascending: true })
     .order("sort_order", { ascending: true });
 
