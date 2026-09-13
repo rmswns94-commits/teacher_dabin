@@ -28,6 +28,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MakeupStatusBadge } from "@/components/status-badge";
 import { useHistoryImport } from "@/components/lesson-history-panel";
 import { registerDirtyCheck } from "@/components/unsaved-guard";
+import { ManualTextbookProgress } from "@/components/manual-textbook-progress";
+import { manualProgressSections, restoreManualProgress, type ManualProgressItem } from "@/lib/manual-progress";
 import { buildTextbookSectionsText, formatTextbookLinked, joinDerivedText } from "@/lib/textbooks";
 import {
   activeTargetSchools,
@@ -192,6 +194,8 @@ type DraftPayload = {
   nextPlanDate: string;
   // 교재별 진도/다음 수업 계획 — [{ name, text }] (내용 있는 교재만)
   textbookProgress: { name: string; text: string }[];
+  // Mixed editor draft only: includes pending rows and stable local identity.
+  manualTextbookProgress?: ManualProgressItem[];
   textbookPlans: { name: string; text: string }[];
   // 학교 context 진도/다음 수업 계획 (시험 기간 ON — name=학교명)
   schoolProgress: { name: string; text: string }[];
@@ -635,6 +639,11 @@ export function DailyLogForm({
       restoredSections(restored?.textbookProgress) ??
       Object.fromEntries((initial?.textbookProgress ?? []).map((s) => [s.name, s.text])),
   );
+  const [manualTextbookProgress, setManualTextbookProgress] = useState<ManualProgressItem[]>(
+    () => restoreManualProgress(restored?.manualTextbookProgress,
+      Object.entries(textbookProgressMap).map(([name, text]) => ({ name, text }))),
+  );
+  const progressMode = resolveProgressMode(examPeriod, examTargetSchools);
   const [textbookPlanMap, setTextbookPlanMap] = useState<Record<string, string>>(
     () =>
       restoredSections(restored?.textbookPlans) ??
@@ -822,9 +831,10 @@ export function DailyLogForm({
       nextLessonPlan,
       nextPlanDate,
       // 교재별 섹션 — 내용 있는 교재만 [{name,text}]로 (draft 복원 대칭)
-      textbookProgress: textbooks
+      textbookProgress: progressMode === "mixed" ? manualProgressSections(manualTextbookProgress) : textbooks
         .filter((name) => (textbookProgressMap[name] ?? "").trim())
         .map((name) => ({ name, text: textbookProgressMap[name] })),
+      ...(progressMode === "mixed" ? { manualTextbookProgress } : {}),
       textbookPlans: [...new Set([...textbooks, ...Object.keys(textbookPlanMap)])]
         .filter((name) => (textbookPlanMap[name] ?? "").trim())
         .map((name) => ({ name, text: textbookPlanMap[name] })),
@@ -852,7 +862,7 @@ export function DailyLogForm({
     if (initialSnapshotRef.current === null) {
       initialSnapshotRef.current = JSON.stringify(formStateRef.current);
     }
-  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, schoolProgressMap, schoolPlanMap, tasks, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries]);
+  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, schoolProgressMap, schoolPlanMap, tasks, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries, progressMode, manualTextbookProgress]);
   useEffect(
     () =>
       registerDirtyCheck(
@@ -998,6 +1008,11 @@ export function DailyLogForm({
       if (restoredHw) setAssignments(restoredHw);
       const restoredProgress = restoredSections(data.textbookProgress);
       if (restoredProgress) setTextbookProgressMap(restoredProgress);
+      const manualDraft = (data as { manualTextbookProgress?: unknown }).manualTextbookProgress;
+      if (restoredProgress || Array.isArray(manualDraft)) {
+        setManualTextbookProgress(restoreManualProgress(manualDraft,
+          Object.entries(restoredProgress ?? {}).map(([name, text]) => ({ name, text }))));
+      }
       const restoredPlans = restoredSections(data.textbookPlans);
       if (restoredPlans) setTextbookPlanMap(restoredPlans);
       const restoredSchoolProgress = restoredSections((data as { schoolProgress?: unknown }).schoolProgress);
@@ -1120,7 +1135,7 @@ export function DailyLogForm({
 
   // 교재별 진도/계획 → [{name,text}] (그룹 교재 순서 기준, 내용 있는 교재만 — name 키라
   // 표시 순서가 바뀌어도 다른 교재에 붙지 않는다). 파생 텍스트는 mirror+기타 메모 합성.
-  const progressSections = textbooks
+  const progressSections = progressMode === "mixed" ? manualProgressSections(manualTextbookProgress, true) : textbooks
     .filter((name) => (textbookProgressMap[name] ?? "").trim())
     .map((name) => ({ name, text: textbookProgressMap[name].trim() }));
   const planSections = [...new Set([...textbooks, ...Object.keys(textbookPlanMap)])]
@@ -1158,7 +1173,6 @@ export function DailyLogForm({
 
   // PHASE 2 — 진도 모드 판정 (조건 순서 규약: OFF → 대상 설정됨(mixed) → legacy).
   // OFF이면 저장된 target이 남아 있어도 무시하고 기존 교재별 진도 그대로.
-  const progressMode = resolveProgressMode(examPeriod, examTargetSchools);
   const progressTargetSchools = examTargetSchools ?? [];
   // 시험 진도 입력 대상 = 저장된 target ∩ 현재 학생 학교 (가나다 유지, 학생 0명 stale target 제외
   // — 설정 자체는 삭제하지 않는다, 관리는 그룹 상세에서)
@@ -1170,7 +1184,7 @@ export function DailyLogForm({
   const regularStudentIdSet = new Set(regularModeStudents.map((student) => student.studentId));
   const hasRegularHomeworkStudents = progressMode === "mixed" && regularModeStudents.length > 0;
   const hasRegularStudents = progressMode === "mixed" &&
-    classifyStudentsByExamTarget(students, progressTargetSchools).regularStudents.length > 0;
+    classifyStudentsByExamTarget(currentHomeworkStudents, progressTargetSchools).regularStudents.length > 0;
   // 학교별 현재 학생 수 (시험 진도 입력의 "N명" 캡션용 — 이미 로드된 students로만 계산, 추가 쿼리 0)
   const studentCountBySchool = new Map<string, number>();
   for (const student of students) {
@@ -1268,10 +1282,9 @@ export function DailyLogForm({
   // 진도 편집기 구성 — 계획과 동일 정책: 이미 내용이 있는 반대 context는 보존 표시(자동 변환/삭제 없음).
   //   regular(OFF)   : 교재 편집기 전체 + 내용 있는 학교 진도(과거 ON draft/기록) 보존 표시
   //   legacy_exam    : 학교 편집기(학생 학교 전체) + 내용 있는 교재 진도 보존 표시 (PHASE 1 이전 방식)
-  //   mixed          : 시험 대상 학교 편집기 + (일반 학생이 있으면) 교재 편집기 전체 —
-  //                    내용 있는 비대상 학교/교재 항목은 보존 표시
+  //   mixed          : 학교는 자동, 교재는 stable local item으로 수동 추가 (아래 별도 UI).
   const progressTextbookNames =
-    progressMode === "regular" || (progressMode === "mixed" && hasRegularStudents)
+    progressMode === "regular"
       ? textbooks
       : textbooks.filter((name) => (textbookProgressMap[name] ?? "").trim());
   const progressSchoolNames = (() => {
@@ -1298,7 +1311,8 @@ export function DailyLogForm({
     }
     return names;
   })();
-  const showStructuredProgress = progressTextbookNames.length > 0 || progressSchoolNames.length > 0;
+  const showStructuredProgress = progressTextbookNames.length > 0 || progressSchoolNames.length > 0 ||
+    (progressMode === "mixed" && (hasRegularStudents || manualTextbookProgress.length > 0));
 
   // 진도 textarea 렌더러 — regular/legacy/mixed 세 모드가 같은 요소를 공유한다.
   // key는 이름 스냅샷(`tb-`/`sc-` prefix)으로 모드/표시 순서와 무관한 stable identity —
@@ -1907,6 +1921,10 @@ export function DailyLogForm({
         return;
       }
     }
+    if (progressMode === "mixed" && manualTextbookProgress.some((item) => !item.name.trim() && item.text.trim())) {
+      failValidation("진도 내용을 입력한 항목의 교재를 선택해주세요.");
+      return;
+    }
     finalSavingRef.current = true; // final 저장 중 autosave tick 중단
     startTransition(async () => {
       const result = await saveDailyLogAction({
@@ -2242,25 +2260,12 @@ export function DailyLogForm({
                         </div>
                       </div>
                     ) : null}
-                    {progressTextbookNames.length > 0 || hasRegularStudents ? (
-                      <div>
-                        <div className="form-label mb-1.5 font-semibold text-[#6652b9]">
-                          일반 수업 진도
-                        </div>
-                        {progressTextbookNames.length > 0 ? (
-                          <div className="space-y-2.5">
-                            {progressTextbookNames.map((name) => textbookProgressField(name))}
-                          </div>
-                        ) : (
-                          // 일반 학생은 있는데 그룹의 일반 교재가 0개 —
-                          // 시험 대비용 교재를 일반 진도로 끌어오지 않는다
-                          <div className="secondary-text rounded-xl bg-[#f8f3ef] px-3 py-2 text-[#7f6f68]">
-                            등록된 일반 교재가 없어요. 수업 그룹에서 교재를 등록하면 여기에 진도를
-                            쓸 수 있어요.
-                          </div>
-                        )}
-                      </div>
-                    ) : null}
+                    <ManualTextbookProgress
+                      items={manualTextbookProgress}
+                      textbooks={textbooks}
+                      canAdd={hasRegularStudents}
+                      onChange={setManualTextbookProgress}
+                    />
                   </div>
                 ) : (
                   <div className="space-y-2.5">
