@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MixedContextList, SavedLessonSections } from "@/components/mixed-context-display";
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate } from "@/lib/dates";
-import { stripHomeworkDuePrefix } from "@/lib/homework-assignments";
+import { formatHomeworkDisplay, homeworkAudienceLabel, isDerivedHomeworkMirror, stripHomeworkDuePrefix } from "@/lib/homework-assignments";
+import { linkedContextLabel } from "@/lib/textbooks";
 import { vocabPercent } from "@/lib/elementary";
 import { getGroupBriefingData } from "@/lib/supabase/queries/briefing";
 import { weaknessCategoryLabels } from "@/lib/validation/weakness";
@@ -130,11 +132,14 @@ export async function ClassBriefing({
   // 📒 지난 숙제 — 직전 수업(lastLog)에서 내준 숙제 내용.
   // lastLog는 이미 class-end cutoff가 적용된 "직전 finalized 일지"라, 오늘 일지를
   // 수업 전에 미리 완료해도 수업 종료 전에는 여기 반영되지 않는다 (기존 lock 그대로).
-  // homework 텍스트는 저장 당시의 mirror(여러 건은 줄바꿈, "교재/학교 - 내용" 포함)라
-  // 과거 context가 그대로 남는다 — 현재 시험 모드/교재로 다시 계산하지 않는다.
-  // 브리핑의 "지난 숙제"는 완료일이 곧 오늘 수업이라 날짜가 자명하다 — 접두만 떼고 보여준다
-  // (저장된 mirror 원문은 그대로 두고 표시에서만 생략).
+  // 같은 일지에 저장된 숙제 행을 context별로 표시한다. 완료 여부는 history에서 필터하지 않는다.
+  // legacy 원문은 기존 formatter를 유지하고, 구조화 행의 정확한 mirror만 중복 표시에서 제외한다.
   const previousHomework = stripHomeworkDuePrefix(lastLog?.homework?.trim() ?? "");
+  const homeworkItems = lastLog?.homeworkAssignments ?? [];
+  const homeworkRaw = homeworkItems.length > 0 && isDerivedHomeworkMirror(
+    lastLog?.homework ?? "",
+    homeworkItems.map((item) => ({ ...item, dueDate: item.due_date })),
+  ) ? "" : previousHomework;
 
   // 지난 숙제를 얼마나 해왔는지 (제출 현황) — 숙제 내용 아래 보조 줄
   const missingNames = (lastLog?.rows ?? [])
@@ -162,6 +167,7 @@ export async function ClassBriefing({
 
   // 📚 오늘 진도 (마지막 일지의 다음 수업 계획)
   const planText = lastLog?.next_lesson_plan?.trim() ?? "";
+  const hasPlan = Boolean(planText) || [...(lastLog?.school_plans ?? []), ...(lastLog?.textbook_plans ?? [])].some((item) => item.text.trim());
 
   // ✅ 준비할 일 / 🗓 시험
   const todoLines: SectionLine[] = prepTexts.map((text, index) => ({ key: `t-${index}`, text }));
@@ -175,7 +181,7 @@ export async function ClassBriefing({
   const extraSections =
     weaknessLines.length > 0 || vocabLines.length > 0 || absentNames.length > 0 || examLines.length > 0;
   const hasAnything =
-    todoLines.length > 0 || Boolean(planText) || Boolean(previousHomework) || extraSections;
+    todoLines.length > 0 || hasPlan || Boolean(previousHomework) || homeworkItems.length > 0 || extraSections;
 
   return (
     <Card className="mt-4 border-[#e8ddf3] bg-[#fdfbf8]">
@@ -197,8 +203,7 @@ export async function ClassBriefing({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* 준비할 일 · 오늘 진도 · 지난 숙제 — 넓으면 3열, 좁으면 자연스럽게 쌓인다
-                (가운데 진도가 길어지기 쉬워 조금 넓게. 고정 px 없음) */}
+            {/* 준비할 일 → 오늘 진도 → 지난 숙제: 모든 화면에서 full-width 세로 배치. */}
             <div className="space-y-4">
               <BriefingSection icon="✅" title="준비할 일" titleClass="text-[#3e7d6b]">
                 {todoLines.length > 0 ? (
@@ -209,21 +214,22 @@ export async function ClassBriefing({
               </BriefingSection>
 
               <BriefingSection icon="📚" title="오늘 진도" titleClass="text-[#3c6478]">
-                {planText ? (
-                  <div className="body-text min-w-0 whitespace-pre-line break-words text-[#453b3b]">
-                    {planText}
-                  </div>
+                {hasPlan ? (
+                  <SavedLessonSections school={lastLog?.school_plans} textbook={lastLog?.textbook_plans} raw={planText} />
                 ) : (
                   <p className="secondary-text text-[#a79996]">적어둔 계획이 없어요</p>
                 )}
               </BriefingSection>
 
               <BriefingSection icon="📒" title="지난 숙제" titleClass="text-[#8a6828]">
-                {previousHomework ? (
+                {homeworkItems.length > 0 || previousHomework ? (
                   <>
-                    <div className="body-text min-w-0 whitespace-pre-line break-words text-[#453b3b]">
-                      {previousHomework}
-                    </div>
+                    <MixedContextList items={homeworkItems} renderItem={(item) => (
+                      <div className="body-text min-w-0 whitespace-pre-wrap break-words text-[#453b3b]">
+                        {formatHomeworkDisplay({ audienceLabel: homeworkAudienceLabel(item.assignedStudentName), contextLabel: linkedContextLabel(item), content: item.content })}
+                      </div>
+                    )} />
+                    {homeworkRaw ? <div className="body-text min-w-0 whitespace-pre-wrap break-words text-[#453b3b]">{homeworkRaw}</div> : null}
                     {homeworkStatusText ? (
                       <p className="caption-text mt-1 text-[#8a7b77]">{homeworkStatusText}</p>
                     ) : null}

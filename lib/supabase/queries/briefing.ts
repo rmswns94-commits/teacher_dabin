@@ -1,4 +1,5 @@
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
+import type { TextbookSection } from "@/lib/textbooks";
 import type {
   AttendanceStatus,
   HomeworkStatus,
@@ -22,9 +23,22 @@ export type BriefingLastLog = {
   id: string;
   class_date: string;
   next_lesson_plan: string | null;
+  textbook_plans: TextbookSection[] | null;
+  school_plans: TextbookSection[] | null;
+  homeworkAssignments: BriefingHomework[];
   homework: string | null;
   vocab_total: number | null;
   rows: BriefingLessonRow[];
+};
+
+export type BriefingHomework = {
+  id: string;
+  content: string;
+  due_date: string;
+  sort_order: number;
+  textbook: string | null;
+  school: string | null;
+  assignedStudentName: string | null;
 };
 
 export type BriefingWeakness = {
@@ -107,7 +121,7 @@ export async function getGroupBriefingData(
     supabase
       .from("daily_logs")
       .select(
-        "id, class_date, next_lesson_plan, homework, vocab_total, student_lesson_logs(student_id, attendance, homework_status, vocab_correct, vocab_retest)",
+        "id, class_date, next_lesson_plan, textbook_plans, school_plans, homework, vocab_total, student_lesson_logs(student_id, attendance, homework_status, vocab_correct, vocab_retest), daily_log_homework_assignments(id, content, due_date, sort_order, textbook, school, assigned_student:students(name))",
       )
       .eq("user_id", user.id)
       .eq("group_id", groupId)
@@ -154,7 +168,12 @@ export async function getGroupBriefingData(
   }
 
   const logRow = logResult.data as
-    | (Omit<BriefingLastLog, "rows"> & { student_lesson_logs: BriefingLessonRow[] | null })
+    | (Omit<BriefingLastLog, "rows" | "homeworkAssignments"> & {
+        student_lesson_logs: BriefingLessonRow[] | null;
+        daily_log_homework_assignments: (Omit<BriefingHomework, "assignedStudentName"> & {
+          assigned_student: { name: string } | { name: string }[] | null;
+        })[] | null;
+      })
     | null;
 
   return {
@@ -164,6 +183,15 @@ export async function getGroupBriefingData(
           id: logRow.id,
           class_date: logRow.class_date,
           next_lesson_plan: logRow.next_lesson_plan,
+          textbook_plans: logRow.textbook_plans,
+          school_plans: logRow.school_plans,
+          // Same selected log, all completion states, names embedded in the same query.
+          homeworkAssignments: (logRow.daily_log_homework_assignments ?? [])
+            .map(({ assigned_student, ...item }) => ({
+              ...item,
+              assignedStudentName: pickOne<{ name: string }>(assigned_student)?.name ?? null,
+            }))
+            .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.sort_order - b.sort_order),
           homework: logRow.homework,
           vocab_total: logRow.vocab_total,
           rows: (logRow.student_lesson_logs ?? []) as BriefingLessonRow[],

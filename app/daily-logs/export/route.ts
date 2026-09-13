@@ -7,6 +7,9 @@ import {
   TEACHER_LOG_CONSTANTS,
   type TeacherLogExportRow,
 } from "@/lib/excel/teacher-log-export";
+import { examTextbookCell } from "@/lib/excel/teacher-log-display";
+import { formatMixedProgressForExcel } from "@/lib/mixed-display";
+import type { TextbookSection } from "@/lib/textbooks";
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type { ExamTextbook } from "@/lib/supabase/types";
@@ -18,31 +21,6 @@ import type { ExamTextbook } from "@/lib/supabase/types";
 // - 파일은 서버에 저장하지 않고 즉시 다운로드로만 반환
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
-
-// 교재 셀 값 — 시험 기간 ON이면 시험 대비용 교재, 아니면 일반 교재.
-// 여러 권은 일반 교재(class_groups.textbook)와 같은 줄바꿈 표기로 이어 붙인다.
-// 시험 기간 ON인데 등록된 교재가 없을 때만 "시험대비"(공백 없음)로 대체한다
-// (표시용 fallback — DB에는 저장하지 않는다). OFF면 이 fallback을 쓰지 않는다:
-// 저장된 시험 대비용 교재가 남아 있어도 무시하고 일반 교재를 쓴다.
-export function examTextbookCell(
-  group: {
-    textbook: string | null;
-    is_exam_period: boolean | null;
-    exam_textbooks?: ExamTextbook[] | null;
-  } | null,
-) {
-  const regular = group?.textbook?.trim() ?? "";
-
-  if (!group?.is_exam_period) {
-    return regular;
-  }
-
-  const examBooks = (group.exam_textbooks ?? [])
-    .map((book) => book?.name?.trim() ?? "")
-    .filter(Boolean);
-
-  return examBooks.length > 0 ? examBooks.join("\n") : "시험대비";
-}
 
 // YYYY-MM-DD 형식 + 실제 달력에 존재하는 날짜인지 (2026-13-40 같은 값 거부).
 // UTC 정오 고정으로 파싱해 timezone 밀림 없이 검증한다.
@@ -84,7 +62,7 @@ export async function GET(request: Request) {
     .from("daily_logs")
     // 교재 셀 결정에 필요한 그룹 필드까지 embed 1쿼리로 (그룹마다 추가 조회 없음)
     .select(
-      "id, group_id, status, default_progress, lesson_content, class_groups(id, name, textbook, is_exam_period, exam_textbooks)",
+      "id, group_id, status, default_progress, lesson_content, textbook_progress, school_progress, class_groups(id, name, textbook, is_exam_period, exam_textbooks)",
     )
     .eq("user_id", user.id)
     .eq("class_date", date);
@@ -117,7 +95,11 @@ export async function GET(request: Request) {
     return {
       group_id: row.group_id,
       status: row.status,
-      progress: mergeLegacyLessonContent(row.default_progress, row.lesson_content),
+      progress: formatMixedProgressForExcel({
+        raw: mergeLegacyLessonContent(row.default_progress, row.lesson_content),
+        school: row.school_progress as TextbookSection[] | null,
+        textbook: row.textbook_progress as TextbookSection[] | null,
+      }),
       groupName: group?.name ?? "수업 그룹",
       // 교재 셀은 export 시점의 그룹 상태 기준 (historical snapshot 아님 — 기존 정책 유지).
       // 시험 기간 ON: 등록된 시험 대비용 교재 이름들, 하나도 없으면 "시험대비" fallback.

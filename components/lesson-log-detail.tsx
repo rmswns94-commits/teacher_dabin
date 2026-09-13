@@ -2,7 +2,8 @@ import Link from "next/link";
 import { BookOpen, CheckCheck, CircleArrowRight, NotebookTabs, PencilLine } from "lucide-react";
 
 import { DailyLogDeleteButton } from "@/components/daily-log-delete-button";
-import { ExpandableList } from "@/components/expandable-list";
+import { MixedContextList, SavedLessonSections } from "@/components/mixed-context-display";
+import { dailyLogTaskTodoId, resolveDailyLogTaskDueDate } from "@/lib/daily-log-tasks";
 import { AttendanceBadge, DailyLogStatusBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,10 +14,8 @@ import {
   isDerivedHomeworkMirror,
 } from "@/lib/homework-assignments";
 import {
-  buildTextbookSectionsText,
   formatTextbookLinked,
   linkedContextLabel,
-  stripDerivedPrefix,
 } from "@/lib/textbooks";
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import {
@@ -78,27 +77,23 @@ export function LessonLogDetail({
   const vocabRows = detail.lessonLogs.filter((log) => log.vocab_correct !== null);
   const parentNoteRows = detail.lessonLogs.filter((log) => log.parent_note);
 
-  // PHASE 2 — 혼합(학교+교재) 진도 일지의 공통 진도 구획 표시.
-  // 학교/교재 구조화 진도가 "둘 다" 저장돼 있고, default_progress가 결정적 mirror 합성
-  // 그대로일 때만 시험 대비/일반 수업으로 나눠 보여준다. 그 외(단일 context, legacy free-text,
-  // 외부 수정된 텍스트)는 기존 raw 표시 그대로 — 저장 데이터를 어떤 것도 재해석/변환하지 않고,
-  // structured와 raw를 중복 표시하지 않는다. 과거 일지의 저장 스냅샷 label이 그대로 쓰인다
-  // (현재 그룹의 시험 대상 설정과 무관 — Finalized 기록 불변).
-  const mergedProgress =
-    mergeLegacyLessonContent(detail.default_progress, detail.lesson_content) ?? "";
-  const schoolProgressSections = (detail.school_progress ?? []).filter((s) => s.text.trim());
-  const textbookProgressSections = (detail.textbook_progress ?? []).filter((s) => s.text.trim());
-  const progressMirror = [
-    buildTextbookSectionsText(textbookProgressSections),
-    buildTextbookSectionsText(schoolProgressSections),
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-  const progressExtraMemo = stripDerivedPrefix(mergedProgress, progressMirror);
-  const showMixedProgress =
-    schoolProgressSections.length > 0 &&
-    textbookProgressSections.length > 0 &&
-    (mergedProgress === progressMirror || mergedProgress.startsWith(`${progressMirror}\n\n`));
+  const mergedProgress = mergeLegacyLessonContent(detail.default_progress, detail.lesson_content) ?? "";
+  const hasPlans = Boolean(detail.next_lesson_plan) ||
+    [...(detail.school_plans ?? []), ...(detail.textbook_plans ?? [])].some((item) => item.text.trim());
+  // Saved task content/context is historical. Linked Todo supplies only current completion.
+  const linkedById = new Map(detail.linkedTasks.map((item) => [item.id, item]));
+  const savedTasks = (detail.tasks ?? []).filter((item) => item.content.trim());
+  const tasks: (Omit<DailyLogDetail["linkedTasks"][number], "completed"> & { completed: boolean | null })[] = savedTasks.length > 0 ? savedTasks.map((item) => ({
+    ...item,
+    textbook: item.textbook ?? null,
+    school: item.school ?? null,
+    dueDate: resolveDailyLogTaskDueDate(item.dueDate, detail.class_date),
+    text: item.content,
+    completed: linkedById.get(dailyLogTaskTodoId(detail.id, item.id))?.completed ?? null,
+  })) : detail.linkedTasks.length > 0 ? detail.linkedTasks : detail.task_content ? [{
+    id: "legacy", text: detail.task_content, textbook: detail.task_textbook, school: null,
+    dueDate: detail.task_due_date, completed: null,
+  }] : [];
 
   return (
     <Card>
@@ -161,56 +156,14 @@ export function LessonLogDetail({
             <div className="flex items-center gap-1.5 section-title text-[#3e7d6b]">
               <BookOpen className="h-3.5 w-3.5" aria-hidden /> 공통 진도
             </div>
-            {showMixedProgress ? (
-              <div className="mt-1.5 space-y-2.5">
-                <div>
-                  <div className="caption-text font-semibold text-[#a2643c]">시험 대비</div>
-                  <div className="mt-0.5 space-y-1.5">
-                    {schoolProgressSections.map((section) => (
-                      <div key={`sc-${section.name}`}>
-                        <div className="secondary-text font-semibold text-[#7f6f68]">
-                          🏫 {section.name}
-                        </div>
-                        <div className="body-text whitespace-pre-line font-medium text-[#2a2323]">
-                          {section.text}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="caption-text font-semibold text-[#6652b9]">일반 수업</div>
-                  <div className="mt-0.5 space-y-1.5">
-                    {textbookProgressSections.map((section) => (
-                      <div key={`tb-${section.name}`}>
-                        <div className="secondary-text font-semibold text-[#7f6f68]">
-                          📘 {section.name}
-                        </div>
-                        <div className="body-text whitespace-pre-line font-medium text-[#2a2323]">
-                          {section.text}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {progressExtraMemo ? (
-                  <div>
-                    <div className="caption-text font-semibold text-[#8b7b77]">기타 메모</div>
-                    <div className="body-text mt-0.5 whitespace-pre-line font-medium text-[#2a2323]">
-                      {progressExtraMemo}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <div className="body-text mt-1.5 whitespace-pre-line font-medium text-[#2a2323]">
-                {mergedProgress || "기록된 진도가 없어요."}
-              </div>
-            )}
+            <div className="mt-1.5 min-w-0 text-[#2a2323]">
+              <SavedLessonSections school={detail.school_progress} textbook={detail.textbook_progress}
+                raw={mergedProgress || (!(detail.school_progress?.length || detail.textbook_progress?.length) ? "기록된 진도가 없어요." : "")} />
+            </div>
           </div>
         </div>
 
-        {detail.homework || detail.next_lesson_plan || detail.homeworkAssignments.length > 0 || detail.linkedTasks.length > 0 ? (
+        {detail.homework || hasPlans || detail.homeworkAssignments.length > 0 || tasks.length > 0 ? (
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             {detail.homeworkAssignments.length > 0 ? (
               // 오늘 숙제(구조화) — 완료일 오름차순, 원문 전체(줄바꿈 보존, truncate 없음)
@@ -222,8 +175,8 @@ export function LessonLogDetail({
                   </span>
                 </div>
                 {/* 목록형 preview: 7개 초과면 접기 — 개수 표시(N개)는 전체 기준 그대로 */}
-                <ExpandableList className="mt-1.5 space-y-2.5">
-                  {detail.homeworkAssignments.map((hw) => (
+                <div className="mt-1.5">
+                <MixedContextList items={detail.homeworkAssignments} expandable renderItem={(hw) => (
                     <div key={hw.id} className="min-w-0">
                       <div className="text-sm font-semibold text-[#ad8c53]">
                         {formatKoreanDate(hw.due_date)}까지
@@ -237,8 +190,8 @@ export function LessonLogDetail({
                         })}
                       </div>
                     </div>
-                  ))}
-                </ExpandableList>
+                  )} />
+                </div>
               </div>
             ) : null}
             {detail.homework &&
@@ -267,7 +220,7 @@ export function LessonLogDetail({
                 </div>
               </div>
             ) : null}
-            {detail.next_lesson_plan ? (
+            {hasPlans ? (
               <div className="rounded-2xl bg-[#eef7f2] p-3.5">
                 <div className="flex items-center gap-1.5 section-title text-[#3e7d6b]">
                   <CircleArrowRight className="h-3.5 w-3.5" aria-hidden /> 다음 수업 계획
@@ -275,28 +228,28 @@ export function LessonLogDetail({
                     <span className="secondary-text font-normal text-[#5f9683]">· {formatKoreanDate(detail.next_plan_date)}</span>
                   ) : null}
                 </div>
-                <div className="body-text mt-1.5 whitespace-pre-line text-[#33473f]">
-                  {detail.next_lesson_plan}
+                <div className="mt-1.5 min-w-0 text-[#33473f]">
+                  <SavedLessonSections school={detail.school_plans} textbook={detail.textbook_plans} raw={detail.next_lesson_plan} />
                 </div>
               </div>
             ) : null}
-            {detail.linkedTasks.length > 0 ? (
-              // 해야 할 일 — 공용 Todo와 같은 linked 항목들의 read-only 상태 (복제 아님)
+            {tasks.length > 0 ? (
+              // 저장된 할 일 내용/context + 연결된 Todo의 완료 상태 (조회만, 복제 없음)
               <div className="rounded-2xl bg-[#f5f1fb] p-3.5">
                 <div className="flex items-center gap-1.5 section-title text-[#5d4ba5]">
                   <CheckCheck className="h-3.5 w-3.5" aria-hidden /> 해야 할 일
                   <span className="secondary-text font-normal text-[#8a7ba8]">
-                    · {detail.linkedTasks.length}개
+                    · {tasks.length}개
                   </span>
                 </div>
-                <ExpandableList className="mt-1.5 space-y-2">
-                  {detail.linkedTasks.map((task) => (
+                <div className="mt-1.5">
+                <MixedContextList items={tasks} expandable renderItem={(task) => (
                     <div key={task.id} className="min-w-0">
                       <div className="secondary-text flex flex-wrap items-center gap-1.5 text-[#8a7ba8]">
                         {task.dueDate ? (
                           <span className="tabular-nums">{formatKoreanDate(task.dueDate)}</span>
                         ) : null}
-                        <span
+                        {task.completed !== null ? <span
                           className={
                             task.completed
                               ? "rounded-full bg-[#e4f4ec] px-2 py-0.5 text-[#3d7f64]"
@@ -304,14 +257,14 @@ export function LessonLogDetail({
                           }
                         >
                           {task.completed ? "완료됨" : "미완료"}
-                        </span>
+                        </span> : null}
                       </div>
                       <div className="body-text mt-0.5 whitespace-pre-wrap break-words text-[#4a4160]">
                         {formatTextbookLinked(linkedContextLabel(task), task.text)}
                       </div>
                     </div>
-                  ))}
-                </ExpandableList>
+                  )} />
+                </div>
               </div>
             ) : null}
           </div>
