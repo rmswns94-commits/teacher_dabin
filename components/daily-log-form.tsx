@@ -200,6 +200,7 @@ type DraftPayload = {
   // Mixed editor draft only: includes pending rows and stable local identity.
   manualTextbookProgress?: ManualProgressItem[];
   textbookPlans: { name: string; text: string }[];
+  manualTextbookPlans?: ManualProgressItem[];
   // 학교 context 진도/다음 수업 계획 (시험 기간 ON — name=학교명)
   schoolProgress: { name: string; text: string }[];
   schoolPlans: { name: string; text: string }[];
@@ -654,6 +655,10 @@ export function DailyLogForm({
       restoredSections(restored?.textbookPlans) ??
       Object.fromEntries((initial?.textbookPlans ?? []).map((s) => [s.name, s.text])),
   );
+  const [manualTextbookPlans, setManualTextbookPlans] = useState<ManualProgressItem[]>(
+    () => restoreManualProgress(restored?.manualTextbookPlans,
+      Object.entries(textbookPlanMap).map(([name, text]) => ({ name, text }))),
+  );
   // 학교 context 진도/다음 수업 계획 (시험 기간 ON) — name=학교명 키 (교재 map과 대칭 구조)
   const [schoolProgressMap, setSchoolProgressMap] = useState<Record<string, string>>(
     () =>
@@ -840,7 +845,8 @@ export function DailyLogForm({
         .filter((name) => (textbookProgressMap[name] ?? "").trim())
         .map((name) => ({ name, text: textbookProgressMap[name] })),
       ...(progressMode === "mixed" ? { manualTextbookProgress } : {}),
-      textbookPlans: [...new Set([...textbooks, ...Object.keys(textbookPlanMap)])]
+      ...(progressMode === "mixed" ? { manualTextbookPlans } : {}),
+      textbookPlans: progressMode === "mixed" ? manualProgressSections(manualTextbookPlans) : [...new Set([...textbooks, ...Object.keys(textbookPlanMap)])]
         .filter((name) => (textbookPlanMap[name] ?? "").trim())
         .map((name) => ({ name, text: textbookPlanMap[name] })),
       schoolProgress: Object.keys(schoolProgressMap)
@@ -867,7 +873,7 @@ export function DailyLogForm({
     if (initialSnapshotRef.current === null) {
       initialSnapshotRef.current = JSON.stringify(formStateRef.current);
     }
-  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, schoolProgressMap, schoolPlanMap, tasks, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries, progressMode, manualTextbookProgress]);
+  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, schoolProgressMap, schoolPlanMap, tasks, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries, progressMode, manualTextbookProgress, manualTextbookPlans]);
   useEffect(
     () =>
       registerDirtyCheck(
@@ -1020,6 +1026,11 @@ export function DailyLogForm({
       }
       const restoredPlans = restoredSections(data.textbookPlans);
       if (restoredPlans) setTextbookPlanMap(restoredPlans);
+      const manualPlans = (data as { manualTextbookPlans?: unknown }).manualTextbookPlans;
+      if (restoredPlans || Array.isArray(manualPlans)) {
+        setManualTextbookPlans(restoreManualProgress(manualPlans,
+          Object.entries(restoredPlans ?? {}).map(([name, text]) => ({ name, text }))));
+      }
       const restoredSchoolProgress = restoredSections((data as { schoolProgress?: unknown }).schoolProgress);
       if (restoredSchoolProgress) setSchoolProgressMap(restoredSchoolProgress);
       const restoredSchoolPlans = restoredSections((data as { schoolPlans?: unknown }).schoolPlans);
@@ -1143,7 +1154,7 @@ export function DailyLogForm({
   const progressSections = progressMode === "mixed" ? manualProgressSections(manualTextbookProgress, true) : textbooks
     .filter((name) => (textbookProgressMap[name] ?? "").trim())
     .map((name) => ({ name, text: textbookProgressMap[name].trim() }));
-  const planSections = [...new Set([...textbooks, ...Object.keys(textbookPlanMap)])]
+  const planSections = progressMode === "mixed" ? manualProgressSections(manualTextbookPlans, true) : [...new Set([...textbooks, ...Object.keys(textbookPlanMap)])]
     .filter((name) => (textbookPlanMap[name] ?? "").trim())
     .map((name) => ({ name, text: textbookPlanMap[name].trim() }));
   // 학교 context 진도/계획 섹션 — map에 있는 모든 키(과거 draft의 다른 학교명 포함) 중 내용 있는 것
@@ -1202,10 +1213,10 @@ export function DailyLogForm({
   // 다음 수업 계획 편집기 구성 — PHASE 3: 진도와 동일한 모드별 정책.
   //   regular(OFF)   : 교재 편집기 전체 + 내용 있는 학교 계획(과거 ON draft) 보존 표시
   //   legacy_exam    : 학교 편집기(학생 학교 전체) + 내용 있는 교재 계획 보존 표시 (기존 방식)
-  //   mixed          : 시험 대상 학교 편집기 + (일반 학생이 있으면) 교재 편집기 전체 —
-  //                    내용 있는 비대상 학교/교재 계획은 보존 표시 (자동 변환/삭제 없음)
+  //   mixed          : 시험 대상 학교 편집기 + 수동 추가 교재 계획 —
+  //                    저장된 학교/교재 계획은 보존 표시 (자동 변환/삭제 없음)
   const planTextbookNames =
-    progressMode === "regular" || (progressMode === "mixed" && hasRegularHomeworkStudents)
+    progressMode === "regular"
       ? [...new Set([...textbooks, ...Object.keys(textbookPlanMap).filter((name) => (textbookPlanMap[name] ?? "").trim())])]
       : Object.keys(textbookPlanMap).filter((name) => (textbookPlanMap[name] ?? "").trim());
   const planSchoolNames = (() => {
@@ -1228,7 +1239,8 @@ export function DailyLogForm({
     }
     return names;
   })();
-  const showStructuredPlans = planTextbookNames.length > 0 || planSchoolNames.length > 0;
+  const showStructuredPlans = planTextbookNames.length > 0 || planSchoolNames.length > 0 ||
+    (progressMode === "mixed" && (hasRegularHomeworkStudents || manualTextbookPlans.length > 0));
 
   // mixed 구획 판정 — 저장 필드(school/textbook) 우선, 작성 중 항목은 section 플래그
   const assignmentSection = (item: AssignmentItem) => mixedItemSection(item, regularStudentIdSet);
@@ -1930,6 +1942,10 @@ export function DailyLogForm({
       failValidation("진도 내용을 입력한 항목의 교재를 선택해주세요.");
       return;
     }
+    if (progressMode === "mixed" && manualTextbookPlans.some((item) => !item.name.trim() && item.text.trim())) {
+      failValidation("계획 내용을 입력한 항목의 교재를 선택해주세요.");
+      return;
+    }
     finalSavingRef.current = true; // final 저장 중 autosave tick 중단
     startTransition(async () => {
       const result = await saveDailyLogAction({
@@ -2475,24 +2491,13 @@ export function DailyLogForm({
                           </div>
                         </div>
                       ) : null}
-                      {planTextbookNames.length > 0 || hasRegularHomeworkStudents ? (
-                        <div>
-                          <div className="form-label mb-1.5 font-semibold text-[#6652b9]">
-                            일반 수업 계획
-                          </div>
-                          {planTextbookNames.length > 0 ? (
-                            <div className="space-y-2.5">
-                              {planTextbookNames.map((name) => textbookPlanField(name))}
-                            </div>
-                          ) : (
-                            // 일반 학생은 있는데 일반 교재 0개 — 시험 대비용 교재를 끌어오지 않는다
-                            <div className="secondary-text rounded-xl bg-[#f8f3ef] px-3 py-2 text-[#7f6f68]">
-                              등록된 일반 교재가 없어요. 수업 그룹에서 교재를 등록하면 여기에
-                              계획을 쓸 수 있어요.
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
+                      <ManualTextbookProgress
+                        purpose="plan"
+                        items={manualTextbookPlans}
+                        textbooks={textbooks}
+                        canAdd={hasRegularHomeworkStudents}
+                        onChange={setManualTextbookPlans}
+                      />
                     </div>
                   ) : (
                     <>
