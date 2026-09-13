@@ -14,6 +14,7 @@ import {
   renameExamTextbook,
   restoreGroup,
   setGroupExamPeriod,
+  updateGroupExamTargets,
   updateGroup,
   updateGroupHighlight,
   updateGroupPreparationItems,
@@ -25,6 +26,7 @@ import {
   replaceGroupSchedules,
 } from "@/lib/supabase/queries/schedules";
 import { formatScheduleSlot, slotsOverlap } from "@/lib/schedule";
+import { uniqueSchoolList } from "@/lib/textbooks";
 import { preparationItemSchema } from "@/lib/validation/daily-log";
 import type { PreparationItem } from "@/lib/supabase/types";
 import { groupIconPresets } from "@/lib/group-icons";
@@ -133,6 +135,79 @@ export async function setExamPeriodAction(groupId: string, isExamPeriod: boolean
   // 어느 경로에서든 stale 없이 반영되게 layout 단위로 revalidate한다
   // (서버 재렌더만 — 작성 중인 클라이언트 폼 state를 건드리지 않는다)
   revalidatePath("/", "layout");
+  return { success: true as const };
+}
+
+// 시험 대상 학교 입력 정규화 + 검증 — trim/빈값 제거/정확한 값 기준 중복 제거(가나다 정렬).
+// fuzzy 병합 없음: "한울중"과 "한울중학교"는 다른 값으로 존중한다.
+function parseExamTargetSchools(schools: unknown): string[] | { error: string } {
+  if (!Array.isArray(schools) || schools.some((name) => typeof name !== "string")) {
+    return { error: "시험 대상 학교를 확인해주세요." };
+  }
+  const normalized = uniqueSchoolList(schools as string[]);
+  if (normalized.length === 0) {
+    return { error: "시험 대상 학교를 하나 이상 선택해주세요." };
+  }
+  if (normalized.some((name) => name.length > 100)) {
+    return { error: "학교 이름이 너무 길어요." };
+  }
+  return normalized;
+}
+
+// 시험 대비 시작 — 대상 학교 저장과 is_exam_period=true를 UPDATE 한 문장으로 함께 처리
+// (반쪽 상태 방지). 어떤 학교가 시험을 보는지는 Teacher의 명시적 선택만 사용한다.
+export async function startExamPeriodAction(groupId: string, schools: string[]) {
+  if (typeof groupId !== "string" || !groupId) {
+    return { error: "시험 대비를 시작하지 못했어요. 다시 시도해주세요." };
+  }
+  const parsed = parseExamTargetSchools(schools);
+  if (!Array.isArray(parsed)) {
+    return parsed;
+  }
+
+  try {
+    await updateGroupExamTargets(groupId, parsed, { activate: true });
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error && error.message
+          ? error.message
+          : "시험 대비를 시작하지 못했어요. 다시 시도해주세요.",
+    };
+  }
+
+  // 시험 배지가 그룹 상세/목록/일지/사이드바(layout)에 걸쳐 있어 OFF/ON과 같은 범위로 갱신
+  revalidatePath(`/groups/${groupId}`);
+  revalidatePath("/groups");
+  revalidatePath("/daily-logs");
+  revalidatePath("/", "layout");
+  return { success: true as const };
+}
+
+// ON 상태에서 대상 학교만 수정 — is_exam_period는 건드리지 않는다.
+// 0개 저장은 허용하지 않는다 (전부 해제하려면 시험 대비 OFF를 쓰는 것이 의미상 맞다).
+export async function updateExamTargetSchoolsAction(groupId: string, schools: string[]) {
+  if (typeof groupId !== "string" || !groupId) {
+    return { error: "시험 대상 학교를 저장하지 못했어요. 다시 시도해주세요." };
+  }
+  const parsed = parseExamTargetSchools(schools);
+  if (!Array.isArray(parsed)) {
+    return parsed;
+  }
+
+  try {
+    await updateGroupExamTargets(groupId, parsed);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error && error.message
+          ? error.message
+          : "시험 대상 학교를 저장하지 못했어요. 다시 시도해주세요.",
+    };
+  }
+
+  // PHASE 1에서는 그룹 상세 요약만 이 값을 읽는다 (배지/사이드바는 is_exam_period 기준 불변)
+  revalidatePath(`/groups/${groupId}`);
   return { success: true as const };
 }
 

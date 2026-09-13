@@ -60,6 +60,10 @@ export type ClassGroupRecord = {
   // 시험 대비용 교재 (일반 textbook과 별개 — OFF로 돌려도 지우지 않는다).
   // 시험 기간 ON이면 수업일지 Excel의 교재 셀이 이 목록을 쓴다 (0개면 "시험대비" fallback).
   exam_textbooks: ExamTextbook[] | null;
+  // 시험 대상 학교 이름 배열 (trim된 Student.school 스냅샷).
+  // null = 아직 명시적으로 설정 안 함(legacy 포함) — 자동 backfill 금지.
+  // OFF로 꺼도 유지한다 (다음 시험 대비 시작 때 prefill 참고용).
+  exam_target_schools: string[] | null;
   highlight_memo: string | null;
   preparation_items: PreparationItem[];
   archived: boolean;

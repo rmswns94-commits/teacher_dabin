@@ -277,6 +277,39 @@ export async function updateGroup(groupId: string, input: {
 }
 
 // 시험 기간 ON/OFF — Teacher가 직접 해제할 때까지 유지 (자동 종료 없음).
+// 시험 대상 학교 저장. activate=true면 is_exam_period도 같은 UPDATE 한 번으로 켠다 —
+// "대상 저장은 됐는데 토글은 실패" 같은 반쪽 상태가 생기지 않게 컬럼 두 개를 한 문장으로 쓴다.
+// 배열은 액션에서 이미 정규화(trim/빈값 제거/중복 제거)된 값만 들어온다.
+// user_id 조건으로 남의 그룹은 절대 못 바꾼다 (RLS와 별개로 한 번 더).
+export async function updateGroupExamTargets(
+  groupId: string,
+  schools: string[],
+  options: { activate?: boolean } = {},
+) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  const { error } = await supabase
+    .from("class_groups")
+    .update({
+      exam_target_schools: schools,
+      ...(options.activate ? { is_exam_period: true } : {}),
+    })
+    .eq("id", groupId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("updateGroupExamTargets error", { code: error.code, message: error.message });
+    throw new Error("시험 대상 학교를 저장하지 못했어요. 다시 시도해주세요.");
+  }
+
+  return true;
+}
+
 // 상태 변경만 하며 Todo/플래너/일정 등 side effect는 일절 만들지 않는다.
 export async function setGroupExamPeriod(groupId: string, isExamPeriod: boolean) {
   const supabase = await createServerSupabaseClient();

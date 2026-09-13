@@ -3,18 +3,57 @@
 import { GraduationCap } from "lucide-react";
 import { useState, useTransition } from "react";
 
-import { setExamPeriodAction } from "@/app/groups/actions";
+import { setExamPeriodAction, startExamPeriodAction } from "@/app/groups/actions";
+import { SchoolSelectDialog } from "@/components/exam-target-schools";
 import { Button } from "@/components/ui/button";
 
 // 그룹 상세 우측 상단의 시험 기간 ON/OFF toggle.
-// OFF로 되돌릴 때만 "시험이 잘 끝나셨나요?" 확인을 받는다 (ON은 즉시).
-// 확인 전에는 상태를 바꾸지 않으므로 취소해도 서버/화면 어디에도 변화가 없다.
-// 끄는 동작은 is_exam_period만 false로 바꾼다 — 시험 대비용 교재/일반 교재/일지 등
-// 어떤 데이터도 지우지 않는다 (OFF는 삭제가 아니라 모드 종료).
-export function ExamPeriodToggle({ groupId, isOn }: { groupId: string; isOn: boolean }) {
+// OFF → ON: 즉시 켜지 않고 "이번 시험 대상 학교" 선택 다이얼로그를 먼저 연다 —
+//   [시험 대비 시작]을 눌러야 대상 학교 저장 + ON이 한 번의 UPDATE로 함께 적용된다(취소 = 무변화).
+// ON → OFF: 기존 "시험이 잘 끝나셨나요?" 확인 유지. 끄는 동작은 is_exam_period만 false —
+//   시험 대상 학교/시험 대비용 교재/일지 등 어떤 데이터도 지우지 않는다 (재활성화 때 prefill).
+export function ExamPeriodToggle({
+  groupId,
+  isOn,
+  schools,
+  targetSchools,
+}: {
+  groupId: string;
+  isOn: boolean;
+  // 현재 그룹 학생들의 학교 (page가 이미 조회한 멤버에서 유도 — 추가 쿼리 없음)
+  schools: string[];
+  // 저장된 시험 대상 학교 (null = 아직 설정 안 함)
+  targetSchools: string[] | null;
+}) {
   const [error, setError] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [startOpen, setStartOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  // 시작 다이얼로그 prefill: 저장된 선택이 있으면 그대로(이번 시험 기준으로 확인만),
+  // 없고 학교가 정확히 1개면 그 학교를 기본 체크 (저장은 [시험 대비 시작]을 눌러야).
+  const staleTargets = (targetSchools ?? []).filter((name) => !schools.includes(name));
+  const startInitial =
+    targetSchools && targetSchools.length > 0
+      ? targetSchools
+      : schools.length === 1
+        ? [schools[0]]
+        : [];
+
+  const startExam = (selected: string[]) => {
+    if (isPending) {
+      return;
+    }
+    setError("");
+    startTransition(async () => {
+      const result = await startExamPeriodAction(groupId, selected);
+      if (result && "error" in result) {
+        setError(result.error ?? "시험 대비를 시작하지 못했어요.");
+        return; // 실패 시 OFF 그대로 — 화면이 켜진 척하지 않는다
+      }
+      setStartOpen(false);
+    });
+  };
 
   const applyExamPeriod = (next: boolean) => {
     if (isPending) {
@@ -41,7 +80,9 @@ export function ExamPeriodToggle({ groupId, isOn }: { groupId: string; isOn: boo
       setConfirmOpen(true); // ON → OFF: 확인 후에만 실제로 끈다
       return;
     }
-    applyExamPeriod(true);
+    // OFF → ON: 바로 켜지 않고 이번 시험 대상 학교부터 고른다 (취소하면 아무 변화 없음)
+    setError("");
+    setStartOpen(true);
   };
 
   return (
@@ -61,7 +102,29 @@ export function ExamPeriodToggle({ groupId, isOn }: { groupId: string; isOn: boo
         <GraduationCap className="h-4 w-4" aria-hidden />
         {isPending && !confirmOpen ? "저장 중..." : isOn ? "✓ 시험 기간 ON" : "시험 기간 OFF"}
       </button>
-      {error && !confirmOpen ? <span className="text-sm text-[#a26660]">{error}</span> : null}
+      {error && !confirmOpen && !startOpen ? (
+        <span className="text-sm text-[#a26660]">{error}</span>
+      ) : null}
+
+      {startOpen ? (
+        <SchoolSelectDialog
+          title="시험 대비를 시작할까요?"
+          helper="이번 시험을 준비하는 학교를 선택해주세요."
+          confirmLabel="시험 대비 시작"
+          schools={schools}
+          staleTargets={staleTargets}
+          initialSelected={startInitial}
+          pending={isPending}
+          error={error}
+          onConfirm={startExam}
+          onClose={() => {
+            if (!isPending) {
+              setStartOpen(false);
+              setError("");
+            }
+          }}
+        />
+      ) : null}
 
       {confirmOpen ? (
         <div

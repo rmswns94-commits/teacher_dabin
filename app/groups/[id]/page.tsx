@@ -27,6 +27,7 @@ import { HighlightCard } from "@/components/highlight-card";
 import { PageHeader } from "@/components/page-header";
 import { ScheduleSetEditor } from "@/components/schedule-set-editor";
 import { GuardedForm } from "@/components/unsaved-guard";
+import { ExamTargetSchoolsSection } from "@/components/exam-target-schools";
 import { ExamTextbooksEditor } from "@/components/exam-textbooks-editor";
 import { TextbookFieldsEditor } from "@/components/textbook-fields-editor";
 import { PendingButton } from "@/components/pending-button";
@@ -34,7 +35,7 @@ import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
-import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
+import { formatTextbookLinked, linkedContextLabel, uniqueSchoolList } from "@/lib/textbooks";
 import {
   getAvailableStudentsForGroup,
   getGroupByIdForCurrentUser,
@@ -107,6 +108,9 @@ export default async function GroupDetailPage({
       : null;
 
   const members = allMembers.filter((student) => !student.archived);
+  // 시험 대상 학교 선택지 = 현재 소속 학생들의 Student.school (trim/중복 제거/가나다).
+  // 이미 조회한 멤버 목록에서 유도하므로 학교/학생별 추가 쿼리 0.
+  const memberSchools = uniqueSchoolList(members.map((student) => student.school));
   const memberSet = new Set(allMembers.map((student) => student.id));
   const availableToAdd = availableStudents.filter((student) => !memberSet.has(student.id));
   const isEditMode = edit === "1";
@@ -140,7 +144,14 @@ export default async function GroupDetailPage({
           title={`${groupIconOf(group.icon)} ${group.name}`}
           description={`${gradeDisplay[group.grade]} · 학생 ${members.length}명${group.memo ? ` · ${group.memo}` : ""}`}
           // 시험 기간 ON이면 새 수업일지의 숙제/다음 계획/해야 할 일이 학교 context를 쓴다
-          action={<ExamPeriodToggle groupId={group.id} isOn={group.is_exam_period} />}
+          action={
+            <ExamPeriodToggle
+              groupId={group.id}
+              isOn={group.is_exam_period}
+              schools={memberSchools}
+              targetSchools={group.exam_target_schools ?? null}
+            />
+          }
         />
 
         {saved ? (
@@ -362,9 +373,19 @@ export default async function GroupDetailPage({
                 {/* 시험 기간 ON일 때만 시험 대비용 교재 관리 (OFF여도 데이터는 그대로 보관).
                     일반 교재는 위 목록 그대로 — 두 목록은 서로 영향을 주지 않는다. */}
                 {group.is_exam_period ? (
-                  <div className="mt-4 border-t border-dashed border-[#f0e2d8] pt-3">
-                    <ExamTextbooksEditor groupId={id} books={group.exam_textbooks ?? []} />
-                  </div>
+                  <>
+                    {/* 시험 대상 학교 — PHASE 1: 설정 저장/표시만 (일지 동작은 아직 그대로) */}
+                    <div className="mt-4 border-t border-dashed border-[#f0e2d8] pt-3">
+                      <ExamTargetSchoolsSection
+                        groupId={group.id}
+                        schools={memberSchools}
+                        targetSchools={group.exam_target_schools ?? null}
+                      />
+                    </div>
+                    <div className="mt-4 border-t border-dashed border-[#f0e2d8] pt-3">
+                      <ExamTextbooksEditor groupId={id} books={group.exam_textbooks ?? []} />
+                    </div>
+                  </>
                 ) : null}
               </Card>
             </div>
