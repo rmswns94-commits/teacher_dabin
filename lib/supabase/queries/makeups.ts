@@ -497,6 +497,79 @@ export async function getTodayScheduledMakeups(today: string) {
   });
 }
 
+// 주간 일정 view용 — 실제 scheduled_date가 주 범위 안인 보충만 (created_at/updated_at 미사용).
+// scheduled(예정) + completed(그 주에 잡혀 있었고 완료됨 — scheduled_date 위치에 완료 표시,
+// completed_date로 새 item을 만들지 않는다)만 조회. 일정 미정(required)·취소는 제외.
+// 학생/원래 반은 relation embed 1쿼리 — 건수와 무관하게 추가 쿼리 0 (오늘 카드와 동일 구조).
+export type WeeklyScheduledMakeup = TodayScheduledMakeup & { status: "scheduled" | "completed" };
+
+export async function getScheduledMakeupsInRange(rangeStart: string, rangeEnd: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as WeeklyScheduledMakeup[];
+  }
+
+  const columns =
+    "id, status, scheduled_date, start_time, end_time, missed_progress, comment, students(id, name)";
+  const primary = await supabase
+    .from("makeup_lessons")
+    .select(
+      `${columns}, direct_group:class_groups!makeup_lessons_group_id_fkey(id, name), student_lesson_logs(daily_logs(class_groups(id, name)))`,
+    )
+    .eq("user_id", user.id)
+    .in("status", ["scheduled", "completed"])
+    .gte("scheduled_date", rangeStart)
+    .lte("scheduled_date", rangeEnd)
+    .order("scheduled_date", { ascending: true })
+    .order("start_time", { ascending: true, nullsFirst: false });
+
+  let data: Record<string, unknown>[] | null = primary.data;
+  let error = primary.error;
+
+  if (error && SCHEMA_MISMATCH_CODES.has(error.code ?? "")) {
+    const fallback = await supabase
+      .from("makeup_lessons")
+      .select(`${columns}, student_lesson_logs(daily_logs(class_groups(id, name)))`)
+      .eq("user_id", user.id)
+      .in("status", ["scheduled", "completed"])
+      .gte("scheduled_date", rangeStart)
+      .lte("scheduled_date", rangeEnd)
+      .order("scheduled_date", { ascending: true })
+      .order("start_time", { ascending: true, nullsFirst: false });
+    data = fallback.data;
+    error = fallback.error;
+  }
+
+  if (error) {
+    console.error("getScheduledMakeupsInRange error", error);
+    return [] as WeeklyScheduledMakeup[];
+  }
+
+  return (data ?? []).map((row) => {
+    const lessonLog = pickOne<{ daily_logs: unknown }>(row.student_lesson_logs);
+    const dailyLog = pickOne<{ class_groups: unknown }>(lessonLog?.daily_logs);
+    const directGroup = pickOne<Pick<ClassGroupRecord, "id" | "name">>(
+      (row as { direct_group?: unknown }).direct_group,
+    );
+    const group = directGroup ?? pickOne<Pick<ClassGroupRecord, "id" | "name">>(dailyLog?.class_groups);
+    const student = pickOne<Pick<StudentRecord, "id" | "name">>(row.students);
+
+    return {
+      id: row.id as string,
+      status: row.status as "scheduled" | "completed",
+      studentName: student?.name ?? "학생",
+      groupName: group?.name ?? null,
+      startTime: row.start_time ? formatTimeHM(row.start_time as string) : null,
+      endTime: row.end_time ? formatTimeHM(row.end_time as string) : null,
+      scheduledDate: row.scheduled_date as string,
+      missedProgress: (row.missed_progress as string | null) ?? null,
+      comment: (row.comment as string | null) ?? null,
+    };
+  });
+}
+
 async function getOwnedMakeup(makeupId: string) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();

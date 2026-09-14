@@ -254,15 +254,24 @@ export default async function DashboardPage() {
                 </p>
               </div>
             </div>
-            <Button className="gap-2" asChild>
-              {/* 오늘 탭의 CTA는 항상 "오늘(KST)" 일지 작성으로 — date를 명시해
-                  bare 진입의 최신 draft resume(다른 날짜일 수 있음)을 타지 않는다.
-                  오늘 identity의 draft/일지는 그룹 선택 시 그대로 이어쓰기 된다. */}
-              <Link href={`/daily-logs/new?date=${today}`}>
-                <NotebookPen className="h-4 w-4" />
-                오늘 수업 기록하기
-              </Link>
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* 주간 일정 진입 — read-only weekly view (편의성 PHASE 4) */}
+              <Button variant="secondary" className="gap-2" asChild>
+                <Link href="/week">
+                  <CalendarDays className="h-4 w-4" />
+                  이번 주 보기
+                </Link>
+              </Button>
+              <Button className="gap-2" asChild>
+                {/* 오늘 탭의 CTA는 항상 "오늘(KST)" 일지 작성으로 — date를 명시해
+                    bare 진입의 최신 draft resume(다른 날짜일 수 있음)을 타지 않는다.
+                    오늘 identity의 draft/일지는 그룹 선택 시 그대로 이어쓰기 된다. */}
+                <Link href={`/daily-logs/new?date=${today}`}>
+                  <NotebookPen className="h-4 w-4" />
+                  오늘 수업 기록하기
+                </Link>
+              </Button>
+            </div>
           </div>
 
           {stats.groups === 0 && stats.students === 0 ? (
