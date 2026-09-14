@@ -7,7 +7,7 @@ import type {
 } from "@/lib/supabase/types";
 
 // 수업 전 반 브리핑용 데이터 — 기존 데이터의 aggregation만 (새 데이터 생성 없음, AI 없음).
-// 그룹 하나 기준 batch 4쿼리(멤버/마지막 일지/약점/오답) — 학생별 반복 쿼리 금지.
+// 그룹 하나 기준 batch 5쿼리(멤버/마지막 일지/약점/오답/학생별 밀린 숙제) — 학생별 반복 쿼리 금지.
 
 export type BriefingMember = { id: string; name: string };
 
@@ -17,6 +17,8 @@ export type BriefingLessonRow = {
   homework_status: HomeworkStatus | null;
   vocab_correct: number | null;
   vocab_retest: boolean;
+  // 온라인 복습 평가 — 학생 체크 signal용 (false만 미완료, null=미선택은 signal 아님)
+  online_review_completed: boolean | null;
 };
 
 export type BriefingLastLog = {
@@ -55,6 +57,9 @@ export type GroupBriefingData = {
   lastLog: BriefingLastLog | null;
   dueWeaknesses: BriefingWeakness[];
   recentMistakes: BriefingMistake[];
+  // 학생 체크 signal용 — 이 그룹 멤버에게 배정된(assigned_student_id) 미완료 + due<=오늘 숙제.
+  // 공통 숙제(assigned null)는 애초에 조회하지 않는다 (학생별 완료 상태가 아니므로).
+  overdueStudentHomework: { assigned_student_id: string }[];
 };
 
 const EMPTY: GroupBriefingData = {
@@ -62,6 +67,7 @@ const EMPTY: GroupBriefingData = {
   lastLog: null,
   dueWeaknesses: [],
   recentMistakes: [],
+  overdueStudentHomework: [],
 };
 
 function pickOne<T>(value: unknown): T | null {
@@ -117,11 +123,11 @@ export async function getGroupBriefingData(
   // 2) 마지막 finalized(completed) 일지 + 학생별 기록 embed (숙제/결석/지난 단어시험/오늘 진도)
   // 3) 복습 필요 약점 (Phase 1): active + due가 오늘이거나 지난 것
   // 4) 최근 오답 (Phase 2): 반복 오답 집계 창
-  const [logResult, weaknessResult, mistakeResult] = await Promise.all([
+  const [logResult, weaknessResult, mistakeResult, overdueHwResult] = await Promise.all([
     supabase
       .from("daily_logs")
       .select(
-        "id, class_date, next_lesson_plan, textbook_plans, school_plans, homework, vocab_total, student_lesson_logs(student_id, attendance, homework_status, vocab_correct, vocab_retest), daily_log_homework_assignments(id, content, due_date, sort_order, textbook, school, assigned_student:students(name))",
+        "id, class_date, next_lesson_plan, textbook_plans, school_plans, homework, vocab_total, student_lesson_logs(student_id, attendance, homework_status, vocab_correct, vocab_retest, online_review_completed), daily_log_homework_assignments(id, content, due_date, sort_order, textbook, school, assigned_student:students(name))",
       )
       .eq("user_id", user.id)
       .eq("group_id", groupId)
@@ -148,6 +154,17 @@ export async function getGroupBriefingData(
       .gte("created_at", mistakesSince)
       .in("student_id", memberIds)
       .order("created_at", { ascending: false }),
+    // 5) 학생 체크 — 멤버에게 배정된 개인 숙제 중 미완료 + due<=오늘 (undated는 DB상 불가).
+    // 학생별 반복 쿼리 금지: 멤버 id 집합으로 batch 1쿼리. 공통 숙제(assigned null)는 제외 —
+    // 완료 상태가 assignment 단위라 학생별 미완료로 배분할 수 없다.
+    supabase
+      .from("daily_log_homework_assignments")
+      .select("assigned_student_id")
+      .eq("user_id", user.id)
+      .eq("completed", false)
+      .lte("due_date", today)
+      .not("assigned_student_id", "is", null)
+      .in("assigned_student_id", memberIds),
   ]);
 
   if (logResult.error) {
@@ -158,6 +175,12 @@ export async function getGroupBriefingData(
     console.error("getGroupBriefingData weakness error", {
       code: weaknessResult.error.code,
       message: weaknessResult.error.message,
+    });
+  }
+  if (overdueHwResult.error) {
+    console.error("getGroupBriefingData overdue homework error", {
+      code: overdueHwResult.error.code,
+      message: overdueHwResult.error.message,
     });
   }
   if (mistakeResult.error) {
@@ -209,5 +232,9 @@ export async function getGroupBriefingData(
         return !(log && log.group_id === groupId && log.class_date >= previousBefore);
       })
       .map(({ student_id, word, created_at }) => ({ student_id, word, created_at })),
+    // 실패 시 빈 목록 — 학생 체크가 "전원 확인 필요" 같은 false positive를 만들지 않는다
+    overdueStudentHomework: overdueHwResult.error
+      ? []
+      : ((overdueHwResult.data ?? []) as { assigned_student_id: string }[]),
   };
 }

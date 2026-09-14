@@ -425,7 +425,11 @@ export async function getMonthlyScheduledMakeups(monthStart: string, monthEnd: s
 // 완료·취소는 애초에 조회하지 않는다. 학생/원래 반은 relation embed라 건수와 무관하게 1쿼리.
 export type TodayScheduledMakeup = {
   id: string;
+  // 학생 체크(PHASE 5)의 exact identity — 이름이 아니라 id로 매칭 (동명이인 안전)
+  studentId: string | null;
   studentName: string;
+  // 정확한 반 relation(직접 등록 group ∪ 원래 일지의 group)이 있을 때만 — 추측 금지
+  groupId: string | null;
   groupName: string | null;
   startTime: string | null; // "HH:MM"
   endTime: string | null;
@@ -486,7 +490,9 @@ export async function getTodayScheduledMakeups(today: string) {
 
     return {
       id: row.id as string,
+      studentId: student?.id ?? null,
       studentName: student?.name ?? "학생",
+      groupId: group?.id ?? null,
       groupName: group?.name ?? null,
       startTime: row.start_time ? formatTimeHM(row.start_time as string) : null,
       endTime: row.end_time ? formatTimeHM(row.end_time as string) : null,
@@ -559,7 +565,9 @@ export async function getScheduledMakeupsInRange(rangeStart: string, rangeEnd: s
     return {
       id: row.id as string,
       status: row.status as "scheduled" | "completed",
+      studentId: student?.id ?? null,
       studentName: student?.name ?? "학생",
+      groupId: group?.id ?? null,
       groupName: group?.name ?? null,
       startTime: row.start_time ? formatTimeHM(row.start_time as string) : null,
       endTime: row.end_time ? formatTimeHM(row.end_time as string) : null,

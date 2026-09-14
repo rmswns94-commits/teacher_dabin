@@ -459,6 +459,13 @@ export default async function DashboardPage() {
                 prepTexts={activePreparationItems(focusGroup.preparation_items)
                   .filter((item) => !item.completed && (!item.dueDate || item.dueDate <= today))
                   .map((item) => formatTextbookLinked(linkedContextLabel(item), item.text))}
+                // 학생 체크의 "오늘 보충 예정" — 이미 조회된 오늘 보충 batch 재사용 (추가 쿼리 0),
+                // exact group relation 매칭은 briefing 내부 helper가 groupId로만 한다
+                todayMakeups={todayMakeups.map((makeup) => ({
+                  studentId: makeup.studentId,
+                  groupId: makeup.groupId,
+                  startTime: makeup.startTime,
+                }))}
               />
             </Suspense>
           ) : null}

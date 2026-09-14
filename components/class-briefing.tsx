@@ -1,4 +1,7 @@
+import Link from "next/link";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buildStudentCheckSignals } from "@/lib/student-checks";
 import { MixedContextList, SavedLessonSections } from "@/components/mixed-context-display";
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate } from "@/lib/dates";
@@ -64,6 +67,7 @@ export async function ClassBriefing({
   previousBefore,
   exams,
   prepTexts,
+  todayMakeups = [],
 }: {
   group: { id: string; name: string; icon: string | null };
   isNow: boolean;
@@ -76,6 +80,9 @@ export async function ClassBriefing({
   exams: { id: string; title: string; badge: string }[];
   // 이 그룹의 미완료 준비 항목 (기존 shared To Do — 브리핑 전용 Todo 생성 없음)
   prepTexts: string[];
+  // 오늘 scheduled 보충 (Dashboard가 이미 조회한 batch 재사용 — 추가 쿼리 0).
+  // exact group relation 매칭은 buildStudentCheckSignals가 groupId로만 한다 (추측 금지).
+  todayMakeups?: { studentId: string | null; groupId: string | null; startTime: string | null }[];
 }) {
   const data = await getGroupBriefingData(
     group.id,
@@ -176,12 +183,28 @@ export async function ClassBriefing({
     text: `${exam.title} · ${exam.badge}`,
   }));
 
+  // 🙋 학생 체크 (PHASE 5) — 오늘 수업 전에 한 번 더 확인할 예외 학생만 (전원 나열 금지).
+  // source 전부 이미 가진 데이터: members/직전 rows(class-end lock 승계)/개인 밀린 숙제 batch/
+  // Dashboard가 조회해 내려준 오늘 보충. 0명이면 section 자체를 렌더하지 않는다.
+  const studentCheckRows = buildStudentCheckSignals({
+    members: data.members,
+    overdueStudentHomework: data.overdueStudentHomework,
+    previousRows: lastLog?.rows ?? [],
+    todayMakeups,
+    briefingGroupId: group.id,
+  });
+
   // 준비할 일 · 오늘 진도 · 지난 숙제는 항상 자리를 지킨다 (내용이 없으면 안내 문구).
   // 내용 유무로 열이 밀려 배치가 흔들리지 않게 하기 위함.
   const extraSections =
     weaknessLines.length > 0 || vocabLines.length > 0 || absentNames.length > 0 || examLines.length > 0;
   const hasAnything =
-    todoLines.length > 0 || hasPlan || Boolean(previousHomework) || homeworkItems.length > 0 || extraSections;
+    todoLines.length > 0 ||
+    hasPlan ||
+    Boolean(previousHomework) ||
+    homeworkItems.length > 0 ||
+    studentCheckRows.length > 0 ||
+    extraSections;
 
   return (
     <Card className="mt-4 border-[#e8ddf3] bg-[#fdfbf8]">
@@ -238,6 +261,33 @@ export async function ClassBriefing({
                   <p className="secondary-text text-[#a79996]">지난 숙제가 없어요</p>
                 )}
               </BriefingSection>
+
+              {/* 학생 체크 — 예외 학생만, 학생당 row 1개에 signal을 묶는다 (문제 없는 학생 미표시).
+                  0명이면 section 자체 숨김 — empty 안내 블록을 만들지 않는다. */}
+              {studentCheckRows.length > 0 ? (
+                <BriefingSection icon="🙋" title="학생 체크" titleClass="text-[#6d5aa8]">
+                  <ul className="space-y-1.5">
+                    {studentCheckRows.map((row) => (
+                      <li key={row.studentId} className="min-w-0">
+                        <Link
+                          href={`/students/${row.studentId}`}
+                          className="body-text break-words font-semibold text-[#2d2928] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#c9b9e8]"
+                        >
+                          {row.name}
+                        </Link>
+                        <div className="secondary-text flex flex-wrap gap-x-1.5 text-[#7f6f68]">
+                          {row.signals.map((signal, index) => (
+                            <span key={signal.type} className="min-w-0 break-words">
+                              {index > 0 ? <span aria-hidden>· </span> : null}
+                              {signal.label}
+                            </span>
+                          ))}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </BriefingSection>
+              ) : null}
             </div>
 
             {/* 부가 정보 — 있을 때만 (기존 섹션/디자인 그대로) */}
