@@ -857,6 +857,96 @@ function schemaMismatchMessage(error: { code?: string } | null | undefined) {
 // Saves the daily log header, all per-student records, and keeps makeup
 // lessons consistent with the attendance data. Upserts are idempotent, so
 // retrying after a partial failure never duplicates rows.
+// "지난 수업에서 가져오기" source — 같은 그룹의 beforeDate(현재 폼 lesson_date) "미만" 중
+// class_date가 가장 최근인 Finalized 일지 1개 (Draft 제외, created_at이 아니라 class_date 기준,
+// 다른 그룹 절대 금지 — group_id eq). 숙제는 relation embed로 같은 쿼리에 — 항목별 쿼리 0.
+// 조회 실패/없음은 null — 폼은 "가져올 이전 수업일지가 없어요"로 계속 정상 동작한다.
+export async function getPreviousLessonImportSource(groupId: string, beforeDate: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user || !beforeDate) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("daily_logs")
+    .select(
+      "id, class_date, next_lesson_plan, school_plans, textbook_plans, tasks, daily_log_homework_assignments(id, content, textbook, school, assigned_student_id, sort_order, assigned_student:students(id, name))",
+    )
+    .eq("user_id", user.id)
+    .eq("group_id", groupId)
+    .eq("status", "completed")
+    .lt("class_date", beforeDate)
+    .order("class_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) {
+    if (error) {
+      console.error("getPreviousLessonImportSource error", error);
+    }
+    return null;
+  }
+
+  const row = data as {
+    id: string;
+    class_date: string;
+    next_lesson_plan: string | null;
+    school_plans: { name: string; text: string }[] | null;
+    textbook_plans: { name: string; text: string }[] | null;
+    tasks: { content?: string; textbook?: string | null; school?: string | null }[] | null;
+    daily_log_homework_assignments:
+      | {
+          id: string;
+          content: string;
+          textbook: string | null;
+          school: string | null;
+          assigned_student_id: string | null;
+          sort_order: number | null;
+          assigned_student?: { id: string; name: string } | { id: string; name: string }[] | null;
+        }[]
+      | null;
+  };
+
+  const schoolPlans = (row.school_plans ?? []).filter((s) => s.text?.trim());
+  const textbookPlans = (row.textbook_plans ?? []).filter((s) => s.text?.trim());
+
+  return {
+    id: row.id,
+    classDate: row.class_date,
+    schoolPlans,
+    textbookPlans,
+    // 구조화 계획이 하나도 없을 때만 legacy free-text로 취급 (mirror 텍스트를 raw로 오인하지 않게)
+    legacyPlanText:
+      schoolPlans.length === 0 && textbookPlans.length === 0 ? row.next_lesson_plan ?? "" : "",
+    homework: [...(row.daily_log_homework_assignments ?? [])]
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      .filter((hw) => hw.content?.trim())
+      .map((hw) => {
+        const linked = Array.isArray(hw.assigned_student) ? hw.assigned_student[0] : hw.assigned_student;
+        return {
+          sourceId: hw.id,
+          content: hw.content,
+          textbook: hw.textbook ?? "",
+          school: hw.school ?? "",
+          assignedStudentId: hw.assigned_student_id,
+          assignedStudentName: linked?.name ?? null,
+        };
+      }),
+    tasks: meaningfulDailyLogTasks(
+      ((row.tasks ?? []) as { content?: string; textbook?: string | null; school?: string | null }[]).map(
+        (task) => ({
+          content: task.content ?? "",
+          textbook: task.textbook ?? "",
+          school: task.school ?? "",
+        }),
+      ),
+    ),
+  };
+}
+
 export async function saveDailyLog(input: DailyLogFormInput) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();

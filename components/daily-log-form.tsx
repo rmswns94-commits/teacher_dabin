@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
   BookOpen,
+  History,
   CalendarCheck,
   CalendarDays,
   CheckCheck,
@@ -30,6 +31,17 @@ import { useHistoryImport } from "@/components/lesson-history-panel";
 import { registerDirtyCheck } from "@/components/unsaved-guard";
 import { ManualTextbookProgress } from "@/components/manual-textbook-progress";
 import { manualProgressSections, restoreManualProgress, type ManualProgressItem } from "@/lib/manual-progress";
+import {
+  PreviousLessonImportDialog,
+  type ImportSelection,
+} from "@/components/previous-lesson-import";
+import {
+  applyTextbookPlanToManualProgress,
+  classifyHomeworkImports,
+  classifyPlanImports,
+  classifyTaskImports,
+  type PreviousLessonImportSource,
+} from "@/lib/lesson-import";
 import { buildTextbookSectionsText, formatTextbookLinked, joinDerivedText } from "@/lib/textbooks";
 import {
   activeTargetSchools,
@@ -528,6 +540,7 @@ export function DailyLogForm({
   examPeriod = false,
   schools = [],
   examTargetSchools = null,
+  importSource = null,
 }: {
   dailyLogId?: string;
   classDate: string;
@@ -550,6 +563,10 @@ export function DailyLogForm({
   // null = legacy 미설정 — 시험 기간 ON이어도 기존 전체 학교별 방식을 유지한다(자동 mixed 전환 금지).
   // 배열 = 혼합 모드: 대상 학교만 학교별 진도, 나머지 학생은 일반 교재별 진도.
   examTargetSchools?: string[] | null;
+  // [지난 수업에서 가져오기] source — 현재 폼 lesson_date "미만"의 같은 그룹 최신 Finalized
+  // (서버 getPreviousLessonImportSource가 만들어 내려줌). null = 이전 일지 없음/조회 실패 —
+  // 버튼은 그대로 두고 다이얼로그에서 안내만 한다. 자동 적용은 절대 없다 (USER ACTION만).
+  importSource?: PreviousLessonImportSource | null;
   // 서버에서 발견한 자동 임시저장 draft (있으면 복구 배너 표시 — 자동 덮어쓰기 없음)
   draft?: { id: string; updatedAt: string; payload: unknown } | null;
   // [수업 일지 작성하기] resume 진입: 10분 창과 무관하게 draft를 즉시 전체 복원
@@ -1245,6 +1262,128 @@ export function DailyLogForm({
   // mixed 구획 판정 — 저장 필드(school/textbook) 우선, 작성 중 항목은 section 플래그
   const assignmentSection = (item: AssignmentItem) => mixedItemSection(item, regularStudentIdSet);
   const taskSection = (item: TaskFormItem) => mixedItemSection(item, regularStudentIdSet);
+
+  // ── [지난 수업에서 가져오기] — 후보 분류는 현재 폼 상태 기준으로 매 렌더 파생된다
+  // (다이얼로그를 다시 열면 이미 가져온 항목은 duplicate로 자동 제외 — 중복 가져오기 방지).
+  // 적용은 아래 applyPreviousLessonImport에서 필요한 섹션만 merge — 폼 전체 교체 금지.
+  const [importOpen, setImportOpen] = useState(false);
+  const importTextbookTextByName: Record<string, string> =
+    progressMode === "mixed"
+      ? Object.fromEntries(manualTextbookProgress.map((item) => [item.name, item.text]))
+      : textbookProgressMap;
+  const importPlans = importSource
+    ? classifyPlanImports({
+        mode: progressMode,
+        source: importSource,
+        activeTargetSchools: examInputSchools,
+        memberSchools: schools,
+        regularTextbooks: textbooks,
+        canAddRegular: hasRegularStudents,
+        currentSchoolText: schoolProgressMap,
+        currentTextbookText: importTextbookTextByName,
+        currentMemo: defaultProgress,
+      })
+    : [];
+  const importHomework = importSource
+    ? classifyHomeworkImports({
+        mode: progressMode,
+        entries: importSource.homework,
+        activeTargetSchools: examInputSchools,
+        memberSchools: schools,
+        regularTextbooks: textbooks,
+        targetSchools: progressTargetSchools,
+        students: currentHomeworkStudents,
+        existing: assignments,
+      })
+    : [];
+  const importTasks = importSource
+    ? classifyTaskImports({
+        mode: progressMode,
+        entries: importSource.tasks,
+        activeTargetSchools: examInputSchools,
+        memberSchools: schools,
+        regularTextbooks: textbooks,
+        existing: tasks,
+      })
+    : [];
+
+  const applyPreviousLessonImport = (selection: ImportSelection) => {
+    if (selection.plan) {
+      for (const plan of importPlans) {
+        if (plan.status !== "importable") {
+          continue;
+        }
+        if (plan.kind === "school") {
+          // name 키 갱신 — 기존 textarea key가 그대로라 remount/IME 영향 없음
+          setSchoolProgressMap((prev) => ({ ...prev, [plan.name]: plan.text }));
+        } else if (plan.kind === "textbook") {
+          if (progressMode === "mixed") {
+            // 수동 추가 버튼과 같은 shape — 기존 item은 id 유지한 채 내용만 채운다
+            setManualTextbookProgress((prev) =>
+              applyTextbookPlanToManualProgress(prev, plan.name, plan.text),
+            );
+          } else {
+            setTextbookProgressMap((prev) => ({ ...prev, [plan.name]: plan.text }));
+          }
+        } else {
+          // legacy raw 계획 — 기타 진도 메모가 비어 있을 때만 importable로 분류되므로 안전
+          setDefaultProgress(plan.text);
+        }
+      }
+    }
+    if (selection.homework) {
+      const copies = importHomework
+        .filter((item) => item.status === "importable")
+        .map((item) => ({
+          key: globalThis.crypto.randomUUID(),
+          // NEW row id — 원본 id/완료 상태를 복사하지 않는다 (새 숙제는 completed=false로 저장)
+          id: globalThis.crypto.randomUUID(),
+          content: item.content,
+          // 지난 due_date는 복사하지 않는다 — 신규 숙제와 동일한 기본값(다음 실제 수업일) 정책
+          dueDate: nextClassDateAfter(scheduleDays, classDate) ?? "",
+          textbook: item.textbook,
+          school: item.school,
+          assignedStudentId: item.assignedStudentId ?? "",
+          ...(progressMode === "mixed"
+            ? { section: (item.school ? "exam" : "regular") as "exam" | "regular" }
+            : {}),
+        }));
+      if (copies.length > 0) {
+        setAssignments((prev) => [...prev, ...copies]);
+      }
+    }
+    if (selection.tasks) {
+      const copies = importTasks
+        .filter((item) => item.status === "importable")
+        .map((item) => ({
+          key: globalThis.crypto.randomUUID(),
+          // NEW stable id — Final Save에서 새 linked Todo 1개 (복사 시점 Todo 생성 0)
+          id: globalThis.crypto.randomUUID(),
+          textbook: item.textbook,
+          school: item.school,
+          content: item.content,
+          // 지난 날짜 미복사 — 날짜 없으면 기존 정책(수업 다음날)이 Final Save에서 적용
+          dueDate: "",
+          ...(progressMode === "mixed"
+            ? { section: (item.school ? "exam" : "regular") as "exam" | "regular" }
+            : {}),
+        }));
+      if (copies.length > 0) {
+        setTasks((prev) => [...prev, ...copies]);
+      }
+    }
+    setImportOpen(false);
+  };
+
+  const importButton = (
+    <button
+      type="button"
+      onClick={() => setImportOpen(true)}
+      className="flex min-h-9 shrink-0 items-center gap-1 rounded-xl border border-[#e2d8f3] bg-white px-2.5 text-sm font-medium text-[#6652b9] transition hover:bg-[#faf7ff]"
+    >
+      <History className="h-3.5 w-3.5" aria-hidden /> 지난 수업에서 가져오기
+    </button>
+  );
 
   // 다음 수업 계획 textarea 렌더러 — 진도와 동일하게 세 모드가 같은 요소를 공유
   // (key = 이름 스냅샷, 순서/구획 재배치에도 remount 없음 — IME 보호)
@@ -2249,14 +2388,18 @@ export function DailyLogForm({
               // 저장 시 "이름 - 내용" mirror가 공통 진도로 합성되고, [전체 학생에게 적용]은
               // 모드별 scope로만 적용된다 (교차 적용 없음).
               <div className="block">
-                <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
-                  <BookOpen className="h-3.5 w-3.5" />{" "}
-                  {progressMode === "mixed"
-                    ? "오늘 진도"
-                    : progressMode === "legacy_exam"
-                      ? "학교별 진도"
-                      : "교재별 진도"}
-                </span>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
+                    <BookOpen className="h-3.5 w-3.5" />{" "}
+                    {progressMode === "mixed"
+                      ? "오늘 진도"
+                      : progressMode === "legacy_exam"
+                        ? "학교별 진도"
+                        : "교재별 진도"}
+                  </span>
+                  {/* 직전 Finalized의 다음 수업 계획을 오늘 진도 초안으로 — USER ACTION만, 자동 없음 */}
+                  {importButton}
+                </div>
                 {progressMode === "legacy_exam" ? (
                   // legacy: 시험 대비 ON + 대상 학교 미설정 — 자동 mixed 전환 없이 안내만
                   <div className="secondary-text mb-2 rounded-xl bg-[#fdf1e6] px-3 py-2 text-[#a2643c]">
@@ -2326,10 +2469,13 @@ export function DailyLogForm({
                 </div>
               </div>
             ) : (
-              <label className="block">
-                <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
-                  <BookOpen className="h-3.5 w-3.5" /> 공통 진도
-                </span>
+              <div className="block">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
+                    <BookOpen className="h-3.5 w-3.5" /> 공통 진도
+                  </span>
+                  {importButton}
+                </div>
                 {examPeriod && schools.length === 0 ? (
                   // 시험 기간 ON인데 그룹 학생 전원이 학교 미등록 — 학교 편집기 없이도
                   // 작성/저장은 그대로 가능 (임의 학교를 만들지 않는다)
@@ -2349,7 +2495,7 @@ export function DailyLogForm({
                     전체 학생에게 적용
                   </Button>
                 </div>
-              </label>
+              </div>
             )}
           </div>
 
@@ -3447,6 +3593,17 @@ export function DailyLogForm({
             </div>
           </div>
         </div>
+      ) : null}
+
+      {importOpen ? (
+        <PreviousLessonImportDialog
+          sourceDate={importSource ? importSource.classDate : null}
+          plans={importPlans}
+          homework={importHomework}
+          tasks={importTasks}
+          onConfirm={applyPreviousLessonImport}
+          onClose={() => setImportOpen(false)}
+        />
       ) : null}
 
       {showSummary ? (
