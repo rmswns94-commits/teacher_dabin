@@ -31,6 +31,8 @@ export async function getDashboardOverview() {
   const empty = {
     today,
     todayLogs: [] as TodayLogSummary[],
+    // 조회 실패 표시 — 미작성 수업일지 알림이 "전부 미작성" false alarm을 만들지 않게
+    todayLogsFailed: false,
   };
 
   if (!supabase || !user) {
@@ -68,7 +70,7 @@ export async function getDashboardOverview() {
     };
   });
 
-  return { today, todayLogs };
+  return { today, todayLogs, todayLogsFailed: Boolean(logsResult.error) };
 }
 
 export async function getDashboardStats() {

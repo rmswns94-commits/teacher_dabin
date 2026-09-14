@@ -29,6 +29,8 @@ import {
   previousLessonSourceCutoff,
   type ClassOccurrence,
 } from "@/lib/schedule";
+import { deriveUnfinishedLogCandidates } from "@/lib/unfinished-logs";
+import { UnfinishedLogCard } from "@/components/unfinished-log-card";
 import { getDisplayName } from "@/lib/supabase/auth";
 import { getDashboardOverview, getDashboardStats } from "@/lib/supabase/queries/dashboard";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
@@ -200,12 +202,23 @@ export default async function DashboardPage() {
       : `/daily-logs/new?groupId=${hero.group.id}&date=${today}`
     : null;
 
-  // A class finished today but its log isn't completed yet → nudge to write it.
-  const lastEnded = scheduleOverview.endedToday.at(-1) ?? null;
-  const endedGroupLog = lastEnded
-    ? overview.todayLogs.find((log) => log.group_id === lastEnded.group.id)
-    : undefined;
-  const showEndedNudge = Boolean(lastEnded && endedGroupLog?.status !== "completed");
+  // 마무리가 필요한 수업(미작성 수업일지 알림) 후보 — 오늘(KST) 요일 schedule이 있는
+  // active 그룹 전부를 서버가 파생해 내려보내고, "수업이 끝났는가"는 카드(client)가
+  // 현재 시각으로 판정한다: 페이지를 열어둔 채 종료 시각이 지나면 F5/DB polling 없이 나타난다.
+  // - 데이터는 전부 이미 가진 것 재사용: todayWindowByGroup(schedules) + overview.todayLogs
+  //   batch + allGroups — 그룹별 추가 쿼리 0 (N+1 없음).
+  // - Finalized(completed)만 작성 완료: 여기서 제외. Draft는 미작성 → [이어쓰기]로 그 draft를,
+  //   일지 없음 → [작성하기]로 새 작성을 연다 — 빠른 실행(heroLogHref)과 같은 resolver 규칙.
+  // - 오늘 일지 조회가 실패했으면 후보를 비운다 (전부 미작성 false alarm 금지).
+  // - 보충 수업(Makeup)은 대상이 아니다 — 정규 schedule 그룹만. class-end lock/브리핑
+  //   resolver(previousLessonSourceCutoff)와는 무관한 별도 파생 표시.
+  const unfinishedLogRows = deriveUnfinishedLogCandidates({
+    today,
+    windowsByGroup: todayWindowByGroup,
+    todayLogs: overview.todayLogs,
+    groups: allGroups,
+    todayLogsFailed: overview.todayLogsFailed,
+  });
 
   const draftToday = overview.todayLogs.filter((log) => log.status === "draft");
 
@@ -441,26 +454,9 @@ export default async function DashboardPage() {
             </Suspense>
           ) : null}
 
-          {showEndedNudge && lastEnded ? (
-            <Card className="mt-4">
-              <CardContent className="secondary-text flex flex-wrap items-center justify-between gap-3 p-4">
-                <span className="text-[#564d4d]">
-                  <strong className="text-[#2b2323]">{lastEnded.group.name}</strong> 수업이 끝났어요.
-                </span>
-                <Button variant="secondary" size="sm" className="gap-1.5" asChild>
-                  <Link
-                    href={
-                      endedGroupLog
-                        ? `/daily-logs/${endedGroupLog.id}/edit`
-                        : `/daily-logs/new?groupId=${lastEnded.group.id}&date=${today}`
-                    }
-                  >
-                    <NotebookPen className="h-3.5 w-3.5" /> 수업일지 작성하기
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ) : null}
+          {/* 수업 종료 후 미작성 수업일지 알림 — 기존 단건 nudge를 다건 compact 카드로 확장.
+              종료 판정은 카드 내부 local clock (표시/숨김만 client, 데이터는 서버 파생) */}
+          <UnfinishedLogCard rows={unfinishedLogRows} initialNow={currentEpochMs()} />
 
           <div className="mt-5 grid gap-5 lg:grid-cols-[1.55fr_1fr]">
             <div className="space-y-4">
