@@ -274,7 +274,7 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {stats.groups === 0 && stats.students === 0 ? (
+          {allGroups.length === 0 && stats.students === 0 ? (
             <div className="relative mb-5">
               <Tape />
             <Card className="border-[#e8ddf3] bg-gradient-to-br from-[#fbf8ff] to-[#fdf9f4]">

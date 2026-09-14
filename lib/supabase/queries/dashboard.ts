@@ -73,29 +73,23 @@ export async function getDashboardOverview() {
   return { today, todayLogs, todayLogsFailed: Boolean(logsResult.error) };
 }
 
+// 그룹 수는 여기서 세지 않는다 — Dashboard가 어차피 getCurrentUserGroups()로 전체 목록을
+// 갖고 있어(환영 카드 조건은 allGroups.length 사용) count 쿼리가 요청마다 1개 중복이었다.
 export async function getDashboardStats() {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
   if (!supabase || !user) {
-    return { students: 0, groups: 0 };
+    return { students: 0 };
   }
 
-  const [{ count: studentsCount }, { count: groupsCount }] = await Promise.all([
-    supabase
-      .from("students")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("archived", false),
-    supabase
-      .from("class_groups")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("archived", false),
-  ]);
+  const { count: studentsCount } = await supabase
+    .from("students")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("archived", false);
 
   return {
     students: studentsCount ?? 0,
-    groups: groupsCount ?? 0,
   };
 }

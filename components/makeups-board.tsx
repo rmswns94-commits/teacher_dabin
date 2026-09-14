@@ -18,6 +18,7 @@ import {
   dialogLabelClass,
 } from "@/components/makeup-complete-dialog";
 import { Button } from "@/components/ui/button";
+import { TimeSelect } from "@/components/time-select";
 import { Card } from "@/components/ui/card";
 import { formatKoreanDate } from "@/lib/dates";
 import { groupPendingMakeups } from "@/lib/makeup-grouping";
@@ -167,11 +168,11 @@ function ScheduleDialog({
         <div className="grid grid-cols-2 gap-2">
           <label className="block">
             <span className={labelClass}>시작</span>
-            <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={inputClass} />
+            <TimeSelect value={startTime} onChange={setStartTime} ariaLabel="보충 시작 시간" allowEmpty className={inputClass} />
           </label>
           <label className="block">
             <span className={labelClass}>종료</span>
-            <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={inputClass} />
+            <TimeSelect value={endTime} onChange={setEndTime} ariaLabel="보충 종료 시간" allowEmpty className={inputClass} />
           </label>
         </div>
         <label className="block">
@@ -361,19 +362,21 @@ function ManualMakeupDialog({
         <div className="grid grid-cols-2 gap-2">
           <label className="block min-w-0">
             <span className={labelClass}>시작 (선택)</span>
-            <input
-              type="time"
+            <TimeSelect
               value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
+              onChange={setStartTime}
+              ariaLabel="직접 등록 시작 시간"
+              allowEmpty
               className={`${inputClass} min-w-0 max-w-full`}
             />
           </label>
           <label className="block min-w-0">
             <span className={labelClass}>종료 (선택)</span>
-            <input
-              type="time"
+            <TimeSelect
               value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
+              onChange={setEndTime}
+              ariaLabel="직접 등록 종료 시간"
+              allowEmpty
               className={`${inputClass} min-w-0 max-w-full`}
             />
           </label>

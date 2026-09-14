@@ -1,6 +1,7 @@
 "use client";
 
 import { DAY_DISPLAY_ORDER, DAY_LABELS } from "@/lib/schedule";
+import { TimeSelect } from "@/components/time-select";
 import { cn } from "@/lib/utils";
 
 export type PickerValue = {
@@ -110,21 +111,20 @@ export function WeekdayTimePicker({
       <div>
         <span className="mb-1.5 block text-sm font-medium text-[#8a7b77]">수업 시간</span>
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="time"
+          {/* 5분 단위 공용 TimeSelect — legacy 홀수 분은 "(기존 시간)" option으로 보존 */}
+          <TimeSelect
             name="pickerStart"
             value={value.startTime}
-            onChange={(event) => onChange({ ...value, startTime: event.target.value })}
-            aria-label="시작 시간"
+            onChange={(next) => onChange({ ...value, startTime: next })}
+            ariaLabel="시작 시간"
             className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
           />
           <span className="text-sm text-[#8a7b77]">~</span>
-          <input
-            type="time"
+          <TimeSelect
             name="pickerEnd"
             value={value.endTime}
-            onChange={(event) => onChange({ ...value, endTime: event.target.value })}
-            aria-label="종료 시간"
+            onChange={(next) => onChange({ ...value, endTime: next })}
+            ariaLabel="종료 시간"
             className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
           />
         </div>

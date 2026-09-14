@@ -3,6 +3,7 @@ import { FeedbackDialog } from "@/components/feedback-dialog";
 import { InstallAppButton } from "@/components/install-app";
 import { LogoutButton } from "@/components/logout-button";
 import { PageHeader } from "@/components/page-header";
+import { FontSizeControl } from "@/components/font-size-control";
 import { ThemeModeControl } from "@/components/theme-mode-control";
 import { Card, CardContent } from "@/components/ui/card";
 import { getDisplayName } from "@/lib/supabase/auth";
@@ -51,6 +52,17 @@ export default async function SettingsPage() {
                 </p>
                 <div className="mt-3">
                   <ThemeModeControl />
+                </div>
+
+                {/* 글씨 크기 — 기본/크게/아주 크게 (localStorage, 기기별 설정) */}
+                <div className="mt-5 border-t border-dashed border-[#efe4dc] pt-4">
+                  <div className="text-base font-medium text-[#2d2928]">글씨 크기</div>
+                  <p className="secondary-text mt-0.5 text-[#8a7b77]">
+                    기본 · 크게 · 아주 크게 중에서 고를 수 있어요.
+                  </p>
+                  <div className="mt-3">
+                    <FontSizeControl />
+                  </div>
                 </div>
               </CardContent>
             </Card>
