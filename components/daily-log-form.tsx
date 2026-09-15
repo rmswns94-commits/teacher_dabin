@@ -20,6 +20,7 @@ import {
   NotebookPen,
   NotebookTabs,
   Plus,
+  Share2,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -43,6 +44,7 @@ import {
   type PreviousLessonImportSource,
 } from "@/lib/lesson-import";
 import { buildTextbookSectionsText, formatTextbookLinked, joinDerivedText } from "@/lib/textbooks";
+import { buildHomeworkShareText, shareableHomework } from "@/lib/homework-share";
 import {
   activeTargetSchools,
   classifyStudentsByExamTarget,
@@ -934,6 +936,21 @@ export function DailyLogForm({
   // payload의 dailyLogId로 항상 이 값을 쓴다 (edit 화면은 prop으로 이미 채워져 있음).
   const persistedLogIdRef = useRef<string | null>(dailyLogId ?? null);
   const [draftSavedNotice, setDraftSavedNotice] = useState("");
+
+  // 오늘 숙제 공유 — source는 현재 폼 state (DB 조회/저장 없음).
+  // shareBusyRef: 빠른 연속 탭으로 share sheet가 중첩되지 않게 하는 로컬 가드 (DB 가드 아님).
+  // notice는 폼 dirty 스냅샷에 포함되지 않는 표시 전용 state — autosave에 영향 없음.
+  const shareBusyRef = useRef(false);
+  const [homeworkShareNotice, setHomeworkShareNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const shareNoticeTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (shareNoticeTimerRef.current !== null) {
+        window.clearTimeout(shareNoticeTimerRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const tick = async () => {
@@ -1939,6 +1956,81 @@ export function DailyLogForm({
   const examTaskRows = indexedTasks.filter(({ item }) => taskSection(item) === "exam");
   const regularTaskRows = indexedTasks.filter(({ item }) => taskSection(item) === "regular");
 
+  // ── 오늘 숙제 공유 (카톡으로 공유) ──────────────────────────────────
+  // 공유 순서 = 화면에 보이는 순서: mixed는 시험 구획 → 일반 구획, 그 외는 배열 순서 그대로.
+  // 각 항목의 저장된 context(학교/교재)를 그대로 쓴다 — 현재 그룹 설정으로 재분류하지 않는다.
+  const assignmentsInDisplayOrder =
+    progressMode === "mixed"
+      ? [...examAssignmentRows, ...regularAssignmentRows].map(({ item }) => item)
+      : assignments;
+  const shareableAssignments = shareableHomework(assignmentsInDisplayOrder);
+
+  // 대상 학생 이름 — audience select와 같은 해석 순서: 현재 roster → 저장 스냅샷 이름 → 보존 문구.
+  // 학생마다 query하지 않는다 (이미 로드된 폼 데이터 재사용).
+  const homeworkShareAudienceName = (assignedStudentId: string): string | null => {
+    if (!assignedStudentId) {
+      return null;
+    }
+    return (
+      students.find((student) => student.studentId === assignedStudentId)?.name ??
+      initialAssignments.find((item) => item.assignedStudentId === assignedStudentId)?.assignedStudentName ??
+      "기존 지정 학생"
+    );
+  };
+
+  const showHomeworkShareNotice = (tone: "ok" | "error", text: string) => {
+    setHomeworkShareNotice({ tone, text });
+    if (shareNoticeTimerRef.current !== null) {
+      window.clearTimeout(shareNoticeTimerRef.current);
+    }
+    shareNoticeTimerRef.current = window.setTimeout(() => {
+      setHomeworkShareNotice(null);
+      shareNoticeTimerRef.current = null;
+    }, 4000);
+  };
+
+  const copyHomeworkShareText = async (text: string, successText: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showHomeworkShareNotice("ok", successText);
+    } catch {
+      showHomeworkShareNotice("error", "복사하지 못했어요. 다시 시도해주세요.");
+    }
+  };
+
+  // 명시적 버튼 클릭에서만 실행 — 자동 공유/자동 복사 금지. 저장·draft·DB 작업 없음.
+  const shareHomeworkList = async () => {
+    if (shareBusyRef.current) {
+      return;
+    }
+    const text = buildHomeworkShareText(
+      shareableAssignments.map((item) => ({
+        content: item.content,
+        textbook: item.textbook,
+        school: item.school,
+        assignedStudentName: homeworkShareAudienceName(item.assignedStudentId),
+      })),
+    );
+    shareBusyRef.current = true;
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        try {
+          await navigator.share({ text });
+        } catch (error) {
+          // 사용자가 공유창을 직접 닫은 경우(AbortError) = 정상 종료 — 복사/에러 안내 없음
+          if (error instanceof Error && error.name === "AbortError") {
+            return;
+          }
+          await copyHomeworkShareText(text, "공유 기능을 사용할 수 없어 숙제 목록을 복사했어요.");
+        }
+      } else {
+        await copyHomeworkShareText(text, "숙제 목록을 복사했어요.");
+      }
+    } finally {
+      shareBusyRef.current = false;
+    }
+  };
+
   // [전체 학생에게 적용] — 버튼 한 번으로 진도를 전 학생에게.
   // 결석 학생은 기존 정책대로 놓친 진도 기본값으로만 채운다.
   // mixed: 시험 대상 학교 학생 → 자기 학교 진도만, 일반 학생(비대상/학교 미등록) → 일반 교재
@@ -2501,9 +2593,36 @@ export function DailyLogForm({
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="block min-w-0">
-              <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
-                <NotebookTabs className="h-3.5 w-3.5 text-[#6652b9]" /> 오늘 숙제
-              </span>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
+                  <NotebookTabs className="h-3.5 w-3.5 text-[#6652b9]" /> 오늘 숙제
+                </span>
+                {/* 현재 작성 중인 숙제를 저장 전에도 공유 — OS share sheet(카카오톡 선택 가능),
+                    미지원 환경은 클립보드 복사. 공유할 숙제가 없으면 비활성. */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  disabled={shareableAssignments.length === 0}
+                  onClick={shareHomeworkList}
+                  aria-label="숙제 목록 카톡으로 공유"
+                >
+                  <Share2 className="h-4 w-4" aria-hidden /> 카톡으로 공유
+                </Button>
+              </div>
+              {homeworkShareNotice ? (
+                <div
+                  role="status"
+                  className={
+                    homeworkShareNotice.tone === "ok"
+                      ? "mb-2 rounded-xl border border-[#d8ebe0] bg-[#f0faf5] px-3 py-2 text-sm text-[#2f6d54]"
+                      : "mb-2 rounded-xl border border-[#f0d9d5] bg-[#fff9f7] px-3 py-2 text-sm text-[#7f5d57]"
+                  }
+                >
+                  {homeworkShareNotice.text}
+                </div>
+              ) : null}
 
               {/* 오늘 새로 내주는 숙제 — 숙제 N개, 각각 독립 완료일.
                   (지난 숙제를 해왔는지는 위 학생별 "숙제" 평가에서 — 서로 다른 기능)
