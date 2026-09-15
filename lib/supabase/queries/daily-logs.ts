@@ -1765,6 +1765,73 @@ export async function getPreviousReflectionNext(
   return { class_date: data.class_date as string, reflection_next: reflectionNext };
 }
 
+// ── 학생 평가 카드 "지난 수업 참고" ─────────────────────────────────
+// 같은 그룹의 직전 Finalized 일지(현재 lesson_date 미만, class_date 최신 1개)에 저장된
+// 학생 평가를 embed 1쿼리로 배치 조회한다 — 학생 수와 무관하게 쿼리 1회 (per-student 금지).
+// read-only 참고 전용: 실패해도 작성 화면은 그대로 동작해야 하므로 에러는 null로 삼킨다.
+
+export type PreviousStudentEvaluations = {
+  classDate: string;
+  entries: import("@/lib/previous-evaluation").PreviousEvaluationEntry[];
+};
+
+export async function getPreviousStudentEvaluations(
+  groupId: string,
+  beforeDate: string,
+): Promise<PreviousStudentEvaluations | null> {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("daily_logs")
+    .select(
+      "id, class_date, student_lesson_logs(student_id, attendance, homework_status, focus_level, participation_level, question_level, kindness_level, effort_level, online_review_completed, memo)",
+    )
+    .eq("user_id", user.id)
+    .eq("group_id", groupId)
+    .eq("status", "completed")
+    .lt("class_date", beforeDate)
+    .order("class_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("getPreviousStudentEvaluations error", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    return null;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  const rows = Array.isArray(data.student_lesson_logs) ? data.student_lesson_logs : [];
+
+  return {
+    classDate: data.class_date as string,
+    entries: rows.map((row) => ({
+      studentId: row.student_id as string,
+      attendance: row.attendance ?? null,
+      homeworkStatus: row.homework_status ?? null,
+      focusLevel: row.focus_level ?? null,
+      participationLevel: row.participation_level ?? null,
+      questionLevel: row.question_level ?? null,
+      kindnessLevel: row.kindness_level ?? null,
+      effortLevel: row.effort_level ?? null,
+      onlineReviewCompleted: row.online_review_completed ?? null,
+      memo: row.memo ?? null,
+    })),
+  };
+}
+
 // ── 수업 회고 모아보기 ─────────────────────────────────────────
 
 export const REFLECTION_NOT_EMPTY =

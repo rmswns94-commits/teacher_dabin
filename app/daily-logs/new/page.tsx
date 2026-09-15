@@ -23,6 +23,7 @@ import {
   getGroupHistoryLogs,
   getPreviousLessonImportSource,
   getPreviousReflectionNext,
+  getPreviousStudentEvaluations,
 } from "@/lib/supabase/queries/daily-logs";
 import {
   getCurrentUserGroups,
@@ -69,7 +70,7 @@ export default async function NewDailyLogPage({
   // 그룹 목록과 (선택된 그룹의) 학생/직전 수업/이전 기록을 한 번에 병렬 조회한다.
   // 이전 기록은 lightweight 첫 페이지만 — 실패해도 작성 화면은 그대로 동작해야 한다.
   const emptyHistory = { rows: [], hasMore: false, failed: false };
-  const [groups, groupStudentsRaw, lastLesson, history, groupSchedules, draftRow, prevReflection, importSource, allSchedules] = await Promise.all([
+  const [groups, groupStudentsRaw, lastLesson, history, groupSchedules, draftRow, prevReflection, importSource, allSchedules, prevEvaluations] = await Promise.all([
     getCurrentUserGroups(),
     requestedGroupId ? getGroupStudentsForCurrentUser(requestedGroupId) : Promise.resolve([]),
     requestedGroupId ? getGroupLatestProgress(requestedGroupId) : Promise.resolve(null),
@@ -88,6 +89,8 @@ export default async function NewDailyLogPage({
     requestedGroupId ? getPreviousLessonImportSource(requestedGroupId, date) : Promise.resolve(null),
     // 이전/다음 수업 바로가기 — 전 그룹 시간표 (AppShell과 같은 요청당 1쿼리 cache, N+1 없음)
     getCurrentUserSchedulesWithGroup(),
+    // 학생 평가 카드 "지난 수업 참고" — 직전 Finalized 일지의 학생 평가 embed 1쿼리 (read-only)
+    requestedGroupId ? getPreviousStudentEvaluations(requestedGroupId, date) : Promise.resolve(null),
   ]);
 
   const selectedGroup = requestedGroupId
@@ -249,6 +252,8 @@ export default async function NewDailyLogPage({
               examTargetSchools={selectedGroup.exam_target_schools}
               // [지난 수업에서 가져오기] — 직전 Finalized의 계획/숙제/할 일 (자동 적용 없음)
               importSource={importSource}
+              // 학생 평가 카드 "지난 수업 참고" (read-only — 오늘 평가로 복사하지 않음)
+              previousEvaluations={prevEvaluations}
               draft={
                 draftRow
                   ? { id: draftRow.id, updatedAt: draftRow.updated_at, payload: draftRow.payload }

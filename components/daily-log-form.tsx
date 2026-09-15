@@ -62,7 +62,14 @@ import { createStudentWeaknessAction } from "@/app/students/weakness-actions";
 import { WeaknessFormDialog, type WeaknessFormValues } from "@/components/weakness-form-dialog";
 import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comments";
 import { addDaysStr } from "@/lib/calendar";
-import { formatKoreanDate } from "@/lib/dates";
+import { formatKoreanDate, formatShortDateWithWeekday } from "@/lib/dates";
+import {
+  hasMeaningfulPreviousEvaluation,
+  previousEvaluationByStudent,
+  previousEvaluationChips,
+  previousEvaluationMemo,
+  type PreviousEvaluationEntry,
+} from "@/lib/previous-evaluation";
 import { sortByKoreanName } from "@/lib/korean-sort";
 import { nextClassDateAfter } from "@/lib/schedule";
 import { vocabWordKey } from "@/lib/vocab";
@@ -543,6 +550,7 @@ export function DailyLogForm({
   schools = [],
   examTargetSchools = null,
   importSource = null,
+  previousEvaluations = null,
 }: {
   dailyLogId?: string;
   classDate: string;
@@ -616,6 +624,9 @@ export function DailyLogForm({
   }[];
   // 같은 그룹 직전 completed 일지의 "다음에 다르게 해볼 것" — 회고 카드에 리마인드로 표시
   previousReflection?: { classDate: string; reflectionNext: string } | null;
+  // 학생 평가 카드 "지난 수업 참고" — 같은 그룹 직전 Finalized 일지의 학생 평가 (read-only,
+  // 오늘 평가 기본값으로 복사하지 않는다. 폼 state/draft/final payload와 완전 분리)
+  previousEvaluations?: { classDate: string; entries: PreviousEvaluationEntry[] } | null;
 }) {
   // 최근(10분 내) 임시저장 draft는 mount 시점에 자동 복원 — reload 복구가 목적이라
   // effect/remount 없이 초기 state로만 반영한다 (IME/입력에 영향 없음).
@@ -2034,6 +2045,10 @@ export function DailyLogForm({
     }
   };
 
+  // "지난 수업 참고" lookup — student_id 기준 (이름 매칭 금지). read-only 표시 전용이라
+  // 폼 state/dirty 스냅샷/draft payload 어디에도 들어가지 않는다.
+  const previousEvaluationMap = previousEvaluationByStudent(previousEvaluations?.entries ?? []);
+
   // [전체 학생에게 적용] — 버튼 한 번으로 진도를 전 학생에게.
   // 결석 학생은 기존 정책대로 놓친 진도 기본값으로만 채운다.
   // mixed: 시험 대상 학교 학생 → 자기 학교 진도만, 일반 학생(비대상/학교 미등록) → 일반 교재
@@ -3017,6 +3032,40 @@ export function DailyLogForm({
                   </button>
                 </div>
               </div>
+
+              {/* 지난 수업 참고 — 같은 그룹 직전 Finalized 일지의 이 학생 평가 (read-only).
+                  값이 하나도 없거나(신규 학생/미평가) 지난 일지가 없으면 영역 자체를 숨긴다.
+                  오늘 평가 controls와 혼동되지 않게 muted 톤 + "지난 수업" 라벨 명시. */}
+              {previousEvaluations
+                ? (() => {
+                    const prevEntry = previousEvaluationMap.get(student.studentId);
+                    if (!prevEntry || !hasMeaningfulPreviousEvaluation(prevEntry)) {
+                      return null;
+                    }
+                    const prevChips = previousEvaluationChips(prevEntry);
+                    const prevMemo = previousEvaluationMemo(prevEntry);
+                    return (
+                      <div
+                        aria-label={`${student.name} 지난 수업 참고`}
+                        className="mt-3 min-w-0 rounded-xl border border-[#e9e2f5] bg-[#faf8ff] px-3 py-2"
+                      >
+                        <div className="caption-text text-[#7a6ea8]">
+                          지난 수업 · {formatShortDateWithWeekday(previousEvaluations.classDate)}
+                        </div>
+                        {prevChips.length > 0 ? (
+                          <div className="secondary-text mt-0.5 break-keep text-[#5f5563]">
+                            {prevChips.join(" · ")}
+                          </div>
+                        ) : null}
+                        {prevMemo ? (
+                          <div className="secondary-text mt-0.5 whitespace-pre-wrap break-words text-[#7c6d69]">
+                            메모: {prevMemo}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })()
+                : null}
 
               {isAbsent ? (
                 <div className="mt-3 space-y-3 rounded-2xl bg-[#fff7f5] p-3">

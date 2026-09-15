@@ -17,6 +17,7 @@ import {
   getPraisesForDailyLog,
   getPreviousLessonImportSource,
   getPreviousReflectionNext,
+  getPreviousStudentEvaluations,
 } from "@/lib/supabase/queries/daily-logs";
 import { getCurrentUserGroups, getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup, getGroupSchedules } from "@/lib/supabase/queries/schedules";
@@ -113,7 +114,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
 
   // Students who joined the group after this log was written can still be added.
   const knownIds = new Set(students.map((student) => student.studentId));
-  const [currentMembers, groupSchedules, prevReflection, allGroups, importSource, allSchedules] = await Promise.all([
+  const [currentMembers, groupSchedules, prevReflection, allGroups, importSource, allSchedules, prevEvaluations] = await Promise.all([
     getGroupStudentsForCurrentUser(log.group_id),
     // 다음 수업 계획 기본 날짜 계산용 시간표 (legacy row는 저장 전까지 DB 미변경)
     getGroupSchedules(log.group_id),
@@ -126,6 +127,9 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
     getPreviousLessonImportSource(log.group_id, log.class_date),
     // 이전/다음 수업 바로가기 — 전 그룹 시간표 (AppShell과 같은 요청당 1쿼리 cache, N+1 없음)
     getCurrentUserSchedulesWithGroup(),
+    // 학생 평가 카드 "지난 수업 참고" — 이 일지 class_date "미만"의 직전 Finalized 학생 평가
+    // (자기 자신은 lt 조건으로 자연 제외 — 과거 일지 수정에서도 그 시점 기준의 직전 수업)
+    getPreviousStudentEvaluations(log.group_id, log.class_date),
   ]);
 
   // 기준은 "이 일지의 class_date 요일" 정규 시간표뿐 (오늘 날짜 아님 — 과거 일지도 그 요일 기준)
@@ -251,6 +255,8 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           examTargetSchools={log.group?.exam_target_schools ?? null}
           // [지난 수업에서 가져오기] — 직전 Finalized의 계획/숙제/할 일 (자동 적용 없음)
           importSource={importSource}
+          // 학생 평가 카드 "지난 수업 참고" (read-only — 오늘 평가로 복사하지 않음)
+          previousEvaluations={prevEvaluations}
           initial={{
             title: log.title ?? "",
             // migration 미적용 legacy row도 수업 내용을 잃지 않게 병합해 편집한다
