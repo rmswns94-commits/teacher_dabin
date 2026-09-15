@@ -43,12 +43,17 @@ export function formatHomeworkShareDueLine(dueDate: string | null | undefined): 
   return `마감: ${formatShortDateWithWeekday(dueDate) || "미정"}`;
 }
 
+// 숙제 블록(내용 줄 + 마감 줄) 목록 — 숙제 전용 공유와 수업 안내 공유가 같은 형식을
+// 쓰는 단일 소스 (마감 날짜/요일 formatter를 다른 곳에서 다시 만들지 않는다).
+export function homeworkShareBlocks(items: readonly ShareableHomeworkItem[]): string[] {
+  return shareableHomework(items).map(
+    (item) => `${formatHomeworkShareLine(item)}\n${formatHomeworkShareDueLine(item.dueDate)}`,
+  );
+}
+
 // 최종 공유 텍스트. 첫 줄 제목 + 빈 줄 + 숙제 블록들(내용 줄 + 마감 줄, 블록 사이 빈 줄).
 // 숙제마다 서로 다른 마감일을 각자 블록 아래에 표시한다 — 상단 공통 날짜 없음.
 // URL/그룹명은 붙이지 않는다 — 숙제 내용 전달이 목적.
 export function buildHomeworkShareText(items: readonly ShareableHomeworkItem[]): string {
-  const blocks = shareableHomework(items).map(
-    (item) => `${formatHomeworkShareLine(item)}\n${formatHomeworkShareDueLine(item.dueDate)}`,
-  );
-  return [HOMEWORK_SHARE_TITLE, "", blocks.join("\n\n")].join("\n");
+  return [HOMEWORK_SHARE_TITLE, "", homeworkShareBlocks(items).join("\n\n")].join("\n");
 }

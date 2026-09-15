@@ -45,6 +45,8 @@ import {
 } from "@/lib/lesson-import";
 import { buildTextbookSectionsText, formatTextbookLinked, joinDerivedText } from "@/lib/textbooks";
 import { buildHomeworkShareText, shareableHomework } from "@/lib/homework-share";
+import { hasShareableContextSection } from "@/lib/lesson-share";
+import { LessonShareDialog } from "@/components/lesson-share-dialog";
 import {
   activeTargetSchools,
   classifyStudentsByExamTarget,
@@ -2049,6 +2051,33 @@ export function DailyLogForm({
   // 폼 state/dirty 스냅샷/draft payload 어디에도 들어가지 않는다.
   const previousEvaluationMap = previousEvaluationByStudent(previousEvaluations?.entries ?? []);
 
+  // ── 수업 안내 공유 (진도/숙제/다음 계획 선택 공유) ─────────────────
+  // source = 현재 폼이 이미 파생해 둔 구획들 (섹션 + 기타 raw — mirror 중복/parsing 없음).
+  // 다이얼로그가 열려 있는 동안에도 매 렌더 최신 state가 내려가 공유 시점 값이 최신이다.
+  const [lessonShareOpen, setLessonShareOpen] = useState(false);
+  const lessonShareProgress = {
+    schoolSections: schoolProgressSections,
+    textbookSections: progressSections,
+    extra: defaultProgress,
+  };
+  const lessonShareNextPlan = {
+    schoolSections: schoolPlanSections,
+    textbookSections: planSections,
+    extra: nextLessonPlan,
+  };
+  const lessonShareHomework = assignmentsInDisplayOrder.map((item) => ({
+    content: item.content,
+    textbook: item.textbook,
+    school: item.school,
+    dueDate: item.dueDate,
+    assignedStudentId: item.assignedStudentId,
+    assignedStudentName: homeworkShareAudienceName(item.assignedStudentId),
+  }));
+  const lessonShareAvailable =
+    hasShareableContextSection(lessonShareProgress) ||
+    shareableHomework(lessonShareHomework).length > 0 ||
+    hasShareableContextSection(lessonShareNextPlan);
+
   // [전체 학생에게 적용] — 버튼 한 번으로 진도를 전 학생에게.
   // 결석 학생은 기존 정책대로 놓친 진도 기본값으로만 채운다.
   // mixed: 시험 대상 학교 학생 → 자기 학교 진도만, 일반 학생(비대상/학교 미등록) → 일반 교재
@@ -3661,10 +3690,31 @@ export function DailyLogForm({
           onDraft={() => save("draft")}
           onFinal={() => setShowSummary(true)}
         />
+        {/* 수업 안내 공유 — 저장 전에도 현재 작성 내용(진도/숙제/다음 계획)을 선택 공유.
+            secondary 톤 (Final Save CTA보다 약하게), 공유할 내용이 없으면 비활성. */}
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!lessonShareAvailable}
+          onClick={() => setLessonShareOpen(true)}
+          className="min-h-[44px] gap-1.5"
+        >
+          <Share2 className="h-4 w-4" aria-hidden /> 수업 안내 공유
+        </Button>
         <span className="text-sm text-[#8a7b77]">
           임시 저장한 일지는 목록에서 &quot;작성 중&quot;으로 표시돼요.
         </span>
       </div>
+
+      {lessonShareOpen ? (
+        <LessonShareDialog
+          onClose={() => setLessonShareOpen(false)}
+          progress={lessonShareProgress}
+          nextPlan={lessonShareNextPlan}
+          homeworkItems={lessonShareHomework}
+          students={students.map((student) => ({ studentId: student.studentId, name: student.name }))}
+        />
+      ) : null}
 
       {importConfirmText !== null ? (
         <div
