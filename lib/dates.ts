@@ -41,6 +41,23 @@ export function formatShortMonthDay(ymd: string | null | undefined) {
   return m && d ? `${m}/${d}` : "";
 }
 
+// "9/18(금)" — 숙제 공유처럼 짧은 자리용. date-only semantics:
+// 요일은 달력 날짜에서만 결정되므로 UTC 정오 anchor 계산이 안전하다 (KST 하루 밀림 없음).
+export function formatShortDateWithWeekday(ymd: string | null | undefined) {
+  if (!ymd) {
+    return "";
+  }
+
+  const [y, m, d] = ymd.split("-").map(Number);
+
+  if (!y || !m || !d) {
+    return ymd;
+  }
+
+  const weekday = WEEKDAYS[new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay()];
+  return `${m}/${d}(${weekday})`;
+}
+
 export function formatKoreanDate(ymd: string | null | undefined, withWeekday = false) {
   if (!ymd) {
     return "날짜 미정";

@@ -2009,6 +2009,9 @@ export function DailyLogForm({
         textbook: item.textbook,
         school: item.school,
         assignedStudentName: homeworkShareAudienceName(item.assignedStudentId),
+        // 폼의 effective 마감일 그대로 — 기본값(다음 수업일)은 addAssignment가 이미 채웠고,
+        // 교사가 바꾼 날짜도 이 값에 즉시 반영되어 있다 (공유용 별도 계산 없음)
+        dueDate: item.dueDate,
       })),
     );
     shareBusyRef.current = true;
