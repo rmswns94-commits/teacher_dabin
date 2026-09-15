@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { AdjacentLessonNav } from "@/components/adjacent-lesson-nav";
 import { AppShell } from "@/components/app-shell";
 import { DailyLogExamPreview } from "@/components/daily-log-exam-preview";
 import { DailyLogForm, type DailyLogFormStudent } from "@/components/daily-log-form";
@@ -18,9 +19,11 @@ import {
   getPreviousReflectionNext,
 } from "@/lib/supabase/queries/daily-logs";
 import { getCurrentUserGroups, getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
-import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
+import { getCurrentUserSchedulesWithGroup, getGroupSchedules } from "@/lib/supabase/queries/schedules";
 import { getDailyLogExamPreviewEntries } from "@/lib/supabase/queries/school-exams";
 import { getVocabMistakesForDailyLog } from "@/lib/supabase/queries/vocab-mistakes";
+import { getAdjacentScheduledClasses } from "@/lib/adjacent-classes";
+import { dayOfWeekOf } from "@/lib/schedule";
 
 export default async function EditDailyLogPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -110,7 +113,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
 
   // Students who joined the group after this log was written can still be added.
   const knownIds = new Set(students.map((student) => student.studentId));
-  const [currentMembers, groupSchedules, prevReflection, allGroups, importSource] = await Promise.all([
+  const [currentMembers, groupSchedules, prevReflection, allGroups, importSource, allSchedules] = await Promise.all([
     getGroupStudentsForCurrentUser(log.group_id),
     // 다음 수업 계획 기본 날짜 계산용 시간표 (legacy row는 저장 전까지 DB 미변경)
     getGroupSchedules(log.group_id),
@@ -121,7 +124,16 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
     // [지난 수업에서 가져오기] source — 이 일지 class_date "미만"의 최신 Finalized
     // (자기 자신은 lt 조건으로 자연 제외 — Finalized Edit에서도 안전)
     getPreviousLessonImportSource(log.group_id, log.class_date),
+    // 이전/다음 수업 바로가기 — 전 그룹 시간표 (AppShell과 같은 요청당 1쿼리 cache, N+1 없음)
+    getCurrentUserSchedulesWithGroup(),
   ]);
+
+  // 기준은 "이 일지의 class_date 요일" 정규 시간표뿐 (오늘 날짜 아님 — 과거 일지도 그 요일 기준)
+  const adjacentClasses = getAdjacentScheduledClasses(
+    allSchedules,
+    dayOfWeekOf(log.class_date),
+    log.group_id,
+  );
 
   for (const member of currentMembers) {
     if (!member.archived && !knownIds.has(member.id)) {
@@ -163,6 +175,13 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           backHref={`/daily-logs/${log.id}`}
           title={log.status === "draft" ? "수업 일지 이어쓰기" : "수업 일지 수정"}
           description={`${formatKoreanDate(log.class_date, true)} · ${log.group?.name ?? "그룹 정보 없음"}`}
+        />
+
+        {/* 같은 날짜의 이전/다음 정규 수업 바로가기 — 클릭 시 공용 resolver로만 이동 (DB 무접촉) */}
+        <AdjacentLessonNav
+          previous={adjacentClasses.previous}
+          next={adjacentClasses.next}
+          date={log.class_date}
         />
 
         {/* 작성 중(draft) 일지는 새 작성 화면과 같은 그룹/날짜 피커를 유지한다 —

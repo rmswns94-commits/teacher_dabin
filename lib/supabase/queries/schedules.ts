@@ -41,6 +41,8 @@ export type ScheduleGroupInfo = {
   name: string;
   grade: StudentGrade;
   archived: boolean;
+  // 이름 옆 (시험) 표시용 — 기존 ExamPeriodMark와 같은 기준 (class_groups.is_exam_period 하나)
+  is_exam_period: boolean;
 };
 
 export type ScheduleWithGroup = ClassGroupScheduleRecord & { group: ScheduleGroupInfo | null };
@@ -57,7 +59,7 @@ async function fetchSchedulesWithGroup() {
 
   const { data, error } = await supabase
     .from("class_group_schedules")
-    .select("*, class_groups(id, name, grade, archived)")
+    .select("*, class_groups(id, name, grade, archived, is_exam_period)")
     .eq("user_id", user.id);
 
   if (error) {

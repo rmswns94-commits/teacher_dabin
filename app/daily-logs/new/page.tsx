@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CircleArrowRight, NotebookTabs } from "lucide-react";
 
+import { AdjacentLessonNav } from "@/components/adjacent-lesson-nav";
 import { AppShell } from "@/components/app-shell";
 import { DailyLogExamPreview } from "@/components/daily-log-exam-preview";
 import { DailyLogForm } from "@/components/daily-log-form";
@@ -28,8 +29,10 @@ import {
   getGroupLatestProgress,
   getGroupStudentsForCurrentUser,
 } from "@/lib/supabase/queries/groups";
-import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
+import { getCurrentUserSchedulesWithGroup, getGroupSchedules } from "@/lib/supabase/queries/schedules";
 import { getDailyLogExamPreviewEntries } from "@/lib/supabase/queries/school-exams";
+import { getAdjacentScheduledClasses } from "@/lib/adjacent-classes";
+import { dayOfWeekOf } from "@/lib/schedule";
 
 export default async function NewDailyLogPage({
   searchParams,
@@ -66,7 +69,7 @@ export default async function NewDailyLogPage({
   // 그룹 목록과 (선택된 그룹의) 학생/직전 수업/이전 기록을 한 번에 병렬 조회한다.
   // 이전 기록은 lightweight 첫 페이지만 — 실패해도 작성 화면은 그대로 동작해야 한다.
   const emptyHistory = { rows: [], hasMore: false, failed: false };
-  const [groups, groupStudentsRaw, lastLesson, history, groupSchedules, draftRow, prevReflection, importSource] = await Promise.all([
+  const [groups, groupStudentsRaw, lastLesson, history, groupSchedules, draftRow, prevReflection, importSource, allSchedules] = await Promise.all([
     getCurrentUserGroups(),
     requestedGroupId ? getGroupStudentsForCurrentUser(requestedGroupId) : Promise.resolve([]),
     requestedGroupId ? getGroupLatestProgress(requestedGroupId) : Promise.resolve(null),
@@ -83,11 +86,19 @@ export default async function NewDailyLogPage({
     // [지난 수업에서 가져오기] source — "현재 폼 날짜 미만"의 같은 그룹 최신 Finalized 1개
     // (숙제 embed 포함 1쿼리). group/date가 바뀌면 페이지가 다시 렌더되며 자동 갱신된다.
     requestedGroupId ? getPreviousLessonImportSource(requestedGroupId, date) : Promise.resolve(null),
+    // 이전/다음 수업 바로가기 — 전 그룹 시간표 (AppShell과 같은 요청당 1쿼리 cache, N+1 없음)
+    getCurrentUserSchedulesWithGroup(),
   ]);
 
   const selectedGroup = requestedGroupId
     ? groups.find((group) => group.id === requestedGroupId)
     : undefined;
+
+  // 이전/다음 수업 바로가기 — 기준은 "현재 폼의 lesson_date 요일"의 정규 시간표뿐
+  // (보충/시험 일정 제외, start_time ASC). 현재 그룹이 그 요일 시간표에 없으면 미표시.
+  const adjacentClasses = selectedGroup
+    ? getAdjacentScheduledClasses(allSchedules, dayOfWeekOf(date), selectedGroup.id)
+    : null;
 
   // 시험 기간 ON: 그룹 학생 학교들의 기존 시험 대비(시험+플래너 계획)를 read-only 미리보기로.
   // batch 2쿼리 — 학교 수와 무관, Daily Log에 아무것도 복제/생성하지 않는다.
@@ -140,6 +151,15 @@ export default async function NewDailyLogPage({
             />
           </CardContent>
         </Card>
+
+        {/* 같은 날짜의 이전/다음 정규 수업 바로가기 — 클릭 시 공용 resolver로만 이동 (DB 무접촉) */}
+        {adjacentClasses ? (
+          <AdjacentLessonNav
+            previous={adjacentClasses.previous}
+            next={adjacentClasses.next}
+            date={date}
+          />
+        ) : null}
 
         <LessonHistoryWorkspace
           group={selectedGroup ? { id: selectedGroup.id, name: selectedGroup.name } : null}

@@ -115,7 +115,8 @@ function addDays(ymd: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-function dayOfWeekOf(ymd: string) {
+// date-only 요일 (0=일 ... 6=토) — UTC 정오 anchor라 KST에서 하루 밀림이 없다.
+export function dayOfWeekOf(ymd: string) {
   return new Date(`${ymd}T12:00:00Z`).getUTCDay();
 }
 
