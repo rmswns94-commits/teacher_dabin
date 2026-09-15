@@ -154,7 +154,8 @@ function NavLink({
       // 라우트 TTFB가 150ms 안팎이라 클릭 후 바로 이동해도 충분히 빠르다.
       prefetch={false}
       className={cn(
-        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-base font-medium transition-all",
+        // tap-press-subtle: 터치 눌림 피드백 (넓은 메뉴 항목용 약한 버전 — globals.css)
+        "tap-press-subtle flex items-center gap-3 rounded-xl px-3 py-2.5 text-base font-medium transition-all",
         isActive
           ? "bg-[#f0f0f3] text-[#232327] shadow-sm ring-1 ring-[#e2e2e8]"
           : "text-[#3c3c45] hover:bg-[#f4f4f6] hover:text-[#232327]",
@@ -226,7 +227,8 @@ export function Sidebar({
     <li key={item.href}>
       <div
         className={cn(
-          "flex items-center gap-1 rounded-xl transition-all",
+          // 내부 Link/토글을 누르면 :active가 조상까지 올라와 pill 전체가 눌린다
+          "tap-press-subtle flex items-center gap-1 rounded-xl transition-all",
           inGroupsSection
             ? "bg-[#f0f0f3] shadow-sm ring-1 ring-[#e2e2e8]"
             : "hover:bg-[#f4f4f6]",
@@ -275,7 +277,7 @@ export function Sidebar({
                   prefetch={false}
                   aria-current={groupActive ? "page" : undefined}
                   className={cn(
-                    "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-normal transition-all",
+                    "tap-press-subtle flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-normal transition-all",
                     groupActive
                       ? "bg-[#f0f0f3] font-semibold text-[#232327] ring-1 ring-[#e2e2e8]"
                       : "text-[#4c4c55] hover:bg-[#f4f4f6] hover:text-[#232327]",

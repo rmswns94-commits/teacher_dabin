@@ -7,12 +7,14 @@ import { cn } from "@/lib/utils";
 const buttonVariants = cva(
   // 글자 크기는 size variant가 정한다 (기본 버튼 16px / 작은 액션 14px).
   // globals.css의 폼 리셋이 @layer base로 내려가면서 이제 이 text-* 유틸이 실제로 적용된다.
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl font-medium leading-none transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9b9c6] disabled:pointer-events-none disabled:opacity-50",
+  // tap-press: 눌림 피드백 마커 — asChild(<a>)도 globals.css의 :active 규칙을 타게 한다.
+  // transition은 실제로 바뀌는 속성만 (all이면 글씨 크기 설정 전환 시 font-size까지 애니메이션된다).
+  "tap-press inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl font-medium leading-none transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-100 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9b9c6] disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
         default:
-          "bg-[#2b2b31] text-white shadow-sm hover:bg-[#3a3a42]",
+          "bg-[#2b2b31] text-white shadow-sm hover:bg-[#3a3a42] active:shadow-none",
         secondary:
           "bg-[#f0f0f3] text-[#33333b] hover:bg-[#e6e6ea]",
         outline:
