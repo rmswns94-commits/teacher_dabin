@@ -2932,6 +2932,20 @@ export function DailyLogForm({
             </div>
           </div>
 
+          {/* 수업 안내 공유 — 진도/숙제/다음 계획 작성을 마친 지점(해야 할 일 아래)에서 바로 공유.
+              저장 전에도 현재 폼 내용을 선택 공유, 공유할 내용이 없으면 비활성. */}
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!lessonShareAvailable}
+              onClick={() => setLessonShareOpen(true)}
+              className="min-h-[44px] gap-1.5"
+            >
+              <Share2 className="h-4 w-4" aria-hidden /> 수업 안내 공유
+            </Button>
+          </div>
+
           <label className="block">
             <span className="mb-2 block text-sm font-medium text-[#4d3a3a]">수업 메모 (선택)</span>
             <textarea
@@ -3690,17 +3704,6 @@ export function DailyLogForm({
           onDraft={() => save("draft")}
           onFinal={() => setShowSummary(true)}
         />
-        {/* 수업 안내 공유 — 저장 전에도 현재 작성 내용(진도/숙제/다음 계획)을 선택 공유.
-            secondary 톤 (Final Save CTA보다 약하게), 공유할 내용이 없으면 비활성. */}
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!lessonShareAvailable}
-          onClick={() => setLessonShareOpen(true)}
-          className="min-h-[44px] gap-1.5"
-        >
-          <Share2 className="h-4 w-4" aria-hidden /> 수업 안내 공유
-        </Button>
         <span className="text-sm text-[#8a7b77]">
           임시 저장한 일지는 목록에서 &quot;작성 중&quot;으로 표시돼요.
         </span>
