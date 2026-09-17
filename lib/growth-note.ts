@@ -1,3 +1,4 @@
+import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
 import {
   computeWeeklyGrowth,
   growthAchievedSentences,
@@ -76,6 +77,50 @@ export function toGrowthBadge(type: GrowthAchievementType): GrowthBadge {
     label: growthLabels[type],
     sentence: growthAchievedSentences[type],
   };
+}
+
+// ---- 주간/월간 기간 (KST date-only, UTC 정오 anchor 연산이라 경계 안전) ----
+// 왕 판정 엔진(lib/growth.ts)은 기간 record 배열만 받는 period-agnostic 구조라,
+// 여기서 기간 range만 주/월로 계산해 같은 엔진에 전달한다 (월간 전용 알고리즘 금지).
+
+export type GrowthViewMode = "week" | "month";
+
+export function growthPeriodRange(
+  anchorDate: string,
+  mode: GrowthViewMode,
+): { start: string; end: string } {
+  if (mode === "month") {
+    const year = Number(anchorDate.slice(0, 4));
+    const month = Number(anchorDate.slice(5, 7));
+    // Date.UTC(y, m, 0) = m월의 마지막 날 (m은 1-based month) — 윤년/월 길이 자동 처리
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return {
+      start: `${anchorDate.slice(0, 7)}-01`,
+      end: `${anchorDate.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`,
+    };
+  }
+  // 주간: 한국 기준 월요일 시작 (일요일도 그 주의 월요일로)
+  const start = addDaysStr(anchorDate, -((dayOfWeekOf(anchorDate) + 6) % 7));
+  return { start, end: addDaysStr(start, 6) };
+}
+
+// 이전/다음 기간의 anchor — week는 ±7일(요일 유지), month는 이전/다음 달의 1일.
+// 연도 경계(12월→1월, 1월→12월)는 date 연산이 자연 처리한다.
+export function shiftGrowthAnchor(
+  anchorDate: string,
+  mode: GrowthViewMode,
+  direction: 1 | -1,
+): string {
+  if (mode === "week") {
+    return addDaysStr(anchorDate, 7 * direction);
+  }
+  const { start, end } = growthPeriodRange(anchorDate, "month");
+  return direction === 1 ? addDaysStr(end, 1) : growthPeriodRange(addDaysStr(start, -1), "month").start;
+}
+
+// 월간 표시 라벨: "2026년 9월"
+export function growthMonthLabel(anchorDate: string): string {
+  return `${Number(anchorDate.slice(0, 4))}년 ${Number(anchorDate.slice(5, 7))}월`;
 }
 
 // ---- 왕중왕 (derived UI only) ----

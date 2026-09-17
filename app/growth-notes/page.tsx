@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Sparkles } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { Button } from "@/components/ui/button";
 import { DailyQuoteCard } from "@/components/daily-quote-card";
 import { PageHeader } from "@/components/page-header";
 import { dailyQuoteOf } from "@/lib/constants/daily-quotes";
-import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
+import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate, toDateString, todayDateString } from "@/lib/dates";
 import { vocabPercent } from "@/lib/elementary";
 import {
@@ -19,9 +20,13 @@ import {
   scopeMakeupsToWeek,
 } from "@/lib/growth";
 import {
+  growthMonthLabel,
+  growthPeriodRange,
   isKingOfKings,
   kingOfKingsMaxCount,
+  shiftGrowthAnchor,
   toGrowthBadge,
+  type GrowthViewMode,
   type StudentGrowthCardSummary,
 } from "@/lib/growth-note";
 import {
@@ -39,10 +44,8 @@ import { getCurrentUserMemberships } from "@/lib/supabase/queries/students";
 import type { GrowthAchievementType } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
-// 한국 기준 주 시작(월요일). 날짜 문자열만으로 계산해 timezone 밀림이 없다.
-function weekStartOf(ymd: string) {
-  return addDaysStr(ymd, -((dayOfWeekOf(ymd) + 6) % 7));
-}
+// 기간(주/월) 계산은 lib/growth-note의 growthPeriodRange 단일 소스를 사용한다
+// (주간: 한국 기준 월요일 시작 — 기존과 동일 결과, 월간: 1일~말일, 전부 KST date-only).
 
 
 // 9개 성장왕 카드 테마 — 왕의 성격에 맞는 파스텔 그라데이션 + 반짝 포인트색.
@@ -124,15 +127,19 @@ const VOCAB_WINDOW_DAYS = 90;
 export default async function GrowthNotesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ group?: string }>;
+  searchParams?: Promise<{ group?: string; date?: string; view?: string }>;
 }) {
-  const { group: groupParam } = (await searchParams) ?? {};
+  const { group: groupParam, date: dateParam, view: viewParam } = (await searchParams) ?? {};
 
   const groups = await getCurrentUserGroups();
   const selectedGroup = groupParam ? groups.find((group) => group.id === groupParam) ?? null : null;
 
   if (selectedGroup) {
-    return <GroupStudentList group={selectedGroup} />;
+    // URL이 기간 상태의 소스 — 새로고침/뒤로가기에도 주간·월간/기준 날짜가 유지된다.
+    // 기본값은 기존과 동일하게 "이번 주" 주간 보기.
+    const anchor = /^\d{4}-\d{2}-\d{2}$/.test(dateParam ?? "") ? dateParam! : todayDateString();
+    const mode: GrowthViewMode = viewParam === "month" ? "month" : "week";
+    return <GroupStudentList group={selectedGroup} anchor={anchor} mode={mode} />;
   }
 
   // ---- Landing: 설명은 local constant, 쿼리는 그룹 목록 + membership 수뿐 ----
@@ -250,11 +257,27 @@ export default async function GrowthNotesPage({
 }
 
 // ---- 반 선택 후: 해당 반 학생 목록 (학생 한 명 = full-width 한 줄) ----
-async function GroupStudentList({ group }: { group: { id: string; name: string } }) {
+// 주간/월간은 "어떤 기간을 집계하느냐"만 다르다 — 같은 카드 renderer/같은 판정 엔진에
+// period range만 바꿔 전달한다 (월간 전용 알고리즘/화면 없음).
+async function GroupStudentList({
+  group,
+  anchor,
+  mode,
+}: {
+  group: { id: string; name: string };
+  anchor: string;
+  mode: GrowthViewMode;
+}) {
   const today = todayDateString();
-  const weekStart = weekStartOf(today);
-  const weekEnd = addDaysStr(weekStart, 6);
-  const windowStart = addDaysStr(weekStart, -VOCAB_WINDOW_DAYS);
+  const { start: periodStart, end: periodEnd } = growthPeriodRange(anchor, mode);
+  const windowStart = addDaysStr(periodStart, -VOCAB_WINDOW_DAYS);
+  const isCurrentPeriod = growthPeriodRange(today, mode).start === periodStart;
+  const hrefFor = (date: string, view: GrowthViewMode) =>
+    `/growth-notes?group=${group.id}&view=${view}&date=${date}`;
+  const periodLabel =
+    mode === "month"
+      ? growthMonthLabel(periodStart)
+      : `${formatKoreanDate(periodStart)} ~ ${formatKoreanDate(periodEnd)}`;
 
   const members = await getGroupStudentsForCurrentUser(group.id);
   const students = members.filter((student) => !student.archived);
@@ -262,11 +285,11 @@ async function GroupStudentList({ group }: { group: { id: string; name: string }
   const uniqueStudents = [...new Map(students.map((student) => [student.id, student])).values()];
   const studentIds = uniqueStudents.map((student) => student.id);
 
-  // 선택한 반 학생만 batch 조회 (학생별 개별 쿼리 금지)
+  // 선택한 반 학생만 batch 조회 (학생별/날짜별 개별 쿼리 금지 — 기간과 무관하게 3쿼리)
   const [lessonRows, praiseRows, makeupRows] = await Promise.all([
-    getGrowthLessonRows(windowStart, weekEnd, studentIds),
-    getGrowthPraiseRows(weekStart, studentIds),
-    getGrowthMakeupRows(weekStart, weekEnd, studentIds),
+    getGrowthLessonRows(windowStart, periodEnd, studentIds),
+    getGrowthPraiseRows(periodStart, studentIds),
+    getGrowthMakeupRows(periodStart, periodEnd, studentIds),
   ]);
 
   const rowsByStudent = new Map<string, GrowthLessonRow[]>();
@@ -279,14 +302,14 @@ async function GroupStudentList({ group }: { group: { id: string; name: string }
     makeupsByStudent.set(row.student_id, [...(makeupsByStudent.get(row.student_id) ?? []), row]);
   }
 
-  // 칭찬은 (연결된 일지 날짜 ?? 작성일 KST) 기준으로 이번 주만 센다 — manual praise만 존재
+  // 칭찬은 (연결된 일지 날짜 ?? 작성일 KST) 기준으로 선택 기간만 센다 — manual praise만 존재
   const logDateById = new Map(lessonRows.map((row) => [row.daily_log_id, row.class_date]));
   const praiseCountByStudent = new Map<string, number>();
   for (const praise of praiseRows) {
     const date =
       (praise.daily_log_id ? logDateById.get(praise.daily_log_id) : null) ??
       toDateString(new Date(praise.created_at));
-    if (date >= weekStart && date <= weekEnd) {
+    if (date >= periodStart && date <= periodEnd) {
       praiseCountByStudent.set(
         praise.student_id,
         (praiseCountByStudent.get(praise.student_id) ?? 0) + 1,
@@ -297,9 +320,10 @@ async function GroupStudentList({ group }: { group: { id: string; name: string }
   const summaries: StudentGrowthCardSummary[] = uniqueStudents
     .map((student) => {
       const rows = rowsByStudent.get(student.id) ?? [];
-      const weekRows = rows.filter((row) => row.class_date >= weekStart);
+      // 기존 판정 엔진 그대로 — 기간 record만 주/월 range로 바꿔 전달한다
+      const periodRows = rows.filter((row) => row.class_date >= periodStart);
       const growth = computeWeeklyGrowth({
-        weekRecords: weekRows.map((row) => ({
+        weekRecords: periodRows.map((row) => ({
           attendance: row.attendance,
           homeworkStatus: row.homework_status,
           focusLevel: row.focus_level,
@@ -311,7 +335,11 @@ async function GroupStudentList({ group }: { group: { id: string; name: string }
         recentVocabPercents: rows
           .filter((row) => row.vocab_correct !== null && (row.vocab_total ?? 0) > 0)
           .map((row) => vocabPercent(row.vocab_correct!, row.vocab_total!)!),
-        weekMakeups: scopeMakeupsToWeek(makeupsByStudent.get(student.id) ?? [], weekStart, weekEnd),
+        weekMakeups: scopeMakeupsToWeek(
+          makeupsByStudent.get(student.id) ?? [],
+          periodStart,
+          periodEnd,
+        ),
       });
 
       return {
@@ -337,10 +365,72 @@ async function GroupStudentList({ group }: { group: { id: string; name: string }
 
           <div className="mt-3">
             <h1 className="text-2xl font-bold tracking-[-0.01em] text-[#3a2f2c]">{group.name}</h1>
-            <p className="mt-1 text-sm text-[#8a7b77]">
-              우리 반 성장노트를 확인해요 · {formatKoreanDate(weekStart)} ~{" "}
-              {formatKoreanDate(weekEnd)}
-            </p>
+            <p className="mt-1 text-sm text-[#8a7b77]">우리 반 성장노트를 확인해요.</p>
+          </div>
+
+          {/* 주간/월간 전환 + 기간 이동 — URL(?view=&date=)이 상태라 F5/뒤로가기에도 유지.
+              토글은 현재 보고 있는 anchor 날짜를 그대로 들고 가서(오늘로 jump 금지)
+              그 날짜가 속한 주/달을 보여준다. */}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div
+              role="group"
+              aria-label="성장노트 기간 단위"
+              className="flex gap-1 rounded-2xl border border-[#efe4de] bg-[#fffdfb] p-1"
+            >
+              <Link
+                href={hrefFor(anchor, "week")}
+                aria-current={mode === "week" ? "true" : undefined}
+                className={cn(
+                  "tap-press-subtle rounded-xl px-3 py-1.5 text-sm font-semibold transition",
+                  mode === "week"
+                    ? "border border-[#d8cdf0] bg-[#f3eefc] text-[#5d4ba5]"
+                    : "border border-transparent text-[#8a7b77] hover:bg-[#faf6f3]",
+                )}
+              >
+                주간
+              </Link>
+              <Link
+                href={hrefFor(anchor, "month")}
+                aria-current={mode === "month" ? "true" : undefined}
+                className={cn(
+                  "tap-press-subtle rounded-xl px-3 py-1.5 text-sm font-semibold transition",
+                  mode === "month"
+                    ? "border border-[#d8cdf0] bg-[#f3eefc] text-[#5d4ba5]"
+                    : "border border-transparent text-[#8a7b77] hover:bg-[#faf6f3]",
+                )}
+              >
+                월간
+              </Link>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="secondary" size="sm" className="gap-1" asChild>
+                <Link
+                  href={hrefFor(shiftGrowthAnchor(anchor, mode, -1), mode)}
+                  aria-label={mode === "month" ? "이전 달" : "이전 주"}
+                >
+                  <ChevronLeft className="h-4 w-4" aria-hidden />
+                  {mode === "month" ? "이전 달" : "이전 주"}
+                </Link>
+              </Button>
+              <span className="card-title tabular-nums text-[#2a2323]">{periodLabel}</span>
+              <Button variant="secondary" size="sm" className="gap-1" asChild>
+                <Link
+                  href={hrefFor(shiftGrowthAnchor(anchor, mode, 1), mode)}
+                  aria-label={mode === "month" ? "다음 달" : "다음 주"}
+                >
+                  {mode === "month" ? "다음 달" : "다음 주"}
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </Link>
+              </Button>
+              {!isCurrentPeriod ? (
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={hrefFor(today, mode)}>
+                    {mode === "month" ? "이번 달" : "이번 주"}
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           {summaries.length === 0 ? (
@@ -428,7 +518,7 @@ async function GroupStudentList({ group }: { group: { id: string; name: string }
                         )}
                         {summary.praiseCount > 0 ? (
                           <span className="rounded-full bg-[#fdf8ec] px-2.5 py-1 text-xs font-semibold text-[#8a6828]">
-                            💜 이번 주 칭찬 {summary.praiseCount}회
+                            💜 {mode === "month" ? "이번 달" : "이번 주"} 칭찬 {summary.praiseCount}회
                           </span>
                         ) : null}
                       </div>
