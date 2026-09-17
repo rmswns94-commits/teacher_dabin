@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+  type ReactNode,
+} from "react";
 import {
   BookOpen,
   History,
@@ -69,6 +77,15 @@ import {
   bulkUnevaluatedTargets,
   type BulkEvaluationField,
 } from "@/lib/bulk-evaluation";
+import {
+  collapsedStudentsKey,
+  getCollapsedStudentsServerSnapshot,
+  getCollapsedStudentsSnapshot,
+  parseCollapsedIds,
+  subscribeCollapsedStudents,
+  toggleCollapsedId,
+  writeCollapsedStudents,
+} from "@/lib/collapsed-students";
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate, formatShortDateWithWeekday } from "@/lib/dates";
 import {
@@ -1067,6 +1084,27 @@ export function DailyLogForm({
     },
     [],
   );
+
+  // 학생 카드 접힘 — 100% 사용자 [접기]/[펴기]로만 바뀌는 UI-only state.
+  // 평가 완료 여부와 무관, dirty/autosave/draft·final payload에 절대 관여하지 않는다.
+  // key는 group+수업일 단위(mode 무관)라 create/draft/finalized edit 모두 같은 상태를 쓰고,
+  // 날짜를 바꾸면 그 날짜의 상태로 전환된다(다른 날짜/그룹과 격리). 자동 접기/펴기 없음.
+  const collapseStorageKey = collapsedStudentsKey(group.id, classDate);
+  const collapsedRaw = useSyncExternalStore(
+    subscribeCollapsedStudents,
+    () => getCollapsedStudentsSnapshot(collapseStorageKey),
+    getCollapsedStudentsServerSnapshot,
+  );
+  const collapsedStudentIds = useMemo(
+    () => new Set(parseCollapsedIds(collapsedRaw)),
+    [collapsedRaw],
+  );
+  const toggleStudentCollapsed = (studentId: string) => {
+    writeCollapsedStudents(
+      collapseStorageKey,
+      toggleCollapsedId(parseCollapsedIds(collapsedRaw), studentId),
+    );
+  };
 
   useEffect(() => {
     const tick = async () => {
@@ -3242,6 +3280,10 @@ export function DailyLogForm({
           const entry = entries[student.studentId];
           const isAbsent = entry.attendance === "absent";
           const isExpanded = expanded[student.studentId];
+          // 카드 접힘 — 사용자 [접기]/[펴기]로만 결정 (평가 완료 여부와 무관).
+          // 본문은 unmount하지 않고 display:none으로만 숨겨 입력값/편집기 상태를 보존한다.
+          const isCollapsed = collapsedStudentIds.has(student.studentId);
+          const cardBodyId = `student-card-body-${student.studentId}`;
           // 결석 시 "놓친 진도" 기본 후보 — mixed에서는 학생 몫의 진도만
           // (시험 대상 학생 → 자기 학교 진도, 일반 학생 → 일반 교재 mirror. 교차 스냅샷 금지).
           // regular/legacy_exam은 기존 전체 mirror 정책 그대로.
@@ -3272,7 +3314,12 @@ export function DailyLogForm({
                   </span>
                 </div>
 
-                <div className="flex gap-1.5" role="group" aria-label={`${student.name} 출결`}>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                <div
+                  className={cn("flex gap-1.5", isCollapsed && "hidden")}
+                  role="group"
+                  aria-label={`${student.name} 출결`}
+                >
                   <button
                     type="button"
                     onClick={() => updateEntry(student.studentId, { attendance: "present" })}
@@ -3322,7 +3369,32 @@ export function DailyLogForm({
                     <CircleX className="h-3.5 w-3.5" /> 결석
                   </button>
                 </div>
+
+                {/* 접기/펴기 — 100% 사용자 조작 (자동 접힘/펼침 없음), UI-only라
+                    dirty/autosave/draft·final payload에 영향 없음. shared Button 재사용. */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-expanded={!isCollapsed}
+                  aria-controls={cardBodyId}
+                  aria-label={`${student.name} 평가 카드 ${isCollapsed ? "펴기" : "접기"}`}
+                  onClick={() => toggleStudentCollapsed(student.studentId)}
+                  className="gap-1 text-[#7c6d69]"
+                >
+                  {isCollapsed ? (
+                    <ChevronDown className="h-4 w-4" aria-hidden />
+                  ) : (
+                    <ChevronUp className="h-4 w-4" aria-hidden />
+                  )}
+                  {isCollapsed ? "펴기" : "접기"}
+                </Button>
+                </div>
               </div>
+
+              {/* 카드 본문 — 접힘 시 display:none으로만 숨긴다 (mounted 유지: 입력값·미확정
+                  편집기 상태 보존, hidden이라 keyboard focus/접근성 트리에서도 제외). */}
+              <div id={cardBodyId} className={isCollapsed ? "hidden" : undefined}>
 
               {/* 지난 수업 참고 — 같은 그룹 직전 Finalized 일지의 이 학생 평가 (read-only).
                   값이 하나도 없거나(신규 학생/미평가) 지난 일지가 없으면 영역 자체를 숨긴다.
@@ -3860,6 +3932,7 @@ export function DailyLogForm({
                   ) : null}
                 </div>
               )}
+              </div>
             </Card>
           );
         })}
