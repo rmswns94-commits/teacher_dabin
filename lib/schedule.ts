@@ -3,7 +3,11 @@
 // UTC+9, no DST), so absolute instants can be built with a constant offset.
 // A future per-user timezone setting only needs to change these two constants.
 
-import { resolveOccurrence, type ScheduleExceptionMap } from "@/lib/schedule-exceptions";
+import {
+  movedInOccurrences,
+  resolveOccurrence,
+  type ScheduleExceptionIndex,
+} from "@/lib/schedule-exceptions";
 
 export const APP_TIMEZONE = "Asia/Seoul";
 export const APP_UTC_OFFSET = "+09:00";
@@ -136,17 +140,19 @@ export type ScheduleOverview<G> = {
 // Scans today plus the next `horizonDays` days of weekly repeats and returns
 // the class in progress (if any), the next one, the one after that, and
 // today's already-finished classes (for the "write your log" nudge).
-// exceptions를 주면 1회 휴강(occurrence 제외)/1회 시간 변경(effective start·end)이 반영된다.
-// 예외 적용은 lib/schedule-exceptions의 resolveOccurrence 한 곳에서만 일어난다.
+// exceptions를 주면 1회 휴강(occurrence 제외)/시간 변경(effective start·end)/날짜 이동
+// (원래 날짜에서 빠지고 옮긴 날짜에 등장)이 반영된다. 예외 적용은 lib/schedule-exceptions
+// 한 곳에서만 일어난다.
 export function getScheduleOverview<G>(
   slots: { schedule: ScheduleSlot; group: G }[],
   now = new Date(),
   horizonDays = 7,
-  exceptions?: ScheduleExceptionMap | null,
+  exceptions?: ScheduleExceptionIndex | null,
 ): ScheduleOverview<G> {
   const nowEpoch = now.getTime();
   const today = getAppTimezoneToday(now);
   const occurrences: ClassOccurrence<G>[] = [];
+  const slotById = new Map(slots.map((entry) => [entry.schedule.id, entry]));
 
   for (let offset = 0; offset <= horizonDays; offset += 1) {
     const date = addDays(today, offset);
@@ -166,7 +172,7 @@ export function getScheduleOverview<G>(
       );
 
       if (effective.cancelled) {
-        continue; // 1회 휴강 — 이 날짜의 수업은 없다 (반복 시간표는 그대로)
+        continue; // 1회 휴강이거나 다른 날짜로 옮겨감 (반복 시간표는 그대로)
       }
 
       occurrences.push({
@@ -176,6 +182,23 @@ export function getScheduleOverview<G>(
         daysFromNow: offset,
         startEpoch: toEpoch(date, effective.startTime),
         endEpoch: toEpoch(date, effective.endTime),
+      });
+    }
+
+    // 이 날짜로 옮겨온 수업 (요일이 달라도 열린다)
+    for (const moved of movedInOccurrences(exceptions, date)) {
+      const entry = slotById.get(moved.scheduleId);
+      if (!entry || !moved.startTime || !moved.endTime) {
+        continue;
+      }
+
+      occurrences.push({
+        schedule: entry.schedule,
+        group: entry.group,
+        date,
+        daysFromNow: offset,
+        startEpoch: toEpoch(date, moved.startTime),
+        endEpoch: toEpoch(date, moved.endTime),
       });
     }
   }
@@ -210,11 +233,24 @@ export function getGroupNextOccurrences(
   slots: Pick<ScheduleSlot, "id" | "group_id" | "day_of_week" | "start_time" | "end_time">[],
   now = new Date(),
   horizonDays = 7,
-  exceptions?: ScheduleExceptionMap | null,
+  exceptions?: ScheduleExceptionIndex | null,
 ): Map<string, GroupNextOccurrence> {
   const nowEpoch = now.getTime();
   const today = getAppTimezoneToday(now);
   const result = new Map<string, GroupNextOccurrence>();
+  const slotById = new Map(slots.map((slot) => [slot.id, slot]));
+
+  // 그룹당 "수업 중 > 더 이른 시작" 1건만 유지
+  const consider = (groupId: string, occurrence: GroupNextOccurrence) => {
+    const existing = result.get(groupId);
+    if (
+      !existing ||
+      (occurrence.isNow && !existing.isNow) ||
+      (occurrence.isNow === existing.isNow && occurrence.startEpoch < existing.startEpoch)
+    ) {
+      result.set(groupId, occurrence);
+    }
+  };
 
   for (let offset = 0; offset <= horizonDays; offset += 1) {
     const date = addDays(today, offset);
@@ -234,7 +270,7 @@ export function getGroupNextOccurrences(
       );
 
       if (effective.cancelled) {
-        continue; // 1회 휴강 occurrence는 "다음 수업" 후보가 아니다
+        continue; // 1회 휴강이거나 다른 날짜로 옮겨감
       }
 
       const startEpoch = toEpoch(date, effective.startTime);
@@ -244,7 +280,7 @@ export function getGroupNextOccurrences(
         continue; // 이미 끝난 수업
       }
 
-      const occurrence: GroupNextOccurrence = {
+      consider(slot.group_id, {
         isNow: startEpoch <= nowEpoch && nowEpoch < endEpoch,
         date,
         daysFromNow: offset,
@@ -252,18 +288,32 @@ export function getGroupNextOccurrences(
         endTime: effective.endTime,
         startEpoch,
         endEpoch,
-      };
+      });
+    }
 
-      const existing = result.get(slot.group_id);
-
-      // 수업 중 > 더 이른 시작 시각 순으로 그룹당 1건만 유지.
-      if (
-        !existing ||
-        (occurrence.isNow && !existing.isNow) ||
-        (occurrence.isNow === existing.isNow && occurrence.startEpoch < existing.startEpoch)
-      ) {
-        result.set(slot.group_id, occurrence);
+    // 이 날짜로 옮겨온 수업
+    for (const moved of movedInOccurrences(exceptions, date)) {
+      const slot = slotById.get(moved.scheduleId);
+      if (!slot || !moved.startTime || !moved.endTime) {
+        continue;
       }
+
+      const startEpoch = toEpoch(date, moved.startTime);
+      const endEpoch = toEpoch(date, moved.endTime);
+
+      if (endEpoch <= nowEpoch) {
+        continue;
+      }
+
+      consider(slot.group_id, {
+        isNow: startEpoch <= nowEpoch && nowEpoch < endEpoch,
+        date,
+        daysFromNow: offset,
+        startTime: formatTimeHM(moved.startTime),
+        endTime: formatTimeHM(moved.endTime),
+        startEpoch,
+        endEpoch,
+      });
     }
   }
 
@@ -302,10 +352,19 @@ export function slotsOverlap(
 export function getDayClassWindows(
   slots: Pick<ScheduleSlot, "id" | "group_id" | "day_of_week" | "start_time" | "end_time">[],
   date: string,
-  exceptions?: ScheduleExceptionMap | null,
+  exceptions?: ScheduleExceptionIndex | null,
 ): Map<string, { start: string; end: string }> {
   const dow = dayOfWeekOf(date);
   const windows = new Map<string, { start: string; end: string }>();
+  const slotById = new Map(slots.map((slot) => [slot.id, slot]));
+
+  const widen = (groupId: string, start: string, end: string) => {
+    const current = windows.get(groupId);
+    windows.set(groupId, {
+      start: !current || start < current.start ? start : current.start,
+      end: !current || end > current.end ? end : current.end,
+    });
+  };
 
   for (const slot of slots) {
     if (slot.day_of_week !== dow) {
@@ -317,11 +376,16 @@ export function getDayClassWindows(
       continue;
     }
 
-    const current = windows.get(slot.group_id);
-    windows.set(slot.group_id, {
-      start: !current || effective.startTime < current.start ? effective.startTime : current.start,
-      end: !current || effective.endTime > current.end ? effective.endTime : current.end,
-    });
+    widen(slot.group_id, effective.startTime, effective.endTime);
+  }
+
+  // 이 날짜로 옮겨온 수업도 그날의 수업 window에 포함된다
+  for (const moved of movedInOccurrences(exceptions, date)) {
+    const slot = slotById.get(moved.scheduleId);
+    if (!slot || !moved.startTime || !moved.endTime) {
+      continue;
+    }
+    widen(slot.group_id, formatTimeHM(moved.startTime), formatTimeHM(moved.endTime));
   }
 
   return windows;

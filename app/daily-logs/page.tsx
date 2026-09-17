@@ -40,6 +40,7 @@ import {
   getMonthlyScheduledMakeups,
   type MonthlyMakeupMarker,
 } from "@/lib/supabase/queries/makeups";
+import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import { eventMetaOf } from "@/lib/validation/calendar-event";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,44 @@ function kstStamp(iso: string) {
   const kst = new Date(Date.parse(iso) + 9 * 3_600_000);
   return `${kst.getUTCMonth() + 1}/${kst.getUTCDate()} ${String(kst.getUTCHours()).padStart(2, "0")}:${String(kst.getUTCMinutes()).padStart(2, "0")}`;
 }
+
+// 달력에 얹는 정규수업 1회 변경 표시. 예외 row 하나가 날짜에 따라 다른 의미를 갖는다.
+//   cancelled    : 이날 휴강
+//   moved-out    : 이날 수업이 다른 날짜로 옮겨감 (원래 날짜는 자동 휴강)
+//   moved-in     : 다른 날짜 수업이 이날로 옮겨옴
+//   time-changed : 날짜는 그대로, 시간만 바뀜
+type ScheduleChangeMarker = {
+  id: string;
+  kind: "cancelled" | "moved-out" | "moved-in" | "time-changed";
+  groupName: string;
+  groupIcon: string;
+  // moved-out이면 옮겨간 날짜, moved-in이면 원래 날짜
+  counterpartDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
+};
+
+function changeComment(change: ScheduleChangeMarker) {
+  const time = change.startTime ? ` ${change.startTime}` : "";
+
+  if (change.kind === "cancelled") {
+    return "이날 수업은 휴강이에요.";
+  }
+  if (change.kind === "moved-out") {
+    return `이날 수업은 ${formatKoreanDate(change.counterpartDate, true)}${time}(으)로 변경되었어요.`;
+  }
+  if (change.kind === "moved-in") {
+    return `${formatKoreanDate(change.counterpartDate, true)} 수업이 이날${time}(으)로 변경되었어요.`;
+  }
+  return `이날 수업 시간이 ${change.startTime} ~ ${change.endTime}(으)로 변경되었어요.`;
+}
+
+const CHANGE_EMOJI: Record<ScheduleChangeMarker["kind"], string> = {
+  cancelled: "😴",
+  "moved-out": "😴",
+  "moved-in": "🔁",
+  "time-changed": "🕒",
+};
 
 const WEEKDAY_HEADERS = ["일", "월", "화", "수", "목", "금", "토"];
 const WEEKDAY_HEADERS_FULL = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
@@ -99,7 +138,7 @@ export default async function DailyLogsPage({
     params.status === "draft" || params.status === "completed" ? (params.status as DailyLogStatus) : "";
   const range = monthRange(month);
 
-  const [markers, events, groups, schedules, monthlyMakeups] = await Promise.all([
+  const [markers, events, groups, schedules, monthlyMakeups, scheduleExceptions] = await Promise.all([
     getMonthlyLogMarkers(range.start, range.end, {
       groupId: groupId || undefined,
       status: status || undefined,
@@ -108,6 +147,8 @@ export default async function DailyLogsPage({
     getCurrentUserGroups(),
     getCurrentUserSchedulesWithGroup(),
     getMonthlyScheduledMakeups(range.start, range.end),
+    // 이 달의 1회 변경(휴강/시간 변경/날짜 이동) — 월 단위 batch 1회 (날짜별 조회 없음)
+    getScheduleExceptionsInRange(range.start, range.end),
   ]);
 
   // 그룹+요일 → 수업 시간 (정확히 하나일 때만 표시, 추측 금지)
@@ -164,6 +205,56 @@ export default async function DailyLogsPage({
       makeup,
     ]);
   }
+
+  // 1회 변경을 날짜별로 펼친다. 이동은 원래 날짜(😴 사라짐)와 옮긴 날짜(🔁 생김) 양쪽에 남는다 —
+  // 같은 예외 row 하나가 두 날짜에서 각각 다른 코멘트로 보인다.
+  const changesByDate = new Map<string, ScheduleChangeMarker[]>();
+  const pushChange = (date: string, marker: ScheduleChangeMarker) => {
+    changesByDate.set(date, [...(changesByDate.get(date) ?? []), marker]);
+  };
+  for (const entry of scheduleExceptions) {
+    // 반 필터가 켜져 있으면 달력의 다른 표시와 동일하게 그 반만 남긴다
+    if (groupId && entry.groupId !== groupId) {
+      continue;
+    }
+    const group = groups.find((row) => row.id === entry.groupId);
+    const base = {
+      groupName: group?.name ?? "수업",
+      groupIcon: groupIconOf(group?.icon),
+      startTime: entry.startTime,
+      endTime: entry.endTime,
+    };
+
+    if (entry.kind === "cancelled") {
+      pushChange(entry.date, { ...base, id: entry.id, kind: "cancelled", counterpartDate: null });
+    } else if (entry.kind === "moved" && entry.movedToDate) {
+      pushChange(entry.date, {
+        ...base,
+        id: `${entry.id}-out`,
+        kind: "moved-out",
+        counterpartDate: entry.movedToDate,
+      });
+      pushChange(entry.movedToDate, {
+        ...base,
+        id: `${entry.id}-in`,
+        kind: "moved-in",
+        counterpartDate: entry.date,
+      });
+    } else if (entry.kind === "time_override") {
+      pushChange(entry.date, {
+        ...base,
+        id: entry.id,
+        kind: "time-changed",
+        counterpartDate: null,
+      });
+    }
+  }
+
+  // 그날 수업이 사라지는 변경(휴강 + 다른 날짜로 이동)만 달력 셀에 😴로 표시한다
+  const restCountFor = (date: string) =>
+    (changesByDate.get(date) ?? []).filter(
+      (change) => change.kind === "cancelled" || change.kind === "moved-out",
+    ).length;
 
   const groupOptions = groups.map((group) => ({ id: group.id, name: group.name }));
 
@@ -392,6 +483,7 @@ export default async function DailyLogsPage({
                   const completedCount = logs.filter((log) => log.status === "completed").length;
                   const draftCount = logs.length - completedCount;
                   const icons = iconsFor(date);
+                  const restCount = restCountFor(date);
                   const isSelected = date === selectedDate;
                   const isToday = date === today;
                   const dayNumber = Number(date.slice(8));
@@ -427,7 +519,13 @@ export default async function DailyLogsPage({
                           .map((makeup) => makeup.student?.name ?? "학생")
                           .join(", ")})`
                       : "",
-                    logs.length === 0 && dayEvents.length === 0 && dayMakeups.length === 0
+                    ...(changesByDate.get(date) ?? []).map(
+                      (change) => `${change.groupName} ${changeComment(change)}`,
+                    ),
+                    logs.length === 0 &&
+                    dayEvents.length === 0 &&
+                    dayMakeups.length === 0 &&
+                    (changesByDate.get(date) ?? []).length === 0
                       ? "기록 없음"
                       : "",
                   ].filter(Boolean);
@@ -470,6 +568,12 @@ export default async function DailyLogsPage({
                             aria-hidden
                             className="h-1.5 w-1.5 shrink-0 rounded-full bg-white ring-1 ring-[#3d7f64]"
                           />
+                        ) : null}
+                        {/* 수업이 사라진 날(휴강·다른 날짜로 변경) — 자세한 내용은 아래 상세에서 */}
+                        {restCount > 0 ? (
+                          <span aria-hidden className="shrink-0 text-xs leading-none">
+                            😴
+                          </span>
                         ) : null}
                       </span>
 
@@ -521,6 +625,9 @@ export default async function DailyLogsPage({
                 <span className="flex items-center gap-1">
                   <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-white ring-1 ring-[#3d7f64]" /> 보충 예정
                 </span>
+                <span className="flex items-center gap-1">
+                  <span aria-hidden className="text-sm leading-none">😴</span> 휴강 · 날짜 변경
+                </span>
               </div>
 
               {markers.length === 0 ? (
@@ -542,6 +649,30 @@ export default async function DailyLogsPage({
                   {dateLogs.length > 0 ? `수업 ${dateLogs.length}개` : ""}
                 </span>
               </div>
+
+              {/* 정규수업 1회 변경 — 이 날짜에 수업이 사라졌거나(휴강·날짜 변경) 새로 생긴 이유 */}
+              {(changesByDate.get(selectedDate) ?? []).length > 0 ? (
+                <div className="mt-3">
+                  <h3 className="card-title text-[#8f5470]">수업 변경</h3>
+                  <ul className="mt-2 space-y-2">
+                    {(changesByDate.get(selectedDate) ?? []).map((change) => (
+                      <li
+                        key={change.id}
+                        className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl border border-[#e6e6ea] bg-white px-3.5 py-2.5 text-sm"
+                      >
+                        <span aria-hidden className="text-base leading-none">
+                          {CHANGE_EMOJI[change.kind]}
+                        </span>
+                        <span className="flex min-w-0 items-center gap-1 font-medium text-[#232327]">
+                          <span aria-hidden>{change.groupIcon}</span>
+                          <span className="min-w-0 truncate">{change.groupName}</span>
+                        </span>
+                        <span className="min-w-0 text-[#6b6b74]">{changeComment(change)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
 
               <div className="mt-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">

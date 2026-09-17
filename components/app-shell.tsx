@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { ScrollJumpControls } from "@/components/scroll-jump-controls";
 import { Sidebar } from "@/components/sidebar";
 import { getGroupNextOccurrences } from "@/lib/schedule";
-import { buildScheduleExceptionMap } from "@/lib/schedule-exceptions";
+import { buildScheduleExceptionIndex } from "@/lib/schedule-exceptions";
 import { todayDateString } from "@/lib/dates";
 import { addDaysStr } from "@/lib/calendar";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
@@ -28,7 +28,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
     schedules,
     new Date(),
     7,
-    buildScheduleExceptionMap(scheduleExceptions),
+    buildScheduleExceptionIndex(scheduleExceptions),
   );
   const sortedGroups = [...groups].sort((a, b) => {
     const keyA = nextByGroup.get(a.id)?.startEpoch ?? Number.MAX_SAFE_INTEGER;

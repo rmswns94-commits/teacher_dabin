@@ -22,7 +22,7 @@ import {
   getPreviousStudentEvaluations,
 } from "@/lib/supabase/queries/daily-logs";
 import { getCurrentUserGroups, getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
-import { buildScheduleExceptionMap } from "@/lib/schedule-exceptions";
+import { buildScheduleExceptionIndex } from "@/lib/schedule-exceptions";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup, getGroupSchedules } from "@/lib/supabase/queries/schedules";
 import { getDailyLogExamPreviewEntries } from "@/lib/supabase/queries/school-exams";
@@ -151,7 +151,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
     allSchedules,
     dayOfWeekOf(log.class_date),
     log.group_id,
-    { date: log.class_date, exceptions: buildScheduleExceptionMap(dateExceptions) },
+    { date: log.class_date, exceptions: buildScheduleExceptionIndex(dateExceptions) },
   );
 
   for (const member of currentMembers) {

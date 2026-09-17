@@ -23,7 +23,7 @@ import {
   getLatestLogPerGroup,
   getUpcomingGroupExams,
 } from "@/lib/supabase/queries/groups";
-import { buildScheduleExceptionMap } from "@/lib/schedule-exceptions";
+import { buildScheduleExceptionIndex } from "@/lib/schedule-exceptions";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import { restoreGroupAction } from "./actions";
@@ -98,7 +98,7 @@ export default async function GroupsPage() {
     schedules,
     now,
     7,
-    buildScheduleExceptionMap(scheduleExceptions),
+    buildScheduleExceptionIndex(scheduleExceptions),
   );
 
   // 그룹별 가장 가까운 시험 1건 (start_date 오름차순이라 첫 항목이 가장 가깝다).

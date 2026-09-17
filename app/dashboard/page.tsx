@@ -30,7 +30,7 @@ import {
   previousLessonSourceCutoff,
   type ClassOccurrence,
 } from "@/lib/schedule";
-import { buildScheduleExceptionMap } from "@/lib/schedule-exceptions";
+import { buildScheduleExceptionIndex } from "@/lib/schedule-exceptions";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { deriveUnfinishedLogCandidates } from "@/lib/unfinished-logs";
 import { UnfinishedLogCard } from "@/components/unfinished-log-card";
@@ -112,7 +112,7 @@ export default async function DashboardPage() {
     // 정규수업 1회 예외(휴강/시간 변경) — 오늘~다음 수업 탐색 범위 1쿼리 (schedule마다 조회 금지)
     getScheduleExceptionsInRange(today, addDaysStr(today, SCHEDULE_HORIZON_DAYS)),
   ]);
-  const exceptionMap = buildScheduleExceptionMap(scheduleExceptions);
+  const exceptionMap = buildScheduleExceptionIndex(scheduleExceptions);
   const displayName = getDisplayName(user);
 
   const upcomingExams = examEvents.map((event) => {

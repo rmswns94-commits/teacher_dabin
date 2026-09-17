@@ -14,6 +14,7 @@ type ExceptionRow = {
   kind: ScheduleExceptionKind;
   start_time: string | null;
   end_time: string | null;
+  moved_to_date: string | null;
 };
 
 function toEntry(row: ExceptionRow): ScheduleExceptionEntry {
@@ -25,10 +26,12 @@ function toEntry(row: ExceptionRow): ScheduleExceptionEntry {
     kind: row.kind,
     startTime: row.start_time ? formatTimeHM(row.start_time) : null,
     endTime: row.end_time ? formatTimeHM(row.end_time) : null,
+    movedToDate: row.moved_to_date ?? null,
   };
 }
 
-const SELECT_COLUMNS = "id, group_id, schedule_id, occurrence_date, kind, start_time, end_time";
+const LEGACY_SELECT_COLUMNS = "id, group_id, schedule_id, occurrence_date, kind, start_time, end_time";
+const SELECT_COLUMNS = `${LEGACY_SELECT_COLUMNS}, moved_to_date`;
 
 // migration 미적용(테이블 없음)은 오류가 아니라 "예외 기능이 아직 꺼진 상태"다 —
 // 읽기 경로에서는 조용히 빈 목록으로 두고, 저장 경로에서만 사용자에게 알린다.
@@ -36,6 +39,15 @@ const MISSING_TABLE_CODES = new Set(["42P01", "PGRST205"]);
 
 function isMissingTable(error: { code?: string } | null | undefined) {
   return Boolean(error?.code && MISSING_TABLE_CODES.has(error.code));
+}
+
+// 이동(moved_to_date) migration만 아직 안 된 상태 — 테이블은 있고 컬럼만 없다.
+// 이 경우 이미 쓰고 있던 휴강/시간 변경까지 같이 죽으면 안 되므로, 읽기는 구 컬럼으로
+// 한 번 더 시도해 그대로 동작시키고 이동만 저장 시 안내한다.
+const MISSING_COLUMN_CODES = new Set(["42703", "PGRST204"]);
+
+function isMissingMoveColumn(error: { code?: string } | null | undefined) {
+  return Boolean(error?.code && MISSING_COLUMN_CODES.has(error.code));
 }
 
 // 날짜 범위 batch (대시보드 오늘~+7일, 일지 화면의 특정 날짜 등)
@@ -47,22 +59,38 @@ export async function getScheduleExceptionsInRange(startDate: string, endDate: s
     return [] as ScheduleExceptionEntry[];
   }
 
+  // 원래 날짜가 범위에 있거나(휴강/시간 변경/이동 출발), 옮겨온 날짜가 범위에 있는 경우
+  // (이동 도착)를 한 번에 가져온다 — 날짜별 추가 조회 없음.
   const { data, error } = await supabase
     .from("class_schedule_exceptions")
     .select(SELECT_COLUMNS)
     .eq("user_id", user.id)
-    .gte("occurrence_date", startDate)
-    .lte("occurrence_date", endDate);
+    .or(
+      `and(occurrence_date.gte.${startDate},occurrence_date.lte.${endDate}),` +
+        `and(moved_to_date.gte.${startDate},moved_to_date.lte.${endDate})`,
+    );
 
-  if (error) {
-    // 테이블 미적용(migration 전)은 조용히 빈 목록 — 예외 없음 = 기존 시간표대로 동작
-    if (!isMissingTable(error)) {
-      console.error("getScheduleExceptionsInRange error", error);
-    }
-    return [] as ScheduleExceptionEntry[];
+  if (!error) {
+    return ((data ?? []) as ExceptionRow[]).map(toEntry);
   }
 
-  return ((data ?? []) as ExceptionRow[]).map(toEntry);
+  // 이동 migration 전: 구 컬럼으로 원래 날짜 범위만 (휴강/시간 변경은 그대로 동작)
+  if (isMissingMoveColumn(error)) {
+    const legacy = await supabase
+      .from("class_schedule_exceptions")
+      .select(LEGACY_SELECT_COLUMNS)
+      .eq("user_id", user.id)
+      .gte("occurrence_date", startDate)
+      .lte("occurrence_date", endDate);
+
+    return ((legacy.data ?? []) as ExceptionRow[]).map(toEntry);
+  }
+
+  // 테이블 미적용(migration 전)은 조용히 빈 목록 — 예외 없음 = 기존 시간표대로 동작
+  if (!isMissingTable(error)) {
+    console.error("getScheduleExceptionsInRange error", error);
+  }
+  return [] as ScheduleExceptionEntry[];
 }
 
 // 그룹의 특정 날짜 이후 예외 (그룹 상세의 "예정된 1회 변경")
@@ -79,17 +107,96 @@ export async function getGroupScheduleExceptionsFrom(groupId: string, fromDate: 
     .select(SELECT_COLUMNS)
     .eq("user_id", user.id)
     .eq("group_id", groupId)
-    .gte("occurrence_date", fromDate)
+    // 원래 날짜가 아직 안 지났거나, 옮겨간 날짜가 미래인 변경까지 "예정된 변경"으로 본다
+    .or(`occurrence_date.gte.${fromDate},moved_to_date.gte.${fromDate}`)
     .order("occurrence_date", { ascending: true });
+
+  if (!error) {
+    return ((data ?? []) as ExceptionRow[]).map(toEntry);
+  }
+
+  if (isMissingMoveColumn(error)) {
+    const legacy = await supabase
+      .from("class_schedule_exceptions")
+      .select(LEGACY_SELECT_COLUMNS)
+      .eq("user_id", user.id)
+      .eq("group_id", groupId)
+      .gte("occurrence_date", fromDate)
+      .order("occurrence_date", { ascending: true });
+
+    return ((legacy.data ?? []) as ExceptionRow[]).map(toEntry);
+  }
+
+  if (!isMissingTable(error)) {
+    console.error("getGroupScheduleExceptionsFrom error", error);
+  }
+  return [] as ScheduleExceptionEntry[];
+}
+
+// 특정 occurrence(schedule + 원래 날짜)에 이미 걸려 있는 예외 하나.
+// 저장 직전 "이미 옮겨둔 수업을 다시 옮기는 중인가" 판정에만 쓰는 point lookup이다.
+export async function getScheduleExceptionForOccurrence(scheduleId: string, date: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return null;
+  }
+
+  const query = (columns: string) =>
+    supabase
+      .from("class_schedule_exceptions")
+      .select(columns)
+      .eq("user_id", user.id)
+      .eq("schedule_id", scheduleId)
+      .eq("occurrence_date", date)
+      .maybeSingle();
+
+  let { data, error } = await query(SELECT_COLUMNS);
+  if (error && isMissingMoveColumn(error)) {
+    ({ data, error } = await query(LEGACY_SELECT_COLUMNS));
+  }
 
   if (error) {
     if (!isMissingTable(error)) {
-      console.error("getGroupScheduleExceptionsFrom error", error);
+      console.error("getScheduleExceptionForOccurrence error", error);
     }
-    return [] as ScheduleExceptionEntry[];
+    return null;
   }
 
-  return ((data ?? []) as ExceptionRow[]).map(toEntry);
+  return data ? toEntry(data as unknown as ExceptionRow) : null;
+}
+
+// 되돌리기 직전 확인용 — id로 예외 하나 (원래 날짜/옮긴 날짜 모두 서버에서 확인하기 위해).
+export async function getScheduleExceptionById(exceptionId: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return null;
+  }
+
+  const query = (columns: string) =>
+    supabase
+      .from("class_schedule_exceptions")
+      .select(columns)
+      .eq("user_id", user.id)
+      .eq("id", exceptionId)
+      .maybeSingle();
+
+  let { data, error } = await query(SELECT_COLUMNS);
+  if (error && isMissingMoveColumn(error)) {
+    ({ data, error } = await query(LEGACY_SELECT_COLUMNS));
+  }
+
+  if (error) {
+    if (!isMissingTable(error)) {
+      console.error("getScheduleExceptionById error", error);
+    }
+    return null;
+  }
+
+  return data ? toEntry(data as unknown as ExceptionRow) : null;
 }
 
 // 1회 예외 저장 — 같은 occurrence에는 항상 하나만 존재한다(unique + upsert).
@@ -101,6 +208,8 @@ export async function upsertScheduleException(input: {
   kind: ScheduleExceptionKind;
   startTime?: string | null;
   endTime?: string | null;
+  // kind === "moved"일 때 옮겨갈 날짜
+  movedToDate?: string | null;
 }) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
@@ -122,27 +231,40 @@ export async function upsertScheduleException(input: {
     throw new Error("수업 시간을 찾을 수 없어요.");
   }
 
-  const { error } = await supabase.from("class_schedule_exceptions").upsert(
-    {
-      user_id: user.id,
-      group_id: input.groupId,
-      schedule_id: input.scheduleId,
-      occurrence_date: input.date,
-      kind: input.kind,
-      start_time: input.kind === "time_override" ? input.startTime ?? null : null,
-      end_time: input.kind === "time_override" ? input.endTime ?? null : null,
-    },
-    { onConflict: "schedule_id,occurrence_date" },
-  );
+  const payload: Record<string, unknown> = {
+    user_id: user.id,
+    group_id: input.groupId,
+    schedule_id: input.scheduleId,
+    occurrence_date: input.date,
+    kind: input.kind,
+    start_time: input.kind === "cancelled" ? null : input.startTime ?? null,
+    end_time: input.kind === "cancelled" ? null : input.endTime ?? null,
+  };
+
+  // 이동 컬럼은 이동일 때만 보낸다 — 이동 migration 전에도 휴강/시간 변경은 그대로 저장된다
+  if (input.kind === "moved") {
+    payload.moved_to_date = input.movedToDate ?? null;
+  }
+
+  const { error } = await supabase
+    .from("class_schedule_exceptions")
+    .upsert(payload, { onConflict: "schedule_id,occurrence_date" });
 
   if (error) {
     console.error("upsertScheduleException error", error);
     // 저장 경로에서는 미적용 원인을 숨기지 않는다 ("다시 시도"로 풀리지 않는 문제)
-    throw new Error(
-      isMissingTable(error)
-        ? "1회 변경에 필요한 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20260918_create_class_schedule_exceptions.sql을 실행한 뒤 다시 시도해주세요."
-        : "수업 일정을 변경하지 못했어요. 잠시 후 다시 시도해주세요.",
-    );
+    if (isMissingTable(error)) {
+      throw new Error(
+        "1회 변경에 필요한 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20260918_create_class_schedule_exceptions.sql을 실행한 뒤 다시 시도해주세요.",
+      );
+    }
+    // 이동만 아직 못 쓰는 상태: 컬럼 없음(42703/PGRST204) 또는 kind check 위반(23514)
+    if (input.kind === "moved" && (isMissingMoveColumn(error) || error.code === "23514")) {
+      throw new Error(
+        "날짜 변경에 필요한 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20260918_add_schedule_exception_move.sql을 실행한 뒤 다시 시도해주세요.",
+      );
+    }
+    throw new Error("수업 일정을 변경하지 못했어요. 잠시 후 다시 시도해주세요.");
   }
 
   return true;

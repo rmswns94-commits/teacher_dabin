@@ -30,7 +30,7 @@ import {
   getGroupLatestProgress,
   getGroupStudentsForCurrentUser,
 } from "@/lib/supabase/queries/groups";
-import { buildScheduleExceptionMap } from "@/lib/schedule-exceptions";
+import { buildScheduleExceptionIndex } from "@/lib/schedule-exceptions";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup, getGroupSchedules } from "@/lib/supabase/queries/schedules";
 import { getDailyLogExamPreviewEntries } from "@/lib/supabase/queries/school-exams";
@@ -107,7 +107,7 @@ export default async function NewDailyLogPage({
   const adjacentClasses = selectedGroup
     ? getAdjacentScheduledClasses(allSchedules, dayOfWeekOf(date), selectedGroup.id, {
         date,
-        exceptions: buildScheduleExceptionMap(dateExceptions),
+        exceptions: buildScheduleExceptionIndex(dateExceptions),
       })
     : null;
 

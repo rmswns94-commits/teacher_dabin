@@ -1,5 +1,9 @@
 import { formatTimeHM } from "@/lib/schedule";
-import { resolveOccurrence, type ScheduleExceptionMap } from "@/lib/schedule-exceptions";
+import {
+  movedInOccurrences,
+  resolveOccurrence,
+  type ScheduleExceptionIndex,
+} from "@/lib/schedule-exceptions";
 
 // 같은 날짜(요일)의 정규 수업 이전/다음 계산 — Daily Log 이전/다음 수업 바로가기용 순수 헬퍼.
 // 기준: 현재 일지의 lesson_date 요일에 실제 schedule row가 있는 그룹만 후보이며(보충/시험
@@ -30,16 +34,17 @@ export type AdjacentClasses = {
 
 const NONE: AdjacentClasses = { previous: null, next: null, hasCurrent: false };
 
-// date/exceptions를 주면 1회 예외가 반영된다: 휴강 occurrence는 이동 대상에서 빠지고,
-// 시간 변경은 effective start_time 기준으로 순서가 정해진다 (base 시간 기준 정렬 금지).
+// date/exceptions를 주면 1회 예외가 반영된다: 휴강·다른 날짜로 옮겨간 occurrence는 이동
+// 대상에서 빠지고, 이 날짜로 옮겨온 수업은 추가되며, 순서는 effective start_time 기준이다
+// (base 시간 기준 정렬 금지).
 export function getAdjacentScheduledClasses(
   slots: readonly AdjacentClassSlot[],
   weekday: number,
   currentGroupId: string,
-  options?: { date?: string; exceptions?: ScheduleExceptionMap | null },
+  options?: { date?: string; exceptions?: ScheduleExceptionIndex | null },
 ): AdjacentClasses {
   const date = options?.date;
-  const daySlots = slots
+  const sameWeekday = slots
     .filter((slot) => slot.day_of_week === weekday && slot.group)
     .map((slot) => {
       const effective = date
@@ -52,7 +57,20 @@ export function getAdjacentScheduledClasses(
         startTime: effective && !effective.cancelled ? effective.startTime : formatTimeHM(slot.start_time),
       };
     })
-    .filter((entry) => !entry.cancelled)
+    .filter((entry) => !entry.cancelled);
+
+  // 이 날짜로 옮겨온 수업 (요일이 달라도 그날 수업이므로 이동 대상이다)
+  const slotById = new Map(slots.map((slot) => [slot.id, slot]));
+  const movedIn = date
+    ? movedInOccurrences(options?.exceptions, date).flatMap((moved) => {
+        const slot = slotById.get(moved.scheduleId);
+        return slot && slot.group && moved.startTime
+          ? [{ slot, cancelled: false, startTime: formatTimeHM(moved.startTime) }]
+          : [];
+      })
+    : [];
+
+  const daySlots = [...sameWeekday, ...movedIn]
     // start_time ASC — 동률은 안정적인 schedule row id로만 가른다 (새 이름순 규칙 금지)
     .sort(
       (a, b) => a.startTime.localeCompare(b.startTime) || a.slot.id.localeCompare(b.slot.id),
