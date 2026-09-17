@@ -731,9 +731,13 @@ export function DailyLogForm({
   const [showLegacyHomework] = useState(() =>
     Boolean(restoredText(restored?.homework, legacyHomeworkFallback).trim()),
   );
-  // 숙제 날짜(선택): 고르면 그 날짜의 To Do로 숙제가 노출된다 — 기본값 없음(옵트인)
+  // 숙제 날짜(선택): 고르면 그 날짜의 To Do로 숙제가 노출된다 — 기본값 없음(옵트인).
+  // draft에 문자열이 있으면 ""(지움)도 그대로 복원 — `|| initial` fallback을 쓰면
+  // 지워서 임시저장한 날짜가 저장된 row 값으로 부활한다 (restoreDraft와 동일한 규칙).
   const [homeworkDueDate, setHomeworkDueDate] = useState(
-    restoredText(restored?.homeworkDueDate, "") || initial?.homeworkDueDate || "",
+    typeof restored?.homeworkDueDate === "string"
+      ? restored.homeworkDueDate
+      : initial?.homeworkDueDate ?? "",
   );
   // 수업 회고 (강사 자기 성찰) — 전부 선택 입력, 값이 있으면 카드 자동 펼침
   const [reflectionGood, setReflectionGood] = useState(
