@@ -64,6 +64,11 @@ import {
 import { createStudentWeaknessAction } from "@/app/students/weakness-actions";
 import { WeaknessFormDialog, type WeaknessFormValues } from "@/components/weakness-form-dialog";
 import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comments";
+import {
+  applyBulkEvaluation,
+  bulkUnevaluatedTargets,
+  type BulkEvaluationField,
+} from "@/lib/bulk-evaluation";
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate, formatShortDateWithWeekday } from "@/lib/dates";
 import {
@@ -191,6 +196,44 @@ const digitsOnly = (value: string) => value.replace(/\D/g, "").slice(0, 3);
 function isComposingEvent(event: { nativeEvent: object }) {
   return Boolean((event.nativeEvent as { isComposing?: boolean }).isComposing);
 }
+
+// 학생 평가 일괄 입력 대상 — 실제 존재하는 세그먼트 평가 필드 중 spec 범위(숙제/집중/참여).
+// value/label은 기존 enum·라벨 단일 소스(lib/elementary) 재사용. 출결은 폼 기본값이
+// "출석"이라 미평가 상태가 없어 bulk 대상이 아니고, 온라인 복습(boolean|null 3-state)과
+// 코멘트/칭찬(개별 텍스트)도 제외한다. particle은 한국어 조사(숙제를/집중을, 완료로/좋음으로).
+const BULK_EVALUATION_ACTIONS: readonly {
+  field: BulkEvaluationField;
+  group: string;
+  objectParticle: string;
+  value: string;
+  valueLabel: string;
+  toParticle: string;
+}[] = [
+  {
+    field: "homeworkStatus",
+    group: "숙제",
+    objectParticle: "를",
+    value: "completed",
+    valueLabel: homeworkStatusLabels.completed,
+    toParticle: "로",
+  },
+  {
+    field: "focusLevel",
+    group: "집중",
+    objectParticle: "을",
+    value: "good",
+    valueLabel: focusLevelLabels.good,
+    toParticle: "으로",
+  },
+  {
+    field: "participationLevel",
+    group: "참여",
+    objectParticle: "를",
+    value: "active",
+    valueLabel: participationLevelLabels.active,
+    toParticle: "으로",
+  },
+];
 
 // 자동 임시저장 주기 (final 저장과 별개 — background 보호용)
 const DAILY_LOG_AUTOSAVE_INTERVAL_MS = 60_000;
@@ -978,6 +1021,20 @@ export function DailyLogForm({
     [],
   );
 
+  // 학생 평가 일괄 입력 — 표시 전용 state (draft 스냅샷/dirty에 포함되지 않는다).
+  // notice는 숙제 공유 notice와 같은 4초 자동 소멸 패턴.
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkNotice, setBulkNotice] = useState("");
+  const bulkNoticeTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (bulkNoticeTimerRef.current !== null) {
+        window.clearTimeout(bulkNoticeTimerRef.current);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     const tick = async () => {
       if (autosaveInFlightRef.current || composingRef.current || finalSavingRef.current) {
@@ -1243,6 +1300,36 @@ export function DailyLogForm({
           entry.attendance === "absent" ? entry : { ...entry, homeworkStatus: "completed" },
         ]),
       ),
+    );
+  };
+
+  const showBulkNotice = (text: string) => {
+    setBulkNotice(text);
+    if (bulkNoticeTimerRef.current !== null) {
+      window.clearTimeout(bulkNoticeTimerRef.current);
+    }
+    bulkNoticeTimerRef.current = window.setTimeout(() => {
+      setBulkNotice("");
+      bulkNoticeTimerRef.current = null;
+    }, 4000);
+  };
+
+  // 일괄 입력 실행 — 미평가(빈 값)이면서 결석이 아닌 학생만, form state 1회 update.
+  // DB 호출 없음: 저장은 기존 autosave/임시 저장/수업 마무리 파이프라인이 그대로 담당한다.
+  // 이미 입력된 값은 절대 덮어쓰지 않는다 (대상 0명이면 state 변경도 dirty도 없음).
+  const runBulkEvaluation = (action: (typeof BULK_EVALUATION_ACTIONS)[number]) => {
+    const targets = bulkUnevaluatedTargets(
+      students.map((student) => student.studentId),
+      entries,
+      action.field,
+    );
+    if (targets.length === 0) {
+      showBulkNotice(`${action.group} 미평가 학생이 없어요.`);
+      return;
+    }
+    setEntries((prev) => applyBulkEvaluation(prev, targets, action.field, action.value));
+    showBulkNotice(
+      `미평가 학생 ${targets.length}명의 ${action.group}${action.objectParticle} ${action.valueLabel}${action.toParticle} 표시했어요.`,
     );
   };
 
@@ -3071,10 +3158,64 @@ export function DailyLogForm({
             <Button type="button" variant="secondary" size="sm" onClick={markAllHomeworkCompleted}>
               숙제 전원 완료로 표시
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-expanded={bulkOpen}
+              aria-controls="bulk-evaluation-panel"
+              onClick={() => setBulkOpen((open) => !open)}
+            >
+              일괄 입력
+            </Button>
             <span className="text-sm text-[#8a7b77]">
               시험이 없는 날은 비워두면 돼요. 저장 전까지 학생별로 수정할 수 있어요.
             </span>
           </div>
+          {/* 학생 평가 일괄 입력 — 미평가 학생에게만 적용하는 안전한 bulk.
+              count는 form state에서 파생(저장 안 함), 클릭은 DB 호출 없이 state 1회 update. */}
+          {bulkOpen ? (
+            <div
+              id="bulk-evaluation-panel"
+              className="mt-3 space-y-2.5 rounded-2xl bg-[#f8f6fc] p-3"
+            >
+              <div className="text-sm font-semibold text-[#4d3a3a]">학생 평가 일괄 입력</div>
+              <p className="text-sm text-[#8a7b77]">
+                미평가 항목에만 적용돼요 — 이미 입력한 값과 결석 학생은 바뀌지 않아요. 출결은
+                기본이 출석이라 예외 학생만 바꾸면 돼요.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {BULK_EVALUATION_ACTIONS.map((action) => {
+                  const count = bulkUnevaluatedTargets(
+                    students.map((student) => student.studentId),
+                    entries,
+                    action.field,
+                  ).length;
+                  return (
+                    <Button
+                      key={action.field}
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="min-h-[44px]"
+                      aria-label={`미평가 학생의 ${action.group}${action.objectParticle} 모두 ${action.valueLabel}${action.toParticle} 표시`}
+                      onClick={() => runBulkEvaluation(action)}
+                    >
+                      {action.group} · 미평가 {count}명 → {action.valueLabel}
+                    </Button>
+                  );
+                })}
+              </div>
+              {bulkNotice ? (
+                <p
+                  role="status"
+                  className="rounded-xl border border-[#d8ebe0] bg-[#f0faf5] px-3 py-2 text-sm text-[#2f6d54]"
+                >
+                  {bulkNotice}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
       </Card>
 
       {/* 대시보드 빠른 실행 [출결]의 hash 목적지 — 학생별 출결 버튼이 이 목록 안에 있다 */}
