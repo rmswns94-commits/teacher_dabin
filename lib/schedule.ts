@@ -140,11 +140,28 @@ export function toEpoch(ymd: string, time: string) {
   return new Date(`${ymd}T${formatTimeHM(time)}:00${APP_UTC_OFFSET}`).getTime();
 }
 
+// 오늘 휴강된 수업 — 실제 수업(ClassOccurrence)이 아니라 "원래 이 시간에 수업이 있었다"는 안내용이다.
+// 시각은 그 occurrence가 원래 가지고 있던 반복 시간표 시각이다.
+export type CancelledOccurrence<G> = {
+  group: G;
+  date: string;
+  startTime: string; // 원래 수업 시각 "HH:MM"
+  endTime: string;
+  startEpoch: number;
+  endEpoch: number;
+  // 왜 사라졌는지 — 안내 문구를 다르게 쓴다 (문자열 파싱 없이 구조로 구분)
+  reason: "cancelled" | "academy_closed" | "moved";
+  // reason === "moved"일 때 옮겨간 날짜
+  movedToDate: string | null;
+};
+
 export type ScheduleOverview<G> = {
   current: ClassOccurrence<G> | null;
   next: ClassOccurrence<G> | null;
   nextAfter: ClassOccurrence<G> | null;
   endedToday: ClassOccurrence<G>[];
+  // 오늘 휴강된 수업들 (실제 수업 목록과 완전히 분리 — 어떤 소비처도 이것을 수업으로 쓰지 않는다)
+  cancelledToday: CancelledOccurrence<G>[];
 };
 
 // Scans today plus the next `horizonDays` days of weekly repeats and returns
@@ -165,6 +182,7 @@ export function getScheduleOverview<G>(
   const nowEpoch = now.getTime();
   const today = getAppTimezoneToday(now);
   const occurrences: ClassOccurrence<G>[] = [];
+  const cancelledToday: CancelledOccurrence<G>[] = [];
   const slotById = new Map(slots.map((entry) => [entry.schedule.id, entry]));
   const groupOf = (groupId: string): G | null => {
     const fromMap = groupsById?.get(groupId);
@@ -192,6 +210,24 @@ export function getScheduleOverview<G>(
       );
 
       if (effective.cancelled) {
+        // 실제 수업 목록에는 넣지 않는다. 다만 오늘 것은 "원래 이 시간에 수업이 있었다"는
+        // 안내를 위해 따로 모은다 (시각은 반복 시간표의 원래 시각 그대로).
+        if (offset === 0) {
+          cancelledToday.push({
+            group,
+            date,
+            startTime: effective.startTime,
+            endTime: effective.endTime,
+            startEpoch: toEpoch(date, effective.startTime),
+            endEpoch: toEpoch(date, effective.endTime),
+            reason: effective.academyClosed
+              ? "academy_closed"
+              : effective.movedToDate
+                ? "moved"
+                : "cancelled",
+            movedToDate: effective.movedToDate,
+          });
+        }
         continue; // 1회 휴강이거나 다른 날짜로 옮겨감 (반복 시간표는 그대로)
       }
 
@@ -255,11 +291,14 @@ export function getScheduleOverview<G>(
   const upcoming = occurrences.filter((occ) => occ.startEpoch > nowEpoch);
   const endedToday = occurrences.filter((occ) => occ.daysFromNow === 0 && occ.endEpoch <= nowEpoch);
 
+  cancelledToday.sort((a, b) => a.startEpoch - b.startEpoch);
+
   return {
     current,
     next: upcoming[0] ?? null,
     nextAfter: upcoming[1] ?? null,
     endedToday,
+    cancelledToday,
   };
 }
 

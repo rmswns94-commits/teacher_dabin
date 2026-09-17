@@ -13,7 +13,8 @@ import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDaysStr, dayOfWeekOf, daysBetween } from "@/lib/calendar";
-import { formatKoreanDate, todayDateString } from "@/lib/dates";
+import { formatKoreanDate, formatShortDateWithWeekday, todayDateString } from "@/lib/dates";
+import { groupIconOf } from "@/lib/group-icons";
 import { DashboardTodoCard } from "@/components/dashboard-todo-card";
 import { ExamPeriodMark } from "@/components/exam-period-mark";
 import { ExpandableList } from "@/components/expandable-list";
@@ -34,6 +35,7 @@ import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closur
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getSupplementsInRange } from "@/lib/supabase/queries/supplements";
 import { deriveUnfinishedLogCandidates } from "@/lib/unfinished-logs";
+import { CancelledClassNotice } from "@/components/cancelled-class-notice";
 import { UnfinishedLogCard } from "@/components/unfinished-log-card";
 import { getDisplayName } from "@/lib/supabase/auth";
 import { getDashboardOverview, getDashboardStats } from "@/lib/supabase/queries/dashboard";
@@ -238,6 +240,21 @@ export default async function DashboardPage() {
       ? `/daily-logs/${heroTodayLog.id}/edit`
       : `/daily-logs/new?groupId=${hero.group.id}&date=${today}`
     : null;
+
+  // 오늘 휴강된 수업 안내 — "원래 이 시간에 수업이 있었다"는 사실만 알린다.
+  // 실제 수업이 아니므로 현재 수업/다음 수업/To Do window/미작성 알림 어디에도 들어가지 않는다.
+  // 표시 여부(지금이 원래 수업 시간인가)는 카드가 local clock으로 판단한다 — 추가 쿼리 0.
+  const cancelledRows = scheduleOverview.cancelledToday.map((occ) => ({
+    groupId: occ.group.id,
+    groupName: occ.group.name,
+    groupIcon: groupIconOf(allGroups.find((group) => group.id === occ.group.id)?.icon),
+    timeLabel: formatTimeRange(occ.startTime, occ.endTime),
+    startEpoch: occ.startEpoch,
+    endEpoch: occ.endEpoch,
+    reason: occ.reason,
+    // 옮긴 날짜/시각은 저장된 구조화 값에서 만든다 (화면 문구를 다시 파싱하지 않는다)
+    movedLabel: occ.movedToDate ? formatShortDateWithWeekday(occ.movedToDate) : null,
+  }));
 
   // 마무리가 필요한 수업(미작성 수업일지 알림) 후보 — 오늘(KST) 요일 schedule이 있는
   // active 그룹 전부를 서버가 파생해 내려보내고, "수업이 끝났는가"는 카드(client)가
@@ -484,6 +501,10 @@ export default async function DashboardPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* 휴강 안내 — 실제 현재 수업 카드 아래의 보조 표시.
+              진행 중인 수업이 따로 있으면 그 카드가 그대로 주인공이고, 이건 옆에 덧붙는 상태 안내다. */}
+          <CancelledClassNotice rows={cancelledRows} initialNow={currentEpochMs()} />
 
           {/* 수업 전 반 브리핑 — 오늘 수업(진행 중 포함)인 hero 그룹 하나만, 기존 데이터 정리(AI 없음).
               Suspense로 감싸 hero 첫 렌더를 막지 않는다 (브리핑 쿼리는 스트리밍으로 뒤에 채워짐). */}
