@@ -26,6 +26,7 @@ import {
 import { buildScheduleExceptionIndex } from "@/lib/schedule-exceptions";
 import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
+import { getSupplementsInRange } from "@/lib/supabase/queries/supplements";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import { restoreGroupAction } from "./actions";
 
@@ -77,6 +78,7 @@ export default async function GroupsPage() {
     exams,
     scheduleExceptions,
     academyClosures,
+    supplements,
   ] = await Promise.all([
     getCurrentUserGroups(true),
     getAllGroupStudentCounts(),
@@ -88,6 +90,8 @@ export default async function GroupsPage() {
     getScheduleExceptionsInRange(today, addDaysStr(today, 7)),
     // 학원 전체 휴강일 (같은 범위 1쿼리)
     getAcademyClosuresInRange(today, addDaysStr(today, 7)),
+    // 보강(1회성 그룹 수업)도 다음 수업 후보다 (같은 범위 1쿼리)
+    getSupplementsInRange(today, addDaysStr(today, 7)),
   ]);
 
   // 최근 일지들의 출결 집계 (일지 id가 필요해서 위 결과 이후 1쿼리).
@@ -104,7 +108,11 @@ export default async function GroupsPage() {
   }
 
   // 1회 휴강/학원 전체 휴강은 다음 수업에서 제외되고, 시간 변경/날짜 이동은 변경된 시각으로 반영된다
-  const exceptionIndex = buildScheduleExceptionIndex(scheduleExceptions, academyClosures);
+  const exceptionIndex = buildScheduleExceptionIndex(
+    scheduleExceptions,
+    academyClosures,
+    supplements,
+  );
   const nextByGroup = getGroupNextOccurrences(schedules, now, 7, exceptionIndex);
   // 카드 정렬용 "오늘 첫 수업 시각" — 휴강/이동이 반영된 오늘 수업 window에서 가져온다
   // (반복 시간표 요일만 보면 옮겨간 수업이 오늘 남아 있고, 옮겨온 수업이 빠진다).

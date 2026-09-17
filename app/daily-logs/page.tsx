@@ -44,8 +44,10 @@ import {
   buildScheduleExceptionIndex,
   movedInOccurrences,
   resolveOccurrence,
+  supplementOccurrences,
 } from "@/lib/schedule-exceptions";
 import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
+import { getSupplementsInRange } from "@/lib/supabase/queries/supplements";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import { eventMetaOf } from "@/lib/validation/calendar-event";
@@ -152,6 +154,7 @@ export default async function DailyLogsPage({
     monthlyMakeups,
     scheduleExceptions,
     academyClosures,
+    supplements,
   ] = await Promise.all([
     getMonthlyLogMarkers(range.start, range.end, {
       groupId: groupId || undefined,
@@ -165,9 +168,15 @@ export default async function DailyLogsPage({
     getScheduleExceptionsInRange(range.start, range.end),
     // 이 달의 학원 전체 휴강일 — 역시 월 단위 batch 1회
     getAcademyClosuresInRange(range.start, range.end),
+    // 이 달의 보강(1회성 그룹 수업) — 월 단위 batch 1회
+    getSupplementsInRange(range.start, range.end),
   ]);
 
-  const exceptionIndex = buildScheduleExceptionIndex(scheduleExceptions, academyClosures);
+  const exceptionIndex = buildScheduleExceptionIndex(
+    scheduleExceptions,
+    academyClosures,
+    supplements,
+  );
   const closedDateSet = new Set(academyClosures);
 
   // 그룹+요일 → 시간표 slot (예외 적용 전 후보)
@@ -200,12 +209,31 @@ export default async function DailyLogsPage({
       times.push(formatTimeRange(moved.startTime, moved.endTime));
     }
 
+    for (const supplement of supplementOccurrences(exceptionIndex, date)) {
+      if (supplement.groupId !== logGroupId) {
+        continue;
+      }
+      times.push(formatTimeRange(supplement.startTime, supplement.endTime));
+    }
+
     return times.length === 1 ? times[0] : null;
   };
 
   const byDate = new Map<string, MonthlyLogMarker[]>();
   for (const marker of markers) {
     byDate.set(marker.class_date, [...(byDate.get(marker.class_date) ?? []), marker]);
+  }
+
+  // 보강 날짜 → 그날 보강하는 반들 (달력 아이콘·상세용). 학원 휴강일이면 열리지 않는다.
+  const supplementsByDate = new Map<string, { groupId: string; startTime: string; endTime: string }[]>();
+  for (const supplement of supplements) {
+    if (closedDateSet.has(supplement.date)) {
+      continue;
+    }
+    supplementsByDate.set(supplement.date, [
+      ...(supplementsByDate.get(supplement.date) ?? []),
+      { groupId: supplement.groupId, startTime: supplement.startTime, endTime: supplement.endTime },
+    ]);
   }
 
   // 날짜별 대표 아이콘: 수업 시간 순(모르면 기록 순), 같은 반은 한 번만 (추가 쿼리 없음)
@@ -222,6 +250,17 @@ export default async function DailyLogsPage({
       seenGroups.add(log.group_id);
       icons.push(groupIconOf(log.group?.icon));
     }
+
+    // 보강도 그날의 실제 수업이라 반 아이콘을 함께 보여준다 (아직 일지가 없어도).
+    // 보강 전용 아이콘을 따로 만들지 않고 그 반의 기존 아이콘을 그대로 쓴다.
+    for (const supplement of [...(supplementsByDate.get(date) ?? [])].sort((a, b) =>
+      a.startTime.localeCompare(b.startTime),
+    )) {
+      if (seenGroups.has(supplement.groupId)) continue;
+      seenGroups.add(supplement.groupId);
+      icons.push(groupIconOf(groups.find((group) => group.id === supplement.groupId)?.icon));
+    }
+
     return icons;
   };
 
@@ -305,7 +344,12 @@ export default async function DailyLogsPage({
     };
   };
 
-  const groupOptions = groups.map((group) => ({ id: group.id, name: group.name }));
+  // 일정 폼의 반 선택에도 반 아이콘을 함께 보여준다 (보강 등록 시 어느 반인지 바로 보이게)
+  const groupOptions = groups.map((group) => ({
+    id: group.id,
+    name: group.name,
+    icon: group.icon ?? null,
+  }));
 
   // 일정 등록 폼의 [학원 휴강] toggle이 쓰는 값 — 이 달 달력이 이미 가져온 데이터 그대로다
   // (날짜를 바꿀 때마다 조회하지 않으므로 stale 응답도, 날짜별 추가 쿼리도 없다).
@@ -584,6 +628,16 @@ export default async function DailyLogsPage({
                           .join(", ")})`
                       : "",
                     closedDateSet.has(date) ? "학원 휴강일" : "",
+                    (supplementsByDate.get(date) ?? []).length > 0
+                      ? `보강 ${(supplementsByDate.get(date) ?? []).length}건 (${(
+                          supplementsByDate.get(date) ?? []
+                        )
+                          .map(
+                            (row) =>
+                              `${groups.find((group) => group.id === row.groupId)?.name ?? "수업"} ${row.startTime}`,
+                          )
+                          .join(", ")})`
+                      : "",
                     ...(closedDateSet.has(date)
                       ? []
                       : (changesByDate.get(date) ?? []).map(
@@ -744,6 +798,38 @@ export default async function DailyLogsPage({
                   <span className="min-w-0 text-[#7f5d57]">
                     이 날짜의 정규수업은 모두 휴강 처리돼요. 반복 시간표는 그대로예요.
                   </span>
+                </div>
+              ) : null}
+
+              {/* 보강 — 그날 1회 진행하는 실제 수업. 반 아이콘·이름·시간을 그대로 보여준다 */}
+              {!closedDateSet.has(selectedDate) &&
+              (supplementsByDate.get(selectedDate) ?? []).length > 0 ? (
+                <div className="mt-3">
+                  <h3 className="card-title text-[#8f5470]">보강 수업</h3>
+                  <ul className="mt-2 space-y-2">
+                    {[...(supplementsByDate.get(selectedDate) ?? [])]
+                      .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                      .map((supplement) => {
+                        const group = groups.find((row) => row.id === supplement.groupId);
+                        return (
+                          <li
+                            key={`${supplement.groupId}-${supplement.startTime}`}
+                            className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl border border-[#d8ebe0] bg-[#f4f9f6] px-3.5 py-2.5 text-sm"
+                          >
+                            <span className="rounded-full bg-[#e4f4ec] px-2 py-0.5 text-xs font-semibold text-[#3d7f64]">
+                              보강
+                            </span>
+                            <span className="flex min-w-0 items-center gap-1 font-medium text-[#232327]">
+                              <span aria-hidden>{groupIconOf(group?.icon)}</span>
+                              <span className="min-w-0 truncate">{group?.name ?? "수업 그룹"}</span>
+                            </span>
+                            <span className="tabular-nums text-[#33333b]">
+                              {supplement.startTime} ~ {supplement.endTime}
+                            </span>
+                          </li>
+                        );
+                      })}
+                  </ul>
                 </div>
               ) : null}
 

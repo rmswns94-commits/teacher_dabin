@@ -12,13 +12,15 @@ import {
   deleteCalendarEventAction,
   updateCalendarEventAction,
 } from "@/app/daily-logs/event-actions";
+import { TimeSelect } from "@/components/time-select";
 import { Button } from "@/components/ui/button";
 import { formatKoreanDate } from "@/lib/dates";
+import { groupIconOf } from "@/lib/group-icons";
 import type { CalendarEventWithGroup } from "@/lib/supabase/queries/calendar-events";
 import { calendarEventTypes, calendarEventMeta, eventMetaOf } from "@/lib/validation/calendar-event";
 import { cn } from "@/lib/utils";
 
-type GroupOption = { id: string; name: string };
+type GroupOption = { id: string; name: string; icon?: string | null };
 
 type FormValues = {
   title: string;
@@ -27,6 +29,9 @@ type FormValues = {
   endDate: string;
   groupId: string;
   memo: string;
+  // 보강(반을 지정한 1회성 수업)일 때만 쓴다
+  startTime: string;
+  endTime: string;
 };
 
 // 학원 전체 휴강 상태를 화면이 어떻게 아는가: 달력이 이미 가져온 그 달의 휴강일 목록을
@@ -148,10 +153,51 @@ function EventFormDialog({
           >
             <option value="">전체 일정</option>
             {groups.map((group) => (
-              <option key={group.id} value={group.id}>{group.name}</option>
+              <option key={group.id} value={group.id}>
+                {`${groupIconOf(group.icon)} ${group.name}`}
+              </option>
             ))}
           </select>
         </label>
+
+        {/* 보강 수업 — 반을 정하고 시간을 넣으면 그날 1회 진행하는 실제 수업이 된다.
+            (반이나 시간을 비워두면 예전처럼 달력 일정으로만 남는다) */}
+        {values.eventType === "makeup" ? (
+          <div className="mt-3 rounded-2xl border border-[#d8ebe0] bg-[#f4f9f6] p-3">
+            <div className="text-sm font-medium text-[#2f6d54]">보강 수업 시간</div>
+            {values.groupId ? (
+              <>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <TimeSelect
+                    value={values.startTime}
+                    onChange={(next) => update({ startTime: next })}
+                    ariaLabel="보강 시작 시간"
+                    allowEmpty
+                    emptyLabel="시간 없음"
+                    className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
+                  />
+                  <span className="text-sm text-[#8a7b77]">~</span>
+                  <TimeSelect
+                    value={values.endTime}
+                    onChange={(next) => update({ endTime: next })}
+                    ariaLabel="보강 종료 시간"
+                    allowEmpty
+                    emptyLabel="시간 없음"
+                    className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
+                  />
+                </div>
+                <p className="mt-2 text-sm leading-5 text-[#3d7f64]">
+                  시간을 넣으면 그날 하루만 이 반의 수업으로 잡혀요. 대시보드와 수업일지에서
+                  정규수업처럼 쓸 수 있고, 반복 시간표는 바뀌지 않아요.
+                </p>
+              </>
+            ) : (
+              <p className="mt-1.5 text-sm leading-5 text-[#8a7b77]">
+                위에서 수업 반을 먼저 선택하면 보강 시간을 정할 수 있어요.
+              </p>
+            )}
+          </div>
+        ) : null}
 
         <label className="mt-3 block">
           <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">메모 (선택)</span>
@@ -336,6 +382,8 @@ export function EventCreateButton({
             endDate: "",
             groupId: "",
             memo: "",
+            startTime: "",
+            endTime: "",
           }}
           isPending={isPending}
           error={error}
@@ -502,6 +550,8 @@ export function CalendarEventItem({
             endDate: isRange ? event.end_date : "",
             groupId: event.group_id ?? "",
             memo: event.memo ?? "",
+            startTime: event.start_time?.slice(0, 5) ?? "",
+            endTime: event.end_time?.slice(0, 5) ?? "",
           }}
           isPending={isPending}
           error={error}

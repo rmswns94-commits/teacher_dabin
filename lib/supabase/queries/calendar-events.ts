@@ -93,6 +93,11 @@ async function requireContext() {
   return { supabase, user };
 }
 
+// 보강 시간 컬럼(migration) 미적용 여부 — 저장 경로에서만 사용자에게 알린다.
+function isMissingTimeColumn(error: { code?: string } | null | undefined) {
+  return error?.code === "42703" || error?.code === "PGRST204";
+}
+
 async function assertGroupOwnership(groupId: string | null) {
   if (!groupId) {
     return;
@@ -118,6 +123,9 @@ export type CalendarEventInput = {
   endDate: string;
   groupId: string | null;
   memo: string | null;
+  // 보강(그날 1회 진행하는 그룹 수업)일 때만 값이 있다. 일반 일정은 null.
+  startTime?: string | null;
+  endTime?: string | null;
 };
 
 export async function createCalendarEvent(input: CalendarEventInput) {
@@ -132,11 +140,17 @@ export async function createCalendarEvent(input: CalendarEventInput) {
     end_date: input.endDate,
     group_id: input.groupId,
     memo: input.memo?.trim() || null,
+    start_time: input.startTime ?? null,
+    end_time: input.endTime ?? null,
   });
 
   if (error) {
     console.error("createCalendarEvent error", error);
-    throw new Error("일정을 저장하지 못했어요. 다시 시도해주세요.");
+    throw new Error(
+      isMissingTimeColumn(error)
+        ? "보강 수업에 필요한 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20260921_add_supplement_class_times.sql을 실행한 뒤 다시 시도해주세요."
+        : "일정을 저장하지 못했어요. 다시 시도해주세요.",
+    );
   }
 
   return true;
@@ -155,13 +169,19 @@ export async function updateCalendarEvent(eventId: string, input: CalendarEventI
       end_date: input.endDate,
       group_id: input.groupId,
       memo: input.memo?.trim() || null,
+      start_time: input.startTime ?? null,
+      end_time: input.endTime ?? null,
     })
     .eq("id", eventId)
     .eq("user_id", user.id);
 
   if (error) {
     console.error("updateCalendarEvent error", error);
-    throw new Error("일정을 수정하지 못했어요.");
+    throw new Error(
+      isMissingTimeColumn(error)
+        ? "보강 수업에 필요한 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20260921_add_supplement_class_times.sql을 실행한 뒤 다시 시도해주세요."
+        : "일정을 수정하지 못했어요.",
+    );
   }
 
   return true;

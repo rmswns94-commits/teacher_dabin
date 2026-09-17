@@ -32,6 +32,7 @@ import {
 import { buildScheduleExceptionIndex } from "@/lib/schedule-exceptions";
 import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
+import { getSupplementsInRange } from "@/lib/supabase/queries/supplements";
 import { deriveUnfinishedLogCandidates } from "@/lib/unfinished-logs";
 import { UnfinishedLogCard } from "@/components/unfinished-log-card";
 import { getDisplayName } from "@/lib/supabase/auth";
@@ -98,6 +99,7 @@ export default async function DashboardPage() {
     todayMakeups,
     scheduleExceptions,
     academyClosures,
+    supplements,
   ] = await Promise.all([
     getDashboardStats(),
     getDashboardOverview(),
@@ -114,8 +116,10 @@ export default async function DashboardPage() {
     getScheduleExceptionsInRange(today, addDaysStr(today, SCHEDULE_HORIZON_DAYS)),
     // 학원 전체 휴강일 — 같은 범위 1쿼리 (수업마다 "이 날 휴강인가?"를 묻지 않는다)
     getAcademyClosuresInRange(today, addDaysStr(today, SCHEDULE_HORIZON_DAYS)),
+    // 보강(1회성 그룹 수업) — 같은 범위 1쿼리
+    getSupplementsInRange(today, addDaysStr(today, SCHEDULE_HORIZON_DAYS)),
   ]);
-  const exceptionMap = buildScheduleExceptionIndex(scheduleExceptions, academyClosures);
+  const exceptionMap = buildScheduleExceptionIndex(scheduleExceptions, academyClosures, supplements);
   const displayName = getDisplayName(user);
 
   const upcomingExams = examEvents.map((event) => {
@@ -142,7 +146,26 @@ export default async function DashboardPage() {
     .map((row) => ({ schedule: row, group: row.group! }));
   // 1회 예외 반영: 휴강 occurrence는 현재/다음/끝난 수업 어디에도 나타나지 않고,
   // 시간 변경은 effective start/end로 정렬·판정된다 (class-end lock도 이 endEpoch를 쓴다).
-  const scheduleOverview = getScheduleOverview(slots, new Date(), SCHEDULE_HORIZON_DAYS, exceptionMap);
+  // 보강은 반복 시간표가 없는 반에도 붙을 수 있어, 그런 반의 정보는 slots에 없다 — 전체 그룹에서 찾는다
+  const groupsById = new Map<string, ScheduleGroupInfo>(
+    allGroups.map((group) => [
+      group.id,
+      {
+        id: group.id,
+        name: group.name,
+        grade: group.grade,
+        archived: group.archived,
+        is_exam_period: Boolean(group.is_exam_period),
+      },
+    ]),
+  );
+  const scheduleOverview = getScheduleOverview(
+    slots,
+    new Date(),
+    SCHEDULE_HORIZON_DAYS,
+    exceptionMap,
+    groupsById,
+  );
   const hero = scheduleOverview.current ?? scheduleOverview.next;
   const followUp = scheduleOverview.current ? scheduleOverview.next : scheduleOverview.nextAfter;
   const isCurrentClass = Boolean(scheduleOverview.current);
@@ -368,6 +391,11 @@ export default async function DashboardPage() {
                           {hero.group.name}
                         </Link>
                         <ExamPeriodMark show={isExamPeriodGroup(hero.group.id)} className="text-sm" />
+                        {hero.source === "supplement" ? (
+                          <span className="shrink-0 rounded-full bg-[#e4f4ec] px-2 py-0.5 text-xs font-semibold text-[#3d7f64]">
+                            보강
+                          </span>
+                        ) : null}
                       </span>
                       <NextClassCountdown
                         startEpoch={hero.startEpoch}
@@ -679,6 +707,11 @@ export default async function DashboardPage() {
                         {followUp.group.name}
                       </Link>
                       <ExamPeriodMark show={isExamPeriodGroup(followUp.group.id)} />
+                      {followUp.source === "supplement" ? (
+                        <span className="shrink-0 rounded-full bg-[#e4f4ec] px-2 py-0.5 text-xs font-semibold text-[#3d7f64]">
+                          보강
+                        </span>
+                      ) : null}
                     </div>
                     <span className="tabular-nums text-[#665b5a]">
                       {occurrenceDateLabel(followUp)} · {formatTimeRange(followUp.startTime, followUp.endTime)}

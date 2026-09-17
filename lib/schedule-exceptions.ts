@@ -27,6 +27,17 @@ export type ScheduleExceptionEntry = {
   movedToDate: string | null;
 };
 
+// 보강 — 반복 시간표와 무관하게 그 날 1회만 진행하는 그룹 수업.
+// 출발 occurrence가 없다는 점에서 "수업 변경(이동)"과 다르다. 저장은 calendar_events이지만
+// 여기서는 날짜별 occurrence로만 다룬다 (소비처는 출처를 몰라도 된다).
+export type SupplementOccurrence = {
+  id: string; // calendar_events.id
+  groupId: string;
+  date: string;
+  startTime: string; // "HH:MM"
+  endTime: string;
+};
+
 // 날짜별 조회를 한 번에 하기 위한 인덱스 (소비처는 이 객체만 들고 다닌다)
 export type ScheduleExceptionIndex = {
   // `${scheduleId}:${date}` → 그 occurrence의 예외
@@ -35,12 +46,15 @@ export type ScheduleExceptionIndex = {
   movedInByDate: ReadonlyMap<string, ScheduleExceptionEntry[]>;
   // 학원 전체 휴강일 (date-level). 개별 예외보다 우선한다.
   closedDates: ReadonlySet<string>;
+  // 보강 날짜 → 그 날 1회 열리는 그룹 수업들
+  supplementsByDate: ReadonlyMap<string, SupplementOccurrence[]>;
 };
 
 export const EMPTY_SCHEDULE_EXCEPTION_INDEX: ScheduleExceptionIndex = {
   byOccurrence: new Map(),
   movedInByDate: new Map(),
   closedDates: new Set(),
+  supplementsByDate: new Map(),
 };
 
 export function scheduleExceptionKey(scheduleId: string, date: string) {
@@ -50,9 +64,11 @@ export function scheduleExceptionKey(scheduleId: string, date: string) {
 export function buildScheduleExceptionIndex(
   entries: readonly ScheduleExceptionEntry[],
   closedDates: readonly string[] = [],
+  supplements: readonly SupplementOccurrence[] = [],
 ): ScheduleExceptionIndex {
   const byOccurrence = new Map<string, ScheduleExceptionEntry>();
   const movedInByDate = new Map<string, ScheduleExceptionEntry[]>();
+  const supplementsByDate = new Map<string, SupplementOccurrence[]>();
 
   for (const entry of entries) {
     byOccurrence.set(scheduleExceptionKey(entry.scheduleId, entry.date), entry);
@@ -65,7 +81,19 @@ export function buildScheduleExceptionIndex(
     }
   }
 
-  return { byOccurrence, movedInByDate, closedDates: new Set(closedDates) };
+  for (const supplement of supplements) {
+    supplementsByDate.set(supplement.date, [
+      ...(supplementsByDate.get(supplement.date) ?? []),
+      supplement,
+    ]);
+  }
+
+  return {
+    byOccurrence,
+    movedInByDate,
+    closedDates: new Set(closedDates),
+    supplementsByDate,
+  };
 }
 
 // 그 날짜가 학원 전체 휴강일인가 — 소비처가 직접 DB를 보지 않도록 여기서만 판정한다.
@@ -151,6 +179,19 @@ export function movedInOccurrences(
   }
 
   return index?.movedInByDate.get(date) ?? [];
+}
+
+// 이 날짜의 보강 수업들.
+// 학원 전체 휴강일에는 보강도 열리지 않는다 — 그날은 학원이 쉰다(휴강이 가장 우선).
+export function supplementOccurrences(
+  index: ScheduleExceptionIndex | null | undefined,
+  date: string,
+): SupplementOccurrence[] {
+  if (isAcademyClosed(index, date)) {
+    return [];
+  }
+
+  return index?.supplementsByDate.get(date) ?? [];
 }
 
 // 1회 변경 입력 검증 — 저장 전에 UI/서버가 같은 규칙을 쓴다.

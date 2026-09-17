@@ -6,6 +6,7 @@
 import {
   movedInOccurrences,
   resolveOccurrence,
+  supplementOccurrences,
   type ScheduleExceptionIndex,
 } from "@/lib/schedule-exceptions";
 
@@ -23,8 +24,13 @@ export type ScheduleSlot = {
 };
 
 export type ClassOccurrence<G> = {
-  schedule: ScheduleSlot;
+  // 반복 시간표 row. 보강처럼 시간표 없이 1회만 열리는 수업은 null이다
+  // (표시용 시각은 아래 startTime/endTime을 쓴다 — schedule을 읽지 않는다).
+  schedule: ScheduleSlot | null;
   group: G;
+  // 이 occurrence가 어디서 왔는지. 화면에서 보강 배지를 붙이는 용도이며
+  // 시간 계산/정렬에는 쓰지 않는다 (전부 startEpoch 기준).
+  source: "regular" | "supplement";
   date: string; // YYYY-MM-DD in APP_TIMEZONE
   daysFromNow: number;
   // 이 occurrence의 실제 시각 "HH:MM" — 1회 시간 변경/날짜 이동이 반영된 값이다.
@@ -152,11 +158,21 @@ export function getScheduleOverview<G>(
   now = new Date(),
   horizonDays = 7,
   exceptions?: ScheduleExceptionIndex | null,
+  // 보강은 반복 시간표가 없는 그룹에도 붙을 수 있어 slots만으로는 그룹을 찾지 못한다.
+  // 주면 그 map에서, 없으면 slots에 있는 그룹만 보강 수업으로 잡힌다.
+  groupsById?: ReadonlyMap<string, G> | null,
 ): ScheduleOverview<G> {
   const nowEpoch = now.getTime();
   const today = getAppTimezoneToday(now);
   const occurrences: ClassOccurrence<G>[] = [];
   const slotById = new Map(slots.map((entry) => [entry.schedule.id, entry]));
+  const groupOf = (groupId: string): G | null => {
+    const fromMap = groupsById?.get(groupId);
+    if (fromMap) {
+      return fromMap;
+    }
+    return slots.find((entry) => entry.schedule.group_id === groupId)?.group ?? null;
+  };
 
   for (let offset = 0; offset <= horizonDays; offset += 1) {
     const date = addDays(today, offset);
@@ -182,6 +198,7 @@ export function getScheduleOverview<G>(
       occurrences.push({
         schedule,
         group,
+        source: "regular",
         date,
         daysFromNow: offset,
         startTime: effective.startTime,
@@ -201,12 +218,33 @@ export function getScheduleOverview<G>(
       occurrences.push({
         schedule: entry.schedule,
         group: entry.group,
+        source: "regular",
         date,
         daysFromNow: offset,
         startTime: formatTimeHM(moved.startTime),
         endTime: formatTimeHM(moved.endTime),
         startEpoch: toEpoch(date, moved.startTime),
         endEpoch: toEpoch(date, moved.endTime),
+      });
+    }
+
+    // 보강 — 그 날 1회만 진행하는 그룹 수업 (반복 시간표 없음)
+    for (const supplement of supplementOccurrences(exceptions, date)) {
+      const group = groupOf(supplement.groupId);
+      if (!group) {
+        continue;
+      }
+
+      occurrences.push({
+        schedule: null,
+        group,
+        source: "supplement",
+        date,
+        daysFromNow: offset,
+        startTime: supplement.startTime,
+        endTime: supplement.endTime,
+        startEpoch: toEpoch(date, supplement.startTime),
+        endEpoch: toEpoch(date, supplement.endTime),
       });
     }
   }
@@ -323,6 +361,26 @@ export function getGroupNextOccurrences(
         endEpoch,
       });
     }
+
+    // 보강 — 반복 시간표가 없는 그룹/요일이어도 그날 1회 진행하는 실제 수업이다
+    for (const supplement of supplementOccurrences(exceptions, date)) {
+      const startEpoch = toEpoch(date, supplement.startTime);
+      const endEpoch = toEpoch(date, supplement.endTime);
+
+      if (endEpoch <= nowEpoch) {
+        continue;
+      }
+
+      consider(supplement.groupId, {
+        isNow: startEpoch <= nowEpoch && nowEpoch < endEpoch,
+        date,
+        daysFromNow: offset,
+        startTime: supplement.startTime,
+        endTime: supplement.endTime,
+        startEpoch,
+        endEpoch,
+      });
+    }
   }
 
   return result;
@@ -394,6 +452,11 @@ export function getDayClassWindows(
       continue;
     }
     widen(slot.group_id, formatTimeHM(moved.startTime), formatTimeHM(moved.endTime));
+  }
+
+  // 보강도 그날의 실제 수업이므로 window에 포함된다 (To Do 노출·미작성 알림 대상)
+  for (const supplement of supplementOccurrences(exceptions, date)) {
+    widen(supplement.groupId, supplement.startTime, supplement.endTime);
   }
 
   return windows;

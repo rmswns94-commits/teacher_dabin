@@ -2,6 +2,7 @@ import { formatTimeHM } from "@/lib/schedule";
 import {
   movedInOccurrences,
   resolveOccurrence,
+  supplementOccurrences,
   type ScheduleExceptionIndex,
 } from "@/lib/schedule-exceptions";
 
@@ -70,7 +71,18 @@ export function getAdjacentScheduledClasses(
       })
     : [];
 
-  const daySlots = [...sameWeekday, ...movedIn]
+  // 보강 — 그날 실제 수업이므로 이동 대상에 포함된다.
+  // 그룹 정보는 그 그룹의 아무 schedule row에서 가져온다(시간표가 아예 없는 그룹은 제외).
+  const supplements = date
+    ? supplementOccurrences(options?.exceptions, date).flatMap((supplement) => {
+        const slot = slots.find((row) => row.group_id === supplement.groupId && row.group);
+        return slot
+          ? [{ slot, cancelled: false, startTime: formatTimeHM(supplement.startTime) }]
+          : [];
+      })
+    : [];
+
+  const daySlots = [...sameWeekday, ...movedIn, ...supplements]
     // start_time ASC — 동률은 안정적인 schedule row id로만 가른다 (새 이름순 규칙 금지)
     .sort(
       (a, b) => a.startTime.localeCompare(b.startTime) || a.slot.id.localeCompare(b.slot.id),

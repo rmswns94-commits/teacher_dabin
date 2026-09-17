@@ -15,9 +15,11 @@ import {
   buildScheduleExceptionIndex,
   movedInOccurrences,
   resolveOccurrence,
+  supplementOccurrences,
 } from "@/lib/schedule-exceptions";
 import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
+import { getSupplementsInRange } from "@/lib/supabase/queries/supplements";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type { ExamTextbook } from "@/lib/supabase/types";
 
@@ -134,7 +136,7 @@ export async function GET(request: Request) {
   // 그 schedule row도 후보에 있어야 한다. 실제 시각은 canonical resolver가 정한다.
   const dow = dayOfWeekOf(date);
   const groupIds = [...new Set(exportLogs.map((log) => log.group_id))];
-  const [{ data: scheduleRows, error: scheduleError }, dateExceptions, dateClosures] = await Promise.all([
+  const [{ data: scheduleRows, error: scheduleError }, dateExceptions, dateClosures, dateSupplements] = await Promise.all([
     supabase
       .from("class_group_schedules")
       .select("id, group_id, day_of_week, start_time, end_time")
@@ -142,6 +144,7 @@ export async function GET(request: Request) {
       .in("group_id", groupIds),
     getScheduleExceptionsInRange(date, date),
     getAcademyClosuresInRange(date, date),
+    getSupplementsInRange(date, date),
   ]);
 
   if (scheduleError) {
@@ -149,7 +152,7 @@ export async function GET(request: Request) {
     return errorResponse("수업 시간표를 불러오지 못했어요.", 500);
   }
 
-  const exceptionIndex = buildScheduleExceptionIndex(dateExceptions, dateClosures);
+  const exceptionIndex = buildScheduleExceptionIndex(dateExceptions, dateClosures, dateSupplements);
   const slots = (scheduleRows ?? []) as {
     id: string;
     group_id: string;
@@ -191,6 +194,11 @@ export async function GET(request: Request) {
     }
 
     addTime(slot.group_id, moved.startTime, moved.endTime);
+  }
+
+  // 보강 — 반복 시간표가 없는 날에도 그 반이 실제로 수업한 시간이다
+  for (const supplement of supplementOccurrences(exceptionIndex, date)) {
+    addTime(supplement.groupId, supplement.startTime, supplement.endTime);
   }
 
   const rows: (TeacherLogExportRow & { startSort: string })[] = [];

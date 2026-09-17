@@ -106,6 +106,9 @@ export type CalendarEventRecord = {
   end_date: string;
   group_id: string | null;
   memo: string | null;
+  // 보강(그날 1회 진행하는 그룹 수업)일 때만 값이 있다. 일반 일정은 null.
+  start_time: string | null;
+  end_time: string | null;
   created_at: string;
   updated_at: string;
 };
