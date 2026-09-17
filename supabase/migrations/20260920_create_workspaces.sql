@@ -29,6 +29,10 @@ create table if not exists public.workspaces (
 create index if not exists workspaces_user_activated_idx
   on public.workspaces (user_id, activated_at desc);
 
+-- 첫(부트스트랩) 학원은 id를 사용자 id와 같게 만든다. 신규 가입자의 첫 진입에서
+-- 여러 요청이 동시에 "학원 없음"을 보고 각자 INSERT 해도 PK 충돌로 하나만 남는다.
+-- 사용자가 직접 만드는 두 번째 학원부터는 기본값(랜덤 uuid)을 쓴다.
+
 drop trigger if exists workspaces_updated_at on public.workspaces;
 create trigger workspaces_updated_at
   before update on public.workspaces

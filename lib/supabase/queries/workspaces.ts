@@ -75,6 +75,11 @@ export async function getActiveWorkspace() {
 // 신규 가입자는 아직 학원이 없다. 업무 데이터의 workspace_id 기본값이 활성 학원이라,
 // 학원이 하나도 없으면 첫 INSERT가 실패한다 — 앱 진입 시(AppShell) 한 번 보장해준다.
 // 이미 있으면 아무 것도 하지 않는다 (조회 1회).
+//
+// 첫 학원의 id는 사용자 id와 같게 고정한다. 첫 진입 때 여러 요청이 동시에 렌더되면
+// 셋 다 "학원 없음"을 보고 각자 INSERT 해 같은 이름의 학원이 여러 개 생기는데,
+// id가 같으면 PK 충돌(23505)로 하나만 남는다. 나중에 사용자가 직접 만드는 학원은
+// 평소대로 랜덤 id를 쓴다.
 export async function ensureActiveWorkspace() {
   const existing = await getActiveWorkspace();
   if (existing) {
@@ -90,11 +95,22 @@ export async function ensureActiveWorkspace() {
 
   const { data, error } = await supabase
     .from("workspaces")
-    .insert({ user_id: user.id, name: "내 학원" })
+    .insert({ id: user.id, user_id: user.id, name: "내 학원" })
     .select("id, name, activated_at, created_at")
     .maybeSingle();
 
   if (error) {
+    // 동시 요청이 먼저 만든 경우 — 그 학원을 쓰면 된다
+    if (error.code === "23505") {
+      const { data: raced } = await supabase
+        .from("workspaces")
+        .select("id, name, activated_at, created_at")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      return raced ? toRecord(raced as WorkspaceRow) : null;
+    }
+
     // 테이블 미적용이면 조용히 넘어간다 (학원 기능만 꺼진 상태 — 앱은 기존대로 동작)
     if (!isMissingTable(error)) {
       console.error("ensureActiveWorkspace error", error);

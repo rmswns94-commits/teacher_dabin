@@ -18,10 +18,12 @@
 
 -- ── 1) 기존 사용자마다 학원 1개 ────────────────────────────────────────────────
 -- 이름은 추측하지 않는다(앱 어디에도 학원 이름을 저장한 적이 없다). 중립적인 기본값을 쓴다.
-insert into public.workspaces (user_id, name)
-select u.id, '내 학원'
+-- 첫 학원의 id는 사용자 id와 같게 둔다 (앱의 부트스트랩 생성과 같은 규약 — 중복 방지).
+insert into public.workspaces (id, user_id, name)
+select u.id, u.id, '내 학원'
 from auth.users u
-where not exists (select 1 from public.workspaces w where w.user_id = u.id);
+where not exists (select 1 from public.workspaces w where w.user_id = u.id)
+on conflict (id) do nothing;
 
 -- ── 2) 업무 테이블에 workspace_id 추가 → backfill → 기본값/NOT NULL → 격리 정책 ──
 do $$
