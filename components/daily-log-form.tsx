@@ -77,6 +77,7 @@ import {
   bulkUnevaluatedTargets,
   type BulkEvaluationField,
 } from "@/lib/bulk-evaluation";
+import { buildStudentHomeworkItems } from "@/lib/homework-multi-assign";
 import {
   collapsedStudentsKey,
   getCollapsedStudentsServerSnapshot,
@@ -2007,6 +2008,71 @@ export function DailyLogForm({
     );
   };
 
+  // ── 여러 학생에게 동일 숙제 배정 — dialog 임시 state (확정 전에는 form 무변화 = dirty 없음).
+  // 후보는 기존 homeworkAudienceOptions(현재 그룹 + regular/exam/mixed 규칙) 그대로,
+  // 확정 시 선택 학생 수만큼 "독립적인 학생 지정 숙제"를 한 번의 state update로 추가한다.
+  // Common(공통) 변환 없음: 전원 선택해도 학생별 항목이 각각 생성된다.
+  const [multiAssignOpen, setMultiAssignOpen] = useState(false);
+  const [multiAssignSection, setMultiAssignSection] = useState<"exam" | "regular" | undefined>(
+    undefined,
+  );
+  const [multiStudentIds, setMultiStudentIds] = useState<string[]>([]);
+  const [multiContent, setMultiContent] = useState("");
+  const [multiDueDate, setMultiDueDate] = useState("");
+  const [multiTextbook, setMultiTextbook] = useState("");
+  const [multiSchool, setMultiSchool] = useState("");
+
+  // 열 때마다 빈 선택으로 초기화 — context/기본 마감일은 addAssignment와 동일 규칙 재사용
+  const openMultiAssign = (section?: "exam" | "regular") => {
+    setMultiAssignSection(section);
+    setMultiStudentIds([]);
+    setMultiContent("");
+    setMultiDueDate(nextClassDateAfter(scheduleDays, classDate) ?? "");
+    setMultiTextbook(
+      section === "exam"
+        ? ""
+        : section === "regular" || !examPeriod
+          ? textbooks.length === 1
+            ? textbooks[0]
+            : ""
+          : "",
+    );
+    setMultiSchool(
+      section === "exam"
+        ? examInputSchools.length === 1
+          ? examInputSchools[0]
+          : ""
+        : section === "regular"
+          ? ""
+          : examPeriod && schools.length === 1
+            ? schools[0]
+            : "",
+    );
+    setMultiAssignOpen(true);
+  };
+
+  const confirmMultiAssign = () => {
+    // canonical 후보 순서(현재 학생 목록 순) 그대로 생성 — 새 정렬 강제 없음
+    const orderedIds = homeworkAudienceOptions(multiSchool, multiAssignSection)
+      .filter((student) => multiStudentIds.includes(student.studentId))
+      .map((student) => student.studentId);
+    if (orderedIds.length === 0) {
+      return;
+    }
+    setAssignments((prev) => [
+      ...prev,
+      ...buildStudentHomeworkItems({
+        studentIds: orderedIds,
+        content: multiContent,
+        dueDate: multiDueDate,
+        textbook: multiTextbook,
+        school: multiSchool,
+        section: multiAssignSection,
+      }),
+    ]);
+    setMultiAssignOpen(false);
+  };
+
   // 숙제 추가 — mixed는 구획별 entry point(잘못된 context 선택 방지), 그 외는 기존 규칙.
   // id는 추가 시점 발급(첫 저장부터 같은 id로 insert — idempotent sync), 대상 기본값은 공통.
   const addAssignment = (section?: "exam" | "regular") =>
@@ -2926,14 +2992,24 @@ export function DailyLogForm({
                             renderAssignmentItem(item, index),
                           )}
                           {examInputSchools.length > 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => addAssignment("exam")}
-                              aria-label="시험 대비 숙제 추가"
-                              className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#e8c9b0] bg-white text-sm font-medium text-[#a2643c] transition hover:bg-[#fdf7f1]"
-                            >
-                              <Plus className="h-4 w-4" aria-hidden /> 숙제 추가
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => addAssignment("exam")}
+                                aria-label="시험 대비 숙제 추가"
+                                className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#e8c9b0] bg-white text-sm font-medium text-[#a2643c] transition hover:bg-[#fdf7f1]"
+                              >
+                                <Plus className="h-4 w-4" aria-hidden /> 숙제 추가
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openMultiAssign("exam")}
+                                aria-label="시험 대비 여러 학생에게 배정"
+                                className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#e8c9b0] bg-white text-sm font-medium text-[#a2643c] transition hover:bg-[#fdf7f1]"
+                              >
+                                <Plus className="h-4 w-4" aria-hidden /> 여러 학생에게 배정
+                              </button>
+                            </>
                           ) : null}
                         </div>
                       </div>
@@ -2948,14 +3024,24 @@ export function DailyLogForm({
                             renderAssignmentItem(item, index),
                           )}
                           {hasRegularHomeworkStudents ? (
-                            <button
-                              type="button"
-                              onClick={() => addAssignment("regular")}
-                              aria-label="일반 수업 숙제 추가"
-                              className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#d9c8f0] bg-white text-sm font-medium text-[#6652b9] transition hover:bg-[#faf7ff]"
-                            >
-                              <Plus className="h-4 w-4" aria-hidden /> 숙제 추가
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => addAssignment("regular")}
+                                aria-label="일반 수업 숙제 추가"
+                                className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#d9c8f0] bg-white text-sm font-medium text-[#6652b9] transition hover:bg-[#faf7ff]"
+                              >
+                                <Plus className="h-4 w-4" aria-hidden /> 숙제 추가
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openMultiAssign("regular")}
+                                aria-label="일반 수업 여러 학생에게 배정"
+                                className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#d9c8f0] bg-white text-sm font-medium text-[#6652b9] transition hover:bg-[#faf7ff]"
+                              >
+                                <Plus className="h-4 w-4" aria-hidden /> 여러 학생에게 배정
+                              </button>
+                            </>
                           ) : null}
                         </div>
                       </div>
@@ -2970,6 +3056,14 @@ export function DailyLogForm({
                       className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#d9c8f0] bg-white text-sm font-medium text-[#6652b9] transition hover:bg-[#faf7ff]"
                     >
                       <Plus className="h-4 w-4" aria-hidden /> 숙제 추가
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openMultiAssign()}
+                      aria-label="여러 학생에게 숙제 배정"
+                      className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[#d9c8f0] bg-white text-sm font-medium text-[#6652b9] transition hover:bg-[#faf7ff]"
+                    >
+                      <Plus className="h-4 w-4" aria-hidden /> 여러 학생에게 배정
                     </button>
                   </>
                 )}
@@ -4080,6 +4174,204 @@ export function DailyLogForm({
           students={students.map((student) => ({ studentId: student.studentId, name: student.name }))}
         />
       ) : null}
+
+      {/* 여러 학생에게 숙제 배정 — 후보/context는 기존 숙제 규칙(homeworkAudienceOptions) 그대로.
+          확정 전에는 form state 무변화(dirty 없음), 확정 시 학생별 독립 항목을 한 번에 추가. */}
+      {multiAssignOpen
+        ? (() => {
+            const candidates = homeworkAudienceOptions(multiSchool, multiAssignSection);
+            const selectedCount = candidates.filter((student) =>
+              multiStudentIds.includes(student.studentId),
+            ).length;
+            const useSchoolControl =
+              multiAssignSection === "exam" || (multiAssignSection !== "regular" && examPeriod);
+            const schoolOptions = multiAssignSection === "exam" ? examInputSchools : schools;
+            return (
+              <div
+                className="fixed inset-0 z-[80] flex items-center justify-center bg-[#2b2323]/40 px-4"
+                role="dialog"
+                aria-modal="true"
+                aria-label="여러 학생에게 숙제 배정"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.stopPropagation();
+                    setMultiAssignOpen(false);
+                  }
+                }}
+              >
+                <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+                  <div className="card-title text-[#2a2323]">여러 학생에게 숙제 배정</div>
+                  <p className="mt-1 text-sm leading-5 text-[#8a7b77]">
+                    선택한 학생마다 각각의 숙제로 추가돼요 — 나중에 내용·완료를 학생별로 따로
+                    관리할 수 있어요.
+                  </p>
+
+                  {useSchoolControl ? (
+                    <label className="form-label mt-3 flex items-center gap-2 text-[#7c6d69]">
+                      <span className="shrink-0">학교</span>
+                      <select
+                        value={multiSchool}
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          setMultiSchool(next);
+                          // 학교가 바뀌면 그 학교 후보가 아닌 선택은 정리 (기존 audienceForSchool 정책)
+                          setMultiStudentIds((prev) =>
+                            prev.filter((id) =>
+                              homeworkAudienceOptions(next, multiAssignSection).some(
+                                (student) => student.studentId === id,
+                              ),
+                            ),
+                          );
+                        }}
+                        aria-label="여러 학생 숙제 학교 선택"
+                        className="min-h-[40px] w-full min-w-0 rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-2.5 py-1.5 text-base font-medium text-[#a2643c] outline-none"
+                      >
+                        <option value="">학교 선택</option>
+                        {schoolOptions.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : textbooks.length > 0 ? (
+                    <label className="form-label mt-3 flex items-center gap-2 text-[#7c6d69]">
+                      <span className="shrink-0">교재</span>
+                      <select
+                        value={multiTextbook}
+                        onChange={(event) => setMultiTextbook(event.target.value)}
+                        aria-label="여러 학생 숙제 교재 선택"
+                        className="min-h-[40px] w-full min-w-0 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5 py-1.5 text-base font-medium text-[#6652b9] outline-none"
+                      >
+                        <option value="">교재 없음 / 기타</option>
+                        {textbooks.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+
+                  <div className="mt-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-[#4d3a3a]">
+                        학생{" "}
+                        <span className="text-[#6652b9]" aria-live="polite">
+                          {selectedCount}명 선택
+                        </span>
+                      </span>
+                      {candidates.length > 0 ? (
+                        <span className="flex gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setMultiStudentIds(candidates.map((student) => student.studentId))
+                            }
+                          >
+                            전체 선택
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setMultiStudentIds([])}
+                          >
+                            전체 해제
+                          </Button>
+                        </span>
+                      ) : null}
+                    </div>
+                    {candidates.length === 0 ? (
+                      <p className="mt-2 rounded-xl bg-[#faf4ef] px-3 py-2.5 text-sm text-[#8a7b77]">
+                        {useSchoolControl && !multiSchool.trim()
+                          ? "학교를 먼저 선택해주세요."
+                          : "선택할 수 있는 학생이 없어요."}
+                      </p>
+                    ) : (
+                      <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="배정할 학생 선택">
+                        {candidates.map((student) => {
+                          const checked = multiStudentIds.includes(student.studentId);
+                          return (
+                            <button
+                              key={student.studentId}
+                              type="button"
+                              aria-pressed={checked}
+                              onClick={() =>
+                                setMultiStudentIds((prev) =>
+                                  prev.includes(student.studentId)
+                                    ? prev.filter((id) => id !== student.studentId)
+                                    : [...prev, student.studentId],
+                                )
+                              }
+                              className={cn(
+                                "min-h-[40px] rounded-xl border px-3 py-1.5 text-sm font-medium transition",
+                                checked
+                                  ? "border-[#d8cdf0] bg-[#f3eefc] text-[#5d4ba5]"
+                                  : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
+                              )}
+                            >
+                              {student.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <label className="mt-3 block">
+                    <span className="form-label mb-1.5 block font-semibold text-[#7c6d69]">내용</span>
+                    <textarea
+                      value={multiContent}
+                      onChange={(event) => setMultiContent(event.target.value)}
+                      rows={2}
+                      maxLength={500}
+                      aria-label="여러 학생 숙제 내용"
+                      placeholder={"Unit 6 오답 다시 풀기\n(여러 줄로 적을 수 있어요)"}
+                      className="min-h-[58px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8] placeholder:text-[#a79996]"
+                    />
+                  </label>
+
+                  <label className="mt-3 block">
+                    <span className="form-label mb-1.5 block font-semibold text-[#7c6d69]">완료일</span>
+                    <span className="flex min-h-[40px] min-w-0 max-w-full items-center gap-1.5 rounded-xl border border-[#e2d8f3] bg-[#f8f5fd] px-2.5">
+                      <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[#6652b9]" aria-hidden />
+                      <input
+                        type="date"
+                        aria-label="여러 학생 숙제 완료일"
+                        value={multiDueDate}
+                        min={addDaysStr(classDate, 1)}
+                        onChange={(event) => setMultiDueDate(event.target.value)}
+                        className="w-full min-w-0 max-w-[160px] bg-transparent text-base font-medium text-[#6652b9] outline-none"
+                      />
+                    </span>
+                  </label>
+
+                  <div className="mt-4 flex gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="flex-1"
+                      onClick={() => setMultiAssignOpen(false)}
+                    >
+                      취소
+                    </Button>
+                    <Button
+                      type="button"
+                      className="flex-1"
+                      disabled={selectedCount === 0}
+                      onClick={confirmMultiAssign}
+                    >
+                      {selectedCount > 0 ? `${selectedCount}명에게 숙제 추가` : "학생을 선택해주세요"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()
+        : null}
 
       {importConfirmText !== null ? (
         <div
