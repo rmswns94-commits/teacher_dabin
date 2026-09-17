@@ -664,6 +664,10 @@ export default async function DailyLogsPage({
                         columnIndex === 0 && "border-l-0",
                         index < 7 && "border-t-0",
                         isSunday && !isSelected && "bg-[#faf7f4]",
+                        // 학원 전체 휴강일은 평일이어도 공휴일처럼 보이게 한다.
+                        // 일요일보다 뒤에 둬서 일요일 + 휴강이 겹쳐도 색이 겹쳐 진해지지 않고
+                        // 하나의 휴일 상태로만 보인다.
+                        cellMarkers.closed && !isSelected && "bg-[#fdf3f0]",
                         isSelected
                           ? "bg-[#f5f1fb] shadow-[inset_0_0_0_2px_#cfc4f0]"
                           : "hover:bg-[#faf8ff]",
@@ -675,11 +679,15 @@ export default async function DailyLogsPage({
                             "flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold tabular-nums md:h-6 md:w-6 md:text-xs",
                             hasHoliday
                               ? "text-[#cf4f4f]"
-                              : isSunday
-                                ? "text-[#c97a7a]"
-                                : isSaturday
-                                  ? "text-[#7a8fc9]"
-                                  : "text-[#4a423f]",
+                              : cellMarkers.closed
+                                ? // 학원 휴강일 — 평일이어도 일요일 계열의 부드러운 휴일 색
+                                  "text-[#c0706f]"
+                                : isSunday
+                                  ? "text-[#c97a7a]"
+                                  : isSaturday
+                                    ? "text-[#7a8fc9]"
+                                    : "text-[#4a423f]",
+                            // 오늘 표시는 언제나 유지된다 (휴강일이어도 오늘인 걸 알 수 있게)
                             isToday && "bg-[#8b7ae6] font-bold text-white",
                           )}
                         >
@@ -690,12 +698,6 @@ export default async function DailyLogsPage({
                             aria-hidden
                             className="h-1.5 w-1.5 shrink-0 rounded-full bg-white ring-1 ring-[#3d7f64]"
                           />
-                        ) : null}
-                        {/* 학원 전체 휴강일 */}
-                        {cellMarkers.closed ? (
-                          <span aria-hidden className="shrink-0 text-xs leading-none">
-                            🏫
-                          </span>
                         ) : null}
                         {/* 수업이 사라진 날(휴강·다른 날짜로 변경) — 자세한 내용은 아래 상세에서 */}
                         {cellMarkers.rest ? (
@@ -710,6 +712,23 @@ export default async function DailyLogsPage({
                           </span>
                         ) : null}
                       </span>
+
+                      {/* 학원 전체 휴강일 — 공휴일처럼 한눈에 보이도록 크게.
+                          날짜 숫자 줄 아래 가운데에 두어 숫자나 일정 바를 가리지 않는다.
+                          크기는 좁은 화면에서 셀을 넘지 않도록 clamp한다. 값이 전부 px인 이유는
+                          글씨 크기 설정(rem)을 키워도 좁은 셀 밖으로 커지면 안 되기 때문이다
+                          (뜻은 아래 라벨과 셀의 aria-label이 전달하므로 이모지는 장식이다).
+                          개별 반 휴강(😴)·옮겨간 수업(🔁) 표시는 그대로 작은 크기를 유지한다. */}
+                      {cellMarkers.closed ? (
+                        <span className="mt-0.5 flex flex-col items-center leading-none">
+                          <span aria-hidden className="text-[clamp(22px,6vw,48px)] leading-none">
+                            🏫
+                          </span>
+                          <span className="mt-1 hidden text-[11px] font-medium leading-none text-[#a8756f] md:block">
+                            학원 휴강
+                          </span>
+                        </span>
+                      ) : null}
 
                       {/* 수업일지가 있는 반은 대표 아이콘만 — 전부 표시, 넘치면 줄바꿈 (이름/상세는 아래 목록에서) */}
                       {icons.length > 0 ? (
