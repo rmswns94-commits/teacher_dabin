@@ -496,14 +496,20 @@ export default async function StudentsPage({
           )}
 
           {/* 구 "보관된 학생 보기" 블록은 상태 필터([휴원]/[퇴원]/[전체])로 대체됐다 */}
-          {/* 학기·학년 전환 — 매일 쓰는 기능이 아니라 학생 추가 옆의 보조 액션으로 둔다 */}
-          <div className="mt-6 flex flex-wrap items-center justify-end gap-2 pb-8">
-            <Button variant="outline" className="gap-1.5" asChild>
-              <Link href="/students/transition">
-                <GraduationCap className="h-4 w-4" aria-hidden /> 학기·학년 전환
-              </Link>
-            </Button>
-            <StudentCreateDialog groups={groupOptions} />
+
+          {/* 하단 고정 액션바 — 학생 등록/학기·학년 전환. 일지 화면의 액션바와 같은 패턴:
+              sticky(bottom 0)라 목록이 길어도 항상 손에 닿고, 목록 끝에서는 자연 흐름 위치로
+              돌아와 마지막 학생 카드를 가리지 않는다. z-30 = 다이얼로그(80) 아래·목록 위,
+              safe-area 하단 패딩 포함(iPad/iPhone PWA). */}
+          <div className="sticky bottom-0 z-30 mt-6 rounded-t-2xl border border-b-0 border-[#efe4dc] bg-[#fffdfb]/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(60,48,90,0.08)] backdrop-blur">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button variant="outline" className="gap-1.5" asChild>
+                <Link href="/students/transition">
+                  <GraduationCap className="h-4 w-4" aria-hidden /> 학기·학년 전환
+                </Link>
+              </Button>
+              <StudentCreateDialog groups={groupOptions} />
+            </div>
           </div>
         </div>
       </main>
