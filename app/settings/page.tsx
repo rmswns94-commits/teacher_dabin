@@ -5,6 +5,7 @@ import { LogoutButton } from "@/components/logout-button";
 import { PageHeader } from "@/components/page-header";
 import { FontSizeControl } from "@/components/font-size-control";
 import { ThemeModeControl } from "@/components/theme-mode-control";
+import { WorkspaceReset } from "@/components/workspace-reset";
 import { Card, CardContent } from "@/components/ui/card";
 import { getDisplayName } from "@/lib/supabase/auth";
 import { getServerUser } from "@/lib/supabase/server";
@@ -100,7 +101,7 @@ export default async function SettingsPage() {
             </Card>
           </section>
 
-          <section className="mt-6 pb-10">
+          <section className="mt-6">
             <h2 className="card-title text-[#8f5470]">계정</h2>
             <Card className="mt-2">
               <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
@@ -111,6 +112,25 @@ export default async function SettingsPage() {
                   </p>
                 </div>
                 <LogoutButton />
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* 데이터 관리 — 되돌릴 수 없는 작업이라 다른 설정과 분리해 맨 아래 배치.
+              삭제는 2단계 확인("초기화" 입력)을 거쳐야 하고 계정/화면 설정은 유지된다. */}
+          <section className="mt-10 pb-10">
+            <h2 className="card-title text-[#96534c]">데이터 관리</h2>
+            <Card className="mt-2 border-[#f0d9d5]">
+              <CardContent className="p-4">
+                <div className="text-base font-medium text-[#96534c]">저장된 데이터 전부 초기화</div>
+                <p className="secondary-text mt-0.5 text-[#8a7b77]">
+                  학원을 옮기는 등 처음부터 다시 시작할 때 사용해요. 학생, 수업 그룹, 수업 일지,
+                  숙제, 할 일, 출결, 시험 대비, 보충 수업 등 지금까지 입력한 업무 데이터를 모두
+                  삭제해요. 이 작업은 되돌릴 수 없어요. 로그인 계정은 삭제되지 않아요.
+                </p>
+                <div className="mt-3">
+                  <WorkspaceReset />
+                </div>
               </CardContent>
             </Card>
           </section>
