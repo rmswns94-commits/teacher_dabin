@@ -47,6 +47,7 @@ import { buildTextbookSectionsText, formatTextbookLinked, joinDerivedText } from
 import { buildHomeworkShareText, shareableHomework } from "@/lib/homework-share";
 import { hasShareableContextSection } from "@/lib/lesson-share";
 import { LessonShareDialog } from "@/components/lesson-share-dialog";
+import { DAILY_LOG_NAV_SECTIONS, DailyLogSectionNav } from "@/components/daily-log-section-nav";
 import {
   activeTargetSchools,
   classifyStudentsByExamTarget,
@@ -2414,6 +2415,9 @@ export function DailyLogForm({
         composingRef.current = false;
       }}
     >
+      {/* 섹션 빠른 이동 — sticky 1줄 pill nav (같은 페이지 내부 scroll만, 폼 state 무접촉) */}
+      <DailyLogSectionNav sections={DAILY_LOG_NAV_SECTIONS} />
+
       {/* 상단 저장 액션 — 하단과 완전히 동일한 handler/pending 공유 (긴 폼에서
           아래까지 내려가지 않아도 저장 가능). 자동 임시저장 상태도 같은 줄에 표시 */}
       <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
@@ -2576,7 +2580,7 @@ export function DailyLogForm({
 
           {/* 대시보드 빠른 실행 [진도 기록]의 hash 목적지 — id/scroll-margin만 추가한
               attribute 변경이라 폼 remount/draft identity에 영향이 없다 */}
-          <div id="progress" className="scroll-mt-4 rounded-2xl bg-[#f5f2ff] p-3">
+          <div id="progress" className="scroll-mt-24 rounded-2xl bg-[#f5f2ff] p-3">
             {showStructuredProgress ? (
               // 진도 편집기 3모드 (조건 순서 규약 — resolveProgressMode):
               //   regular(OFF)  = 그룹 교재마다 textarea (+ 과거 학교 진도 보존 표시)
@@ -2697,7 +2701,8 @@ export function DailyLogForm({
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="block min-w-0">
+            {/* 섹션 빠른 이동 anchor — scroll-mt는 상단 sticky 섹션 nav 높이만큼 (가림 방지) */}
+            <div id="homework" className="block min-w-0 scroll-mt-24">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
                   <NotebookTabs className="h-3.5 w-3.5 text-[#6652b9]" /> 오늘 숙제
@@ -2840,7 +2845,7 @@ export function DailyLogForm({
               ) : null}
             </div>
 
-            <div className="block min-w-0">
+            <div id="next-plan" className="block min-w-0 scroll-mt-24">
               <span className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
                 <CircleArrowRight className="h-3.5 w-3.5 text-[#3e7d6b]" /> 다음 수업 계획
               </span>
@@ -3047,7 +3052,7 @@ export function DailyLogForm({
       </Card>
 
       {/* 대시보드 빠른 실행 [출결]의 hash 목적지 — 학생별 출결 버튼이 이 목록 안에 있다 */}
-      <div id="attendance" className="scroll-mt-4 space-y-3">
+      <div id="attendance" className="scroll-mt-24 space-y-3">
         {students.map((student) => {
           const entry = entries[student.studentId];
           const isAbsent = entry.attendance === "absent";
