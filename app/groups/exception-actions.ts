@@ -10,7 +10,7 @@ import {
   validateScheduleException,
   type ScheduleExceptionKind,
 } from "@/lib/schedule-exceptions";
-import { todayDateString } from "@/lib/dates";
+import { formatShortDateWithWeekday, todayDateString } from "@/lib/dates";
 import {
   deleteScheduleException,
   getDailyLogStatusForOccurrence,
@@ -179,11 +179,13 @@ export async function removeScheduleExceptionAction(input: {
 
   for (const date of affectedDates) {
     const existingLog = await getDailyLogStatusForOccurrence(input.groupId, date);
+    const label = formatShortDateWithWeekday(date);
+
     if (existingLog?.status === "completed") {
-      return { error: "이미 완료된 수업일지가 있어 되돌릴 수 없어요." };
+      return { error: `${label}에 이미 완료된 수업일지가 있어 수업 변경을 되돌릴 수 없어요.` };
     }
     if (existingLog?.status === "draft") {
-      return { error: "작성 중인 수업일지가 있어요. 수업일지를 먼저 확인해주세요." };
+      return { error: `${label}에 작성 중인 수업일지가 있어요. 되돌리기 전에 먼저 확인해주세요.` };
     }
   }
 

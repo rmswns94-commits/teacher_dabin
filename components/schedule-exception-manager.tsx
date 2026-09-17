@@ -12,7 +12,7 @@
 // - 캘린더는 기존 date 계산 helper만 쓰는 순수 그리드다 (새 dependency 없음).
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { CalendarOff, ChevronLeft, ChevronRight, Clock, RotateCcw } from "lucide-react";
+import { ArrowRight, CalendarOff, ChevronLeft, ChevronRight, Clock, RotateCcw, X } from "lucide-react";
 
 import {
   removeScheduleExceptionAction,
@@ -21,7 +21,7 @@ import {
 import { TimeSelect } from "@/components/time-select";
 import { Button } from "@/components/ui/button";
 import { addDaysStr } from "@/lib/calendar";
-import { formatKoreanDate } from "@/lib/dates";
+import { formatKoreanDate, formatShortDateWithWeekday } from "@/lib/dates";
 import { DAY_LABELS, dayOfWeekOf, formatTimeHM } from "@/lib/schedule";
 import {
   buildScheduleExceptionIndex,
@@ -128,9 +128,13 @@ export function ScheduleExceptionManager({
     setStep("list");
   };
 
+  // 마법사 전체 종료. 저장하지 않은 선택(고른 수업/날짜)은 버린다 — DB는 건드리지 않는다.
+  // 다시 열 때는 openWizard가 현재 저장 상태 기준으로 처음부터 시작한다.
   const closeWizard = () => {
     if (busyRef.current) return;
     setStep(null);
+    setPicked(null);
+    setTargetDate("");
     setError("");
   };
 
@@ -153,6 +157,23 @@ export function ScheduleExceptionManager({
         entry.scheduleId === occurrence.scheduleId &&
         entry.movedToDate === occurrence.date,
     ) ?? null;
+
+  // 변경 내역 한 줄 요약 — 저장된 예외 row와 반복 시간표에서만 만든다.
+  // "기존"은 그 occurrence의 원래 날짜 + 반복 시간표 시각, "변경"은 예외에 저장된 날짜/시각이다
+  // (화면 문구를 다시 파싱하지 않는다).
+  const summaryOf = (entry: ScheduleExceptionEntry) => {
+    const base = slotById.get(entry.scheduleId);
+    const from = base
+      ? `${formatShortDateWithWeekday(entry.date)} ${formatTimeHM(base.startTime)}~${formatTimeHM(base.endTime)}`
+      : formatShortDateWithWeekday(entry.date);
+
+    if (entry.kind === "cancelled") {
+      return { from, to: null };
+    }
+
+    const toDate = entry.kind === "moved" ? entry.movedToDate ?? entry.date : entry.date;
+    return { from, to: `${formatShortDateWithWeekday(toDate)} ${entry.startTime}~${entry.endTime}` };
+  };
 
   // 이 반 수업이 이미 있는 날짜 — 수업일지가 반·날짜마다 하나라서 그런 날로는 옮길 수 없다
   // (판정 규칙은 서버가 최종적으로 다시 확인한다). 고른 수업 자신의 날짜는 "시간만 변경"이라 제외.
@@ -253,7 +274,7 @@ export function ScheduleExceptionManager({
           return;
         }
         setConfirmRestore(null);
-        showNotice(`${formatKoreanDate(entry.date)} 수업을 원래 시간표대로 되돌렸어요.`);
+        showNotice("수업 변경을 되돌렸어요.");
       } finally {
         busyRef.current = false;
       }
@@ -305,46 +326,47 @@ export function ScheduleExceptionManager({
         </p>
       ) : null}
 
-      {/* 예정된 1회 변경 */}
+      {/* 저장된 수업 변경 — 한 줄 요약 + 되돌리기 (좁으면 자연스럽게 줄바꿈, 정보는 숨기지 않는다) */}
       {exceptions.length > 0 ? (
-        <div className="mt-3 rounded-2xl border border-[#efe4dc] bg-[#fffdfb] p-3">
-          <div className="text-sm font-semibold text-[#4d3a3a]">예정된 수업 변경</div>
-          <ul className="mt-2 space-y-1.5">
-            {exceptions.map((entry) => (
-              <li
-                key={entry.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#faf7f3] px-3 py-2"
-              >
-                <span className="min-w-0 text-sm text-[#564d4d]">
-                  <span className="font-medium text-[#2d2928]">
-                    {formatKoreanDate(entry.date, true)}
-                  </span>{" "}
-                  {entry.kind === "cancelled" ? (
-                    <span className="text-[#a05252]">😴 휴강</span>
-                  ) : entry.kind === "moved" ? (
-                    <span className="tabular-nums">
-                      → {formatKoreanDate(entry.movedToDate ?? "", true)} {entry.startTime}
-                    </span>
-                  ) : (
-                    <span className="tabular-nums">
-                      시간 변경 {entry.startTime} ~ {entry.endTime}
-                    </span>
-                  )}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1 text-[#7c6d69]"
-                  disabled={isPending}
-                  onClick={() => setConfirmRestore(entry)}
+        <div className="mt-3">
+          <ul className="space-y-1.5" aria-label="예정된 수업 변경">
+            {exceptions.map((entry) => {
+              const summary = summaryOf(entry);
+              return (
+                <li
+                  key={entry.id}
+                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border border-[#e8e2f5] bg-[#f8f6fc] px-3 py-2"
                 >
-                  <RotateCcw className="h-3.5 w-3.5" aria-hidden /> 원래대로
-                </Button>
-              </li>
-            ))}
+                  <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                    <span className="tabular-nums text-[#6b6b74]">
+                      <span className="sr-only">기존 </span>
+                      {summary.from}
+                    </span>
+                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[#a99cd4]" aria-hidden />
+                    {summary.to ? (
+                      <span className="tabular-nums font-semibold text-[#5d4ba5]">
+                        <span className="sr-only">변경 </span>
+                        {summary.to}
+                      </span>
+                    ) : (
+                      <span className="font-semibold text-[#96534c]">😴 휴강</span>
+                    )}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 shrink-0"
+                    disabled={isPending}
+                    onClick={() => setConfirmRestore(entry)}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" aria-hidden /> 되돌리기
+                  </Button>
+                </li>
+              );
+            })}
           </ul>
-          <p className="caption-text mt-2 text-[#a89a95]">
+          <p className="caption-text mt-1.5 text-[#a89a95]">
             반복 시간표를 수정하면 예정된 수업 변경은 사라져요.
           </p>
         </div>
@@ -365,8 +387,20 @@ export function ScheduleExceptionManager({
           }}
         >
           <div className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
-            <div className="card-title text-[#2a2323]">
-              {step === "list" ? "어떤 수업을 변경할까요?" : step === "date" ? "언제로 옮길까요?" : "몇 시에 할까요?"}
+            {/* 제목 + 닫기. X는 "이전 단계"가 아니라 마법사 전체 종료다 (저장 없음). */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="card-title min-w-0 text-[#2a2323]">
+                {step === "list" ? "어떤 수업을 변경할까요?" : step === "date" ? "언제로 옮길까요?" : "몇 시에 할까요?"}
+              </div>
+              <button
+                type="button"
+                onClick={closeWizard}
+                disabled={isPending}
+                aria-label="수업 변경 닫기"
+                className="-mr-1.5 -mt-1.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#8a7b77] transition hover:bg-[#faf0f2] disabled:opacity-50"
+              >
+                <X className="h-4 w-4" aria-hidden />
+              </button>
             </div>
 
             {step === "list" ? (
@@ -578,10 +612,15 @@ export function ScheduleExceptionManager({
           }}
         >
           <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
-            <div className="card-title text-[#2a2323]">
-              {formatKoreanDate(confirmRestore.date)} 수업을 원래 시간표대로 되돌릴까요?
-            </div>
+            <div className="card-title text-[#2a2323]">수업 변경을 되돌릴까요?</div>
             <p className="mt-2 text-sm leading-5 text-[#655d5d]">
+              {confirmRestore.kind === "cancelled"
+                ? `${summaryOf(confirmRestore).from} 휴강을 취소하고 원래 일정으로 되돌립니다.`
+                : confirmRestore.kind === "moved"
+                  ? `${summaryOf(confirmRestore).to}으로 옮긴 수업을 취소하고 원래 일정인 ${summaryOf(confirmRestore).from}으로 되돌립니다.`
+                  : `${summaryOf(confirmRestore).to}으로 바꾼 시간을 취소하고 원래 일정인 ${summaryOf(confirmRestore).from}으로 되돌립니다.`}
+            </p>
+            <p className="mt-1 text-sm leading-5 text-[#8a7b77]">
               이 변경만 사라지고, 반복 시간표는 그대로예요.
             </p>
             {error ? (
@@ -605,7 +644,7 @@ export function ScheduleExceptionManager({
                 disabled={isPending}
                 onClick={() => restore(confirmRestore)}
               >
-                {isPending ? "되돌리는 중…" : "원래대로"}
+                {isPending ? "되돌리는 중…" : "되돌리기"}
               </Button>
             </div>
           </div>
