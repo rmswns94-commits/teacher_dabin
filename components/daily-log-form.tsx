@@ -197,15 +197,16 @@ function isComposingEvent(event: { nativeEvent: object }) {
   return Boolean((event.nativeEvent as { isComposing?: boolean }).isComposing);
 }
 
-// 학생 평가 일괄 입력 대상 — 실제 존재하는 세그먼트 평가 필드 중 spec 범위(숙제/집중/참여).
-// value/label은 기존 enum·라벨 단일 소스(lib/elementary) 재사용. 출결은 폼 기본값이
-// "출석"이라 미평가 상태가 없어 bulk 대상이 아니고, 온라인 복습(boolean|null 3-state)과
+// 학생 평가 일괄 입력 대상 — 실제 존재하는 카드 평가 컨트롤 전부
+// (숙제/온라인 복습/집중/참여/질문/배려/노력). value/label은 기존 enum·라벨 단일
+// 소스(lib/elementary) 재사용, 온라인 복습만 boolean(true=완료, null만 미평가 — false 보존).
+// 출결은 폼 기본값이 "출석"이라 미평가 상태가 없어 bulk 대상이 아니고,
 // 코멘트/칭찬(개별 텍스트)도 제외한다. particle은 한국어 조사(숙제를/집중을, 완료로/좋음으로).
 const BULK_EVALUATION_ACTIONS: readonly {
   field: BulkEvaluationField;
   group: string;
   objectParticle: string;
-  value: string;
+  value: string | boolean;
   valueLabel: string;
   toParticle: string;
 }[] = [
@@ -215,6 +216,14 @@ const BULK_EVALUATION_ACTIONS: readonly {
     objectParticle: "를",
     value: "completed",
     valueLabel: homeworkStatusLabels.completed,
+    toParticle: "로",
+  },
+  {
+    field: "onlineReviewCompleted",
+    group: "온라인 복습",
+    objectParticle: "을",
+    value: true,
+    valueLabel: "완료",
     toParticle: "로",
   },
   {
@@ -231,6 +240,30 @@ const BULK_EVALUATION_ACTIONS: readonly {
     objectParticle: "를",
     value: "active",
     valueLabel: participationLevelLabels.active,
+    toParticle: "으로",
+  },
+  {
+    field: "questionLevel",
+    group: "질문",
+    objectParticle: "을",
+    value: "high",
+    valueLabel: questionLevelLabels.high,
+    toParticle: "으로",
+  },
+  {
+    field: "kindnessLevel",
+    group: "배려",
+    objectParticle: "를",
+    value: "good",
+    valueLabel: kindnessLevelLabels.good,
+    toParticle: "으로",
+  },
+  {
+    field: "effortLevel",
+    group: "노력",
+    objectParticle: "을",
+    value: "high",
+    valueLabel: effortLevelLabels.high,
     toParticle: "으로",
   },
 ];
