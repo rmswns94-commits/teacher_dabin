@@ -12,13 +12,14 @@ import { Check, Plus, School } from "lucide-react";
 import {
   activateWorkspaceAction,
   createWorkspaceAction,
+  renameWorkspaceAction,
 } from "@/app/settings/workspace-actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export type WorkspaceOption = { id: string; name: string };
 
-type Step = null | "explain" | "name" | { switchTo: WorkspaceOption };
+type Step = null | "explain" | "name" | "rename" | { switchTo: WorkspaceOption };
 
 export function WorkspaceSwitcher({
   workspaces,
@@ -29,6 +30,8 @@ export function WorkspaceSwitcher({
 }) {
   const [step, setStep] = useState<Step>(null);
   const [name, setName] = useState("");
+  // 한글 입력 중에는 손대지 않는다 — trim/검증은 저장할 때만 한다 (IME 안전)
+  const [renameValue, setRenameValue] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -55,6 +58,29 @@ export function WorkspaceSwitcher({
         setStep(null);
         setName("");
         setNotice(`${result.name}에서 새로 시작해요.`);
+      } finally {
+        busyRef.current = false;
+      }
+    });
+  };
+
+  // 이름 변경 — 표시용 이름만 바뀐다. 학생·반·수업일지 등은 그대로다.
+  const rename = () => {
+    if (busyRef.current || !active || !renameValue.trim()) return;
+    busyRef.current = true;
+    setError("");
+    startTransition(async () => {
+      try {
+        const result = await renameWorkspaceAction({
+          workspaceId: active.id,
+          name: renameValue,
+        });
+        if ("error" in result) {
+          setError(result.error);
+          return;
+        }
+        setStep(null);
+        setNotice(`${result.name}으로 이름을 변경했어요.`);
       } finally {
         busyRef.current = false;
       }
@@ -97,9 +123,24 @@ export function WorkspaceSwitcher({
             지금 보고 있는 학원이에요. 학생·수업일지 등 모든 기록은 학원별로 따로 보관돼요.
           </p>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => setStep("explain")}>
-          학원 변경
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={!active}
+            onClick={() => {
+              setRenameValue(active?.name ?? "");
+              setError("");
+              setStep("rename");
+            }}
+          >
+            이름 변경
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setStep("explain")}>
+            학원 변경
+          </Button>
+        </div>
       </div>
 
       {notice ? (
@@ -114,7 +155,13 @@ export function WorkspaceSwitcher({
       ) : null}
 
       {workspaces.length > 1 ? (
-        <ul className="mt-4 space-y-1.5 border-t border-dashed border-[#efe4dc] pt-4" aria-label="학원 목록">
+        <div className="mt-4 border-t border-dashed border-[#efe4dc] pt-4">
+          <div className="text-sm font-medium text-[#4d3a3a]">내 학원</div>
+        </div>
+      ) : null}
+
+      {workspaces.length > 1 ? (
+        <ul className="mt-2 space-y-1.5" aria-label="학원 목록">
           {workspaces.map((workspace) => {
             const isActive = workspace.id === activeId;
             return (
@@ -153,6 +200,70 @@ export function WorkspaceSwitcher({
         </ul>
       ) : null}
 
+      {/* 학원 이름 변경 — 표시용 이름만 바뀐다 */}
+      {step === "rename" && active ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="학원 이름 변경"
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-[#2b2323]/40 px-4"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.stopPropagation();
+              close();
+            }
+          }}
+        >
+          <div className="w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+            <div className="card-title text-[#2a2323]">학원 이름 변경</div>
+            <p className="mt-2 text-sm leading-6 text-[#655d5d]">
+              현재 이름 <span className="font-medium text-[#2d2928]">{active.name}</span>
+            </p>
+            <p className="mt-1 text-sm leading-6 text-[#8a7b77]">
+              이름만 바뀌고 학생·수업일지 등 기록은 그대로예요.
+            </p>
+            <label className="mt-3 block">
+              <span className="sr-only">새 학원 이름</span>
+              <input
+                value={renameValue}
+                onChange={(event) => setRenameValue(event.target.value)}
+                maxLength={100}
+                autoFocus
+                placeholder="다빈영어학원"
+                aria-label="새 학원 이름"
+                className="w-full rounded-2xl border border-[#ece0db] bg-white px-3 py-2.5 text-base outline-none focus:border-[#e3b9c9] placeholder:text-[#a79996]"
+              />
+            </label>
+            {error ? (
+              <p role="status" className="mt-3 rounded-xl bg-[#fdf1f0] px-3 py-2 text-sm text-[#a05252]">
+                {error}
+              </p>
+            ) : null}
+            <div className="mt-4 flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="flex-1"
+                disabled={isPending}
+                onClick={close}
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                className="flex-1"
+                disabled={
+                  isPending || !renameValue.trim() || renameValue.trim() === active.name.trim()
+                }
+                onClick={rename}
+              >
+                {isPending ? "저장 중…" : "저장"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* 학원 변경 안내 → 이름 입력 */}
       {step === "explain" || step === "name" ? (
         <div
@@ -189,13 +300,17 @@ export function WorkspaceSwitcher({
               </>
             ) : (
               <>
-                <div className="card-title text-[#2a2323]">새 학원 이름</div>
+                <div className="card-title text-[#2a2323]">새 학원 시작</div>
+                <p className="mt-2 text-sm leading-6 text-[#8a7b77]">
+                  기존 학원의 데이터는 삭제되지 않아요. 새 학원에서는 모든 업무 데이터를 처음부터
+                  시작합니다.
+                </p>
                 <label className="mt-3 block">
-                  <span className="sr-only">새 학원 이름</span>
+                  <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">학원 이름</span>
                   <input
                     value={name}
                     onChange={(event) => setName(event.target.value)}
-                    maxLength={40}
+                    maxLength={100}
                     autoFocus
                     placeholder="새봄영어학원"
                     aria-label="새 학원 이름"

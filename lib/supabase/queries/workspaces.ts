@@ -153,6 +153,36 @@ export async function createWorkspace(name: string) {
   return toRecord(data as WorkspaceRow);
 }
 
+// 학원 이름 변경 — 표시용 이름(name) 한 컬럼만 바꾼다.
+// workspace id는 그대로이므로 학생·반·수업일지 등 업무 데이터는 어떤 것도 건드리지 않는다.
+export async function renameWorkspace(workspaceId: string, name: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  const { data, error } = await supabase
+    .from("workspaces")
+    .update({ name })
+    .eq("id", workspaceId)
+    .eq("user_id", user.id)
+    .select("id, name, activated_at, created_at")
+    .maybeSingle();
+
+  if (error) {
+    console.error("renameWorkspace error", error);
+    throw new Error("학원 이름을 변경하지 못했어요. 잠시 후 다시 시도해주세요.");
+  }
+
+  if (!data) {
+    throw new Error("학원을 찾을 수 없어요.");
+  }
+
+  return toRecord(data as WorkspaceRow);
+}
+
 // 학원 전환 — activated_at 갱신 한 문장(RPC). 업무 데이터는 어떤 것도 바뀌지 않는다.
 export async function activateWorkspace(workspaceId: string) {
   const supabase = await createServerSupabaseClient();
