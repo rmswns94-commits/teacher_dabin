@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { DailyLogExamPreview } from "@/components/daily-log-exam-preview";
 import { DailyLogForm, type DailyLogFormStudent } from "@/components/daily-log-form";
 import { DailyLogPicker } from "@/components/daily-log-picker";
+import { LessonHistoryWorkspace } from "@/components/lesson-history-panel";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
@@ -14,6 +15,7 @@ import { buildTextbookSectionsText, stripDerivedPrefix, uniqueSchoolList } from 
 import { getDailyLogDraft } from "@/lib/supabase/queries/daily-log-drafts";
 import {
   getDailyLogDetailForCurrentUser,
+  getGroupHistoryLogs,
   getPraisesForDailyLog,
   getPreviousLessonImportSource,
   getPreviousReflectionNext,
@@ -114,7 +116,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
 
   // Students who joined the group after this log was written can still be added.
   const knownIds = new Set(students.map((student) => student.studentId));
-  const [currentMembers, groupSchedules, prevReflection, allGroups, importSource, allSchedules, prevEvaluations] = await Promise.all([
+  const [currentMembers, groupSchedules, prevReflection, allGroups, importSource, allSchedules, prevEvaluations, history] = await Promise.all([
     getGroupStudentsForCurrentUser(log.group_id),
     // 다음 수업 계획 기본 날짜 계산용 시간표 (legacy row는 저장 전까지 DB 미변경)
     getGroupSchedules(log.group_id),
@@ -130,6 +132,13 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
     // 학생 평가 카드 "지난 수업 참고" — 이 일지 class_date "미만"의 직전 Finalized 학생 평가
     // (자기 자신은 lt 조건으로 자연 제외 — 과거 일지 수정에서도 그 시점 기준의 직전 수업)
     getPreviousStudentEvaluations(log.group_id, log.class_date),
+    // 이전 수업 기록 사이드바 — 새 작성 화면과 같은 쿼리/컴포넌트 재사용.
+    // 기준은 이 일지의 class_date "미만"(lt)이라 현재 수정 중인 일지는 자연 제외된다.
+    // (draft 새로고침/완료 일지 수정이 이 edit 화면으로 오는데, 여기에만 사이드바가 없어
+    //  Create에서 보이던 이전 기록이 사라지던 버그의 수정 — 실패해도 화면은 그대로 동작)
+    getGroupHistoryLogs(log.group_id, log.class_date, 0, 10)
+      .then((result) => ({ ...result, failed: false }))
+      .catch(() => ({ rows: [], hasMore: false, failed: true })),
   ]);
 
   // 기준은 "이 일지의 class_date 요일" 정규 시간표뿐 (오늘 날짜 아님 — 과거 일지도 그 요일 기준)
@@ -206,6 +215,20 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
           </Card>
         ) : null}
 
+        {/* 이전 수업 기록 사이드바 — 새 작성 화면과 동일한 워크스페이스/데이터 재사용.
+            표시 여부는 폼 모드(작성/이어쓰기/완료 수정)가 아니라 group+class_date 기준. */}
+        <LessonHistoryWorkspace
+          group={{ id: log.group_id, name: log.group?.name ?? "수업 그룹" }}
+          currentDate={log.class_date}
+          initialRows={history.rows}
+          initialHasMore={history.hasMore}
+          initialLoadFailed={history.failed}
+          schedules={groupSchedules.map((slot) => ({
+            day_of_week: slot.day_of_week,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
+          }))}
+        >
         {/* 시험 기간 ON: 학교별 시험 대비 캘린더 미리보기 — 폼과 형제 트리 (remount 무관) */}
         {examPreviewEntries.length > 0 ? (
           <DailyLogExamPreview entries={examPreviewEntries} today={todayDateString()} />
@@ -313,6 +336,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
               : null
           }
         />
+        </LessonHistoryWorkspace>
       </main>
     </AppShell>
   );
