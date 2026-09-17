@@ -1324,18 +1324,6 @@ export function DailyLogForm({
     setEntries((prev) => ({ ...prev, [studentId]: { ...prev[studentId], ...patch } }));
   };
 
-  // 숙제 전원 완료: 결석 학생 제외, 저장 전이라 개별 수정 가능
-  const markAllHomeworkCompleted = () => {
-    setEntries((prev) =>
-      Object.fromEntries(
-        Object.entries(prev).map(([studentId, entry]) => [
-          studentId,
-          entry.attendance === "absent" ? entry : { ...entry, homeworkStatus: "completed" },
-        ]),
-      ),
-    );
-  };
-
   const showBulkNotice = (text: string) => {
     setBulkNotice(text);
     if (bulkNoticeTimerRef.current !== null) {
@@ -3188,9 +3176,6 @@ export function DailyLogForm({
               />
               문제
             </label>
-            <Button type="button" variant="secondary" size="sm" onClick={markAllHomeworkCompleted}>
-              숙제 전원 완료로 표시
-            </Button>
             <Button
               type="button"
               variant="outline"
