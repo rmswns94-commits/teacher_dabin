@@ -2215,6 +2215,28 @@ export function DailyLogForm({
   const save = (status: "draft" | "completed") => {
     setError("");
     setDraftSavedNotice("");
+    // [칭찬 한표] 편집기에 [칭찬 추가]로 확정하지 않은 텍스트가 남아 있으면
+    // 명시적 저장 시점에 자동 확정한다 — "칭찬을 작성하고 (추가 버튼 없이) 임시 저장"하면
+    // 편집기 로컬 텍스트가 payload에 없어 reload 후 사라지던 문제의 수정.
+    // autosave는 건드리지 않는다 — 아직 입력 중일 수 있는 텍스트를 임의 확정하지 않음.
+    let entriesForSave = entries;
+    const pendingPraise = praiseDraft.trim();
+    if (praiseOpenFor && pendingPraise && entries[praiseOpenFor]) {
+      const target = entries[praiseOpenFor];
+      const nextComments =
+        praiseEditIndex === null
+          ? [...target.praiseComments, pendingPraise]
+          : target.praiseComments.map((comment, index) =>
+              index === praiseEditIndex ? pendingPraise : comment,
+            );
+      entriesForSave = { ...entries, [praiseOpenFor]: { ...target, praiseComments: nextComments } };
+      setEntries(entriesForSave);
+      setPraiseOpenFor(null);
+      setPraiseEditIndex(null);
+      setPraiseDraft("");
+      // 클릭 시점 저장 스냅샷/payload가 방금 확정한 칭찬을 포함하도록 ref도 함께 갱신
+      formStateRef.current = { ...formStateRef.current, entries: entriesForSave };
+    }
     // 검증 실패는 요약 모달을 닫고 화면의 오류 배너로 보여준다
     // (모달이 열린 채 남으면 아무 일도 안 일어난 것처럼 보인다)
     const failValidation = (message: string) => {
@@ -2321,7 +2343,7 @@ export function DailyLogForm({
         reflectionNext,
         status,
         students: students.map((student) => {
-          const entry = entries[student.studentId];
+          const entry = entriesForSave[student.studentId];
           return {
             studentId: student.studentId,
             attendance: entry.attendance,
