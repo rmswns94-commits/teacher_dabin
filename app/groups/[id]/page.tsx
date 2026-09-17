@@ -47,6 +47,8 @@ import { gradeDisplay, gradeOptions, isElementaryGrade } from "@/lib/grades";
 import { groupIconOf } from "@/lib/group-icons";
 import { activePreparationItems } from "@/lib/preparation";
 import { getCurrentUserMakeups } from "@/lib/supabase/queries/makeups";
+import { ScheduleExceptionManager } from "@/components/schedule-exception-manager";
+import { getGroupScheduleExceptionsFrom } from "@/lib/supabase/queries/schedule-exceptions";
 import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
 import { formatScheduleBlock, groupSchedulesByTime } from "@/lib/schedule";
 import type { PreparationItem } from "@/lib/supabase/types";
@@ -77,16 +79,26 @@ export default async function GroupDetailPage({
 }) {
   const { id } = await params;
   const { edit, saved, scheduleError } = (await searchParams) ?? {};
-  const [group, allMembers, latestProgress, recentLogs, availableStudents, allMakeups, schedules] =
-    await Promise.all([
-      getGroupByIdForCurrentUser(id),
-      getGroupStudentsForCurrentUser(id),
-      getGroupLatestProgress(id),
-      getGroupRecentLogs(id, 5),
-      getAvailableStudentsForGroup(),
-      getCurrentUserMakeups(),
-      getGroupSchedules(id),
-    ]);
+  const [
+    group,
+    allMembers,
+    latestProgress,
+    recentLogs,
+    availableStudents,
+    allMakeups,
+    schedules,
+    scheduleExceptions,
+  ] = await Promise.all([
+    getGroupByIdForCurrentUser(id),
+    getGroupStudentsForCurrentUser(id),
+    getGroupLatestProgress(id),
+    getGroupRecentLogs(id, 5),
+    getAvailableStudentsForGroup(),
+    getCurrentUserMakeups(),
+    getGroupSchedules(id),
+    // 예정된 1회 변경 (오늘 이후) — 그룹당 1쿼리, 지난 기록은 표시만 생략(삭제 없음)
+    getGroupScheduleExceptionsFrom(id, todayDateString()),
+  ]);
 
   if (!group) {
     notFound();
@@ -223,6 +235,21 @@ export default async function GroupDetailPage({
               ))
             )}
           </div>
+        ) : null}
+
+        {/* 정규수업 1회 변경(휴강/시간 변경) — 반복 시간표 수정과 구분된 보조 액션 */}
+        {!isEditMode ? (
+          <ScheduleExceptionManager
+            groupId={id}
+            today={todayDateString()}
+            slots={schedules.map((slot) => ({
+              id: slot.id,
+              dayOfWeek: slot.day_of_week,
+              startTime: slot.start_time,
+              endTime: slot.end_time,
+            }))}
+            exceptions={scheduleExceptions}
+          />
         ) : null}
 
         {isEditMode ? (

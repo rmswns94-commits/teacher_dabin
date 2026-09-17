@@ -30,6 +30,8 @@ import {
   getGroupLatestProgress,
   getGroupStudentsForCurrentUser,
 } from "@/lib/supabase/queries/groups";
+import { buildScheduleExceptionMap } from "@/lib/schedule-exceptions";
+import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup, getGroupSchedules } from "@/lib/supabase/queries/schedules";
 import { getDailyLogExamPreviewEntries } from "@/lib/supabase/queries/school-exams";
 import { getAdjacentScheduledClasses } from "@/lib/adjacent-classes";
@@ -70,7 +72,7 @@ export default async function NewDailyLogPage({
   // 그룹 목록과 (선택된 그룹의) 학생/직전 수업/이전 기록을 한 번에 병렬 조회한다.
   // 이전 기록은 lightweight 첫 페이지만 — 실패해도 작성 화면은 그대로 동작해야 한다.
   const emptyHistory = { rows: [], hasMore: false, failed: false };
-  const [groups, groupStudentsRaw, lastLesson, history, groupSchedules, draftRow, prevReflection, importSource, allSchedules, prevEvaluations] = await Promise.all([
+  const [groups, groupStudentsRaw, lastLesson, history, groupSchedules, draftRow, prevReflection, importSource, allSchedules, prevEvaluations, dateExceptions] = await Promise.all([
     getCurrentUserGroups(),
     requestedGroupId ? getGroupStudentsForCurrentUser(requestedGroupId) : Promise.resolve([]),
     requestedGroupId ? getGroupLatestProgress(requestedGroupId) : Promise.resolve(null),
@@ -91,6 +93,8 @@ export default async function NewDailyLogPage({
     getCurrentUserSchedulesWithGroup(),
     // 학생 평가 카드 "지난 수업 참고" — 직전 Finalized 일지의 학생 평가 embed 1쿼리 (read-only)
     requestedGroupId ? getPreviousStudentEvaluations(requestedGroupId, date) : Promise.resolve(null),
+    // 이 날짜의 정규수업 1회 예외 (이전/다음 수업 이동 계산용 — 날짜 1개 range 1쿼리)
+    getScheduleExceptionsInRange(date, date),
   ]);
 
   const selectedGroup = requestedGroupId
@@ -99,8 +103,12 @@ export default async function NewDailyLogPage({
 
   // 이전/다음 수업 바로가기 — 기준은 "현재 폼의 lesson_date 요일"의 정규 시간표뿐
   // (보충/시험 일정 제외, start_time ASC). 현재 그룹이 그 요일 시간표에 없으면 미표시.
+  // (1회 휴강 occurrence는 이동 대상에서 빠지고, 시간 변경은 변경된 시각 순서를 따른다)
   const adjacentClasses = selectedGroup
-    ? getAdjacentScheduledClasses(allSchedules, dayOfWeekOf(date), selectedGroup.id)
+    ? getAdjacentScheduledClasses(allSchedules, dayOfWeekOf(date), selectedGroup.id, {
+        date,
+        exceptions: buildScheduleExceptionMap(dateExceptions),
+      })
     : null;
 
   // 시험 기간 ON: 그룹 학생 학교들의 기존 시험 대비(시험+플래너 계획)를 read-only 미리보기로.

@@ -22,6 +22,8 @@ import {
   getPreviousStudentEvaluations,
 } from "@/lib/supabase/queries/daily-logs";
 import { getCurrentUserGroups, getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
+import { buildScheduleExceptionMap } from "@/lib/schedule-exceptions";
+import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup, getGroupSchedules } from "@/lib/supabase/queries/schedules";
 import { getDailyLogExamPreviewEntries } from "@/lib/supabase/queries/school-exams";
 import { getVocabMistakesForDailyLog } from "@/lib/supabase/queries/vocab-mistakes";
@@ -116,7 +118,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
 
   // Students who joined the group after this log was written can still be added.
   const knownIds = new Set(students.map((student) => student.studentId));
-  const [currentMembers, groupSchedules, prevReflection, allGroups, importSource, allSchedules, prevEvaluations, history] = await Promise.all([
+  const [currentMembers, groupSchedules, prevReflection, allGroups, importSource, allSchedules, prevEvaluations, history, dateExceptions] = await Promise.all([
     getGroupStudentsForCurrentUser(log.group_id),
     // 다음 수업 계획 기본 날짜 계산용 시간표 (legacy row는 저장 전까지 DB 미변경)
     getGroupSchedules(log.group_id),
@@ -139,13 +141,17 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
     getGroupHistoryLogs(log.group_id, log.class_date, 0, 10)
       .then((result) => ({ ...result, failed: false }))
       .catch(() => ({ rows: [], hasMore: false, failed: true })),
+    // 이 일지 날짜의 정규수업 1회 예외 (이동 계산용 — 날짜 1개 range 1쿼리)
+    getScheduleExceptionsInRange(log.class_date, log.class_date),
   ]);
 
   // 기준은 "이 일지의 class_date 요일" 정규 시간표뿐 (오늘 날짜 아님 — 과거 일지도 그 요일 기준)
+  // 그 날짜의 1회 예외를 반영한다: 휴강은 이동 대상 제외, 시간 변경은 변경된 시각 순서.
   const adjacentClasses = getAdjacentScheduledClasses(
     allSchedules,
     dayOfWeekOf(log.class_date),
     log.group_id,
+    { date: log.class_date, exceptions: buildScheduleExceptionMap(dateExceptions) },
   );
 
   for (const member of currentMembers) {

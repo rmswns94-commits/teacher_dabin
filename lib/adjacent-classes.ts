@@ -1,4 +1,5 @@
 import { formatTimeHM } from "@/lib/schedule";
+import { resolveOccurrence, type ScheduleExceptionMap } from "@/lib/schedule-exceptions";
 
 // 같은 날짜(요일)의 정규 수업 이전/다음 계산 — Daily Log 이전/다음 수업 바로가기용 순수 헬퍼.
 // 기준: 현재 일지의 lesson_date 요일에 실제 schedule row가 있는 그룹만 후보이며(보충/시험
@@ -29,19 +30,34 @@ export type AdjacentClasses = {
 
 const NONE: AdjacentClasses = { previous: null, next: null, hasCurrent: false };
 
+// date/exceptions를 주면 1회 예외가 반영된다: 휴강 occurrence는 이동 대상에서 빠지고,
+// 시간 변경은 effective start_time 기준으로 순서가 정해진다 (base 시간 기준 정렬 금지).
 export function getAdjacentScheduledClasses(
   slots: readonly AdjacentClassSlot[],
   weekday: number,
   currentGroupId: string,
+  options?: { date?: string; exceptions?: ScheduleExceptionMap | null },
 ): AdjacentClasses {
+  const date = options?.date;
   const daySlots = slots
     .filter((slot) => slot.day_of_week === weekday && slot.group)
+    .map((slot) => {
+      const effective = date
+        ? resolveOccurrence(options?.exceptions, slot.id, date, slot.start_time, slot.start_time)
+        : null;
+      return {
+        slot,
+        cancelled: effective?.cancelled ?? false,
+        // resolveOccurrence는 end도 요구하므로 start만 쓰는 여기서는 start를 재사용한다
+        startTime: effective && !effective.cancelled ? effective.startTime : formatTimeHM(slot.start_time),
+      };
+    })
+    .filter((entry) => !entry.cancelled)
     // start_time ASC — 동률은 안정적인 schedule row id로만 가른다 (새 이름순 규칙 금지)
     .sort(
-      (a, b) =>
-        formatTimeHM(a.start_time).localeCompare(formatTimeHM(b.start_time)) ||
-        a.id.localeCompare(b.id),
-    );
+      (a, b) => a.startTime.localeCompare(b.startTime) || a.slot.id.localeCompare(b.slot.id),
+    )
+    .map((entry) => ({ ...entry.slot, start_time: entry.startTime }));
 
   // Daily Log identity는 group+date 하나라서, 같은 그룹이 같은 요일에 schedule row를
   // 여러 개 가져도 목적지 일지는 하나다 — 그룹당 가장 이른 slot 1개만 후보로 남긴다.

@@ -23,6 +23,8 @@ import {
   getLatestLogPerGroup,
   getUpcomingGroupExams,
 } from "@/lib/supabase/queries/groups";
+import { buildScheduleExceptionMap } from "@/lib/schedule-exceptions";
+import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import { restoreGroupAction } from "./actions";
 
@@ -66,14 +68,17 @@ export default async function GroupsPage() {
   const todayDow = dayOfWeekOf(today);
 
   // 첫 화면 요약에 필요한 데이터만 병렬 batch 조회 (그룹당 개별 쿼리 금지).
-  const [allGroups, counts, schedules, latestLogs, latestCompletedLogs, exams] = await Promise.all([
-    getCurrentUserGroups(true),
-    getAllGroupStudentCounts(),
-    getCurrentUserSchedulesWithGroup(),
-    getLatestLogPerGroup(false),
-    getLatestLogPerGroup(true),
-    getUpcomingGroupExams(today, addDaysStr(today, 14)),
-  ]);
+  const [allGroups, counts, schedules, latestLogs, latestCompletedLogs, exams, scheduleExceptions] =
+    await Promise.all([
+      getCurrentUserGroups(true),
+      getAllGroupStudentCounts(),
+      getCurrentUserSchedulesWithGroup(),
+      getLatestLogPerGroup(false),
+      getLatestLogPerGroup(true),
+      getUpcomingGroupExams(today, addDaysStr(today, 14)),
+      // 다음 수업 계산용 1회 예외 (7일 범위 1쿼리 — 그룹별 조회 없음)
+      getScheduleExceptionsInRange(today, addDaysStr(today, 7)),
+    ]);
 
   // 최근 일지들의 출결 집계 (일지 id가 필요해서 위 결과 이후 1쿼리).
   const attendanceByLog = await getAttendanceSummaryForLogs(
@@ -88,7 +93,13 @@ export default async function GroupsPage() {
     schedulesByGroup.set(slot.group_id, [...(schedulesByGroup.get(slot.group_id) ?? []), slot]);
   }
 
-  const nextByGroup = getGroupNextOccurrences(schedules, now);
+  // 1회 휴강은 다음 수업에서 제외되고, 시간 변경은 변경된 시각으로 반영된다
+  const nextByGroup = getGroupNextOccurrences(
+    schedules,
+    now,
+    7,
+    buildScheduleExceptionMap(scheduleExceptions),
+  );
 
   // 그룹별 가장 가까운 시험 1건 (start_date 오름차순이라 첫 항목이 가장 가깝다).
   const examByGroup = new Map<string, (typeof exams)[number]>();

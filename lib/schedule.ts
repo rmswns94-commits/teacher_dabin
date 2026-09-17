@@ -3,6 +3,8 @@
 // UTC+9, no DST), so absolute instants can be built with a constant offset.
 // A future per-user timezone setting only needs to change these two constants.
 
+import { resolveOccurrence, type ScheduleExceptionMap } from "@/lib/schedule-exceptions";
+
 export const APP_TIMEZONE = "Asia/Seoul";
 export const APP_UTC_OFFSET = "+09:00";
 
@@ -134,10 +136,13 @@ export type ScheduleOverview<G> = {
 // Scans today plus the next `horizonDays` days of weekly repeats and returns
 // the class in progress (if any), the next one, the one after that, and
 // today's already-finished classes (for the "write your log" nudge).
+// exceptions를 주면 1회 휴강(occurrence 제외)/1회 시간 변경(effective start·end)이 반영된다.
+// 예외 적용은 lib/schedule-exceptions의 resolveOccurrence 한 곳에서만 일어난다.
 export function getScheduleOverview<G>(
   slots: { schedule: ScheduleSlot; group: G }[],
   now = new Date(),
   horizonDays = 7,
+  exceptions?: ScheduleExceptionMap | null,
 ): ScheduleOverview<G> {
   const nowEpoch = now.getTime();
   const today = getAppTimezoneToday(now);
@@ -152,13 +157,25 @@ export function getScheduleOverview<G>(
         continue;
       }
 
+      const effective = resolveOccurrence(
+        exceptions,
+        schedule.id,
+        date,
+        schedule.start_time,
+        schedule.end_time,
+      );
+
+      if (effective.cancelled) {
+        continue; // 1회 휴강 — 이 날짜의 수업은 없다 (반복 시간표는 그대로)
+      }
+
       occurrences.push({
         schedule,
         group,
         date,
         daysFromNow: offset,
-        startEpoch: toEpoch(date, schedule.start_time),
-        endEpoch: toEpoch(date, schedule.end_time),
+        startEpoch: toEpoch(date, effective.startTime),
+        endEpoch: toEpoch(date, effective.endTime),
       });
     }
   }
@@ -190,9 +207,10 @@ export type GroupNextOccurrence = {
 // 그룹별 "지금 수업 중 또는 가장 가까운 다음 수업" 1건을 계산한다.
 // schedule 전체를 한 번 받아 순수 계산만 하므로 그룹당 쿼리가 필요 없다.
 export function getGroupNextOccurrences(
-  slots: Pick<ScheduleSlot, "group_id" | "day_of_week" | "start_time" | "end_time">[],
+  slots: Pick<ScheduleSlot, "id" | "group_id" | "day_of_week" | "start_time" | "end_time">[],
   now = new Date(),
   horizonDays = 7,
+  exceptions?: ScheduleExceptionMap | null,
 ): Map<string, GroupNextOccurrence> {
   const nowEpoch = now.getTime();
   const today = getAppTimezoneToday(now);
@@ -207,8 +225,20 @@ export function getGroupNextOccurrences(
         continue;
       }
 
-      const startEpoch = toEpoch(date, slot.start_time);
-      const endEpoch = toEpoch(date, slot.end_time);
+      const effective = resolveOccurrence(
+        exceptions,
+        slot.id,
+        date,
+        slot.start_time,
+        slot.end_time,
+      );
+
+      if (effective.cancelled) {
+        continue; // 1회 휴강 occurrence는 "다음 수업" 후보가 아니다
+      }
+
+      const startEpoch = toEpoch(date, effective.startTime);
+      const endEpoch = toEpoch(date, effective.endTime);
 
       if (endEpoch <= nowEpoch) {
         continue; // 이미 끝난 수업
@@ -218,8 +248,8 @@ export function getGroupNextOccurrences(
         isNow: startEpoch <= nowEpoch && nowEpoch < endEpoch,
         date,
         daysFromNow: offset,
-        startTime: formatTimeHM(slot.start_time),
-        endTime: formatTimeHM(slot.end_time),
+        startTime: effective.startTime,
+        endTime: effective.endTime,
         startEpoch,
         endEpoch,
       };
@@ -264,6 +294,37 @@ export function slotsOverlap(
 
   return formatTimeHM(a.start_time) < formatTimeHM(b.end_time) &&
     formatTimeHM(b.start_time) < formatTimeHM(a.end_time);
+}
+
+// 특정 날짜의 그룹별 수업 window [가장 이른 시작, 가장 늦은 종료) — 1회 예외 반영.
+// Dashboard의 To Do 노출 window와 "마무리가 필요한 수업" 후보가 같은 소스를 쓴다.
+// 휴강 slot은 제외되므로, 그 그룹의 그날 수업이 전부 휴강이면 window 자체가 없다.
+export function getDayClassWindows(
+  slots: Pick<ScheduleSlot, "id" | "group_id" | "day_of_week" | "start_time" | "end_time">[],
+  date: string,
+  exceptions?: ScheduleExceptionMap | null,
+): Map<string, { start: string; end: string }> {
+  const dow = dayOfWeekOf(date);
+  const windows = new Map<string, { start: string; end: string }>();
+
+  for (const slot of slots) {
+    if (slot.day_of_week !== dow) {
+      continue;
+    }
+
+    const effective = resolveOccurrence(exceptions, slot.id, date, slot.start_time, slot.end_time);
+    if (effective.cancelled) {
+      continue;
+    }
+
+    const current = windows.get(slot.group_id);
+    windows.set(slot.group_id, {
+      start: !current || effective.startTime < current.start ? effective.startTime : current.start,
+      end: !current || effective.endTime > current.end ? effective.endTime : current.end,
+    });
+  }
+
+  return windows;
 }
 
 // 기준 날짜 "이후"의 그룹 시간표상 가장 빠른 수업 날짜 (date-only, KST-safe).

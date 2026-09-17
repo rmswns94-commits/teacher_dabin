@@ -25,10 +25,13 @@ import {
   DAY_LABELS,
   formatTimeHM,
   formatTimeRange,
+  getDayClassWindows,
   getScheduleOverview,
   previousLessonSourceCutoff,
   type ClassOccurrence,
 } from "@/lib/schedule";
+import { buildScheduleExceptionMap } from "@/lib/schedule-exceptions";
+import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { deriveUnfinishedLogCandidates } from "@/lib/unfinished-logs";
 import { UnfinishedLogCard } from "@/components/unfinished-log-card";
 import { getDisplayName } from "@/lib/supabase/auth";
@@ -44,6 +47,9 @@ import { getServerUser } from "@/lib/supabase/server";
 
 // 시험 D-day 노출 윈도우 (오늘 포함 D-30까지 — 시험 안내 전용, To Do와 무관)
 const EXAM_DISPLAY_DAYS = 30;
+
+// 현재/다음 수업 탐색 범위(일) — 1회 예외 조회 범위와 동일하게 맞춘다
+const SCHEDULE_HORIZON_DAYS = 7;
 
 // 시험 일정 제목에서 학교 이름 추출 (예: "문경중학교 기말시험" → 문경중학교, "한울중 시험" → 한울중).
 // 확신할 수 없으면 null을 돌려주고 카드에는 일정 제목을 그대로 쓴다 — 이름을 지어내지 않는다.
@@ -82,7 +88,16 @@ function occurrenceDateLabel(occ: ClassOccurrence<ScheduleGroupInfo>) {
 export default async function DashboardPage() {
   const user = await getServerUser();
   const today = todayDateString();
-  const [stats, overview, schedules, examEvents, allGroups, dueWeaknesses, todayMakeups] = await Promise.all([
+  const [
+    stats,
+    overview,
+    schedules,
+    examEvents,
+    allGroups,
+    dueWeaknesses,
+    todayMakeups,
+    scheduleExceptions,
+  ] = await Promise.all([
     getDashboardStats(),
     getDashboardOverview(),
     getCurrentUserSchedulesWithGroup(),
@@ -94,7 +109,10 @@ export default async function DashboardPage() {
     getDueWeaknessesForCurrentUser(today, 6),
     // 오늘 보충 수업 카드 — 학생/원래 반까지 embed한 1쿼리 (보충 건마다 조회하지 않는다)
     getTodayScheduledMakeups(today),
+    // 정규수업 1회 예외(휴강/시간 변경) — 오늘~다음 수업 탐색 범위 1쿼리 (schedule마다 조회 금지)
+    getScheduleExceptionsInRange(today, addDaysStr(today, SCHEDULE_HORIZON_DAYS)),
   ]);
+  const exceptionMap = buildScheduleExceptionMap(scheduleExceptions);
   const displayName = getDisplayName(user);
 
   const upcomingExams = examEvents.map((event) => {
@@ -119,7 +137,9 @@ export default async function DashboardPage() {
   const slots = schedules
     .filter((row) => row.group)
     .map((row) => ({ schedule: row, group: row.group! }));
-  const scheduleOverview = getScheduleOverview(slots);
+  // 1회 예외 반영: 휴강 occurrence는 현재/다음/끝난 수업 어디에도 나타나지 않고,
+  // 시간 변경은 effective start/end로 정렬·판정된다 (class-end lock도 이 endEpoch를 쓴다).
+  const scheduleOverview = getScheduleOverview(slots, new Date(), SCHEDULE_HORIZON_DAYS, exceptionMap);
   const hero = scheduleOverview.current ?? scheduleOverview.next;
   const followUp = scheduleOverview.current ? scheduleOverview.next : scheduleOverview.nextAfter;
   const isCurrentClass = Boolean(scheduleOverview.current);
@@ -155,18 +175,9 @@ export default async function DashboardPage() {
 
   // 그룹별 오늘 수업 window — schedules를 이미 갖고 있어 추가 쿼리 없음 (N+1 금지).
   // 하루 여러 slot이면 [가장 이른 시작, 가장 늦은 종료) 합집합을 쓴다.
-  const todayDow = dayOfWeekOf(today);
-  const todayWindowByGroup = new Map<string, { start: string; end: string }>();
-  for (const row of schedules) {
-    if (row.day_of_week !== todayDow) {
-      continue;
-    }
-    const current = todayWindowByGroup.get(row.group_id);
-    todayWindowByGroup.set(row.group_id, {
-      start: !current || row.start_time < current.start ? row.start_time : current.start,
-      end: !current || row.end_time > current.end ? row.end_time : current.end,
-    });
-  }
+  // 1회 예외 반영 — 휴강인 수업은 window 자체가 없어 To Do 노출/미작성 알림 대상에서 빠지고,
+  // 시간 변경은 변경된 시각이 window가 된다 (canonical helper 하나만 사용).
+  const todayWindowByGroup = getDayClassWindows(schedules, today, exceptionMap);
 
   // 날짜 있는 To Do(다음 수업 계획 연동 + 직접 등록 dated 항목): due가 "오늘"인 것만 후보로 (노출 시각은 client에서
   // 수업 window 기준 판단 — 수업 종료 후엔 숨기고, DB row는 그대로 둔다).

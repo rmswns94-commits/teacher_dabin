@@ -3,20 +3,33 @@ import type { ReactNode } from "react";
 import { ScrollJumpControls } from "@/components/scroll-jump-controls";
 import { Sidebar } from "@/components/sidebar";
 import { getGroupNextOccurrences } from "@/lib/schedule";
+import { buildScheduleExceptionMap } from "@/lib/schedule-exceptions";
+import { todayDateString } from "@/lib/dates";
+import { addDaysStr } from "@/lib/calendar";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getPendingMakeupCount } from "@/lib/supabase/queries/makeups";
+import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 
 export async function AppShell({ children }: { children: ReactNode }) {
-  const [groups, pendingMakeupCount, schedules] = await Promise.all([
+  const today = todayDateString();
+  const [groups, pendingMakeupCount, schedules, scheduleExceptions] = await Promise.all([
     getCurrentUserGroups(),
     getPendingMakeupCount(),
     getCurrentUserSchedulesWithGroup(),
+    // 다음 수업 탐색 범위(7일)의 1회 예외 — 그룹마다 조회하지 않는다 (N+1 금지)
+    getScheduleExceptionsInRange(today, addDaysStr(today, 7)),
   ]);
 
   // 사이드바 그룹 트리는 /groups 현황판과 같은 기준으로:
   // 다음 수업이 빠른 순 → 일정 없는 그룹은 마지막 (동순위는 이름 가나다순)
-  const nextByGroup = getGroupNextOccurrences(schedules, new Date());
+  // 1회 휴강은 다음 수업 후보에서 빠지고, 시간 변경은 변경된 시각으로 정렬된다.
+  const nextByGroup = getGroupNextOccurrences(
+    schedules,
+    new Date(),
+    7,
+    buildScheduleExceptionMap(scheduleExceptions),
+  );
   const sortedGroups = [...groups].sort((a, b) => {
     const keyA = nextByGroup.get(a.id)?.startEpoch ?? Number.MAX_SAFE_INTEGER;
     const keyB = nextByGroup.get(b.id)?.startEpoch ?? Number.MAX_SAFE_INTEGER;
