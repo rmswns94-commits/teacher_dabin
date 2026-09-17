@@ -1,8 +1,9 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
+import { getMonthRedDatesAction } from "@/app/exams/calendar-actions";
 import {
   createExamPlanAction,
   deleteExamPlanAction,
@@ -198,6 +199,7 @@ export function ExamPlanner({
   examTypeLabel,
   today,
   initialPlans,
+  initialRedDates,
   plansFailed = false,
   readOnly = false,
 }: {
@@ -207,6 +209,8 @@ export function ExamPlanner({
   examTypeLabel: string;
   today: string; // KST "YYYY-MM-DD" (서버 계산 — client timezone에 의존하지 않는다)
   initialPlans: ExamPrepPlanRecord[];
+  // 첫 달(오늘의 달)의 공휴일·학원 휴강일 — 서버에서 미리 받아 첫 화면에 색이 늦게 칠해지지 않게 한다
+  initialRedDates?: string[];
   // 계획 조회 자체가 실패한 상태 (0개 empty와 구분 — 조용히 위장하지 않는다)
   plansFailed?: boolean;
   // read-only 참고 모드 (Daily Log 상단 미리보기) — 같은 DB row/완료 상태를 보여주되
@@ -229,6 +233,38 @@ export function ExamPlanner({
     }
     return map;
   }, [plans]);
+
+  // 일요일처럼 빨갛게 보여줄 날짜(공휴일 · 현재 학원의 전체 휴강일) — 달 단위 캐시.
+  // 계획 데이터와 달리 client가 미리 알 수 없어 보이는 달만 1회씩 읽고, 읽은 달은 다시 묻지 않는다.
+  const [redDatesByMonth, setRedDatesByMonth] = useState<Record<string, string[]>>(() =>
+    initialRedDates ? { [today.slice(0, 7)]: initialRedDates } : {},
+  );
+
+  useEffect(() => {
+    if (redDatesByMonth[month]) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void getMonthRedDatesAction(month)
+      .then((dates) => {
+        if (!cancelled) {
+          setRedDatesByMonth((prev) => (prev[month] ? prev : { ...prev, [month]: dates }));
+        }
+      })
+      // 실패해도 캘린더는 그대로 뜬다 (빨간 날짜만 없는 상태)
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [month, redDatesByMonth]);
+
+  const redDateSet = useMemo(
+    () => new Set(redDatesByMonth[month] ?? []),
+    [redDatesByMonth, month],
+  );
 
   const weeks = useMemo(() => buildMonthGrid(month), [month]);
   const completedCount = plans.filter((plan) => plan.completed).length;
@@ -476,7 +512,9 @@ export function ExamPlanner({
                           "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums",
                           isToday
                             ? "bg-[#8b7ae6] text-white"
-                            : dayIndex === 0 || dayIndex === 6
+                            : // 공휴일·학원 휴강일도 주말과 같은 하나의 "쉬는 날" 색 —
+                              // 겹쳐도 한 번만 적용되고 이모지/배경/라벨은 붙이지 않는다
+                              dayIndex === 0 || dayIndex === 6 || redDateSet.has(date)
                               ? WEEKEND_TEXT
                               : "text-[#3f3f49]",
                         )}

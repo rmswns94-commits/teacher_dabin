@@ -22,6 +22,7 @@ import { formatKoreanDate, formatShortMonthDay, todayDateString } from "@/lib/da
 import { shouldShowHomeworkOnSelectedDate } from "@/lib/homework-visibility";
 import { groupIconOf } from "@/lib/group-icons";
 import { activePreparationItems, isCompletedToday } from "@/lib/preparation";
+import { getRedDatesInRange } from "@/lib/red-dates";
 import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
 import { formatTimeRange } from "@/lib/schedule";
 import { formatHomeworkDisplay, homeworkAudienceLabel } from "@/lib/homework-assignments";
@@ -217,7 +218,7 @@ export default async function TodayTodosPage({
 
   // 그룹(준비 항목/아이콘)+시간표+숙제 — 3쿼리 batch, 항목/날짜별 반복 쿼리 없음.
   // 숙제는 이 페이지에서만 조회한다 — Dashboard의 Todo 카드 source는 건드리지 않는다.
-  const [groups, schedules, dueHomework] = await Promise.all([
+  const [groups, schedules, dueHomework, redDates] = await Promise.all([
     getCurrentUserGroups(),
     getCurrentUserSchedulesWithGroup(),
     // 달력에 보이는 달 + 오늘/선택 날짜(다른 달일 수 있음)를 한 번에
@@ -227,7 +228,11 @@ export default async function TodayTodosPage({
       extraDates: [today, selectedDate],
       carryForwardToday: isTodaySelected ? today : undefined,
     }),
+    // 공휴일/학원 휴강일 — 보이는 달 전체를 한 번에 (날짜 칸마다 조회하지 않는다)
+    getRedDatesInRange(range.start, range.end),
   ]);
+  // 날짜 숫자 색만 바꾸는 용도다 — 할 일/숙제 데이터는 이 목록의 영향을 받지 않는다
+  const redDateSet = new Set(redDates);
   const activeGroups = groups.filter((group) => !group.archived);
   const activeGroupIds = new Set(activeGroups.map((group) => group.id));
   // (날짜, 그룹)별 숙제 — 보관된 그룹의 숙제는 Todo와 같은 기준으로 제외한다.
@@ -474,7 +479,9 @@ export default async function TodayTodosPage({
                     const allDone = Boolean(marker && marker.done === marker.total);
                     const isToday = date === today;
                     const isSelected = date === selectedDate;
-                    const isWeekend = dayIndex === 0 || dayIndex === 6;
+                    // 공휴일/학원 휴강일도 주말과 같은 하나의 "쉬는 날" 색 상태로 본다 —
+                    // 겹쳐도 색이 두 번 입혀지지 않고, 이모지/배경/라벨은 추가하지 않는다.
+                    const isRestDay = dayIndex === 0 || dayIndex === 6 || redDateSet.has(date);
 
                     return (
                       <Link
@@ -495,7 +502,7 @@ export default async function TodayTodosPage({
                               "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums",
                               isToday
                                 ? "bg-[#8b7ae6] text-white"
-                                : isWeekend
+                                : isRestDay
                                   ? WEEKEND_TEXT
                                   : "text-[#3f3f49]",
                             )}

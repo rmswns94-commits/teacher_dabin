@@ -9,9 +9,10 @@ import { SchoolExamDeleteButton } from "@/components/school-exam-controls";
 import { SchoolExamEditButton, type ExamStudentOption } from "@/components/school-exam-dialog";
 import { WeaknessCategoryBadge } from "@/components/student-weaknesses-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { addDaysStr } from "@/lib/calendar";
+import { addDaysStr, monthRange } from "@/lib/calendar";
 import { todayDateString } from "@/lib/dates";
 import { gradeDisplay } from "@/lib/grades";
+import { getRedDatesInRange } from "@/lib/red-dates";
 import { formatExamPeriod } from "@/lib/school-exam-display";
 import { getExamPrepPlans } from "@/lib/supabase/queries/exam-plans";
 import {
@@ -35,12 +36,14 @@ export default async function SchoolExamDetailPage({
   const { id } = await params;
   const today = todayDateString();
 
-  const [exam, students, planResult] = await Promise.all([
+  const [exam, students, planResult, initialRedDates] = await Promise.all([
     getSchoolExamById(id),
     // 수정 다이얼로그의 학생 selector + 학교 suggestion용
     getCurrentUserStudents(),
     // 플래너 계획: 시험 단위 전체를 batch 1쿼리 — 월 이동은 client state만으로 즉시
     getExamPrepPlans(id),
+    // 첫 화면(오늘의 달)의 공휴일·학원 휴강일 — 날짜 숫자 색만 쓰는 값
+    getRedDatesInRange(monthRange(today.slice(0, 7)).start, monthRange(today.slice(0, 7)).end),
   ]);
 
   if (!exam || !exam.event) {
@@ -123,6 +126,7 @@ export default async function SchoolExamDetailPage({
             examTypeLabel={examTypeLabels[exam.exam_type]}
             today={today}
             initialPlans={planResult.rows}
+            initialRedDates={initialRedDates}
             plansFailed={planResult.failed}
           />
 
