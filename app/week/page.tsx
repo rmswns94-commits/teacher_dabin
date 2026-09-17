@@ -14,8 +14,12 @@ import type { PreparationItem } from "@/lib/supabase/types";
 import { DAY_LABELS, formatTimeRange } from "@/lib/schedule";
 import { getKstWeekRange, groupByDueDate, projectSchedulesIntoWeek } from "@/lib/week";
 import { linkedContextLabel } from "@/lib/textbooks";
+import { WeekTodayButton } from "@/components/week-today-button";
 import { getUpcomingExamEvents } from "@/lib/supabase/queries/calendar-events";
-import { getDueHomeworkForCurrentUser } from "@/lib/supabase/queries/daily-logs";
+import {
+  getDueHomeworkForCurrentUser,
+  getFinalizedDailyLogKeysInRange,
+} from "@/lib/supabase/queries/daily-logs";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getScheduledMakeupsInRange } from "@/lib/supabase/queries/makeups";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
@@ -25,7 +29,12 @@ import { dayOfWeekOf } from "@/lib/calendar";
 // 여기서 어떤 일정도 생성/수정하지 않는다: 각 item은 실제 담당 화면으로 이동하는 링크일 뿐이다.
 // - 주간 범위: Asia/Seoul 월~일 (getKstWeekRange — 일요일도 그 주 월요일로).
 // - 정규 수업: Group 반복 schedule을 7일에 UI로만 파생 (instance row 생성 없음).
-// - 보충: 실제 scheduled_date만 (일정 미정 보충 제외, completed는 그 자리에서 완료 표시).
+// - 보충: 실제 scheduled_date만 (일정 미정 보충 제외, completed는 그 자리에서 완료 표시,
+//   cancelled는 조회 자체에서 제외 — 완료로 표시되지 않는다).
+// - 정규 수업 완료 badge: 같은 (group_id, 날짜)의 Finalized Daily Log 존재로만 판정
+//   (주간 range 1쿼리 key 집합). 시간 경과/Draft는 완료가 아니다.
+// - [오늘로 이동]: 기존 [이번 주] 버튼의 rename/확장 — 현재 주면 오늘 섹션으로 scroll,
+//   다른 주면 현재 주 전환 후 1회 scroll (버튼 클릭 시에만, 반복 auto-scroll 없음).
 // - 시험: calendar_events의 실제 시험 날짜 범위와 겹치는 날에 표시.
 // - 숙제/할 일: "원래 due_date"에만 — 오늘 할 일의 carry-forward(이월)는 실행 관점의
 //   다른 의미라 주간 화면에 복제하지 않는다. undated 항목은 날짜를 추측하지 않고 제외.
@@ -43,7 +52,8 @@ export default async function WeekPage({
   const week = getKstWeekRange(base);
 
   // 서로 독립인 source들 — 병렬 fetch (waterfall 금지)
-  const [allGroups, scheduleRows, makeups, examEvents, homework] = await Promise.all([
+  const [allGroups, scheduleRows, makeups, examEvents, homework, finalizedKeys] =
+    await Promise.all([
     // 그룹 이름/시험 표시/할 일(preparation_items) — 이미 있는 목록 쿼리 1개
     getCurrentUserGroups(),
     getCurrentUserSchedulesWithGroup(),
@@ -52,7 +62,14 @@ export default async function WeekPage({
     getUpcomingExamEvents(week.start, week.end),
     // 원래 due_date 기준 range — carryForwardToday를 넘기지 않으므로 이월 중복이 구조적으로 없다
     getDueHomeworkForCurrentUser({ rangeStart: week.start, rangeEnd: week.end }),
+    // 정규 수업 완료 badge 소스 — Finalized 일지 identity key만 (주간 range 1쿼리)
+    getFinalizedDailyLogKeysInRange(week.start, week.end),
   ]);
+
+  // "날짜:그룹" key 집합 — 정규 카드가 자기 (date, group)으로 O(1) 조회한다
+  const finalizedKeySet = new Set(
+    finalizedKeys.map((row) => `${row.class_date}:${row.group_id}`),
+  );
 
   const groupNameById = new Map(allGroups.map((group) => [group.id, group.name]));
   const examPeriodByGroupId = new Map(allGroups.map((group) => [group.id, group.is_exam_period]));
@@ -119,11 +136,7 @@ export default async function WeekPage({
               <span className="card-title tabular-nums text-[#2a2323]">
                 {formatKoreanDate(week.start)} ~ {formatKoreanDate(week.end)}
               </span>
-              {!isCurrentWeek ? (
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/week">이번 주</Link>
-                </Button>
-              ) : null}
+              <WeekTodayButton isCurrentWeek={isCurrentWeek} today={today} />
             </div>
             <Button variant="secondary" size="sm" className="gap-1" asChild>
               <Link href={`/week?date=${addDaysStr(week.start, 7)}`}>
@@ -156,7 +169,8 @@ export default async function WeekPage({
               return (
                 <section
                   key={date}
-                  className={`min-w-0 rounded-2xl border p-3 ${
+                  id={`week-day-${date}`}
+                  className={`min-w-0 scroll-mt-4 rounded-2xl border p-3 ${
                     isToday ? "border-[#d8cdf0] bg-[#f8f5ff]" : "border-[#efe4dc] bg-[#fffdfb]"
                   }`}
                 >
@@ -179,28 +193,42 @@ export default async function WeekPage({
                     <div className="mt-2 space-y-1.5">
                       {/* 시간 일정 — 수업/보충, 시작 시간 ASC (시간 없는 보충은 뒤로) */}
                       {[
-                        ...classes.map((slot) => ({
-                          time: slot.schedule.start_time.slice(0, 5),
-                          node: (
-                            <Link
-                              key={`c-${slot.group.id}-${slot.schedule.start_time}`}
-                              href={`/groups/${slot.group.id}`}
-                              className="block min-w-0 rounded-xl border border-[#efe4dc] bg-white px-2.5 py-2 transition hover:bg-[#faf7ff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#c9b9e8]"
-                            >
-                              <div className="caption-text tabular-nums text-[#7f6f68]">
-                                {formatTimeRange(slot.schedule.start_time, slot.schedule.end_time)}
-                              </div>
-                              <div className="secondary-text flex flex-wrap items-center gap-1 font-medium text-[#2d2928]">
-                                {typeBadge("수업", "bg-[#f5f2ff] text-[#5d4ba5]")}
-                                <span className="min-w-0 break-words">{slot.group.name}</span>
-                                <ExamPeriodMark
-                                  show={examPeriodByGroupId.get(slot.group.id)}
-                                  className="text-xs"
-                                />
-                              </div>
-                            </Link>
-                          ),
-                        })),
+                        ...classes.map((slot) => {
+                          // 완료 = Finalized 일지 존재만 (완료된 보충 표시와 동일한 톤)
+                          const finalized = finalizedKeySet.has(`${date}:${slot.group.id}`);
+                          return {
+                            time: slot.schedule.start_time.slice(0, 5),
+                            node: (
+                              <Link
+                                key={`c-${slot.group.id}-${slot.schedule.start_time}`}
+                                href={`/groups/${slot.group.id}`}
+                                className="block min-w-0 rounded-xl border border-[#efe4dc] bg-white px-2.5 py-2 transition hover:bg-[#faf7ff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#c9b9e8]"
+                              >
+                                <div className="caption-text tabular-nums text-[#7f6f68]">
+                                  {formatTimeRange(
+                                    slot.schedule.start_time,
+                                    slot.schedule.end_time,
+                                  )}
+                                </div>
+                                <div
+                                  className={`secondary-text flex flex-wrap items-center gap-1 font-medium ${
+                                    finalized ? "text-[#a79996]" : "text-[#2d2928]"
+                                  }`}
+                                >
+                                  {typeBadge("수업", "bg-[#f5f2ff] text-[#5d4ba5]")}
+                                  <span className="min-w-0 break-words">{slot.group.name}</span>
+                                  <ExamPeriodMark
+                                    show={examPeriodByGroupId.get(slot.group.id)}
+                                    className="text-xs"
+                                  />
+                                  {finalized ? (
+                                    <span className="caption-text text-[#3e7d6b]">완료</span>
+                                  ) : null}
+                                </div>
+                              </Link>
+                            ),
+                          };
+                        }),
                         ...dayMakeups.map((makeup) => ({
                           time: makeup.startTime ?? "99:99",
                           node: (
