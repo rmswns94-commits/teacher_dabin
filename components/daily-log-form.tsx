@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import {
   BookOpen,
   History,
@@ -505,10 +505,13 @@ function SaveActions({
   isPending,
   onDraft,
   onFinal,
+  middleSlot = null,
 }: {
   isPending: boolean;
   onDraft: () => void;
   onFinal: () => void;
+  // [임시 저장]과 [수업 기록 완료] 사이에 끼우는 부가 액션 (하단 고정 바의 [수업 안내 공유])
+  middleSlot?: ReactNode;
 }) {
   return (
     <>
@@ -521,6 +524,7 @@ function SaveActions({
       >
         {isPending ? "저장 중..." : "임시 저장"}
       </Button>
+      {middleSlot}
       <Button
         type="button"
         disabled={isPending}
@@ -930,8 +934,10 @@ export function DailyLogForm({
   // ── 자동 임시저장 (1분) ────────────────────────────────────────────
   // 조건: 변경 존재 + 이전 요청 미진행 + IME 조합 중 아님 + final 저장 중 아님.
   // 성공해도 router.refresh/revalidate/side effect 없음 — draft snapshot만 갱신.
+  // 저장 상태 단일 소스 — autosave/수동 임시 저장이 같은 상태를 공유한다 (별도 시스템 없음).
+  // dirty = 현재 폼이 마지막으로 "실제 저장 성공한 스냅샷"과 다름 (타이머/모드와 무관).
   const [autosave, setAutosave] = useState<{
-    status: "idle" | "saving" | "saved" | "error";
+    status: "idle" | "dirty" | "saving" | "saved" | "error";
     savedAtLabel?: string;
   }>(() =>
     autoRestored && draft
@@ -942,6 +948,8 @@ export function DailyLogForm({
   // promptOnly(다른 identity의 fallback draft)면 autosave가 그 id를 이어받지 않는다
   const draftIdRef = useRef<string | null>(draftPromptOnly ? null : draft?.id ?? null);
   const lastSavedSnapshotRef = useRef<string | null>(null);
+  // draft [불러오기] 직후 1회: 복원 내용을 저장 기준 스냅샷으로 재설정 (dirty 오탐 방지)
+  const rebaselineStatusRef = useRef(false);
   const autosaveInFlightRef = useRef(false);
   const composingRef = useRef(false);
   const finalSavingRef = useRef(false);
@@ -1009,7 +1017,13 @@ export function DailyLogForm({
       draftIdRef.current = result.draftId;
       lastSavedSnapshotRef.current = snapshot;
       setDraftPrompt(false); // 새 임시저장이 생겼으니 예전 복구 배너는 내린다
-      setAutosave({ status: "saved", savedAtLabel: kstTimeLabel(result.updatedAt) });
+      // A/B race: 요청 중 새 입력이 생겼으면 방금 성공은 "옛 스냅샷" 저장 성공 —
+      // 최신 스냅샷과 같을 때만 saved, 다르면 dirty 유지 (다음 tick이 최신을 저장)
+      setAutosave(
+        JSON.stringify(formStateRef.current) === snapshot
+          ? { status: "saved", savedAtLabel: kstTimeLabel(result.updatedAt) }
+          : { status: "dirty" },
+      );
     };
 
     const interval = setInterval(tick, DAILY_LOG_AUTOSAVE_INTERVAL_MS);
@@ -1124,6 +1138,9 @@ export function DailyLogForm({
       draftIdRef.current = draft.id;
     }
     lastSavedSnapshotRef.current = null;
+    // 복원된 내용 = 저장돼 있던 draft payload — 다음 state sync에서 저장 기준으로 재설정
+    // (dirty 오탐 방지 + 동일 내용 재저장 방지)
+    rebaselineStatusRef.current = true;
     setDraftPrompt(false);
     setAutosave({ status: "saved", savedAtLabel: kstTimeLabel(draft.updatedAt) });
   };
@@ -1138,6 +1155,34 @@ export function DailyLogForm({
     }
     void discardDailyLogDraftAction(draft.id);
   };
+
+  // ── 저장 상태 파생 (하단 액션바) ────────────────────────────────────
+  // 폼 필드가 바뀔 때만 실행 (위 state sync effect와 같은 deps — 그 뒤에 선언되어
+  // 항상 최신 formStateRef를 본다). 이미 dirty/saving이면 비교 없이 그대로 유지해
+  // 키 입력당 직렬화 비용 0 — 직렬화 비교는 saved/idle/error → dirty "전환 순간"
+  // 한 번뿐이라 IME에 영향 없다. 내용 비교를 하는 이유: 서버 액션 revalidate로
+  // props 참조만 바뀌어도 effect가 돌 수 있어, 실제 변경일 때만 dirty로 만든다.
+  const statusSyncFirstRef = useRef(true);
+  useEffect(() => {
+    if (statusSyncFirstRef.current) {
+      statusSyncFirstRef.current = false;
+      return;
+    }
+    if (rebaselineStatusRef.current) {
+      // draft [불러오기] 직후: 복원 내용 = 이미 저장돼 있는 draft payload 그대로 —
+      // 저장 기준 스냅샷만 갱신 (상태는 restoreDraft가 saved로 표시, dirty 아님)
+      rebaselineStatusRef.current = false;
+      lastSavedSnapshotRef.current = JSON.stringify(formStateRef.current);
+      return;
+    }
+    setAutosave((prev) => {
+      if (prev.status === "dirty" || prev.status === "saving") {
+        return prev;
+      }
+      const baseline = lastSavedSnapshotRef.current ?? initialSnapshotRef.current;
+      return JSON.stringify(formStateRef.current) === baseline ? prev : { status: "dirty" };
+    });
+  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, schoolProgressMap, schoolPlanMap, tasks, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries, progressMode, manualTextbookProgress, manualTextbookPlans]);
 
   // 칭찬 한표 인라인 에디터: 열려 있는 학생 id + 작성 중인 draft
   // editIndex가 null이면 새 칭찬 추가, 숫자면 해당 index 칭찬 수정
@@ -2225,6 +2270,10 @@ export function DailyLogForm({
       return;
     }
     finalSavingRef.current = true; // final 저장 중 autosave tick 중단
+    // 실제로 지금 서버에 보내는(클릭 시점) 스냅샷 — 저장 성공을 이 스냅샷에만 귀속시킨다
+    // (저장 중 추가 입력이 생기면 성공해도 saved가 아니라 dirty로 표시)
+    const sentSnapshot = JSON.stringify(formStateRef.current);
+    setAutosave({ status: "saving" });
     startTransition(async () => {
       const result = await saveDailyLogAction({
         dailyLogId: persistedLogIdRef.current ?? undefined,
@@ -2301,6 +2350,7 @@ export function DailyLogForm({
 
       if (result && "duplicate" in result && result.duplicate) {
         finalSavingRef.current = false;
+        setAutosave({ status: "dirty" }); // 저장 안 됨 — 변경사항은 그대로 남아 있음
         setShowSummary(false);
         setDuplicateExistingId(
           "existingLogId" in result && typeof result.existingLogId === "string"
@@ -2327,20 +2377,26 @@ export function DailyLogForm({
           return;
         }
 
-        // 임시 저장 성공 — 이동 없이 작성 화면 유지
+        // 임시 저장 성공 — 이동 없이 작성 화면 유지.
+        // 저장 기준은 "성공 시점의 폼"이 아니라 "실제로 보낸(클릭 시점) 스냅샷" —
+        // 저장 중 추가 입력이 saved로 오인되거나 autosave에서 누락되지 않게.
         finalSavingRef.current = false;
         draftIdRef.current = null; // 서버가 autosave draft를 정리했음 — 다음 autosave는 새로 시작
-        const snapshot = JSON.stringify(formStateRef.current);
-        lastSavedSnapshotRef.current = snapshot; // 변경 없으면 autosave가 재저장하지 않게
-        initialSnapshotRef.current = snapshot; // 뒤로가기 unsaved 경고 방지
+        lastSavedSnapshotRef.current = sentSnapshot; // 변경 없으면 autosave가 재저장하지 않게
+        initialSnapshotRef.current = sentSnapshot; // 뒤로가기 unsaved 경고 방지
         setDraftPrompt(false);
-        setAutosave({ status: "saved", savedAtLabel: kstTimeLabel(new Date().toISOString()) });
+        setAutosave(
+          JSON.stringify(formStateRef.current) === sentSnapshot
+            ? { status: "saved", savedAtLabel: kstTimeLabel(new Date().toISOString()) }
+            : { status: "dirty" },
+        );
         setDraftSavedNotice("임시 저장했어요. 목록에는 “작성 중”으로 표시돼요.");
         return;
       }
 
       // 저장 실패 — 요약 모달을 닫고 오류를 보이게 한다 (이동 없음, 입력값 유지)
       finalSavingRef.current = false;
+      setAutosave({ status: "error" });
       setShowSummary(false);
       if (result?.error) {
         setError(result.error);
@@ -2371,6 +2427,8 @@ export function DailyLogForm({
               <span className="flex items-center gap-1 text-[#7ba58f]">
                 <Cloud className="h-3 w-3" aria-hidden /> 임시저장됨 · {autosave.savedAtLabel}
               </span>
+            ) : autosave.status === "dirty" ? (
+              <span className="text-[#a2643c]">저장되지 않은 변경사항</span>
             ) : (
               <span className="text-[#b0766f]">임시저장 실패 · 입력 내용은 화면에 남아 있어요</span>
             )}
@@ -3698,15 +3756,56 @@ export function DailyLogForm({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2 pb-8">
-        <SaveActions
-          isPending={isPending}
-          onDraft={() => save("draft")}
-          onFinal={() => setShowSummary(true)}
-        />
-        <span className="text-sm text-[#8a7b77]">
-          임시 저장한 일지는 목록에서 &quot;작성 중&quot;으로 표시돼요.
-        </span>
+      <p className="secondary-text pb-1 text-[#8a7b77]">
+        임시 저장한 일지는 목록에서 &quot;작성 중&quot;으로 표시돼요.
+      </p>
+
+      {/* 하단 고정 액션바 — 저장 상태 + 주요 액션. sticky(bottom 0)라 스크롤 위치와 무관하게
+          항상 접근 가능하고, 폼 끝에 있어 맨 아래에서는 자연 흐름 위치로 돌아온다(마지막 입력
+          미가림). 기존 handler/pending 재사용 — 두 번째 저장 구현 없음. z-30 = 다이얼로그(80)/
+          공유 시트·드로어(60~80) 아래, 폼 내용 위. safe-area 하단 패딩 포함(iPad/iPhone PWA). */}
+      <div className="sticky bottom-0 z-30 rounded-t-2xl border border-b-0 border-[#efe4dc] bg-[#fffdfb]/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(60,48,90,0.08)] backdrop-blur">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {/* 저장 상태 — 실제 저장 mutation 성공/실패/진행이 단일 소스 (색+텍스트, aria-live) */}
+          <div aria-live="polite" data-save-status={autosave.status} className="min-w-0 text-sm">
+            {autosave.status === "saving" ? (
+              <span className="flex items-center gap-1.5 text-[#a79996]">
+                <Cloud className="h-3.5 w-3.5" aria-hidden /> 저장 중...
+              </span>
+            ) : autosave.status === "saved" ? (
+              <span className="flex items-center gap-1.5 text-[#2f6d54]">
+                <CircleCheck className="h-3.5 w-3.5" aria-hidden /> 임시 저장됨
+                {autosave.savedAtLabel ? (
+                  <span className="text-[#7ba58f]">· 마지막 저장 {autosave.savedAtLabel}</span>
+                ) : null}
+              </span>
+            ) : autosave.status === "dirty" ? (
+              <span className="text-[#a2643c]">저장되지 않은 변경사항</span>
+            ) : autosave.status === "error" ? (
+              <span className="text-[#b0766f]">⚠ 저장하지 못했어요 · 입력 내용은 그대로 유지됩니다</span>
+            ) : (
+              <span className="text-[#a79996]">{dailyLogId ? "저장된 기록" : "작성 전"}</span>
+            )}
+          </div>
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <SaveActions
+              isPending={isPending}
+              onDraft={() => save("draft")}
+              onFinal={() => setShowSummary(true)}
+              middleSlot={
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!lessonShareAvailable}
+                  onClick={() => setLessonShareOpen(true)}
+                  className="min-h-[44px] gap-1.5"
+                >
+                  <Share2 className="h-4 w-4" aria-hidden /> 수업 안내 공유
+                </Button>
+              }
+            />
+          </div>
+        </div>
       </div>
 
       {lessonShareOpen ? (
