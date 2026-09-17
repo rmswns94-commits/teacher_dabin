@@ -23,7 +23,6 @@ import { currentEpochMs } from "@/lib/todo-window";
 import { getUpcomingExamEvents } from "@/lib/supabase/queries/calendar-events";
 import {
   DAY_LABELS,
-  formatTimeHM,
   formatTimeRange,
   getDayClassWindows,
   getScheduleOverview,
@@ -374,7 +373,7 @@ export default async function DashboardPage() {
                     </div>
 
                     <div className="secondary-text mt-1.5 tabular-nums text-[#665b5a]">
-                      {occurrenceDateLabel(hero)} · {formatTimeRange(hero.schedule.start_time, hero.schedule.end_time)}
+                      {occurrenceDateLabel(hero)} · {formatTimeRange(hero.startTime, hero.endTime)}
                     </div>
 
                     <div className="mt-5">
@@ -436,7 +435,7 @@ export default async function DashboardPage() {
                       followUp
                         ? {
                             startEpoch: followUp.startEpoch,
-                            startLabel: formatTimeHM(followUp.schedule.start_time),
+                            startLabel: followUp.startTime,
                             daysFromNow: followUp.daysFromNow,
                           }
                         : null
@@ -461,7 +460,7 @@ export default async function DashboardPage() {
               <ClassBriefing
                 group={{ id: focusGroup.id, name: focusGroup.name, icon: focusGroup.icon ?? null }}
                 isNow={isCurrentClass}
-                startTime={formatTimeHM(hero.schedule.start_time)}
+                startTime={hero.startTime}
                 today={today}
                 previousBefore={previousBefore}
                 exams={upcomingExams
@@ -678,7 +677,7 @@ export default async function DashboardPage() {
                       <ExamPeriodMark show={isExamPeriodGroup(followUp.group.id)} />
                     </div>
                     <span className="tabular-nums text-[#665b5a]">
-                      {occurrenceDateLabel(followUp)} · {formatTimeRange(followUp.schedule.start_time, followUp.schedule.end_time)}
+                      {occurrenceDateLabel(followUp)} · {formatTimeRange(followUp.startTime, followUp.endTime)}
                     </span>
                   </CardContent>
                 </Card>

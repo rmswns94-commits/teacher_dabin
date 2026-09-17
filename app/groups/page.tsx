@@ -11,7 +11,7 @@ import { activePreparationItems } from "@/lib/preparation";
 import {
   DAY_LABELS,
   formatDayList,
-  formatTimeHM,
+  getDayClassWindows,
   getGroupNextOccurrences,
   groupSchedulesByTime,
   type GroupNextOccurrence,
@@ -65,7 +65,6 @@ function daysBetween(fromYmd: string, toYmd: string) {
 export default async function GroupsPage() {
   const now = new Date();
   const today = todayDateString();
-  const todayDow = dayOfWeekOf(today);
 
   // 첫 화면 요약에 필요한 데이터만 병렬 batch 조회 (그룹당 개별 쿼리 금지).
   const [allGroups, counts, schedules, latestLogs, latestCompletedLogs, exams, scheduleExceptions] =
@@ -93,13 +92,12 @@ export default async function GroupsPage() {
     schedulesByGroup.set(slot.group_id, [...(schedulesByGroup.get(slot.group_id) ?? []), slot]);
   }
 
-  // 1회 휴강은 다음 수업에서 제외되고, 시간 변경은 변경된 시각으로 반영된다
-  const nextByGroup = getGroupNextOccurrences(
-    schedules,
-    now,
-    7,
-    buildScheduleExceptionIndex(scheduleExceptions),
-  );
+  // 1회 휴강은 다음 수업에서 제외되고, 시간 변경/날짜 이동은 변경된 시각으로 반영된다
+  const exceptionIndex = buildScheduleExceptionIndex(scheduleExceptions);
+  const nextByGroup = getGroupNextOccurrences(schedules, now, 7, exceptionIndex);
+  // 카드 정렬용 "오늘 첫 수업 시각" — 휴강/이동이 반영된 오늘 수업 window에서 가져온다
+  // (반복 시간표 요일만 보면 옮겨간 수업이 오늘 남아 있고, 옮겨온 수업이 빠진다).
+  const todayWindowByGroup = getDayClassWindows(schedules, today, exceptionIndex);
 
   // 그룹별 가장 가까운 시험 1건 (start_date 오름차순이라 첫 항목이 가장 가깝다).
   const examByGroup = new Map<string, (typeof exams)[number]>();
@@ -117,11 +115,7 @@ export default async function GroupsPage() {
       (block) => `${formatDayList(block.days)} · ${block.startTime} ~ ${block.endTime}`,
     );
 
-    const todaySlots = groupSlots.filter((slot) => slot.day_of_week === todayDow);
-    const todayStart =
-      todaySlots.length > 0
-        ? todaySlots.map((slot) => formatTimeHM(slot.start_time)).sort()[0]
-        : null;
+    const todayStart = todayWindowByGroup.get(group.id)?.start ?? null;
 
     const occ = nextByGroup.get(group.id) ?? null;
     let nextLabel: string | null = null;
@@ -178,7 +172,7 @@ export default async function GroupsPage() {
       studentCount: counts.get(group.id) ?? 0,
       textbooks,
       scheduleLines,
-      hasToday: todaySlots.length > 0,
+      hasToday: todayStart !== null,
       todayStart,
       isNow: occ?.isNow ?? false,
       nextLabel,

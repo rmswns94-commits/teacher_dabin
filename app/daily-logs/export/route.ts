@@ -11,13 +11,20 @@ import { examTextbookCell } from "@/lib/excel/teacher-log-display";
 import { formatMixedProgressForExcel } from "@/lib/mixed-display";
 import type { TextbookSection } from "@/lib/textbooks";
 import { mergeLegacyLessonContent } from "@/lib/progress";
+import {
+  buildScheduleExceptionIndex,
+  movedInOccurrences,
+  resolveOccurrence,
+} from "@/lib/schedule-exceptions";
+import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type { ExamTextbook } from "@/lib/supabase/types";
 
 // 선택한 날짜에 앱에서 실제 작성된 Daily Log들을 기존 교사일지 Excel 양식으로 내보낸다.
 // - App Daily Log가 source of truth (예정 수업을 임의 생성하지 않음)
 // - 수업 시작 시간 오름차순 → 1교시부터 매핑, 교시 1~7 layout은 template에 고정
-// - 시간은 그 요일의 group schedule로 확정 (없거나 여러 개면 명확한 오류)
+// - 시간은 그 날짜의 실제 수업(1회 휴강/시간 변경/날짜 이동 반영)으로 확정
+//   (없거나 여러 개면 명확한 오류 — 임의 추측 금지)
 // - 파일은 서버에 저장하지 않고 즉시 다운로드로만 반환
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
@@ -121,30 +128,67 @@ export async function GET(request: Request) {
     );
   }
 
-  // 시간 확정: 해당 요일의 group schedule을 batch 1쿼리로 조회 (log별 반복 쿼리 금지)
+  // 시간 확정: 이 그룹들의 시간표를 batch 1쿼리로 조회 (log별 반복 쿼리 금지).
+  // 요일로 미리 거르지 않는다 — 1회 날짜 이동으로 다른 요일 수업이 이 날짜에 열릴 수 있어,
+  // 그 schedule row도 후보에 있어야 한다. 실제 시각은 canonical resolver가 정한다.
   const dow = dayOfWeekOf(date);
   const groupIds = [...new Set(exportLogs.map((log) => log.group_id))];
-  const { data: scheduleRows, error: scheduleError } = await supabase
-    .from("class_group_schedules")
-    .select("group_id, start_time, end_time")
-    .eq("user_id", user.id)
-    .eq("day_of_week", dow)
-    .in("group_id", groupIds);
+  const [{ data: scheduleRows, error: scheduleError }, dateExceptions] = await Promise.all([
+    supabase
+      .from("class_group_schedules")
+      .select("id, group_id, day_of_week, start_time, end_time")
+      .eq("user_id", user.id)
+      .in("group_id", groupIds),
+    getScheduleExceptionsInRange(date, date),
+  ]);
 
   if (scheduleError) {
     console.error("teacher log export schedules error", scheduleError.code);
     return errorResponse("수업 시간표를 불러오지 못했어요.", 500);
   }
 
+  const exceptionIndex = buildScheduleExceptionIndex(dateExceptions);
+  const slots = (scheduleRows ?? []) as {
+    id: string;
+    group_id: string;
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+  }[];
+
   const timesByGroup = new Map<string, { start_time: string; end_time: string }[]>();
-  for (const row of scheduleRows ?? []) {
-    const key = row.group_id as string;
-    const list = timesByGroup.get(key) ?? [];
+  const addTime = (groupId: string, start: string, end: string) => {
+    const list = timesByGroup.get(groupId) ?? [];
     // 완전 중복 schedule row는 하나로
-    if (!list.some((item) => item.start_time === row.start_time && item.end_time === row.end_time)) {
-      list.push({ start_time: row.start_time, end_time: row.end_time });
+    if (!list.some((item) => item.start_time === start && item.end_time === end)) {
+      list.push({ start_time: start, end_time: end });
     }
-    timesByGroup.set(key, list);
+    timesByGroup.set(groupId, list);
+  };
+
+  for (const slot of slots) {
+    if (slot.day_of_week !== dow) {
+      continue;
+    }
+
+    // 1회 휴강이거나 다른 날짜로 옮겨간 수업은 이 날짜의 시간 후보가 아니다
+    const effective = resolveOccurrence(exceptionIndex, slot.id, date, slot.start_time, slot.end_time);
+    if (effective.cancelled) {
+      continue;
+    }
+
+    addTime(slot.group_id, effective.startTime, effective.endTime);
+  }
+
+  // 이 날짜로 옮겨온 수업 (원래 요일이 달라도 이 날 실제로 진행된 수업)
+  const slotById = new Map(slots.map((slot) => [slot.id, slot]));
+  for (const moved of movedInOccurrences(exceptionIndex, date)) {
+    const slot = slotById.get(moved.scheduleId);
+    if (!slot || !moved.startTime || !moved.endTime) {
+      continue;
+    }
+
+    addTime(slot.group_id, moved.startTime, moved.endTime);
   }
 
   const rows: (TeacherLogExportRow & { startSort: string })[] = [];

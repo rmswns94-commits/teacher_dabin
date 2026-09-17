@@ -154,6 +154,15 @@ export function ScheduleExceptionManager({
         entry.movedToDate === occurrence.date,
     ) ?? null;
 
+  // 이 반 수업이 이미 있는 날짜 — 수업일지가 반·날짜마다 하나라서 그런 날로는 옮길 수 없다
+  // (판정 규칙은 서버가 최종적으로 다시 확인한다). 고른 수업 자신의 날짜는 "시간만 변경"이라 제외.
+  const occupiedDates = useMemo(() => {
+    if (!picked) return new Set<string>();
+    return new Set(
+      upcoming.filter((occurrence) => occurrence.date !== picked.date).map((o) => o.date),
+    );
+  }, [upcoming, picked]);
+
   const slot = picked ? slotById.get(picked.scheduleId) ?? null : null;
   const movedEntry = picked ? movedEntryOf(picked) : null;
   const originDate = movedEntry ? movedEntry.date : picked?.date ?? "";
@@ -174,6 +183,27 @@ export function ScheduleExceptionManager({
           dayOfWeekOfDate: dayOfWeekOf,
         })
       : "수업을 먼저 선택해주세요.";
+
+  // 시작 시간을 바꾸면 수업 길이는 그대로 따라간다 (90분 수업을 14:00으로 옮기면 15:30).
+  // 종료 시간을 직접 고르면 그 값이 그대로 쓰인다.
+  const shiftStartKeepingDuration = (nextStart: string) => {
+    const toMinutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+    const duration = toMinutes(endTime) - toMinutes(startTime);
+    setStartTime(nextStart);
+
+    if (duration <= 0) {
+      return;
+    }
+
+    const end = toMinutes(nextStart) + duration;
+    if (end >= 24 * 60) {
+      return; // 자정을 넘기면 종료 시간은 사용자가 직접 고르게 둔다
+    }
+
+    setEndTime(
+      `${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`,
+    );
+  };
 
   const save = (kind: "moved" | "time_override" | "cancelled") => {
     if (busyRef.current || !picked || !slot) return;
@@ -406,7 +436,8 @@ export function ScheduleExceptionManager({
                     if (!date) {
                       return <span key={`empty-${cellIndex}`} />;
                     }
-                    const disabled = date < today;
+                    const occupied = occupiedDates.has(date);
+                    const disabled = date < today || occupied;
                     const selected = date === targetDate;
                     return (
                       <button
@@ -414,7 +445,11 @@ export function ScheduleExceptionManager({
                         type="button"
                         disabled={disabled}
                         aria-pressed={selected}
-                        aria-label={formatKoreanDate(date)}
+                        aria-label={
+                          occupied
+                            ? `${formatKoreanDate(date)} — 이 반 수업이 이미 있어요`
+                            : formatKoreanDate(date)
+                        }
                         onClick={() => setTargetDate(date)}
                         className={cn(
                           "min-h-[38px] rounded-xl border text-sm tabular-nums transition",
@@ -430,6 +465,10 @@ export function ScheduleExceptionManager({
                     );
                   })}
                 </div>
+
+                <p className="caption-text mt-2 text-[#a89a95]">
+                  회색 날짜는 이미 지났거나, 이 반 수업이 이미 있는 날이에요.
+                </p>
 
                 {error ? (
                   <p role="status" className="mt-3 rounded-xl bg-[#fdf1f0] px-3 py-2 text-sm text-[#a05252]">
@@ -477,7 +516,7 @@ export function ScheduleExceptionManager({
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <TimeSelect
                     value={startTime}
-                    onChange={setStartTime}
+                    onChange={shiftStartKeepingDuration}
                     ariaLabel="변경할 시작 시간"
                     className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
                   />

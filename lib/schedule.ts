@@ -27,6 +27,10 @@ export type ClassOccurrence<G> = {
   group: G;
   date: string; // YYYY-MM-DD in APP_TIMEZONE
   daysFromNow: number;
+  // 이 occurrence의 실제 시각 "HH:MM" — 1회 시간 변경/날짜 이동이 반영된 값이다.
+  // 화면에 시각을 보여줄 때는 schedule.start_time(반복 시간표 원본)이 아니라 이것을 쓴다.
+  startTime: string;
+  endTime: string;
   startEpoch: number;
   endEpoch: number;
 };
@@ -180,6 +184,8 @@ export function getScheduleOverview<G>(
         group,
         date,
         daysFromNow: offset,
+        startTime: effective.startTime,
+        endTime: effective.endTime,
         startEpoch: toEpoch(date, effective.startTime),
         endEpoch: toEpoch(date, effective.endTime),
       });
@@ -197,6 +203,8 @@ export function getScheduleOverview<G>(
         group: entry.group,
         date,
         daysFromNow: offset,
+        startTime: formatTimeHM(moved.startTime),
+        endTime: formatTimeHM(moved.endTime),
         startEpoch: toEpoch(date, moved.startTime),
         endEpoch: toEpoch(date, moved.endTime),
       });

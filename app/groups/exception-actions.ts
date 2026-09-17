@@ -3,13 +3,20 @@
 import { revalidatePath } from "next/cache";
 
 import { dayOfWeekOf, formatTimeHM } from "@/lib/schedule";
-import { validateScheduleException, type ScheduleExceptionKind } from "@/lib/schedule-exceptions";
+import {
+  buildScheduleExceptionIndex,
+  movedInOccurrences,
+  resolveOccurrence,
+  validateScheduleException,
+  type ScheduleExceptionKind,
+} from "@/lib/schedule-exceptions";
 import { todayDateString } from "@/lib/dates";
 import {
   deleteScheduleException,
   getDailyLogStatusForOccurrence,
   getScheduleExceptionById,
   getScheduleExceptionForOccurrence,
+  getScheduleExceptionsInRange,
   upsertScheduleException,
 } from "@/lib/supabase/queries/schedule-exceptions";
 import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
@@ -19,6 +26,36 @@ import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
 // - 이미 수업일지가 있는 날짜는 기본 차단한다 (history 충돌 방지) — Draft/Finalized 모두
 //   자동 삭제/수정하지 않고 안내만 한다.
 // - 실패 시 원본 DB 에러를 노출하지 않는다.
+
+// 옮기려는 날짜에 이 반 수업이 이미 있는지 — 반복 시간표 + 그날로 옮겨온 수업 모두 본다.
+// 지금 저장하려는 예외 자신(같은 schedule의 같은 원래 날짜)은 후보에서 빼야, 이미 옮겨둔
+// 수업의 시간만 바꾸는 재저장이 자기 자신 때문에 막히지 않는다.
+async function groupAlreadyHasClassOn(
+  groupId: string,
+  targetDate: string,
+  schedules: { id: string; day_of_week: number; start_time: string; end_time: string }[],
+  scheduleId: string,
+  originDate: string,
+) {
+  const entries = await getScheduleExceptionsInRange(targetDate, targetDate);
+  const index = buildScheduleExceptionIndex(
+    entries.filter((entry) => !(entry.scheduleId === scheduleId && entry.date === originDate)),
+  );
+
+  const targetDow = dayOfWeekOf(targetDate);
+  const hasBaseClass = schedules.some(
+    (slot) =>
+      slot.day_of_week === targetDow &&
+      !resolveOccurrence(index, slot.id, targetDate, slot.start_time, slot.end_time).cancelled,
+  );
+
+  if (hasBaseClass) {
+    return true;
+  }
+
+  const groupScheduleIds = new Set(schedules.map((slot) => slot.id));
+  return movedInOccurrences(index, targetDate).some((moved) => groupScheduleIds.has(moved.scheduleId));
+}
 
 function revalidateScheduleSurfaces(groupId: string) {
   revalidatePath(`/groups/${groupId}`);
@@ -93,6 +130,12 @@ export async function saveScheduleExceptionAction(input: {
             ? "옮기려는 날짜에 이미 완료된 수업일지가 있어요."
             : "옮기려는 날짜에 작성 중인 수업일지가 있어요. 수업일지를 먼저 확인해주세요.",
       };
+    }
+
+    // 그날 이 반 수업이 이미 있으면 차단한다. 수업일지 identity가 (반 + 날짜) 하나라서
+    // 같은 반 수업이 하루에 둘이 되면 두 수업을 따로 기록할 수 없다.
+    if (await groupAlreadyHasClassOn(input.groupId, input.movedToDate, schedules, input.scheduleId, input.date)) {
+      return { error: "그날은 이 반 수업이 이미 있어요. 수업일지는 반·날짜마다 하나라서 다른 날짜를 골라주세요." };
     }
   }
 

@@ -40,6 +40,11 @@ import {
   getMonthlyScheduledMakeups,
   type MonthlyMakeupMarker,
 } from "@/lib/supabase/queries/makeups";
+import {
+  buildScheduleExceptionIndex,
+  movedInOccurrences,
+  resolveOccurrence,
+} from "@/lib/schedule-exceptions";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import { eventMetaOf } from "@/lib/validation/calendar-event";
@@ -151,17 +156,38 @@ export default async function DailyLogsPage({
     getScheduleExceptionsInRange(range.start, range.end),
   ]);
 
-  // 그룹+요일 → 수업 시간 (정확히 하나일 때만 표시, 추측 금지)
-  const scheduleMap = new Map<string, string[]>();
+  const exceptionIndex = buildScheduleExceptionIndex(scheduleExceptions);
+
+  // 그룹+요일 → 시간표 slot (예외 적용 전 후보)
+  const slotsByGroupDow = new Map<string, typeof schedules>();
   for (const slot of schedules) {
     const key = `${slot.group_id}:${slot.day_of_week}`;
-    scheduleMap.set(key, [
-      ...(scheduleMap.get(key) ?? []),
-      formatTimeRange(slot.start_time, slot.end_time),
-    ]);
+    slotsByGroupDow.set(key, [...(slotsByGroupDow.get(key) ?? []), slot]);
   }
+  const slotById = new Map(schedules.map((slot) => [slot.id, slot]));
+
+  // 그 날짜 이 반의 실제 수업 시간 (정확히 하나일 때만 표시, 추측 금지).
+  // 1회 휴강은 후보에서 빠지고, 시간 변경/날짜 이동은 변경된 시각으로 잡힌다 —
+  // 요일만 보고 반복 시간표 시각을 그대로 쓰면 옮긴 수업의 시간이 틀리게 나온다.
   const timeFor = (logGroupId: string, date: string) => {
-    const times = scheduleMap.get(`${logGroupId}:${dayOfWeekOf(date)}`) ?? [];
+    const times: string[] = [];
+
+    for (const slot of slotsByGroupDow.get(`${logGroupId}:${dayOfWeekOf(date)}`) ?? []) {
+      const effective = resolveOccurrence(exceptionIndex, slot.id, date, slot.start_time, slot.end_time);
+      if (effective.cancelled) {
+        continue;
+      }
+      times.push(formatTimeRange(effective.startTime, effective.endTime));
+    }
+
+    for (const moved of movedInOccurrences(exceptionIndex, date)) {
+      const slot = slotById.get(moved.scheduleId);
+      if (!slot || slot.group_id !== logGroupId || !moved.startTime || !moved.endTime) {
+        continue;
+      }
+      times.push(formatTimeRange(moved.startTime, moved.endTime));
+    }
+
     return times.length === 1 ? times[0] : null;
   };
 
@@ -250,11 +276,15 @@ export default async function DailyLogsPage({
     }
   }
 
-  // 그날 수업이 사라지는 변경(휴강 + 다른 날짜로 이동)만 달력 셀에 😴로 표시한다
-  const restCountFor = (date: string) =>
-    (changesByDate.get(date) ?? []).filter(
-      (change) => change.kind === "cancelled" || change.kind === "moved-out",
-    ).length;
+  // 달력 셀 표시: 수업이 사라진 날은 😴, 다른 날짜에서 옮겨와 수업이 생긴 날은 🔁.
+  // (옮겨온 날은 원래 시간표에 수업이 없을 수 있어, 표시가 없으면 그날 수업이 있다는 걸 알 수 없다.)
+  const cellMarkersFor = (date: string) => {
+    const changes = changesByDate.get(date) ?? [];
+    return {
+      rest: changes.some((change) => change.kind === "cancelled" || change.kind === "moved-out"),
+      movedIn: changes.some((change) => change.kind === "moved-in"),
+    };
+  };
 
   const groupOptions = groups.map((group) => ({ id: group.id, name: group.name }));
 
@@ -483,7 +513,7 @@ export default async function DailyLogsPage({
                   const completedCount = logs.filter((log) => log.status === "completed").length;
                   const draftCount = logs.length - completedCount;
                   const icons = iconsFor(date);
-                  const restCount = restCountFor(date);
+                  const cellMarkers = cellMarkersFor(date);
                   const isSelected = date === selectedDate;
                   const isToday = date === today;
                   const dayNumber = Number(date.slice(8));
@@ -570,9 +600,15 @@ export default async function DailyLogsPage({
                           />
                         ) : null}
                         {/* 수업이 사라진 날(휴강·다른 날짜로 변경) — 자세한 내용은 아래 상세에서 */}
-                        {restCount > 0 ? (
+                        {cellMarkers.rest ? (
                           <span aria-hidden className="shrink-0 text-xs leading-none">
                             😴
+                          </span>
+                        ) : null}
+                        {/* 다른 날짜에서 옮겨와 이날 열리는 수업 */}
+                        {cellMarkers.movedIn ? (
+                          <span aria-hidden className="shrink-0 text-xs leading-none">
+                            🔁
                           </span>
                         ) : null}
                       </span>
@@ -626,7 +662,10 @@ export default async function DailyLogsPage({
                   <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-white ring-1 ring-[#3d7f64]" /> 보충 예정
                 </span>
                 <span className="flex items-center gap-1">
-                  <span aria-hidden className="text-sm leading-none">😴</span> 휴강 · 날짜 변경
+                  <span aria-hidden className="text-sm leading-none">😴</span> 휴강 · 다른 날로 변경
+                </span>
+                <span className="flex items-center gap-1">
+                  <span aria-hidden className="text-sm leading-none">🔁</span> 옮겨온 수업
                 </span>
               </div>
 
