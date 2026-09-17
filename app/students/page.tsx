@@ -10,6 +10,11 @@ import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate, formatShortMonthDay, todayDateString } from "@/lib/dates";
 import { formatGrade, gradeValues } from "@/lib/grades";
 import { computeStudentStatuses, emptyStudentStatus } from "@/lib/student-status";
+import {
+  lifecycleBadgeClasses,
+  lifecycleLabels,
+  studentLifecycleStatus,
+} from "@/lib/student-lifecycle";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getCurrentUserMakeups } from "@/lib/supabase/queries/makeups";
 import { getRecentLessonRecords } from "@/lib/supabase/queries/student-history";
@@ -51,10 +56,14 @@ const SORTS = [
 export default async function StudentsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; filter?: string; sort?: string; saved?: string; deleted?: string }>;
+  searchParams?: Promise<{ q?: string; filter?: string; sort?: string; status?: string; saved?: string; deleted?: string }>;
 }) {
   const params = (await searchParams) ?? {};
   const q = (params.q ?? "").trim().toLowerCase();
+  // 상태 필터: 기본은 재원(기존 동작과 동일). 휴원/퇴원/전체는 명시 선택 시에만.
+  const statusFilter = ["paused", "withdrawn", "all"].includes(params.status ?? "")
+    ? (params.status as "paused" | "withdrawn" | "all")
+    : "";
   const activeFilter = ["attention", "birthday", "unassigned"].includes(params.filter ?? "")
     ? (params.filter as "attention" | "birthday" | "unassigned")
     : "";
@@ -89,7 +98,19 @@ export default async function StudentsPage({
   const groupOptions = groups.map((group) => ({ id: group.id, name: group.name }));
   const groupById = new Map(groups.map((group) => [group.id, group]));
   const activeStudents = students.filter((student) => !student.archived);
-  const archivedStudents = students.filter((student) => student.archived);
+  // 휴원/퇴원 = soft status (archived 마스터 플래그 + status 구분, 기록은 전부 보존)
+  const pausedStudents = students.filter((student) => studentLifecycleStatus(student) === "paused");
+  const withdrawnStudents = students.filter(
+    (student) => studentLifecycleStatus(student) === "withdrawn",
+  );
+  const baseStudents =
+    statusFilter === "paused"
+      ? pausedStudents
+      : statusFilter === "withdrawn"
+        ? withdrawnStudents
+        : statusFilter === "all"
+          ? students
+          : activeStudents;
 
   // 학생별 소속 활성 그룹 badge
   const groupsByStudent = new Map<string, string[]>();
@@ -139,7 +160,7 @@ export default async function StudentsPage({
     return matchesName || matchesSchool;
   };
 
-  let visibleStudents = activeStudents.filter((student) => {
+  let visibleStudents = baseStudents.filter((student) => {
     if (activeFilter === "attention" && !statusOf(student).attention) return false;
     if (activeFilter === "birthday" && !isBirthdayMonth(student)) return false;
     if (activeFilter === "unassigned" && !isUnassigned(student)) return false;
@@ -179,16 +200,19 @@ export default async function StudentsPage({
     return byName(a, b);
   });
 
-  const buildHref = (next: { filter?: string; sort?: string; q?: string }) => {
+  const buildHref = (next: { filter?: string; sort?: string; q?: string; status?: string }) => {
     const query = new URLSearchParams();
     if (next.filter) query.set("filter", next.filter);
     if (next.sort) query.set("sort", next.sort);
     if (next.q) query.set("q", next.q);
+    if (next.status) query.set("status", next.status);
     const qs = query.toString();
     return qs ? `/students?${qs}` : "/students";
   };
   const filterHref = (key: string) =>
-    buildHref({ filter: key, sort: activeSortParam, q: params.q });
+    buildHref({ filter: key, sort: activeSortParam, q: params.q, status: statusFilter });
+  const statusHref = (key: string) =>
+    buildHref({ filter: activeFilter, sort: activeSortParam, q: params.q, status: key });
   // 비활성 pill 클릭 → 그 기준 오름차순, 활성 pill 다시 클릭 → 역순 ↔ 오름차순 토글
   const sortHref = (key: string) => {
     const target =
@@ -199,7 +223,7 @@ export default async function StudentsPage({
         : sortBase === key && sortDesc
           ? key
           : key;
-    return buildHref({ filter: activeFilter, sort: target, q: params.q });
+    return buildHref({ filter: activeFilter, sort: target, q: params.q, status: statusFilter });
   };
 
   const emptyMessage =
@@ -211,7 +235,11 @@ export default async function StudentsPage({
           ? "모든 학생이 수업 그룹에 배정되어 있어요."
           : q
             ? "검색 결과가 없어요. 학생 이름이나 학교 이름을 확인해 주세요."
-            : "";
+            : statusFilter === "paused"
+              ? "휴원 중인 학생이 없어요."
+              : statusFilter === "withdrawn"
+                ? "퇴원한 학생이 없어요."
+                : "";
 
   return (
     <AppShell>
@@ -235,6 +263,7 @@ export default async function StudentsPage({
               <form action="/students" className="flex items-center gap-3">
                 {activeFilter ? <input type="hidden" name="filter" value={activeFilter} /> : null}
                 {activeSortParam ? <input type="hidden" name="sort" value={activeSortParam} /> : null}
+                {statusFilter ? <input type="hidden" name="status" value={statusFilter} /> : null}
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f6f0fb] text-[#5e4eb5]">
                   <Search className="h-4 w-4" />
                 </div>
@@ -257,6 +286,34 @@ export default async function StudentsPage({
               </form>
             </CardContent>
           </Card>
+
+          {/* 재원/휴원/퇴원 상태 필터 — 기본은 재원 (기존 목록과 동일). 검색과 함께 동작한다. */}
+          <div className="mb-2.5 flex flex-wrap gap-1.5">
+            {[
+              { key: "", label: "재원", count: activeStudents.length },
+              { key: "paused", label: "휴원", count: pausedStudents.length },
+              { key: "withdrawn", label: "퇴원", count: withdrawnStudents.length },
+              { key: "all", label: "전체", count: students.length },
+            ].map((option) => {
+              const isActive = statusFilter === option.key;
+              return (
+                <Link
+                  key={option.key || "active"}
+                  href={statusHref(option.key)}
+                  aria-current={isActive ? "true" : undefined}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition",
+                    isActive
+                      ? "border-[#d3c8ec] bg-[#f2edf9] text-[#5c4ca8]"
+                      : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
+                  )}
+                >
+                  {option.label}
+                  <span className="tabular-nums opacity-70">{option.count}</span>
+                </Link>
+              );
+            })}
+          </div>
 
           <div className="mb-4 flex flex-wrap gap-1.5">
             {FILTERS.map((filter) => {
@@ -315,7 +372,7 @@ export default async function StudentsPage({
             })}
           </div>
 
-          {activeStudents.length === 0 && !q ? (
+          {activeStudents.length === 0 && !q && !statusFilter ? (
             <Card>
               <CardContent className="body-text flex flex-col items-start gap-3 p-6 text-[#655d5d]">
                 아직 등록된 학생이 없어요 🌱
@@ -350,6 +407,16 @@ export default async function StudentsPage({
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             <span className="text-base font-semibold text-[#2d2928]">{student.name}</span>
+                            {studentLifecycleStatus(student) !== "active" ? (
+                              <span
+                                className={cn(
+                                  "rounded-full px-2 py-0.5 text-xs font-semibold",
+                                  lifecycleBadgeClasses[studentLifecycleStatus(student)],
+                                )}
+                              >
+                                {lifecycleLabels[studentLifecycleStatus(student)]}
+                              </span>
+                            ) : null}
                             <span className="secondary-text text-[#8a7b77]">
                               {[
                                 formatGrade(student.grade),
@@ -420,24 +487,7 @@ export default async function StudentsPage({
             </div>
           )}
 
-          {archivedStudents.length > 0 && !q && !activeFilter ? (
-            <details className="mt-6">
-              <summary className="section-title cursor-pointer font-medium text-[#756a67]">
-                보관된 학생 {archivedStudents.length}명 보기
-              </summary>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {archivedStudents.map((student) => (
-                  <Link key={student.id} href={`/students/${student.id}`} className="block">
-                    <div className="flex min-h-11 items-center justify-between rounded-xl border border-[#ece0db] bg-white/70 px-3 py-2 text-sm text-[#8a7b77] transition hover:bg-[#faf6f3]">
-                      <span>{student.name}</span>
-                      <span className="secondary-text">{formatGrade(student.grade)}</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </details>
-          ) : null}
-
+          {/* 구 "보관된 학생 보기" 블록은 상태 필터([휴원]/[퇴원]/[전체])로 대체됐다 */}
           <div className="mt-6 flex justify-end pb-8">
             <StudentCreateDialog groups={groupOptions} />
           </div>

@@ -255,6 +255,92 @@ export async function updateStudentWithGroups(studentId: string, input: {
   return true;
 }
 
+// 재원/휴원/퇴원 상태 변경 — hard delete가 아니다. 학생 row/과거 기록은 전부 보존되고,
+// 현재 roster 제외는 기존 archived 마스터 플래그로 동작한다 (휴원·퇴원 = archived=true).
+// status 컬럼 migration(20260917) 미적용 환경에서는 update가 실패하고 에러를 던진다
+// (거짓 성공 없음 — UI가 "변경하지 못했어요"로 안내).
+export async function setStudentLifecycleStatus(
+  studentId: string,
+  status: "active" | "paused" | "withdrawn",
+) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  const { error } = await supabase
+    .from("students")
+    .update({ archived: status !== "active", status })
+    .eq("id", studentId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("setStudentLifecycleStatus error", error);
+    throw new Error("학생 상태를 변경하지 못했어요. 잠시 후 다시 시도해주세요.");
+  }
+
+  return true;
+}
+
+// 반 이동 — 현재 membership만 바꾼다 (과거 일지의 group_id는 절대 변경하지 않는다).
+// multi-group 안전: 지정한 source membership 하나만 종료하고 다른 소속은 유지.
+// 순서: target insert 먼저(실패 시 아무 변화 없음) → source delete.
+// target에 이미 소속이면(unique 위반) 그대로 인정하고 source만 제거한다.
+export async function transferStudentGroup(
+  studentId: string,
+  fromGroupId: string,
+  toGroupId: string,
+) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  if (fromGroupId === toGroupId) {
+    throw new Error("같은 반으로는 이동할 수 없어요.");
+  }
+
+  const { data: existing } = await supabase
+    .from("students")
+    .select("id")
+    .eq("id", studentId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!existing) {
+    throw new Error("학생 정보를 찾을 수 없어요.");
+  }
+
+  const { error: insertError } = await supabase
+    .from("student_group_memberships")
+    .insert({ user_id: user.id, student_id: studentId, group_id: toGroupId });
+
+  // 23505 = 이미 target 소속 (동시 클릭/기존 소속) — 이동 목적상 정상으로 취급
+  if (insertError && insertError.code !== "23505") {
+    console.error("transferStudentGroup insert error", insertError);
+    throw new Error("반 이동을 하지 못했어요. 잠시 후 다시 시도해주세요.");
+  }
+
+  const { error: deleteError } = await supabase
+    .from("student_group_memberships")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("student_id", studentId)
+    .eq("group_id", fromGroupId);
+
+  if (deleteError) {
+    // target 소속은 이미 생겼고 source 종료만 실패 — 데이터 손실 없는 상태(양쪽 소속).
+    console.error("transferStudentGroup delete error", deleteError);
+    throw new Error("새 반 배정은 됐지만 기존 반 정리에 실패했어요. 학생 정보에서 확인해주세요.");
+  }
+
+  return true;
+}
+
 export async function archiveStudent(studentId: string) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();

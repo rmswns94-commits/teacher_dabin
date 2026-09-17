@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { StudentDeleteButton } from "@/components/student-delete-button";
 import { StudentEditDialog } from "@/components/student-edit-dialog";
+import { StudentLifecycleActions } from "@/components/student-lifecycle-actions";
 import { StudentVocabCard } from "@/components/student-vocab-card";
 import { StudentWeaknessesCard } from "@/components/student-weaknesses-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +33,11 @@ import {
   scopeMakeupsToWeek,
 } from "@/lib/growth";
 import { nextClassDateAfter } from "@/lib/schedule";
+import {
+  lifecycleBadgeClasses,
+  lifecycleLabels,
+  studentLifecycleStatus,
+} from "@/lib/student-lifecycle";
 import { genderLabels } from "@/lib/validation/student";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
@@ -279,6 +285,11 @@ export default async function StudentDetailPage({
                   <span className="rounded-full bg-[#f3eefa] px-2.5 py-0.5 text-xs font-medium text-[#6d5aa8]">
                     {gradeDisplay[student.grade as keyof typeof gradeDisplay]}
                   </span>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${lifecycleBadgeClasses[studentLifecycleStatus(student)]}`}
+                  >
+                    {lifecycleLabels[studentLifecycleStatus(student)]}
+                  </span>
                 </div>
 
                 {/* 2. 성별 · 생일 · 학교 — compact info grid (wide에서 벌어지지 않게 max-w 제한) */}
@@ -328,6 +339,17 @@ export default async function StudentDetailPage({
                     )}
                   </div>
                 </div>
+
+                {/* 3.5 재원/휴원/퇴원/반 이동 — soft 상태 관리 (기록은 전부 보존) */}
+                <StudentLifecycleActions
+                  studentId={id}
+                  studentName={student.name}
+                  status={studentLifecycleStatus(student)}
+                  memberGroups={studentGroups.map((group) => ({ id: group.id, name: group.name }))}
+                  allGroups={groups
+                    .filter((group) => !group.archived)
+                    .map((group) => ({ id: group.id, name: group.name }))}
+                />
 
                 {/* 4. 수정 (secondary action — 카드 하단 오른쪽) */}
                 <div className="mt-5 flex justify-end border-t border-dashed border-[#f0e7e2] pt-4">

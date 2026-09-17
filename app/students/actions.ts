@@ -3,7 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { createStudent, deleteStudent, updateStudentWithGroups, archiveStudent, restoreStudent } from "@/lib/supabase/queries/students";
+import {
+  createStudent,
+  deleteStudent,
+  updateStudentWithGroups,
+  archiveStudent,
+  restoreStudent,
+  setStudentLifecycleStatus,
+  transferStudentGroup,
+} from "@/lib/supabase/queries/students";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import { studentSchema } from "@/lib/validation/student";
 
@@ -128,6 +136,57 @@ export async function completeParentNoteAction(lessonLogId: string, studentId: s
 
   revalidatePath("/students");
   revalidatePath(`/students/${studentId}`);
+}
+
+// 상태 변경 후 학생 목록/상세/그룹/성장/대시보드가 새 roster를 보게 revalidate.
+// (일지 작성/편집 화면은 dynamic이라 다음 진입 시 항상 최신)
+function revalidateStudentSurfaces(studentId: string) {
+  revalidatePath("/students");
+  revalidatePath(`/students/${studentId}`);
+  revalidatePath("/groups", "layout");
+  revalidatePath("/dashboard");
+  revalidatePath("/growth-notes", "layout");
+}
+
+// 재원/휴원/퇴원 — soft status 전환 (삭제 아님). 클라이언트 확인 dialog를 거친 뒤 호출.
+export async function setStudentStatusAction(
+  studentId: string,
+  status: "active" | "paused" | "withdrawn",
+): Promise<{ error: string } | { success: true }> {
+  if (!["active", "paused", "withdrawn"].includes(status)) {
+    return { error: "잘못된 상태예요." };
+  }
+
+  try {
+    await setStudentLifecycleStatus(studentId, status);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error && error.message ? error.message : "학생 상태를 변경하지 못했어요.",
+    };
+  }
+
+  revalidateStudentSurfaces(studentId);
+  return { success: true };
+}
+
+// 반 이동 — 지정한 source membership만 종료하고 target membership을 만든다.
+// 과거 일지의 group_id/기록은 변경하지 않는다 (현재 roster만 변경).
+export async function transferStudentGroupAction(
+  studentId: string,
+  fromGroupId: string,
+  toGroupId: string,
+): Promise<{ error: string } | { success: true }> {
+  try {
+    await transferStudentGroup(studentId, fromGroupId, toGroupId);
+  } catch (error) {
+    return {
+      error: error instanceof Error && error.message ? error.message : "반 이동을 하지 못했어요.",
+    };
+  }
+
+  revalidateStudentSurfaces(studentId);
+  return { success: true };
 }
 
 export async function archiveStudentAction(studentId: string) {

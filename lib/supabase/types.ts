@@ -10,6 +10,8 @@ export type StudentGrade =
   | "middle_3"
   | "high_1";
 
+export type StudentLifecycleStatus = "active" | "paused" | "withdrawn";
+
 export type StudentRecord = {
   id: string;
   user_id: string;
@@ -20,6 +22,10 @@ export type StudentRecord = {
   gender: "male" | "female" | null;
   birth_date: string | null;
   archived: boolean;
+  // 재원/휴원/퇴원 구분 (additive migration) — 현재 roster 제외의 마스터 플래그는
+  // 기존 archived 그대로이고, status는 제외 사유만 구분한다.
+  // migration 미적용 환경에서는 select("*")에 없을 수 있어 optional.
+  status?: StudentLifecycleStatus | null;
   created_at: string;
   updated_at: string;
 };
