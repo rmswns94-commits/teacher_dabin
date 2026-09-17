@@ -78,6 +78,25 @@ export function toGrowthBadge(type: GrowthAchievementType): GrowthBadge {
   };
 }
 
+// ---- 왕중왕 (derived UI only) ----
+// 현재 목록에 표시되는 학생들의 "실제 획득 왕 개수" 최댓값. 왕중왕은 왕 title 데이터가
+// 아니라 화면 파생 배지일 뿐 — achievements 배열/count에 절대 포함하지 않고 DB에도
+// 저장하지 않는다 (순환 계산 금지).
+export function kingOfKingsMaxCount(titleCounts: readonly number[]): number {
+  let max = 0;
+  for (const count of titleCounts) {
+    if (count > max) {
+      max = count;
+    }
+  }
+  return max;
+}
+
+// 전원 0개면 왕중왕 없음. 동점자는 전부 공동 왕중왕 (한 명만 임의 선정 금지).
+export function isKingOfKings(titleCount: number, maxTitleCount: number): boolean {
+  return maxTitleCount > 0 && titleCount === maxTitleCount;
+}
+
 // ---- 이번 주 잘한 일: 구조화된 관찰값 → deterministic 학생용 문장 ----
 // 같은 category가 여러 번 관찰돼도 대표 문장 하나만 쓴다 (반복 금지).
 const observationPhrases: Partial<Record<GrowthAchievementType, string>> = {

@@ -337,3 +337,35 @@ body {
     font-size: calc(30px * var(--font-scale-heading, 1));
   }
 }
+
+/* 성장노트 왕중왕 카드의 은은한 sheen — 느린 주기(4.5s)로 카드 위를 스치는 빛.
+   reduced-motion 환경에서는 sheen을 아예 표시하지 않는다 (정적 하이라이트
+   배경/보더/sparkle은 카드 클래스로 항상 유지). 깜빡임/큰 움직임 금지. */
+.king-of-kings-sheen {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .king-of-kings-sheen {
+    display: block;
+    animation: king-of-kings-sheen 4.5s ease-in-out infinite;
+  }
+
+  @keyframes king-of-kings-sheen {
+    0% {
+      transform: translateX(-160%) skewX(-12deg);
+      opacity: 0;
+    }
+    12% {
+      opacity: 1;
+    }
+    45% {
+      transform: translateX(320%) skewX(-12deg);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(320%) skewX(-12deg);
+      opacity: 0;
+    }
+  }
+}

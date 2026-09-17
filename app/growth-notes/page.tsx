@@ -18,7 +18,12 @@ import {
   growthLabels,
   scopeMakeupsToWeek,
 } from "@/lib/growth";
-import { toGrowthBadge, type StudentGrowthCardSummary } from "@/lib/growth-note";
+import {
+  isKingOfKings,
+  kingOfKingsMaxCount,
+  toGrowthBadge,
+  type StudentGrowthCardSummary,
+} from "@/lib/growth-note";
 import {
   getCurrentUserGroups,
   getGroupStudentsForCurrentUser,
@@ -344,60 +349,98 @@ async function GroupStudentList({ group }: { group: { id: string; name: string }
             </div>
           ) : (
             <div className="mt-5 space-y-3 pb-8">
-              {summaries.map((summary) => {
-                const shown = summary.achievements.slice(0, 3);
-                const extra = summary.achievements.length - shown.length;
+              {(() => {
+                // 왕중왕(derived UI): 카드에 표시되는 canonical achievements와 같은 소스로
+                // 최대 왕 개수를 계산한다. 동점자는 전부 공동 왕중왕, 전원 0개면 없음.
+                // 목록 순서는 그대로(이름순) — 랭킹 정렬 금지 정책 유지.
+                const maxTitleCount = kingOfKingsMaxCount(
+                  summaries.map((summary) => summary.achievements.length),
+                );
 
-                return (
-                  <Link
-                    key={summary.studentId}
-                    href={`/growth-notes/${summary.studentId}`}
-                    className="group flex w-full flex-col gap-3 rounded-3xl border border-[#efe4de] bg-[#fffdfb] p-4 shadow-sm transition hover:border-[#e0d2f2] hover:bg-[#fdfbff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#b9a5e3] sm:flex-row sm:items-center sm:gap-4 sm:p-5"
-                  >
-                    <div className="flex items-center justify-between gap-2 sm:w-48 sm:shrink-0">
-                      <div className="min-w-0 truncate text-lg font-bold text-[#3a2f2c]">
-                        {summary.studentName}
-                      </div>
-                      <ChevronRight
-                        className="h-4 w-4 shrink-0 text-[#c4b6b0] transition group-hover:text-[#8f7bc4] sm:hidden"
-                        aria-hidden
-                      />
-                    </div>
+                return summaries.map((summary) => {
+                  const king = isKingOfKings(summary.achievements.length, maxTitleCount);
 
-                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 sm:justify-end">
-                      {shown.length === 0 ? (
-                        <span className="text-sm text-[#8a7b77]">🌱 성장 기록이 쌓이는 중이에요</span>
-                      ) : (
+                  return (
+                    <Link
+                      key={summary.studentId}
+                      href={`/growth-notes/${summary.studentId}`}
+                      data-king-of-kings={king ? "" : undefined}
+                      className={cn(
+                        "group flex w-full flex-col gap-3 rounded-3xl border p-4 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#b9a5e3] sm:flex-row sm:items-center sm:gap-4 sm:p-5",
+                        king
+                          ? "relative overflow-hidden border-[#e9d5a4] bg-gradient-to-br from-[#fffdf4] via-[#fdf6e2] to-[#fbf0d8] shadow-[0_4px_18px_rgba(203,169,92,0.18)] hover:border-[#dfc78f] hover:shadow-[0_6px_22px_rgba(203,169,92,0.26)]"
+                          : "border-[#efe4de] bg-[#fffdfb] hover:border-[#e0d2f2] hover:bg-[#fdfbff]",
+                      )}
+                    >
+                      {king ? (
                         <>
-                          {shown.map((badge) => (
+                          {/* 은은한 sheen(느린 주기, reduced-motion에서는 표시 안 함) +
+                              정적 빛번짐/sparkle — 전부 pointer-events 없음 (클릭 방해 금지) */}
+                          <span
+                            aria-hidden
+                            className="king-of-kings-sheen pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/50 to-transparent"
+                          />
+                          <span
+                            aria-hidden
+                            className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full bg-[#f6e3ae]/60 blur-2xl"
+                          />
+                          <Sparkles
+                            aria-hidden
+                            className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-[#d9b45e]"
+                          />
+                          <Sparkles
+                            aria-hidden
+                            className="pointer-events-none absolute right-9 top-6 h-2.5 w-2.5 text-[#d9b45e] opacity-60"
+                          />
+                        </>
+                      ) : null}
+
+                      <div className="flex items-center justify-between gap-2 sm:w-52 sm:shrink-0">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <div className="min-w-0 truncate text-lg font-bold text-[#3a2f2c]">
+                            {summary.studentName}
+                          </div>
+                          {king ? (
+                            <span className="shrink-0 rounded-full border border-[#e5cf9a] bg-gradient-to-r from-[#fdf6e0] to-[#fbeecb] px-2 py-0.5 text-xs font-bold text-[#8a6a25]">
+                              👑 왕중왕
+                            </span>
+                          ) : null}
+                        </div>
+                        <ChevronRight
+                          className="h-4 w-4 shrink-0 text-[#c4b6b0] transition group-hover:text-[#8f7bc4] sm:hidden"
+                          aria-hidden
+                        />
+                      </div>
+
+                      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 sm:justify-end">
+                        {summary.achievements.length === 0 ? (
+                          <span className="text-sm text-[#8a7b77]">🌱 성장 기록이 쌓이는 중이에요</span>
+                        ) : (
+                          // 획득한 왕 title 전부 표시 — "+N" 축약 없음, 카드 안에서 wrap
+                          summary.achievements.map((badge) => (
                             <span
                               key={badge.type}
                               className="rounded-full bg-[#f0f7f2] px-2.5 py-1 text-xs font-semibold text-[#3d7f64]"
                             >
                               {badge.emoji} {badge.label}
                             </span>
-                          ))}
-                          {extra > 0 ? (
-                            <span className="rounded-full bg-[#f4f1ee] px-2.5 py-1 text-xs font-medium text-[#8a7b77]">
-                              +{extra}
-                            </span>
-                          ) : null}
-                        </>
-                      )}
-                      {summary.praiseCount > 0 ? (
-                        <span className="rounded-full bg-[#fdf8ec] px-2.5 py-1 text-xs font-semibold text-[#8a6828]">
-                          💜 이번 주 칭찬 {summary.praiseCount}회
-                        </span>
-                      ) : null}
-                    </div>
+                          ))
+                        )}
+                        {summary.praiseCount > 0 ? (
+                          <span className="rounded-full bg-[#fdf8ec] px-2.5 py-1 text-xs font-semibold text-[#8a6828]">
+                            💜 이번 주 칭찬 {summary.praiseCount}회
+                          </span>
+                        ) : null}
+                      </div>
 
-                    <ChevronRight
-                      className="hidden h-4 w-4 shrink-0 text-[#c4b6b0] transition group-hover:text-[#8f7bc4] sm:block"
-                      aria-hidden
-                    />
-                  </Link>
-                );
-              })}
+                      <ChevronRight
+                        className="hidden h-4 w-4 shrink-0 text-[#c4b6b0] transition group-hover:text-[#8f7bc4] sm:block"
+                        aria-hidden
+                      />
+                    </Link>
+                  );
+                });
+              })()}
             </div>
           )}
         </div>
