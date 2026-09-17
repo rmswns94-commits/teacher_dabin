@@ -11,7 +11,16 @@ import {
   useTransition,
   type ReactNode,
 } from "react";
-import { ArrowLeft, ChevronRight, History, Pencil, SquareArrowOutUpRight, X } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  History,
+  Pencil,
+  SquareArrowOutUpRight,
+  X,
+} from "lucide-react";
 
 import {
   loadGroupHistoryAction,
@@ -23,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDiscardDialog, useBeforeUnloadWarning } from "@/components/unsaved-guard";
 import { dayOfWeekOf } from "@/lib/calendar";
 import { formatKoreanDate } from "@/lib/dates";
+import { RECENT_VISIBLE_COUNT, historyPreview } from "@/lib/history-preview";
 import {
   effortLevelLabels,
   focusLevelLabels,
@@ -160,6 +170,9 @@ export function LessonHistoryWorkspace({
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<PanelMode>("list");
+  // 최근 3개만 기본 표시 — 사용자가 [이전 기록 펴기]를 누른 동안만 4번째 이후를 보여준다.
+  // UI-only state (dirty/autosave/payload 무관), 페이지(수업 context)가 바뀌면 remount로 리셋.
+  const [showOlder, setShowOlder] = useState(false);
   const [recordsCache, setRecordsCache] = useState<Record<string, RecordsData>>({});
   const [recordsOpen, setRecordsOpen] = useState(false);
   const [recordsError, setRecordsError] = useState("");
@@ -315,6 +328,9 @@ export function LessonHistoryWorkspace({
     });
   };
 
+  // 프레젠테이션 전용 slice — canonical rows/ordering은 그대로, 표시 개수만 계산
+  const preview = historyPreview(rows.length, showOlder);
+
   const panelBody = (
     <div className="flex h-full flex-col">
       <div className="flex items-start justify-between gap-2 border-b border-dashed border-[#eee3dc] pb-3">
@@ -353,8 +369,8 @@ export function LessonHistoryWorkspace({
                 아직 이전 수업 기록이 없어요.
               </p>
             ) : (
-              <ul className="space-y-2">
-                {rows.map((row) => {
+              <ul id="lesson-history-list" className="space-y-2">
+                {rows.slice(0, preview.visibleCount).map((row) => {
                   const progress = mergeLegacyLessonContent(row.default_progress, row.lesson_content);
                   const time = timeOf(row.class_date);
 
@@ -391,7 +407,25 @@ export function LessonHistoryWorkspace({
                 })}
               </ul>
             )}
-            {hasMore ? (
+            {/* 4개 이상일 때만: 숨긴(로드된) 개수와 함께 펴기 — 사용자가 누르기 전까지
+                4번째 이후는 렌더하지 않는다 (자동 펼침 없음, keyboard focus 대상도 아님) */}
+            {preview.showExpand ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="mt-3 w-full gap-1"
+                aria-expanded={false}
+                aria-controls="lesson-history-list"
+                onClick={() => setShowOlder(true)}
+              >
+                <ChevronDown className="h-4 w-4" aria-hidden /> 이전 기록 펴기 (
+                {preview.hiddenCount})
+              </Button>
+            ) : null}
+            {/* 서버 페이지네이션(더 보기)은 기존 그대로 — 접힘 중에는 로드해도 숨겨질 뿐이라
+                펼친 상태(또는 로드된 기록이 3개 이하인 예외)에서만 노출한다 */}
+            {hasMore && (showOlder || rows.length <= RECENT_VISIBLE_COUNT) ? (
               <Button
                 type="button"
                 variant="secondary"
@@ -401,6 +435,19 @@ export function LessonHistoryWorkspace({
                 onClick={loadMore}
               >
                 {isPending ? "불러오는 중..." : "이전 기록 더 보기"}
+              </Button>
+            ) : null}
+            {preview.showCollapse ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="mt-3 w-full gap-1"
+                aria-expanded
+                aria-controls="lesson-history-list"
+                onClick={() => setShowOlder(false)}
+              >
+                <ChevronUp className="h-4 w-4" aria-hidden /> 이전 기록 접기
               </Button>
             ) : null}
           </>
