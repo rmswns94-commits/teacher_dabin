@@ -94,33 +94,8 @@ export async function getMonthlyLogMarkers(
   });
 }
 
-// 주간 view 완료 badge용 경량 identity key 조회 — 정규 수업의 "완료"는 오직
-// 해당 (group_id, class_date)에 Finalized(status=completed) 일지가 존재하는지로만 판정한다.
-// 시간 경과/Draft 존재는 완료가 아니다. unique(user_id, group_id, class_date)라 key 집합이면
-// 충분하고, 주간 range 1쿼리라 날짜별/수업별 N+1이 없다. 실패 시 [] (badge만 조용히 생략).
-export async function getFinalizedDailyLogKeysInRange(startDate: string, endDate: string) {
-  const supabase = await createServerSupabaseClient();
-  const user = await getServerUser();
-
-  if (!supabase || !user) {
-    return [] as { group_id: string; class_date: string }[];
-  }
-
-  const { data, error } = await supabase
-    .from("daily_logs")
-    .select("group_id, class_date")
-    .eq("user_id", user.id)
-    .eq("status", "completed")
-    .gte("class_date", startDate)
-    .lte("class_date", endDate);
-
-  if (error) {
-    console.error("getFinalizedDailyLogKeysInRange error", error);
-    return [] as { group_id: string; class_date: string }[];
-  }
-
-  return (data ?? []) as { group_id: string; class_date: string }[];
-}
+// (주간 view의 정규 수업 완료 badge용 getFinalizedDailyLogKeysInRange는 주간 화면에서
+//  정규 수업 리스트가 제거되면서 함께 삭제됨 — 완료 데이터/일지 자체는 그대로다.)
 
 export type StudentLessonLogWithStudent = StudentLessonLogRecord & {
   student: Pick<StudentRecord, "id" | "name" | "grade" | "school"> | null;
