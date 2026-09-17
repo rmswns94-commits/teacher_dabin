@@ -11,9 +11,15 @@ import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getPendingMakeupCount } from "@/lib/supabase/queries/makeups";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
+import { ensureActiveWorkspace } from "@/lib/supabase/queries/workspaces";
 
 export async function AppShell({ children }: { children: ReactNode }) {
   const today = todayDateString();
+  // 학원(Workspace) 보장 — 신규 가입자는 아직 학원이 없다. 업무 데이터의 workspace_id 기본값이
+  // 활성 학원이라, 학원이 없으면 첫 저장이 실패한다. 앱 진입 시 한 번만 만들어 둔다
+  // (이미 있으면 조회 1회로 끝나고, 학원 migration 전에는 아무 일도 하지 않는다).
+  await ensureActiveWorkspace();
+
   const [groups, pendingMakeupCount, schedules, scheduleExceptions, academyClosures] =
     await Promise.all([
       getCurrentUserGroups(),

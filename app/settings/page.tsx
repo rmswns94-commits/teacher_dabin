@@ -7,8 +7,10 @@ import { FontSizeControl } from "@/components/font-size-control";
 import { ThemeModeControl } from "@/components/theme-mode-control";
 import { WorkspaceReset } from "@/components/workspace-reset";
 import { Card, CardContent } from "@/components/ui/card";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { getDisplayName } from "@/lib/supabase/auth";
 import { getServerUser } from "@/lib/supabase/server";
+import { getWorkspaces } from "@/lib/supabase/queries/workspaces";
 
 // 설정 — 사이드바 하단에 상시 노출되던 계정/앱 기능을 한곳에 모은 페이지.
 // (기능은 전부 기존 컴포넌트 재사용: PWA 설치, 피드백, 로그아웃)
@@ -16,6 +18,9 @@ export default async function SettingsPage() {
   const user = await getServerUser();
   const displayName = getDisplayName(user);
   const email = user?.email ?? "";
+  // 학원 목록은 activated_at 최신순 — 첫 항목이 현재 학원이다 (DB의 current_workspace_id()와 같은 규칙)
+  const workspaces = await getWorkspaces();
+  const activeWorkspace = workspaces[0] ?? null;
 
   return (
     <AppShell>
@@ -42,6 +47,25 @@ export default async function SettingsPage() {
               </CardContent>
             </Card>
           </section>
+
+          {/* 학원 관리 — 학원을 옮겨도 기존 기록은 그대로 보관되고, 새 학원은 빈 상태로 시작한다.
+              (migration 적용 전에는 목록이 비어 아무 것도 표시되지 않는다) */}
+          {workspaces.length > 0 ? (
+            <section className="mt-6">
+              <h2 className="card-title text-[#8f5470]">학원</h2>
+              <Card className="mt-2">
+                <CardContent className="p-4">
+                  <WorkspaceSwitcher
+                    workspaces={workspaces.map((workspace) => ({
+                      id: workspace.id,
+                      name: workspace.name,
+                    }))}
+                    activeId={activeWorkspace?.id ?? null}
+                  />
+                </CardContent>
+              </Card>
+            </section>
+          ) : null}
 
           <section className="mt-6">
             <h2 className="card-title text-[#8f5470]">화면 설정</h2>
@@ -122,11 +146,14 @@ export default async function SettingsPage() {
             <h2 className="card-title text-[#96534c]">데이터 관리</h2>
             <Card className="mt-2 border-[#f0d9d5]">
               <CardContent className="p-4">
-                <div className="text-base font-medium text-[#96534c]">저장된 데이터 전부 초기화</div>
+                <div className="text-base font-medium text-[#96534c]">
+                  {activeWorkspace ? "현재 학원 데이터 초기화" : "저장된 데이터 전부 초기화"}
+                </div>
                 <p className="secondary-text mt-0.5 text-[#8a7b77]">
-                  학원을 옮기는 등 처음부터 다시 시작할 때 사용해요. 학생, 수업 그룹, 수업 일지,
-                  숙제, 할 일, 출결, 시험 대비, 보충 수업 등 지금까지 입력한 업무 데이터를 모두
+                  {activeWorkspace ? `${activeWorkspace.name}에서 ` : ""}입력한 학생, 수업 그룹,
+                  수업 일지, 숙제, 할 일, 출결, 시험 대비, 보충 수업 등 업무 데이터를 모두
                   삭제해요. 이 작업은 되돌릴 수 없어요. 로그인 계정은 삭제되지 않아요.
+                  {activeWorkspace ? " 다른 학원의 데이터는 삭제되지 않아요." : ""}
                 </p>
                 <div className="mt-3">
                   <WorkspaceReset />

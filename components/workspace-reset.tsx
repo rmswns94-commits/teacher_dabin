@@ -123,7 +123,8 @@ export function WorkspaceReset() {
                 <div className="card-title text-[#2a2323]">저장된 데이터를 전부 초기화할까요?</div>
                 <p className="mt-2 text-sm leading-5 text-[#655d5d]">
                   학생, 수업 그룹, 수업 일지, 숙제, 할 일, 출결, 학생 평가, 시험 대비, 보충 수업,
-                  성장 기록 등 지금까지 입력한 업무 데이터가 모두 삭제됩니다.
+                  성장 기록 등 <span className="font-medium text-[#2d2928]">현재 학원에서</span>{" "}
+                  입력한 업무 데이터가 모두 삭제됩니다. 다른 학원의 데이터는 삭제되지 않아요.
                 </p>
                 <p className="mt-2 text-sm font-medium leading-5 text-[#96534c]">
                   삭제한 데이터는 복구할 수 없습니다.

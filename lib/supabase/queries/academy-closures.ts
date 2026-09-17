@@ -38,8 +38,9 @@ export async function getAcademyClosuresInRange(startDate: string, endDate: stri
   return ((data ?? []) as { closure_date: string }[]).map((row) => row.closure_date);
 }
 
-// 학원 휴강일 등록 — 같은 사용자의 같은 날짜에는 항상 하나(unique + upsert).
-// 더블 클릭/중복 저장에도 row가 늘지 않는다.
+// 학원 휴강일 등록 — 같은 학원의 같은 날짜에는 항상 하나.
+// unique 위반(23505)은 "이미 휴강일"이라는 뜻이므로 성공으로 본다 — 더블 클릭에도 row가 늘지 않고,
+// unique 컬럼 구성(학원 도입 전 user 단위 / 도입 후 학원 단위)에 의존하지 않는다.
 export async function upsertAcademyClosure(date: string) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
@@ -50,7 +51,11 @@ export async function upsertAcademyClosure(date: string) {
 
   const { error } = await supabase
     .from("academy_closures")
-    .upsert({ user_id: user.id, closure_date: date }, { onConflict: "user_id,closure_date" });
+    .insert({ user_id: user.id, closure_date: date });
+
+  if (error?.code === "23505") {
+    return true;
+  }
 
   if (error) {
     console.error("upsertAcademyClosure error", error);
