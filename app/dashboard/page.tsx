@@ -30,6 +30,7 @@ import {
   type ClassOccurrence,
 } from "@/lib/schedule";
 import { buildScheduleExceptionIndex } from "@/lib/schedule-exceptions";
+import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { deriveUnfinishedLogCandidates } from "@/lib/unfinished-logs";
 import { UnfinishedLogCard } from "@/components/unfinished-log-card";
@@ -96,6 +97,7 @@ export default async function DashboardPage() {
     dueWeaknesses,
     todayMakeups,
     scheduleExceptions,
+    academyClosures,
   ] = await Promise.all([
     getDashboardStats(),
     getDashboardOverview(),
@@ -110,8 +112,10 @@ export default async function DashboardPage() {
     getTodayScheduledMakeups(today),
     // 정규수업 1회 예외(휴강/시간 변경) — 오늘~다음 수업 탐색 범위 1쿼리 (schedule마다 조회 금지)
     getScheduleExceptionsInRange(today, addDaysStr(today, SCHEDULE_HORIZON_DAYS)),
+    // 학원 전체 휴강일 — 같은 범위 1쿼리 (수업마다 "이 날 휴강인가?"를 묻지 않는다)
+    getAcademyClosuresInRange(today, addDaysStr(today, SCHEDULE_HORIZON_DAYS)),
   ]);
-  const exceptionMap = buildScheduleExceptionIndex(scheduleExceptions);
+  const exceptionMap = buildScheduleExceptionIndex(scheduleExceptions, academyClosures);
   const displayName = getDisplayName(user);
 
   const upcomingExams = examEvents.map((event) => {

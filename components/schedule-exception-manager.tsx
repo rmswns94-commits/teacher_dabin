@@ -54,12 +54,15 @@ export function ScheduleExceptionManager({
   groupId,
   slots,
   exceptions,
+  closedDates,
   today,
 }: {
   groupId: string;
   slots: ExceptionScheduleSlot[];
   // 예정된 1회 변경 (원래 날짜 또는 옮긴 날짜가 오늘 이후)
   exceptions: ScheduleExceptionEntry[];
+  // 학원 전체 휴강일 (앞으로 2주) — 그날은 수업이 없으므로 목록에서 빠지고 이동 대상도 아니다
+  closedDates: string[];
   today: string;
 }) {
   const [step, setStep] = useState<Step | null>(null);
@@ -76,7 +79,11 @@ export function ScheduleExceptionManager({
   const noticeTimerRef = useRef<number | null>(null);
 
   const slotById = useMemo(() => new Map(slots.map((slot) => [slot.id, slot])), [slots]);
-  const index = useMemo(() => buildScheduleExceptionIndex(exceptions), [exceptions]);
+  const index = useMemo(
+    () => buildScheduleExceptionIndex(exceptions, closedDates),
+    [exceptions, closedDates],
+  );
+  const closedSet = useMemo(() => new Set(closedDates), [closedDates]);
 
   // 앞으로 2주간 이 반의 실제 수업 목록 (1회 변경이 이미 반영된 상태로 보여준다)
   const upcoming = useMemo(() => {
@@ -470,8 +477,9 @@ export function ScheduleExceptionManager({
                     if (!date) {
                       return <span key={`empty-${cellIndex}`} />;
                     }
+                    const closed = closedSet.has(date);
                     const occupied = occupiedDates.has(date);
-                    const disabled = date < today || occupied;
+                    const disabled = date < today || occupied || closed;
                     const selected = date === targetDate;
                     return (
                       <button
@@ -480,9 +488,11 @@ export function ScheduleExceptionManager({
                         disabled={disabled}
                         aria-pressed={selected}
                         aria-label={
-                          occupied
-                            ? `${formatKoreanDate(date)} — 이 반 수업이 이미 있어요`
-                            : formatKoreanDate(date)
+                          closed
+                            ? `${formatKoreanDate(date)} — 학원 휴강일이에요`
+                            : occupied
+                              ? `${formatKoreanDate(date)} — 이 반 수업이 이미 있어요`
+                              : formatKoreanDate(date)
                         }
                         onClick={() => setTargetDate(date)}
                         className={cn(
@@ -501,7 +511,7 @@ export function ScheduleExceptionManager({
                 </div>
 
                 <p className="caption-text mt-2 text-[#a89a95]">
-                  회색 날짜는 이미 지났거나, 이 반 수업이 이미 있는 날이에요.
+                  회색 날짜는 이미 지났거나, 이 반 수업이 이미 있거나, 학원 휴강일이에요.
                 </p>
 
                 {error ? (

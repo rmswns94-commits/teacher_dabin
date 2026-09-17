@@ -16,6 +16,7 @@ import {
   movedInOccurrences,
   resolveOccurrence,
 } from "@/lib/schedule-exceptions";
+import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type { ExamTextbook } from "@/lib/supabase/types";
@@ -133,13 +134,14 @@ export async function GET(request: Request) {
   // 그 schedule row도 후보에 있어야 한다. 실제 시각은 canonical resolver가 정한다.
   const dow = dayOfWeekOf(date);
   const groupIds = [...new Set(exportLogs.map((log) => log.group_id))];
-  const [{ data: scheduleRows, error: scheduleError }, dateExceptions] = await Promise.all([
+  const [{ data: scheduleRows, error: scheduleError }, dateExceptions, dateClosures] = await Promise.all([
     supabase
       .from("class_group_schedules")
       .select("id, group_id, day_of_week, start_time, end_time")
       .eq("user_id", user.id)
       .in("group_id", groupIds),
     getScheduleExceptionsInRange(date, date),
+    getAcademyClosuresInRange(date, date),
   ]);
 
   if (scheduleError) {
@@ -147,7 +149,7 @@ export async function GET(request: Request) {
     return errorResponse("수업 시간표를 불러오지 못했어요.", 500);
   }
 
-  const exceptionIndex = buildScheduleExceptionIndex(dateExceptions);
+  const exceptionIndex = buildScheduleExceptionIndex(dateExceptions, dateClosures);
   const slots = (scheduleRows ?? []) as {
     id: string;
     group_id: string;

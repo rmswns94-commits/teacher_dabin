@@ -48,6 +48,8 @@ import { groupIconOf } from "@/lib/group-icons";
 import { activePreparationItems } from "@/lib/preparation";
 import { getCurrentUserMakeups } from "@/lib/supabase/queries/makeups";
 import { ScheduleExceptionManager } from "@/components/schedule-exception-manager";
+import { addDaysStr } from "@/lib/calendar";
+import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
 import { getGroupScheduleExceptionsFrom } from "@/lib/supabase/queries/schedule-exceptions";
 import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
 import { formatScheduleBlock, groupSchedulesByTime } from "@/lib/schedule";
@@ -88,6 +90,7 @@ export default async function GroupDetailPage({
     allMakeups,
     schedules,
     scheduleExceptions,
+    academyClosures,
   ] = await Promise.all([
     getGroupByIdForCurrentUser(id),
     getGroupStudentsForCurrentUser(id),
@@ -98,6 +101,8 @@ export default async function GroupDetailPage({
     getGroupSchedules(id),
     // 예정된 1회 변경 (오늘 이후) — 그룹당 1쿼리, 지난 기록은 표시만 생략(삭제 없음)
     getGroupScheduleExceptionsFrom(id, todayDateString()),
+    // 학원 전체 휴강일 — 마법사가 보여주는 앞으로 2주 범위 1쿼리
+    getAcademyClosuresInRange(todayDateString(), addDaysStr(todayDateString(), 14)),
   ]);
 
   if (!group) {
@@ -249,6 +254,7 @@ export default async function GroupDetailPage({
               endTime: slot.end_time,
             }))}
             exceptions={scheduleExceptions}
+            closedDates={academyClosures}
           />
         ) : null}
 

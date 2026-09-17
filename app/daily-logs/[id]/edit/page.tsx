@@ -23,6 +23,7 @@ import {
 } from "@/lib/supabase/queries/daily-logs";
 import { getCurrentUserGroups, getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
 import { buildScheduleExceptionIndex } from "@/lib/schedule-exceptions";
+import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup, getGroupSchedules } from "@/lib/supabase/queries/schedules";
 import { getDailyLogExamPreviewEntries } from "@/lib/supabase/queries/school-exams";
@@ -118,7 +119,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
 
   // Students who joined the group after this log was written can still be added.
   const knownIds = new Set(students.map((student) => student.studentId));
-  const [currentMembers, groupSchedules, prevReflection, allGroups, importSource, allSchedules, prevEvaluations, history, dateExceptions] = await Promise.all([
+  const [currentMembers, groupSchedules, prevReflection, allGroups, importSource, allSchedules, prevEvaluations, history, dateExceptions, dateClosures] = await Promise.all([
     getGroupStudentsForCurrentUser(log.group_id),
     // 다음 수업 계획 기본 날짜 계산용 시간표 (legacy row는 저장 전까지 DB 미변경)
     getGroupSchedules(log.group_id),
@@ -143,6 +144,8 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
       .catch(() => ({ rows: [], hasMore: false, failed: true })),
     // 이 일지 날짜의 정규수업 1회 예외 (이동 계산용 — 날짜 1개 range 1쿼리)
     getScheduleExceptionsInRange(log.class_date, log.class_date),
+    // 이 날짜가 학원 전체 휴강일인지 (날짜 1개 range 1쿼리)
+    getAcademyClosuresInRange(log.class_date, log.class_date),
   ]);
 
   // 기준은 "이 일지의 class_date 요일" 정규 시간표뿐 (오늘 날짜 아님 — 과거 일지도 그 요일 기준)
@@ -151,7 +154,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
     allSchedules,
     dayOfWeekOf(log.class_date),
     log.group_id,
-    { date: log.class_date, exceptions: buildScheduleExceptionIndex(dateExceptions) },
+    { date: log.class_date, exceptions: buildScheduleExceptionIndex(dateExceptions, dateClosures) },
   );
 
   for (const member of currentMembers) {

@@ -45,6 +45,7 @@ import {
   movedInOccurrences,
   resolveOccurrence,
 } from "@/lib/schedule-exceptions";
+import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import { eventMetaOf } from "@/lib/validation/calendar-event";
@@ -143,7 +144,15 @@ export default async function DailyLogsPage({
     params.status === "draft" || params.status === "completed" ? (params.status as DailyLogStatus) : "";
   const range = monthRange(month);
 
-  const [markers, events, groups, schedules, monthlyMakeups, scheduleExceptions] = await Promise.all([
+  const [
+    markers,
+    events,
+    groups,
+    schedules,
+    monthlyMakeups,
+    scheduleExceptions,
+    academyClosures,
+  ] = await Promise.all([
     getMonthlyLogMarkers(range.start, range.end, {
       groupId: groupId || undefined,
       status: status || undefined,
@@ -154,9 +163,12 @@ export default async function DailyLogsPage({
     getMonthlyScheduledMakeups(range.start, range.end),
     // 이 달의 1회 변경(휴강/시간 변경/날짜 이동) — 월 단위 batch 1회 (날짜별 조회 없음)
     getScheduleExceptionsInRange(range.start, range.end),
+    // 이 달의 학원 전체 휴강일 — 역시 월 단위 batch 1회
+    getAcademyClosuresInRange(range.start, range.end),
   ]);
 
-  const exceptionIndex = buildScheduleExceptionIndex(scheduleExceptions);
+  const exceptionIndex = buildScheduleExceptionIndex(scheduleExceptions, academyClosures);
+  const closedDateSet = new Set(academyClosures);
 
   // 그룹+요일 → 시간표 slot (예외 적용 전 후보)
   const slotsByGroupDow = new Map<string, typeof schedules>();
@@ -276,17 +288,35 @@ export default async function DailyLogsPage({
     }
   }
 
-  // 달력 셀 표시: 수업이 사라진 날은 😴, 다른 날짜에서 옮겨와 수업이 생긴 날은 🔁.
-  // (옮겨온 날은 원래 시간표에 수업이 없을 수 있어, 표시가 없으면 그날 수업이 있다는 걸 알 수 없다.)
+  // 달력 셀 표시: 학원 전체 휴강일은 🏫 하나로, 그 외에는 수업이 사라진 날 😴 /
+  // 다른 날짜에서 옮겨와 수업이 생긴 날 🔁.
+  // 학원 휴강일에는 개별 변경 표시를 함께 띄우지 않는다 — 그날은 어차피 수업이 없고,
+  // "옮겨왔어요" 같은 문구가 같이 보이면 서로 모순돼 보인다 (우선순위: 학원 휴강 > 개별 예외).
   const cellMarkersFor = (date: string) => {
+    if (closedDateSet.has(date)) {
+      return { closed: true, rest: false, movedIn: false };
+    }
+
     const changes = changesByDate.get(date) ?? [];
     return {
+      closed: false,
       rest: changes.some((change) => change.kind === "cancelled" || change.kind === "moved-out"),
       movedIn: changes.some((change) => change.kind === "moved-in"),
     };
   };
 
   const groupOptions = groups.map((group) => ({ id: group.id, name: group.name }));
+
+  // 일정 등록 폼의 [학원 휴강] toggle이 쓰는 값 — 이 달 달력이 이미 가져온 데이터 그대로다
+  // (날짜를 바꿀 때마다 조회하지 않으므로 stale 응답도, 날짜별 추가 쿼리도 없다).
+  const closureContext = {
+    closedDates: academyClosures,
+    rangeStart: range.start,
+    rangeEnd: range.end,
+    makeupCountByDate: Object.fromEntries(
+      [...makeupsByDate].map(([date, list]) => [date, list.length]),
+    ),
+  };
 
   // 기간 일정이 날짜를 넘어 이어져 보이도록, 겹치는 일정끼리는 서로 다른
   // "레인"에 고정 배정한다 (달력에는 위 2개 레인만 바로 표시).
@@ -425,7 +455,11 @@ export default async function DailyLogsPage({
               groupId={groupId}
               status={status}
             />
-            <EventCreateButton groups={groupOptions} defaultDate={selectedDate ?? today} />
+            <EventCreateButton
+              groups={groupOptions}
+              defaultDate={selectedDate ?? today}
+              closure={closureContext}
+            />
           </div>
 
           <Card>
@@ -549,12 +583,16 @@ export default async function DailyLogsPage({
                           .map((makeup) => makeup.student?.name ?? "학생")
                           .join(", ")})`
                       : "",
-                    ...(changesByDate.get(date) ?? []).map(
-                      (change) => `${change.groupName} ${changeComment(change)}`,
-                    ),
+                    closedDateSet.has(date) ? "학원 휴강일" : "",
+                    ...(closedDateSet.has(date)
+                      ? []
+                      : (changesByDate.get(date) ?? []).map(
+                          (change) => `${change.groupName} ${changeComment(change)}`,
+                        )),
                     logs.length === 0 &&
                     dayEvents.length === 0 &&
                     dayMakeups.length === 0 &&
+                    !closedDateSet.has(date) &&
                     (changesByDate.get(date) ?? []).length === 0
                       ? "기록 없음"
                       : "",
@@ -598,6 +636,12 @@ export default async function DailyLogsPage({
                             aria-hidden
                             className="h-1.5 w-1.5 shrink-0 rounded-full bg-white ring-1 ring-[#3d7f64]"
                           />
+                        ) : null}
+                        {/* 학원 전체 휴강일 */}
+                        {cellMarkers.closed ? (
+                          <span aria-hidden className="shrink-0 text-xs leading-none">
+                            🏫
+                          </span>
                         ) : null}
                         {/* 수업이 사라진 날(휴강·다른 날짜로 변경) — 자세한 내용은 아래 상세에서 */}
                         {cellMarkers.rest ? (
@@ -667,6 +711,9 @@ export default async function DailyLogsPage({
                 <span className="flex items-center gap-1">
                   <span aria-hidden className="text-sm leading-none">🔁</span> 옮겨온 수업
                 </span>
+                <span className="flex items-center gap-1">
+                  <span aria-hidden className="text-sm leading-none">🏫</span> 학원 휴강일
+                </span>
               </div>
 
               {markers.length === 0 ? (
@@ -689,8 +736,19 @@ export default async function DailyLogsPage({
                 </span>
               </div>
 
+              {/* 학원 전체 휴강일 — 개별 변경보다 우선하므로 이것만 보여준다 */}
+              {closedDateSet.has(selectedDate) ? (
+                <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl border border-[#e8d6c4] bg-[#fffaf6] px-3.5 py-2.5 text-sm">
+                  <span aria-hidden className="text-base leading-none">🏫</span>
+                  <span className="font-semibold text-[#9a6234]">학원 휴강일</span>
+                  <span className="min-w-0 text-[#7f5d57]">
+                    이 날짜의 정규수업은 모두 휴강 처리돼요. 반복 시간표는 그대로예요.
+                  </span>
+                </div>
+              ) : null}
+
               {/* 정규수업 1회 변경 — 이 날짜에 수업이 사라졌거나(휴강·날짜 변경) 새로 생긴 이유 */}
-              {(changesByDate.get(selectedDate) ?? []).length > 0 ? (
+              {!closedDateSet.has(selectedDate) && (changesByDate.get(selectedDate) ?? []).length > 0 ? (
                 <div className="mt-3">
                   <h3 className="card-title text-[#8f5470]">수업 변경</h3>
                   <ul className="mt-2 space-y-2">
@@ -721,6 +779,7 @@ export default async function DailyLogsPage({
                     defaultDate={selectedDate}
                     label="일정 추가"
                     variant="ghost"
+                    closure={closureContext}
                   />
                 </div>
                 {(eventsByDate.get(selectedDate) ?? []).length === 0 ? (

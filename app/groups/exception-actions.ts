@@ -11,6 +11,7 @@ import {
   type ScheduleExceptionKind,
 } from "@/lib/schedule-exceptions";
 import { formatShortDateWithWeekday, todayDateString } from "@/lib/dates";
+import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
 import {
   deleteScheduleException,
   getDailyLogStatusForOccurrence,
@@ -130,6 +131,11 @@ export async function saveScheduleExceptionAction(input: {
             ? "옮기려는 날짜에 이미 완료된 수업일지가 있어요."
             : "옮기려는 날짜에 작성 중인 수업일지가 있어요. 수업일지를 먼저 확인해주세요.",
       };
+    }
+
+    // 학원 전체 휴강일로는 옮길 수 없다 — 옮겨도 그날은 수업이 열리지 않아 조용히 사라진다
+    if ((await getAcademyClosuresInRange(input.movedToDate, input.movedToDate)).length > 0) {
+      return { error: "옮기려는 날짜는 학원 휴강일이에요. 다른 날짜를 골라주세요." };
     }
 
     // 그날 이 반 수업이 이미 있으면 차단한다. 수업일지 identity가 (반 + 날짜) 하나라서

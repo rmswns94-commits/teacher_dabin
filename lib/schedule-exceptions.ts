@@ -33,11 +33,14 @@ export type ScheduleExceptionIndex = {
   byOccurrence: ReadonlyMap<string, ScheduleExceptionEntry>;
   // 옮겨온 날짜 → 그 날짜에 새로 열리는 수업들
   movedInByDate: ReadonlyMap<string, ScheduleExceptionEntry[]>;
+  // 학원 전체 휴강일 (date-level). 개별 예외보다 우선한다.
+  closedDates: ReadonlySet<string>;
 };
 
 export const EMPTY_SCHEDULE_EXCEPTION_INDEX: ScheduleExceptionIndex = {
   byOccurrence: new Map(),
   movedInByDate: new Map(),
+  closedDates: new Set(),
 };
 
 export function scheduleExceptionKey(scheduleId: string, date: string) {
@@ -46,6 +49,7 @@ export function scheduleExceptionKey(scheduleId: string, date: string) {
 
 export function buildScheduleExceptionIndex(
   entries: readonly ScheduleExceptionEntry[],
+  closedDates: readonly string[] = [],
 ): ScheduleExceptionIndex {
   const byOccurrence = new Map<string, ScheduleExceptionEntry>();
   const movedInByDate = new Map<string, ScheduleExceptionEntry[]>();
@@ -61,17 +65,27 @@ export function buildScheduleExceptionIndex(
     }
   }
 
-  return { byOccurrence, movedInByDate };
+  return { byOccurrence, movedInByDate, closedDates: new Set(closedDates) };
+}
+
+// 그 날짜가 학원 전체 휴강일인가 — 소비처가 직접 DB를 보지 않도록 여기서만 판정한다.
+export function isAcademyClosed(
+  index: ScheduleExceptionIndex | null | undefined,
+  date: string,
+) {
+  return Boolean(index?.closedDates.has(date));
 }
 
 export type ResolvedOccurrence = {
-  // 이 날짜에서 수업이 사라지는가 (휴강이거나 다른 날짜로 옮겨감)
+  // 이 날짜에서 수업이 사라지는가 (학원 휴강이거나 1회 휴강이거나 다른 날짜로 옮겨감)
   cancelled: boolean;
   // 휴강/이동이면 base 시간을 그대로 돌려준다 (표시용) — 소비처는 cancelled를 먼저 본다
   startTime: string; // "HH:MM"
   endTime: string;
   overridden: boolean;
   movedToDate: string | null;
+  // 학원 전체 휴강 때문에 사라진 경우 (개별 1회 휴강과 구분해 안내 문구를 다르게 쓴다)
+  academyClosed: boolean;
 };
 
 // 이 occurrence의 실제(effective) 시간 — 예외가 없으면 base 그대로.
@@ -88,7 +102,14 @@ export function resolveOccurrence(
     endTime: formatTimeHM(baseEndTime),
     overridden: false,
     movedToDate: null,
+    academyClosed: false,
   };
+
+  // 우선순위 1 — 학원 전체 휴강. 그날은 개별 예외와 무관하게 수업이 없다.
+  // 개별 예외 row는 그대로 두므로 휴강일을 해제하면 다시 적용된다.
+  if (isAcademyClosed(index, date)) {
+    return { ...base, cancelled: true, academyClosed: true };
+  }
 
   const exception = index?.byOccurrence.get(scheduleExceptionKey(scheduleId, date));
   if (!exception) {
@@ -115,14 +136,20 @@ export function resolveOccurrence(
     endTime: formatTimeHM(exception.endTime),
     overridden: true,
     movedToDate: null,
+    academyClosed: false,
   };
 }
 
-// 이 날짜로 옮겨온 수업들 (요일과 무관하게 열린다)
+// 이 날짜로 옮겨온 수업들 (요일과 무관하게 열린다).
+// 학원 전체 휴강일에는 옮겨온 수업도 열리지 않는다 — 그날은 학원이 쉰다.
 export function movedInOccurrences(
   index: ScheduleExceptionIndex | null | undefined,
   date: string,
 ): ScheduleExceptionEntry[] {
+  if (isAcademyClosed(index, date)) {
+    return [];
+  }
+
   return index?.movedInByDate.get(date) ?? [];
 }
 

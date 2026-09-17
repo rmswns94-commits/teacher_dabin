@@ -6,6 +6,7 @@ import { getGroupNextOccurrences } from "@/lib/schedule";
 import { buildScheduleExceptionIndex } from "@/lib/schedule-exceptions";
 import { todayDateString } from "@/lib/dates";
 import { addDaysStr } from "@/lib/calendar";
+import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getPendingMakeupCount } from "@/lib/supabase/queries/makeups";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
@@ -13,13 +14,16 @@ import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedul
 
 export async function AppShell({ children }: { children: ReactNode }) {
   const today = todayDateString();
-  const [groups, pendingMakeupCount, schedules, scheduleExceptions] = await Promise.all([
-    getCurrentUserGroups(),
-    getPendingMakeupCount(),
-    getCurrentUserSchedulesWithGroup(),
-    // 다음 수업 탐색 범위(7일)의 1회 예외 — 그룹마다 조회하지 않는다 (N+1 금지)
-    getScheduleExceptionsInRange(today, addDaysStr(today, 7)),
-  ]);
+  const [groups, pendingMakeupCount, schedules, scheduleExceptions, academyClosures] =
+    await Promise.all([
+      getCurrentUserGroups(),
+      getPendingMakeupCount(),
+      getCurrentUserSchedulesWithGroup(),
+      // 다음 수업 탐색 범위(7일)의 1회 예외 — 그룹마다 조회하지 않는다 (N+1 금지)
+      getScheduleExceptionsInRange(today, addDaysStr(today, 7)),
+      // 같은 범위의 학원 전체 휴강일 (range 1쿼리)
+      getAcademyClosuresInRange(today, addDaysStr(today, 7)),
+    ]);
 
   // 사이드바 그룹 트리는 /groups 현황판과 같은 기준으로:
   // 다음 수업이 빠른 순 → 일정 없는 그룹은 마지막 (동순위는 이름 가나다순)
@@ -28,7 +32,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
     schedules,
     new Date(),
     7,
-    buildScheduleExceptionIndex(scheduleExceptions),
+    buildScheduleExceptionIndex(scheduleExceptions, academyClosures),
   );
   const sortedGroups = [...groups].sort((a, b) => {
     const keyA = nextByGroup.get(a.id)?.startEpoch ?? Number.MAX_SAFE_INTEGER;

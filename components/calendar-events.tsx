@@ -1,8 +1,12 @@
 "use client";
 
-import { CalendarPlus, Pencil, Trash2 } from "lucide-react";
+import { CalendarPlus, Check, Pencil, School, Trash2 } from "lucide-react";
 import { useState, useTransition } from "react";
 
+import {
+  removeAcademyClosureAction,
+  setAcademyClosureAction,
+} from "@/app/daily-logs/closure-actions";
 import {
   createCalendarEventAction,
   deleteCalendarEventAction,
@@ -25,25 +29,58 @@ type FormValues = {
   memo: string;
 };
 
+// 학원 전체 휴강 상태를 화면이 어떻게 아는가: 달력이 이미 가져온 그 달의 휴강일 목록을
+// 그대로 내려받아 쓴다 (날짜를 바꿀 때마다 조회하지 않으므로 stale 응답 문제도 없다).
+// 그 달 범위 밖 날짜는 상태를 알 수 없어 toggle을 잠그고 안내한다.
+type ClosureContext = {
+  closedDates: string[];
+  rangeStart: string;
+  rangeEnd: string;
+  // 그 날짜에 예약된 보충수업 수 (저장 전 경고용) — 달력이 이미 가진 데이터
+  makeupCountByDate: Record<string, number>;
+};
+
 function EventFormDialog({
   title,
   initial,
   groups,
   isPending,
   error,
+  closure,
   onCancel,
   onSubmit,
+  onClosureChange,
 }: {
   title: string;
   initial: FormValues;
   groups: GroupOption[];
   isPending: boolean;
   error: string;
+  // 일정 "등록" 다이얼로그에만 준다 (수정 다이얼로그에는 휴강 toggle이 없다)
+  closure?: ClosureContext;
   onCancel: () => void;
   onSubmit: (values: FormValues) => void;
+  onClosureChange?: (date: string, next: boolean) => void;
 }) {
   const [values, setValues] = useState(initial);
   const update = (patch: Partial<FormValues>) => setValues((prev) => ({ ...prev, ...patch }));
+
+  const savedClosed = Boolean(closure?.closedDates.includes(values.startDate));
+  const [closureOn, setClosureOn] = useState(savedClosed);
+  // 날짜를 바꾸면 그 날짜의 저장 상태를 따라간다 (form 전체를 remount하지 않는다)
+  const [closureDate, setClosureDate] = useState(values.startDate);
+  if (closure && closureDate !== values.startDate) {
+    setClosureDate(values.startDate);
+    setClosureOn(savedClosed);
+  }
+
+  const dateKnown =
+    Boolean(closure) &&
+    Boolean(values.startDate) &&
+    values.startDate >= closure!.rangeStart &&
+    values.startDate <= closure!.rangeEnd;
+  const closureDirty = Boolean(closure) && dateKnown && closureOn !== savedClosed;
+  const makeupCount = closure?.makeupCountByDate[values.startDate] ?? 0;
 
   return (
     <div
@@ -128,6 +165,59 @@ function EventFormDialog({
           />
         </label>
 
+        {/* 학원 전체 휴강 — 일정 하나가 아니라 그 날짜 전체를 쉬는 날로 등록한다 */}
+        {closure ? (
+          <div className="mt-4 rounded-2xl border border-[#efe4dc] bg-[#fffaf6] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span id="academy-closure-label" className="flex items-center gap-1.5 text-sm font-medium text-[#4d3a3a]">
+                <School className="h-4 w-4 text-[#c08a5e]" aria-hidden /> 학원 휴강
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={closureOn}
+                aria-labelledby="academy-closure-label"
+                disabled={isPending || !dateKnown}
+                onClick={() => setClosureOn((prev) => !prev)}
+                className={cn(
+                  "flex min-h-[40px] items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition disabled:opacity-50",
+                  closureOn
+                    ? "border-[#e0b894] bg-[#fdf1e4] text-[#9a6234]"
+                    : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
+                )}
+              >
+                {closureOn ? <Check className="h-4 w-4" aria-hidden /> : null}
+                {closureOn ? "휴강 ON" : "휴강 OFF"}
+              </button>
+            </div>
+
+            {!dateKnown ? (
+              <p className="mt-2 text-sm leading-5 text-[#a79996]">
+                이 달 달력에 있는 날짜만 휴강으로 등록할 수 있어요. 해당 날짜가 있는 달을 열어주세요.
+              </p>
+            ) : closureOn ? (
+              <p className="mt-2 text-sm leading-5 text-[#7f5d57]">
+                이 날짜에 예정된 모든 정규수업이 휴강 처리됩니다. 반복 시간표는 변경되지 않습니다.
+              </p>
+            ) : savedClosed ? (
+              <p className="mt-2 text-sm leading-5 text-[#7f5d57]">
+                끄고 저장하면 이 날짜의 정규수업이 기존 시간표대로 다시 적용됩니다.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm leading-5 text-[#a79996]">
+                켜면 이 날짜의 정규수업 전체가 휴강 처리돼요.
+              </p>
+            )}
+
+            {closureOn && dateKnown && makeupCount > 0 ? (
+              <p className="mt-2 rounded-xl bg-[#f4f9f6] px-3 py-2 text-sm leading-5 text-[#3d7f64]">
+                이 날짜에 예약된 보충수업 {makeupCount}건이 있어요. 학원 휴강으로 등록해도 보충수업
+                일정은 자동으로 삭제되지 않아요.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         {error ? (
           <div className="mt-3 rounded-2xl border border-[#f0d9d5] bg-[#fff9f7] px-3 py-2 text-sm text-[#7f5d57]">
             {error}
@@ -141,8 +231,14 @@ function EventFormDialog({
           <Button
             type="button"
             size="sm"
-            disabled={isPending || !values.title.trim() || !values.startDate}
-            onClick={() => onSubmit(values)}
+            disabled={
+              isPending || (closureDirty ? false : !values.title.trim() || !values.startDate)
+            }
+            onClick={() =>
+              closureDirty
+                ? onClosureChange?.(values.startDate, closureOn)
+                : onSubmit(values)
+            }
           >
             {isPending ? "저장 중..." : "저장"}
           </Button>
@@ -158,15 +254,19 @@ export function EventCreateButton({
   label = "일정 등록",
   variant = "secondary",
   size = "sm",
+  closure,
 }: {
   groups: GroupOption[];
   defaultDate?: string;
   label?: string;
   variant?: "secondary" | "outline" | "ghost";
   size?: "sm" | "default";
+  closure?: ClosureContext;
 }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
+  // toggle을 켠 것만으로는 저장하지 않는다 — [저장] → 이 확인 단계 → 그때만 mutation.
+  const [confirmClosure, setConfirmClosure] = useState<{ date: string; next: boolean } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const submit = (values: FormValues) => {
@@ -182,6 +282,33 @@ export function EventCreateButton({
       setOpen(false);
     });
   };
+
+  const applyClosure = () => {
+    if (!confirmClosure || isPending) {
+      return;
+    }
+    const { date, next } = confirmClosure;
+    setError("");
+    startTransition(async () => {
+      const result = next
+        ? await setAcademyClosureAction({ date })
+        : await removeAcademyClosureAction({ date });
+
+      if ("error" in result) {
+        // 실패하면 다이얼로그를 그대로 두고 이유만 보여준다 (성공한 척 닫지 않는다)
+        setError(result.error);
+        setConfirmClosure(null);
+        return;
+      }
+
+      setConfirmClosure(null);
+      setOpen(false);
+    });
+  };
+
+  const makeupCount = confirmClosure
+    ? closure?.makeupCountByDate[confirmClosure.date] ?? 0
+    : 0;
 
   return (
     <>
@@ -212,9 +339,58 @@ export function EventCreateButton({
           }}
           isPending={isPending}
           error={error}
+          closure={closure}
           onCancel={() => setOpen(false)}
           onSubmit={submit}
+          onClosureChange={(date, next) => setConfirmClosure({ date, next })}
         />
+      ) : null}
+
+      {confirmClosure ? (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-label="학원 휴강 확인"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-[#2b2323]/40 px-4"
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && !isPending) {
+              event.stopPropagation();
+              setConfirmClosure(null);
+            }
+          }}
+        >
+          <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+            <div className="card-title text-[#2a2323]">
+              {confirmClosure.next
+                ? `${formatKoreanDate(confirmClosure.date)}을 학원 휴강일로 등록할까요?`
+                : `${formatKoreanDate(confirmClosure.date)} 학원 휴강을 해제할까요?`}
+            </div>
+            <p className="mt-2 text-sm leading-5 text-[#655d5d]">
+              {confirmClosure.next
+                ? "이 날짜에 예정된 모든 정규수업이 휴강 처리됩니다. 반복 수업 시간표와 다른 날짜의 수업은 변경되지 않습니다."
+                : "해제하면 해당 날짜의 정규수업은 기존 시간표대로 다시 적용됩니다."}
+            </p>
+            {confirmClosure.next && makeupCount > 0 ? (
+              <p className="mt-2 rounded-xl bg-[#f4f9f6] px-3 py-2 text-sm leading-5 text-[#3d7f64]">
+                이 날짜에 예약된 보충수업 {makeupCount}건은 그대로 남아요.
+              </p>
+            ) : null}
+            <div className="mt-4 flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="flex-1"
+                disabled={isPending}
+                onClick={() => setConfirmClosure(null)}
+              >
+                취소
+              </Button>
+              <Button type="button" className="flex-1" disabled={isPending} onClick={applyClosure}>
+                {isPending ? "저장 중…" : confirmClosure.next ? "휴강일로 저장" : "휴강 해제"}
+              </Button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </>
   );
