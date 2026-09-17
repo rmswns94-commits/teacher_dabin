@@ -341,6 +341,47 @@ export async function transferStudentGroup(
   return true;
 }
 
+// 학기·학년 전환 batch 적용 — 현재 학년/현재 소속만, 한 번의 RPC = 단일 트랜잭션.
+// 부분 적용(절반만 새 학년) 방지가 목적이라 학생별 순차 update를 쓰지 않는다.
+// 함수는 내부에서 auth.uid()만 사용하므로 다른 교사의 학생/그룹은 변경할 수 없다.
+// migration(20260918_add_academic_transition_rpc) 미적용 환경에서는 에러를 던진다
+// (거짓 성공 없음 — UI가 "전환하지 못했어요"로 안내).
+export async function applyAcademicTransition(
+  changes: {
+    studentId: string;
+    grade: string | null;
+    fromGroupId: string | null;
+    toGroupId: string | null;
+  }[],
+) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  if (changes.length === 0) {
+    return 0;
+  }
+
+  const { data, error } = await supabase.rpc("apply_academic_transition", {
+    p_changes: changes.map((change) => ({
+      student_id: change.studentId,
+      grade: change.grade,
+      from_group_id: change.fromGroupId,
+      to_group_id: change.toGroupId,
+    })),
+  });
+
+  if (error) {
+    console.error("applyAcademicTransition error", error);
+    throw new Error("새 학기 정보를 적용하지 못했어요. 잠시 후 다시 시도해주세요.");
+  }
+
+  return typeof data === "number" ? data : changes.length;
+}
+
 export async function archiveStudent(studentId: string) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();

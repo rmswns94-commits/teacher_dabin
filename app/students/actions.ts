@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  applyAcademicTransition,
   createStudent,
   deleteStudent,
   updateStudentWithGroups,
@@ -187,6 +188,43 @@ export async function transferStudentGroupAction(
 
   revalidateStudentSurfaces(studentId);
   return { success: true };
+}
+
+// 학기·학년 전환 — 마법사의 최종 [적용]에서만 호출된다 (미리보기까지 DB 호출 0).
+// 변경안 전체를 한 RPC(단일 트랜잭션)로 보내 부분 적용을 막는다.
+export async function applyAcademicTransitionAction(
+  changes: {
+    studentId: string;
+    grade: string | null;
+    fromGroupId: string | null;
+    toGroupId: string | null;
+  }[],
+): Promise<{ error: string } | { success: true; applied: number }> {
+  if (!Array.isArray(changes) || changes.length === 0) {
+    return { error: "적용할 변경사항이 없어요." };
+  }
+
+  let applied = 0;
+
+  try {
+    applied = await applyAcademicTransition(changes);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error && error.message
+          ? error.message
+          : "새 학기 정보를 적용하지 못했어요.",
+    };
+  }
+
+  revalidatePath("/students");
+  for (const change of changes) {
+    revalidatePath(`/students/${change.studentId}`);
+  }
+  revalidatePath("/groups", "layout");
+  revalidatePath("/dashboard");
+  revalidatePath("/growth-notes", "layout");
+  return { success: true, applied };
 }
 
 export async function archiveStudentAction(studentId: string) {

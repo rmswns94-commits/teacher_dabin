@@ -1,5 +1,13 @@
 import Link from "next/link";
-import { ArrowDown, ArrowDownUp, ArrowUp, Cake, ChevronRight, Search } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowDownUp,
+  ArrowUp,
+  Cake,
+  ChevronRight,
+  GraduationCap,
+  Search,
+} from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
@@ -488,7 +496,13 @@ export default async function StudentsPage({
           )}
 
           {/* 구 "보관된 학생 보기" 블록은 상태 필터([휴원]/[퇴원]/[전체])로 대체됐다 */}
-          <div className="mt-6 flex justify-end pb-8">
+          {/* 학기·학년 전환 — 매일 쓰는 기능이 아니라 학생 추가 옆의 보조 액션으로 둔다 */}
+          <div className="mt-6 flex flex-wrap items-center justify-end gap-2 pb-8">
+            <Button variant="outline" className="gap-1.5" asChild>
+              <Link href="/students/transition">
+                <GraduationCap className="h-4 w-4" aria-hidden /> 학기·학년 전환
+              </Link>
+            </Button>
             <StudentCreateDialog groups={groupOptions} />
           </div>
         </div>
