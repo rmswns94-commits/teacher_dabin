@@ -46,6 +46,8 @@ import {
   resolveOccurrence,
   supplementOccurrences,
 } from "@/lib/schedule-exceptions";
+import { HolidayClassToggle } from "@/components/holiday-class-toggle";
+import { getKoreanHolidaysInRange } from "@/lib/korean-holidays";
 import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
 import { getSupplementsInRange } from "@/lib/supabase/queries/supplements";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
@@ -155,6 +157,7 @@ export default async function DailyLogsPage({
     scheduleExceptions,
     academyClosures,
     supplements,
+    publicHolidays,
   ] = await Promise.all([
     getMonthlyLogMarkers(range.start, range.end, {
       groupId: groupId || undefined,
@@ -170,12 +173,15 @@ export default async function DailyLogsPage({
     getAcademyClosuresInRange(range.start, range.end),
     // 이 달의 보강(1회성 그룹 수업) — 월 단위 batch 1회
     getSupplementsInRange(range.start, range.end),
+    // 이 달의 대한민국 공휴일 — DB가 아니라 달력 사실(연 단위 로컬 조회)
+    getKoreanHolidaysInRange(range.start, range.end),
   ]);
 
   const exceptionIndex = buildScheduleExceptionIndex(
     scheduleExceptions,
     academyClosures,
     supplements,
+    publicHolidays,
   );
   const closedDateSet = new Set(academyClosures);
 
@@ -380,8 +386,45 @@ export default async function DailyLogsPage({
     laneOf.set(event.id, lane);
   }
 
+  // 선택한 날짜가 공휴일이면, 그 요일에 정규수업이 있는 반만 모아 상태와 토글을 보여준다.
+  // 이미 가져온 시간표/예외 데이터만 쓴다 — 반마다 추가 조회 없음.
+  const holidayRowsFor = (date: string) => {
+    const dow = dayOfWeekOf(date);
+
+    return schedules
+      .filter((slot) => slot.day_of_week === dow && slot.group && !slot.group.archived)
+      .map((slot) => {
+        const effective = resolveOccurrence(
+          exceptionIndex,
+          slot.id,
+          date,
+          slot.start_time,
+          slot.end_time,
+        );
+
+        return {
+          scheduleId: slot.id,
+          groupId: slot.group_id,
+          groupName: slot.group!.name,
+          groupIcon: groupIconOf(groups.find((group) => group.id === slot.group_id)?.icon),
+          startTime: effective.startTime,
+          endTime: effective.endTime,
+          // 공휴일인데 휴강이 아니면 = 정상 수업 예외가 켜져 있다는 뜻
+          isNormalClass: !effective.cancelled,
+        };
+      })
+      .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.scheduleId.localeCompare(b.scheduleId));
+  };
+
   const dateParamValid = params.date && params.date.slice(0, 7) === month ? params.date : null;
   const selectedDate = dateParamValid ?? (month === currentMonth ? today : null);
+
+  // 선택한 날짜가 공휴일일 때만 계산한다 (학원 전체 휴강일이면 그쪽 안내가 우선이라 생략)
+  const selectedHolidayNames = selectedDate ? (publicHolidays.get(selectedDate) ?? null) : null;
+  const selectedHoliday =
+    selectedDate && selectedHolidayNames && !closedDateSet.has(selectedDate)
+      ? { names: selectedHolidayNames, rows: holidayRowsFor(selectedDate) }
+      : null;
 
   // 목록은 시작 시간을 알 수 있으면 시간순으로 (모르면 원래 순서, 가짜 시간 금지)
   const dateLogs = [...(selectedDate ? (byDate.get(selectedDate) ?? []) : [])].sort((a, b) => {
@@ -592,6 +635,7 @@ export default async function DailyLogsPage({
                   const draftCount = logs.length - completedCount;
                   const icons = iconsFor(date);
                   const cellMarkers = cellMarkersFor(date);
+                  const holidayNames = publicHolidays.get(date) ?? null;
                   const isSelected = date === selectedDate;
                   const isToday = date === today;
                   const dayNumber = Number(date.slice(8));
@@ -628,6 +672,7 @@ export default async function DailyLogsPage({
                           .join(", ")})`
                       : "",
                     closedDateSet.has(date) ? "학원 휴강일" : "",
+                    holidayNames ? `공휴일 ${holidayNames.join(", ")}` : "",
                     (supplementsByDate.get(date) ?? []).length > 0
                       ? `보강 ${(supplementsByDate.get(date) ?? []).length}건 (${(
                           supplementsByDate.get(date) ?? []
@@ -679,7 +724,10 @@ export default async function DailyLogsPage({
                             "flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold tabular-nums md:h-6 md:w-6 md:text-xs",
                             hasHoliday
                               ? "text-[#cf4f4f]"
-                              : cellMarkers.closed
+                              : holidayNames
+                                ? // 대한민국 공휴일 — 일요일과 같은 계열의 빨간 날짜
+                                  "text-[#c97a7a]"
+                                : cellMarkers.closed
                                 ? // 학원 휴강일 — 평일이어도 일요일 계열의 부드러운 휴일 색
                                   "text-[#c0706f]"
                                 : isSunday
@@ -712,6 +760,14 @@ export default async function DailyLogsPage({
                           </span>
                         ) : null}
                       </span>
+
+                      {/* 대한민국 공휴일 이름 — 날짜 숫자 아래 작게.
+                          학원 전체 휴강(🏫 큰 표시)과는 별개이며, 이름만 조용히 덧붙인다. */}
+                      {holidayNames ? (
+                        <span className="mt-0.5 hidden truncate text-[11px] leading-none text-[#c08283] md:block">
+                          {holidayNames[0]}
+                        </span>
+                      ) : null}
 
                       {/* 학원 전체 휴강일 — 공휴일처럼 한눈에 보이도록 크게.
                           날짜 숫자 줄 아래 가운데에 두어 숫자나 일정 바를 가리지 않는다.
@@ -817,6 +873,55 @@ export default async function DailyLogsPage({
                   <span className="min-w-0 text-[#7f5d57]">
                     이 날짜의 정규수업은 모두 휴강 처리돼요. 반복 시간표는 그대로예요.
                   </span>
+                </div>
+              ) : null}
+
+              {/* 대한민국 공휴일 — 그 요일에 정규수업이 있는 반만 보여주고 반별로 토글한다.
+                  그날 수업이 없는 반(다른 요일 수업)은 아예 나오지 않는다. */}
+              {selectedHoliday ? (
+                <div className="mt-3">
+                  <h3 className="card-title text-[#b05a63]">{selectedHoliday.names.join(", ")}</h3>
+                  {selectedHoliday.rows.length === 0 ? (
+                    <p className="mt-1.5 text-sm text-[#a08d97]">
+                      이 날짜에 정규수업이 있는 반이 없어요.
+                    </p>
+                  ) : (
+                    <ul className="mt-2 space-y-2">
+                      {selectedHoliday.rows.map((row) => (
+                        <li
+                          key={row.scheduleId}
+                          className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border border-[#f0dde0] bg-[#fffafa] px-3.5 py-2.5 text-sm"
+                        >
+                          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="flex min-w-0 items-center gap-1 font-medium text-[#232327]">
+                              <span aria-hidden>{row.groupIcon}</span>
+                              <span className="min-w-0 truncate">{row.groupName}</span>
+                            </span>
+                            <span className="tabular-nums text-[#33333b]">
+                              {row.startTime} ~ {row.endTime}
+                            </span>
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-xs font-semibold",
+                                row.isNormalClass
+                                  ? "bg-[#e4f4ec] text-[#3d7f64]"
+                                  : "bg-[#fdeef0] text-[#b05a63]",
+                              )}
+                            >
+                              {row.isNormalClass ? "정상 수업" : "공휴일 휴강"}
+                            </span>
+                          </span>
+                          <HolidayClassToggle
+                            groupId={row.groupId}
+                            scheduleId={row.scheduleId}
+                            date={selectedDate}
+                            groupName={row.groupName}
+                            isNormalClass={row.isNormalClass}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               ) : null}
 

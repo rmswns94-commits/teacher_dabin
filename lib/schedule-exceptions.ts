@@ -12,7 +12,8 @@
 
 import { formatTimeHM } from "@/lib/schedule";
 
-export type ScheduleExceptionKind = "cancelled" | "time_override" | "moved";
+// holiday_class = 공휴일이어도 이 occurrence만 정상 수업 (시간은 반복 시간표 그대로)
+export type ScheduleExceptionKind = "cancelled" | "time_override" | "moved" | "holiday_class";
 
 export type ScheduleExceptionEntry = {
   id: string;
@@ -46,6 +47,8 @@ export type ScheduleExceptionIndex = {
   movedInByDate: ReadonlyMap<string, ScheduleExceptionEntry[]>;
   // 학원 전체 휴강일 (date-level). 개별 예외보다 우선한다.
   closedDates: ReadonlySet<string>;
+  // 대한민국 공휴일 (날짜 → 공휴일 이름들). 사용자 데이터가 아니라 달력 사실이다.
+  publicHolidays: ReadonlyMap<string, string[]>;
   // 보강 날짜 → 그 날 1회 열리는 그룹 수업들
   supplementsByDate: ReadonlyMap<string, SupplementOccurrence[]>;
 };
@@ -55,6 +58,7 @@ export const EMPTY_SCHEDULE_EXCEPTION_INDEX: ScheduleExceptionIndex = {
   movedInByDate: new Map(),
   closedDates: new Set(),
   supplementsByDate: new Map(),
+  publicHolidays: new Map(),
 };
 
 export function scheduleExceptionKey(scheduleId: string, date: string) {
@@ -65,6 +69,7 @@ export function buildScheduleExceptionIndex(
   entries: readonly ScheduleExceptionEntry[],
   closedDates: readonly string[] = [],
   supplements: readonly SupplementOccurrence[] = [],
+  publicHolidays: ReadonlyMap<string, string[]> = new Map(),
 ): ScheduleExceptionIndex {
   const byOccurrence = new Map<string, ScheduleExceptionEntry>();
   const movedInByDate = new Map<string, ScheduleExceptionEntry[]>();
@@ -93,7 +98,16 @@ export function buildScheduleExceptionIndex(
     movedInByDate,
     closedDates: new Set(closedDates),
     supplementsByDate,
+    publicHolidays,
   };
+}
+
+// 이 날짜의 대한민국 공휴일 이름들 (공휴일이 아니면 null)
+export function publicHolidayNames(
+  index: ScheduleExceptionIndex | null | undefined,
+  date: string,
+): string[] | null {
+  return index?.publicHolidays.get(date) ?? null;
 }
 
 // 그 날짜가 학원 전체 휴강일인가 — 소비처가 직접 DB를 보지 않도록 여기서만 판정한다.
@@ -114,6 +128,9 @@ export type ResolvedOccurrence = {
   movedToDate: string | null;
   // 학원 전체 휴강 때문에 사라진 경우 (개별 1회 휴강과 구분해 안내 문구를 다르게 쓴다)
   academyClosed: boolean;
+  // 대한민국 공휴일 기본 휴강 때문에 사라진 경우 + 그 공휴일 이름들
+  publicHoliday: boolean;
+  holidayNames: string[] | null;
 };
 
 // 이 occurrence의 실제(effective) 시간 — 예외가 없으면 base 그대로.
@@ -131,17 +148,33 @@ export function resolveOccurrence(
     overridden: false,
     movedToDate: null,
     academyClosed: false,
+    publicHoliday: false,
+    holidayNames: null,
   };
 
   // 우선순위 1 — 학원 전체 휴강. 그날은 개별 예외와 무관하게 수업이 없다.
-  // 개별 예외 row는 그대로 두므로 휴강일을 해제하면 다시 적용된다.
+  // 개별 예외 row는 그대로 두므로 휴강일을 해제하면 다시 적용된다
+  // (공휴일 정상수업 예외도 지우지 않으므로 해제 후 그대로 살아난다).
   if (isAcademyClosed(index, date)) {
     return { ...base, cancelled: true, academyClosed: true };
   }
 
   const exception = index?.byOccurrence.get(scheduleExceptionKey(scheduleId, date));
+  const holidays = publicHolidayNames(index, date);
+
+  // 우선순위 2 — 이 occurrence에 직접 건 예외. occurrence당 최대 하나라 서로 충돌하지 않는다.
   if (!exception) {
+    // 우선순위 3 — 대한민국 공휴일이면 반복 정규수업은 기본 휴강
+    // (사용자가 직접 만든 이동 도착 수업·보강은 여기 해당하지 않는다 — 각자 별도 경로다).
+    if (holidays) {
+      return { ...base, cancelled: true, publicHoliday: true, holidayNames: holidays };
+    }
     return base;
+  }
+
+  // 공휴일이어도 이 수업만 정상 진행 — 시간은 반복 시간표 그대로
+  if (exception.kind === "holiday_class") {
+    return { ...base, holidayNames: holidays };
   }
 
   if (exception.kind === "cancelled") {
@@ -165,6 +198,8 @@ export function resolveOccurrence(
     overridden: true,
     movedToDate: null,
     academyClosed: false,
+    publicHoliday: false,
+    holidayNames: holidays,
   };
 }
 

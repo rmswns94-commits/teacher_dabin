@@ -17,9 +17,11 @@ export type CancelledClassRow = {
   timeLabel: string; // "17:00 ~ 18:30" (원래 수업 시각)
   startEpoch: number;
   endEpoch: number;
-  reason: "cancelled" | "academy_closed" | "moved";
+  reason: "cancelled" | "academy_closed" | "moved" | "public_holiday";
   // reason === "moved"일 때 옮겨간 날짜/시각 안내 문구 (구조화된 값에서 서버가 만든다)
   movedLabel: string | null;
+  // reason === "public_holiday"일 때 공휴일 이름 (예: 어린이날)
+  holidayLabel: string | null;
 };
 
 export function CancelledClassNotice({
@@ -68,7 +70,11 @@ export function CancelledClassNotice({
           </span>
 
           <span className="font-medium text-[#5d4ba5]">
-            {row.movedLabel ? `오늘 수업은 ${row.movedLabel}으로 변경됐어요` : "오늘은 휴강이에요 ☕"}
+            {row.movedLabel
+              ? `오늘 수업은 ${row.movedLabel}으로 변경됐어요`
+              : row.reason === "public_holiday"
+                ? "오늘은 공휴일이라 휴강이에요 ☕"
+                : "오늘은 휴강이에요 ☕"}
           </span>
 
           <span className="secondary-text tabular-nums text-[#8a7b77]">{row.timeLabel}</span>
@@ -76,6 +82,11 @@ export function CancelledClassNotice({
           {row.reason === "academy_closed" ? (
             <span className="secondary-text rounded-full bg-[#fdf1e4] px-2 py-0.5 text-[#9a6234]">
               학원 휴강일
+            </span>
+          ) : null}
+          {row.holidayLabel ? (
+            <span className="secondary-text rounded-full bg-[#fdeef0] px-2 py-0.5 text-[#b05a63]">
+              {row.holidayLabel}
             </span>
           ) : null}
         </div>

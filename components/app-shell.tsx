@@ -11,6 +11,7 @@ import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getPendingMakeupCount } from "@/lib/supabase/queries/makeups";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
+import { getKoreanHolidaysInRange } from "@/lib/korean-holidays";
 import { getSupplementsInRange } from "@/lib/supabase/queries/supplements";
 import { ensureActiveWorkspace } from "@/lib/supabase/queries/workspaces";
 
@@ -21,8 +22,15 @@ export async function AppShell({ children }: { children: ReactNode }) {
   // (이미 있으면 조회 1회로 끝나고, 학원 migration 전에는 아무 일도 하지 않는다).
   await ensureActiveWorkspace();
 
-  const [groups, pendingMakeupCount, schedules, scheduleExceptions, academyClosures, supplements] =
-    await Promise.all([
+  const [
+    groups,
+    pendingMakeupCount,
+    schedules,
+    scheduleExceptions,
+    academyClosures,
+    supplements,
+    publicHolidays,
+  ] = await Promise.all([
       getCurrentUserGroups(),
       getPendingMakeupCount(),
       getCurrentUserSchedulesWithGroup(),
@@ -32,6 +40,8 @@ export async function AppShell({ children }: { children: ReactNode }) {
       getAcademyClosuresInRange(today, addDaysStr(today, 7)),
       // 보강(1회성 그룹 수업)도 다음 수업 후보다 (range 1쿼리)
       getSupplementsInRange(today, addDaysStr(today, 7)),
+      // 대한민국 공휴일 (달력 사실 — DB 조회 아님)
+      getKoreanHolidaysInRange(today, addDaysStr(today, 7)),
     ]);
 
   // 사이드바 그룹 트리는 /groups 현황판과 같은 기준으로:
@@ -41,7 +51,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
     schedules,
     new Date(),
     7,
-    buildScheduleExceptionIndex(scheduleExceptions, academyClosures, supplements),
+    buildScheduleExceptionIndex(scheduleExceptions, academyClosures, supplements, publicHolidays),
   );
   const sortedGroups = [...groups].sort((a, b) => {
     const keyA = nextByGroup.get(a.id)?.startEpoch ?? Number.MAX_SAFE_INTEGER;

@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDaysStr, dayOfWeekOf, daysBetween } from "@/lib/calendar";
 import { formatKoreanDate, formatShortDateWithWeekday, todayDateString } from "@/lib/dates";
 import { groupIconOf } from "@/lib/group-icons";
+import { getKoreanHolidaysInRange } from "@/lib/korean-holidays";
 import { DashboardTodoCard } from "@/components/dashboard-todo-card";
 import { ExamPeriodMark } from "@/components/exam-period-mark";
 import { ExpandableList } from "@/components/expandable-list";
@@ -102,6 +103,7 @@ export default async function DashboardPage() {
     scheduleExceptions,
     academyClosures,
     supplements,
+    publicHolidays,
   ] = await Promise.all([
     getDashboardStats(),
     getDashboardOverview(),
@@ -120,8 +122,15 @@ export default async function DashboardPage() {
     getAcademyClosuresInRange(today, addDaysStr(today, SCHEDULE_HORIZON_DAYS)),
     // 보강(1회성 그룹 수업) — 같은 범위 1쿼리
     getSupplementsInRange(today, addDaysStr(today, SCHEDULE_HORIZON_DAYS)),
+    // 대한민국 공휴일 — DB가 아니라 달력 사실(연 단위 로컬 조회)
+    getKoreanHolidaysInRange(today, addDaysStr(today, SCHEDULE_HORIZON_DAYS)),
   ]);
-  const exceptionMap = buildScheduleExceptionIndex(scheduleExceptions, academyClosures, supplements);
+  const exceptionMap = buildScheduleExceptionIndex(
+    scheduleExceptions,
+    academyClosures,
+    supplements,
+    publicHolidays,
+  );
   const displayName = getDisplayName(user);
 
   const upcomingExams = examEvents.map((event) => {
@@ -254,6 +263,7 @@ export default async function DashboardPage() {
     reason: occ.reason,
     // 옮긴 날짜/시각은 저장된 구조화 값에서 만든다 (화면 문구를 다시 파싱하지 않는다)
     movedLabel: occ.movedToDate ? formatShortDateWithWeekday(occ.movedToDate) : null,
+    holidayLabel: occ.holidayNames?.[0] ?? null,
   }));
 
   // 마무리가 필요한 수업(미작성 수업일지 알림) 후보 — 오늘(KST) 요일 schedule이 있는

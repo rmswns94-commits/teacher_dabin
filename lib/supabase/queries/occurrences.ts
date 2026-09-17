@@ -1,3 +1,4 @@
+import { getKoreanHolidaysInRange } from "@/lib/korean-holidays";
 import { dayOfWeekOf } from "@/lib/schedule";
 import {
   buildScheduleExceptionIndex,
@@ -26,11 +27,12 @@ export async function groupHasClassOn(input: {
   // 지금 수정 중인 보강 자신
   ignoreSupplementId?: string;
 }) {
-  const [schedules, exceptions, closures, supplements] = await Promise.all([
+  const [schedules, exceptions, closures, supplements, holidays] = await Promise.all([
     getGroupSchedules(input.groupId),
     getScheduleExceptionsInRange(input.date, input.date),
     getAcademyClosuresInRange(input.date, input.date),
     getSupplementsInRange(input.date, input.date),
+    getKoreanHolidaysInRange(input.date, input.date),
   ]);
 
   const index = buildScheduleExceptionIndex(
@@ -44,6 +46,7 @@ export async function groupHasClassOn(input: {
     ),
     closures,
     supplements.filter((row) => row.id !== input.ignoreSupplementId),
+    holidays,
   );
 
   const dow = dayOfWeekOf(input.date);

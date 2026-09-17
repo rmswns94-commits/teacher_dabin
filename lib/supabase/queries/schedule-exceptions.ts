@@ -264,6 +264,13 @@ export async function upsertScheduleException(input: {
         "날짜 변경에 필요한 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20260918_add_schedule_exception_move.sql을 실행한 뒤 다시 시도해주세요.",
       );
     }
+
+    // 공휴일 정상 수업 예외만 아직 못 쓰는 상태: kind check 위반
+    if (input.kind === "holiday_class" && error.code === "23514") {
+      throw new Error(
+        "공휴일 정상 수업에 필요한 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20260922_add_holiday_class_exception.sql을 실행한 뒤 다시 시도해주세요.",
+      );
+    }
     throw new Error("수업 일정을 변경하지 못했어요. 잠시 후 다시 시도해주세요.");
   }
 

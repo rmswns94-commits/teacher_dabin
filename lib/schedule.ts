@@ -150,9 +150,11 @@ export type CancelledOccurrence<G> = {
   startEpoch: number;
   endEpoch: number;
   // 왜 사라졌는지 — 안내 문구를 다르게 쓴다 (문자열 파싱 없이 구조로 구분)
-  reason: "cancelled" | "academy_closed" | "moved";
+  reason: "cancelled" | "academy_closed" | "moved" | "public_holiday";
   // reason === "moved"일 때 옮겨간 날짜
   movedToDate: string | null;
+  // reason === "public_holiday"일 때 공휴일 이름들
+  holidayNames: string[] | null;
 };
 
 export type ScheduleOverview<G> = {
@@ -224,8 +226,11 @@ export function getScheduleOverview<G>(
               ? "academy_closed"
               : effective.movedToDate
                 ? "moved"
-                : "cancelled",
+                : effective.publicHoliday
+                  ? "public_holiday"
+                  : "cancelled",
             movedToDate: effective.movedToDate,
+            holidayNames: effective.publicHoliday ? effective.holidayNames : null,
           });
         }
         continue; // 1회 휴강이거나 다른 날짜로 옮겨감 (반복 시간표는 그대로)

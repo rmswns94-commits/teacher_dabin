@@ -32,6 +32,7 @@ import {
 } from "@/lib/supabase/queries/groups";
 import { buildScheduleExceptionIndex } from "@/lib/schedule-exceptions";
 import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
+import { getKoreanHolidaysInRange } from "@/lib/korean-holidays";
 import { getSupplementsInRange } from "@/lib/supabase/queries/supplements";
 import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-exceptions";
 import { getCurrentUserSchedulesWithGroup, getGroupSchedules } from "@/lib/supabase/queries/schedules";
@@ -74,7 +75,7 @@ export default async function NewDailyLogPage({
   // 그룹 목록과 (선택된 그룹의) 학생/직전 수업/이전 기록을 한 번에 병렬 조회한다.
   // 이전 기록은 lightweight 첫 페이지만 — 실패해도 작성 화면은 그대로 동작해야 한다.
   const emptyHistory = { rows: [], hasMore: false, failed: false };
-  const [groups, groupStudentsRaw, lastLesson, history, groupSchedules, draftRow, prevReflection, importSource, allSchedules, prevEvaluations, dateExceptions, dateClosures, dateSupplements] = await Promise.all([
+  const [groups, groupStudentsRaw, lastLesson, history, groupSchedules, draftRow, prevReflection, importSource, allSchedules, prevEvaluations, dateExceptions, dateClosures, dateSupplements, dateHolidays] = await Promise.all([
     getCurrentUserGroups(),
     requestedGroupId ? getGroupStudentsForCurrentUser(requestedGroupId) : Promise.resolve([]),
     requestedGroupId ? getGroupLatestProgress(requestedGroupId) : Promise.resolve(null),
@@ -101,6 +102,8 @@ export default async function NewDailyLogPage({
     getAcademyClosuresInRange(date, date),
     // 이 날짜의 보강 수업 (이전/다음 수업 이동에 포함된다)
     getSupplementsInRange(date, date),
+    // 이 날짜가 대한민국 공휴일인지 (달력 사실)
+    getKoreanHolidaysInRange(date, date),
   ]);
 
   const selectedGroup = requestedGroupId
@@ -113,7 +116,12 @@ export default async function NewDailyLogPage({
   const adjacentClasses = selectedGroup
     ? getAdjacentScheduledClasses(allSchedules, dayOfWeekOf(date), selectedGroup.id, {
         date,
-        exceptions: buildScheduleExceptionIndex(dateExceptions, dateClosures, dateSupplements),
+        exceptions: buildScheduleExceptionIndex(
+          dateExceptions,
+          dateClosures,
+          dateSupplements,
+          dateHolidays,
+        ),
       })
     : null;
 
