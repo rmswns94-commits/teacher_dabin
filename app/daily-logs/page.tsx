@@ -44,9 +44,10 @@ import {
   buildScheduleExceptionIndex,
   movedInOccurrences,
   resolveOccurrence,
+  scheduleExceptionKey,
   supplementOccurrences,
 } from "@/lib/schedule-exceptions";
-import { HolidayClassToggle } from "@/components/holiday-class-toggle";
+import { HolidayClassPanel } from "@/components/holiday-class-panel";
 import { getKoreanHolidaysInRange } from "@/lib/korean-holidays";
 import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
 import { getSupplementsInRange } from "@/lib/supabase/queries/supplements";
@@ -411,6 +412,9 @@ export default async function DailyLogsPage({
           endTime: effective.endTime,
           // 공휴일인데 휴강이 아니면 = 정상 수업 예외가 켜져 있다는 뜻
           isNormalClass: !effective.cancelled,
+          // 일괄 변경 대상 판정용 — 예외가 없는 수업만 "공휴일 때문에만 쉬는" 상태다
+          exceptionKind:
+            exceptionIndex.byOccurrence.get(scheduleExceptionKey(slot.id, date))?.kind ?? null,
         };
       })
       .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.scheduleId.localeCompare(b.scheduleId));
@@ -879,50 +883,11 @@ export default async function DailyLogsPage({
               {/* 대한민국 공휴일 — 그 요일에 정규수업이 있는 반만 보여주고 반별로 토글한다.
                   그날 수업이 없는 반(다른 요일 수업)은 아예 나오지 않는다. */}
               {selectedHoliday ? (
-                <div className="mt-3">
-                  <h3 className="card-title text-[#b05a63]">{selectedHoliday.names.join(", ")}</h3>
-                  {selectedHoliday.rows.length === 0 ? (
-                    <p className="mt-1.5 text-sm text-[#a08d97]">
-                      이 날짜에 정규수업이 있는 반이 없어요.
-                    </p>
-                  ) : (
-                    <ul className="mt-2 space-y-2">
-                      {selectedHoliday.rows.map((row) => (
-                        <li
-                          key={row.scheduleId}
-                          className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border border-[#f0dde0] bg-[#fffafa] px-3.5 py-2.5 text-sm"
-                        >
-                          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                            <span className="flex min-w-0 items-center gap-1 font-medium text-[#232327]">
-                              <span aria-hidden>{row.groupIcon}</span>
-                              <span className="min-w-0 truncate">{row.groupName}</span>
-                            </span>
-                            <span className="tabular-nums text-[#33333b]">
-                              {row.startTime} ~ {row.endTime}
-                            </span>
-                            <span
-                              className={cn(
-                                "rounded-full px-2 py-0.5 text-xs font-semibold",
-                                row.isNormalClass
-                                  ? "bg-[#e4f4ec] text-[#3d7f64]"
-                                  : "bg-[#fdeef0] text-[#b05a63]",
-                              )}
-                            >
-                              {row.isNormalClass ? "정상 수업" : "공휴일 휴강"}
-                            </span>
-                          </span>
-                          <HolidayClassToggle
-                            groupId={row.groupId}
-                            scheduleId={row.scheduleId}
-                            date={selectedDate}
-                            groupName={row.groupName}
-                            isNormalClass={row.isNormalClass}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+                <HolidayClassPanel
+                  date={selectedDate}
+                  names={selectedHoliday.names}
+                  rows={selectedHoliday.rows}
+                />
               ) : null}
 
               {/* 보강 — 그날 1회 진행하는 실제 수업. 반 아이콘·이름·시간을 그대로 보여준다 */}

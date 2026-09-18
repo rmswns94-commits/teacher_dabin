@@ -277,6 +277,80 @@ export async function upsertScheduleException(input: {
   return true;
 }
 
+// 공휴일 정상 수업 일괄 적용 — 여러 occurrence의 예외를 statement 하나로 넣는다.
+// 하나라도 실패하면 전부 실패한다(부분 저장 없음). 이미 예외가 있는 occurrence는
+// 호출부에서 제외하므로 여기서 덮어쓰지 않는다.
+export async function insertHolidayClassExceptions(
+  rows: { groupId: string; scheduleId: string; date: string }[],
+) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  if (rows.length === 0) {
+    return 0;
+  }
+
+  const { error } = await supabase.from("class_schedule_exceptions").insert(
+    rows.map((row) => ({
+      user_id: user.id,
+      group_id: row.groupId,
+      schedule_id: row.scheduleId,
+      occurrence_date: row.date,
+      kind: "holiday_class",
+      start_time: null,
+      end_time: null,
+    })),
+  );
+
+  if (error) {
+    console.error("insertHolidayClassExceptions error", error);
+    if (isMissingTable(error)) {
+      throw new Error(
+        "1회 변경에 필요한 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20260918_create_class_schedule_exceptions.sql을 실행한 뒤 다시 시도해주세요.",
+      );
+    }
+    if (error.code === "23514") {
+      throw new Error(
+        "공휴일 정상 수업에 필요한 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20260922_add_holiday_class_exception.sql을 실행한 뒤 다시 시도해주세요.",
+      );
+    }
+    throw new Error("일괄 변경하지 못했어요. 잠시 후 다시 시도해주세요.");
+  }
+
+  return rows.length;
+}
+
+// "원래대로" 일괄 — 예외 row들을 statement 하나로 삭제한다 (반복 시간표는 그대로).
+export async function deleteScheduleExceptions(exceptionIds: string[]) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  if (exceptionIds.length === 0) {
+    return 0;
+  }
+
+  const { error } = await supabase
+    .from("class_schedule_exceptions")
+    .delete()
+    .in("id", exceptionIds)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("deleteScheduleExceptions error", error);
+    throw new Error("일괄 변경하지 못했어요. 잠시 후 다시 시도해주세요.");
+  }
+
+  return exceptionIds.length;
+}
+
 // "원래대로" — 예외 row만 삭제한다 (반복 시간표는 그대로).
 export async function deleteScheduleException(exceptionId: string) {
   const supabase = await createServerSupabaseClient();
@@ -324,4 +398,37 @@ export async function getDailyLogStatusForOccurrence(groupId: string, date: stri
   }
 
   return (data as { id: string; status: "draft" | "completed" } | null) ?? null;
+}
+
+// 여러 반의 같은 날짜 일지 상태를 한 번에 (일괄 변경 preflight용 — 반마다 묻지 않는다).
+export async function getDailyLogStatusesForGroupsOnDate(groupIds: string[], date: string) {
+  const empty = new Map<string, "draft" | "completed">();
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user || groupIds.length === 0) {
+    return empty;
+  }
+
+  const { data, error } = await supabase
+    .from("daily_logs")
+    .select("group_id, status")
+    .eq("user_id", user.id)
+    .eq("class_date", date)
+    .in("group_id", groupIds);
+
+  if (error) {
+    console.error("getDailyLogStatusesForGroupsOnDate error", error);
+    // 확인 자체가 실패했으면 "일지 없음"으로 단정하지 않는다 — 호출부가 차단한다
+    return null;
+  }
+
+  const result = new Map<string, "draft" | "completed">();
+  for (const row of (data ?? []) as { group_id: string; status: "draft" | "completed" }[]) {
+    // 같은 반에 완료/작성 중이 섞여 있으면 완료를 우선해 보여준다
+    if (result.get(row.group_id) !== "completed") {
+      result.set(row.group_id, row.status);
+    }
+  }
+  return result;
 }
