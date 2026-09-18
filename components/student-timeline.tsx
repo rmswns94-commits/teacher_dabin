@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { BookOpen, ClipboardList, GraduationCap, RotateCcw, Sparkles } from "lucide-react";
+import {
+  BookOpen,
+  ClipboardList,
+  GraduationCap,
+  MessageCircle,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
@@ -32,9 +39,14 @@ import {
   getStudentTimelineMakeups,
   getStudentTimelinePraises,
 } from "@/lib/supabase/queries/student-timeline";
+import { getStudentConsultations } from "@/lib/supabase/queries/consultations";
 import { getSupplementsInRange } from "@/lib/supabase/queries/supplements";
 import { linkedContextLabel } from "@/lib/textbooks";
 import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
+import {
+  consultationMethodLabels,
+  consultationTargetLabels,
+} from "@/lib/validation/consultation";
 import { examTypeLabels, semesterLabels } from "@/lib/validation/school-exam";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +61,7 @@ const TYPE_META = {
   makeup: { icon: RotateCcw, label: "보충 수업", tint: "bg-[#e4f4ec] text-[#3d7f64]" },
   praise: { icon: Sparkles, label: "칭찬", tint: "bg-[#fdeef0] text-[#b05a63]" },
   exam: { icon: GraduationCap, label: "시험", tint: "bg-[#e7eefb] text-[#4a5f96]" },
+  consultation: { icon: MessageCircle, label: "상담", tint: "bg-[#eef3ea] text-[#5b7a54]" },
 } as const;
 
 function homeworkOf(row: {
@@ -174,7 +187,15 @@ function LessonCard({ item, category }: { item: LessonTimelineItem; category: Ti
   );
 }
 
-function TimelineCard({ item, category }: { item: StudentTimelineItem; category: TimelineCategory }) {
+function TimelineCard({
+  item,
+  category,
+  studentIdForLinks,
+}: {
+  item: StudentTimelineItem;
+  category: TimelineCategory;
+  studentIdForLinks: string;
+}) {
   const meta = TYPE_META[item.type];
   const Icon = meta.icon;
 
@@ -262,6 +283,32 @@ function TimelineCard({ item, category }: { item: StudentTimelineItem; category:
           </div>
         ) : null}
 
+        {item.type === "consultation" ? (
+          <div className="min-w-0 space-y-1.5 text-sm">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="rounded-full bg-[#f3eefa] px-2 py-0.5 text-xs font-semibold text-[#5c4ca8]">
+                {consultationTargetLabels[item.target]}
+              </span>
+              <span className="rounded-full bg-[#f5f1eb] px-2 py-0.5 text-xs font-semibold text-[#6f625f]">
+                {consultationMethodLabels[item.method]}
+              </span>
+            </div>
+            <p className="whitespace-pre-wrap break-words font-medium text-[#2b2323]">{item.summary}</p>
+            {item.followUpNote ? (
+              <p className="whitespace-pre-wrap break-words text-[#33333b]">
+                <span className="secondary-text font-semibold text-[#8a7b77]">후속 메모 </span>
+                {item.followUpNote}
+              </p>
+            ) : null}
+            {/* 타임라인은 읽기 전용 — 수정/삭제는 상담 기록 탭에서 한다 */}
+            <Button variant="secondary" size="sm" className="gap-1.5" asChild>
+              <Link href={`/students/${studentIdForLinks}?tab=consultations`}>
+                <MessageCircle className="h-3.5 w-3.5" aria-hidden /> 상담 기록 보기
+              </Link>
+            </Button>
+          </div>
+        ) : null}
+
         {item.type === "exam" ? (
           <div className="min-w-0 space-y-1 text-sm">
             <div className="font-medium text-[#2b2323]">
@@ -301,11 +348,13 @@ export async function StudentTimeline({
   const since = timelineRangeStart(range, today);
 
   // 1단계 — 학생과 직접 연결된 기록들 (source마다 batch 1쿼리)
-  const [lessons, makeups, praises, exams, schedules] = await Promise.all([
+  const [lessons, makeups, praises, exams, consultations, schedules] = await Promise.all([
     getStudentTimelineLessons(studentId, since),
     getStudentTimelineMakeups(studentId),
     getStudentTimelinePraises(studentId, since),
     getStudentTimelineExams(studentId, since),
+    // 상담 기록 — 학생 1명 기준 range batch 1쿼리 (상담마다 학생을 다시 조회하지 않는다)
+    getStudentConsultations(studentId, { sinceDate: since }),
     // AppShell과 같은 쿼리라 요청당 1회로 dedupe된다
     getCurrentUserSchedulesWithGroup(),
   ]);
@@ -434,6 +483,20 @@ export async function StudentTimeline({
     });
   }
 
+  for (const row of consultations) {
+    items.push({
+      type: "consultation",
+      id: `consultation-${row.id}`,
+      date: row.consultation_date,
+      sortTime: row.consultation_time ? row.consultation_time.slice(0, 5) : null,
+      consultationId: row.id,
+      target: row.target,
+      method: row.method,
+      summary: row.summary,
+      followUpNote: row.follow_up_note?.trim() || null,
+    });
+  }
+
   for (const row of exams) {
     items.push({
       type: "exam",
@@ -460,7 +523,17 @@ export async function StudentTimeline({
         {category === "all"
           ? "아직 기록이 없어요."
           : `이 기간에는 ${
-              { lesson: "수업", attendance: "출결", homework: "숙제", evaluation: "평가", exam: "시험", makeup: "보충", praise: "칭찬", all: "" }[category]
+              {
+                lesson: "수업",
+                attendance: "출결",
+                homework: "숙제",
+                evaluation: "평가",
+                exam: "시험",
+                makeup: "보충",
+                praise: "칭찬",
+                consultation: "상담",
+                all: "",
+              }[category]
             } 기록이 없어요.`}
       </div>
     );
@@ -478,7 +551,12 @@ export async function StudentTimeline({
           </h3>
           <ul className="space-y-2.5 border-l border-[#f0e8e4] pl-3">
             {group.items.map((item) => (
-              <TimelineCard key={item.id} item={item} category={category} />
+              <TimelineCard
+                key={item.id}
+                item={item}
+                category={category}
+                studentIdForLinks={studentId}
+              />
             ))}
           </ul>
         </section>

@@ -21,12 +21,17 @@ export function StudentDetailTabs({
   timelineHref,
 }: {
   studentId: string;
-  active: "info" | "timeline";
+  active: "info" | "timeline" | "consultations";
   timelineHref: string;
 }) {
   const tabs = [
     { key: "info" as const, label: "기본 정보", href: `/students/${studentId}` },
     { key: "timeline" as const, label: "타임라인", href: timelineHref },
+    {
+      key: "consultations" as const,
+      label: "상담 기록",
+      href: `/students/${studentId}?tab=consultations`,
+    },
   ];
 
   return (

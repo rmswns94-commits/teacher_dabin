@@ -4,6 +4,7 @@ import type {
   PraiseCategory,
   SchoolExamType,
 } from "@/lib/supabase/types";
+import type { ConsultationMethod, ConsultationTarget } from "@/lib/validation/consultation";
 
 // 학생 통합 타임라인 — 기존 기록을 학생 기준으로 합쳐 보여주는 read-only 파생 view.
 //
@@ -22,7 +23,8 @@ export type TimelineCategory =
   | "evaluation"
   | "exam"
   | "makeup"
-  | "praise";
+  | "praise"
+  | "consultation";
 
 export const TIMELINE_CATEGORIES: { value: TimelineCategory; label: string }[] = [
   { value: "all", label: "전체" },
@@ -33,6 +35,7 @@ export const TIMELINE_CATEGORIES: { value: TimelineCategory; label: string }[] =
   { value: "exam", label: "시험" },
   { value: "makeup", label: "보충" },
   { value: "praise", label: "칭찬" },
+  { value: "consultation", label: "상담" },
 ];
 
 export type TimelineRange = "1m" | "3m" | "6m" | "all";
@@ -147,21 +150,37 @@ export type ExamTimelineItem = {
   scopeText: string | null;
 };
 
+// 상담 기록 — 수업 기록 안에 들어 있는 데이터가 아니라 독립 이벤트라 중복 문제가 없다.
+// 타임라인에서는 읽기 전용이다 (수정/삭제는 상담 기록 탭에서).
+export type ConsultationTimelineItem = {
+  type: "consultation";
+  id: string;
+  date: string;
+  sortTime: string | null; // "HH:MM" (상담 시간을 아는 경우)
+  consultationId: string;
+  target: ConsultationTarget;
+  method: ConsultationMethod;
+  summary: string;
+  followUpNote: string | null;
+};
+
 export type StudentTimelineItem =
   | LessonTimelineItem
   | HomeworkTimelineItem
   | MakeupTimelineItem
   | PraiseTimelineItem
-  | ExamTimelineItem;
+  | ExamTimelineItem
+  | ConsultationTimelineItem;
 
 // 같은 날짜 안의 표시 순서 — 시각을 아는 항목이 먼저(늦은 시각이 위), 그다음 종류, 마지막은 id.
 // 어떤 두 item도 같은 key를 갖지 않아 페이지 경계에서 중복/누락이 생기지 않는다.
 const TYPE_RANK: Record<StudentTimelineItem["type"], number> = {
   lesson: 0,
   makeup: 1,
-  exam: 2,
-  homework: 3,
-  praise: 4,
+  consultation: 2,
+  exam: 3,
+  homework: 4,
+  praise: 5,
 };
 
 export function compareTimelineItems(a: StudentTimelineItem, b: StudentTimelineItem) {
@@ -218,6 +237,8 @@ export function filterTimelineItems(
       return items.filter((item) => item.type === "makeup");
     case "praise":
       return items.filter((item) => item.type === "praise");
+    case "consultation":
+      return items.filter((item) => item.type === "consultation");
     default:
       return [...items];
   }

@@ -9,6 +9,7 @@ import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { StudentDeleteButton } from "@/components/student-delete-button";
 import { StudentEditDialog } from "@/components/student-edit-dialog";
 import { StudentLifecycleActions } from "@/components/student-lifecycle-actions";
+import { StudentConsultations } from "@/components/student-consultations";
 import { StudentTimeline, StudentTimelineSkeleton } from "@/components/student-timeline";
 import {
   StudentDetailTabs,
@@ -50,6 +51,7 @@ import {
   studentLifecycleStatus,
 } from "@/lib/student-lifecycle";
 import { genderLabels } from "@/lib/validation/student";
+import { getStudentConsultations } from "@/lib/supabase/queries/consultations";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import { getStudentVocabMistakes } from "@/lib/supabase/queries/vocab-mistakes";
@@ -86,6 +88,58 @@ export default async function StudentDetailPage({
 }) {
   const { id } = await params;
   const { week, tab, c, r, n } = (await searchParams) ?? {};
+
+  // 상담 기록 탭 — 학생 1명 기준으로만 조회한다 (다른 화면에서는 읽지 않는다).
+  if (tab === "consultations") {
+    const [student, consultations] = await Promise.all([
+      getStudentByIdForCurrentUser(id),
+      getStudentConsultations(id),
+    ]);
+
+    if (!student) {
+      notFound();
+    }
+
+    return (
+      <AppShell>
+        <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
+          <PageHeader
+            backHref="/students"
+            title={student.name}
+            description={[
+              gradeDisplay[student.grade as keyof typeof gradeDisplay],
+              student.gender ? genderLabels[student.gender] : "",
+              student.school || "학교 미입력",
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          />
+
+          <div className="mx-auto w-full max-w-[860px] pb-8">
+            <StudentDetailTabs
+              studentId={id}
+              active="consultations"
+              timelineHref={`/students/${id}?tab=timeline`}
+            />
+            <StudentConsultations
+              studentId={id}
+              studentName={student.name}
+              items={consultations.map((row) => ({
+                id: row.id,
+                consultationDate: row.consultation_date,
+                consultationTime: row.consultation_time ? row.consultation_time.slice(0, 5) : null,
+                target: row.target,
+                method: row.method,
+                summary: row.summary,
+                content: row.content,
+                followUpNote: row.follow_up_note,
+              }))}
+            />
+          </div>
+        </main>
+      </AppShell>
+    );
+  }
 
   // 타임라인 탭 — 기본 정보 탭의 조회를 그대로 두고, 필요한 source만 따로 읽는다.
   // (학생 소유 확인은 기존 쿼리 그대로라 다른 학원 학생 id로 열면 404다)
