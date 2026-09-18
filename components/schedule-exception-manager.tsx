@@ -574,6 +574,7 @@ export function ScheduleExceptionManager({
                     value={startTime}
                     onChange={shiftStartKeepingDuration}
                     ariaLabel="변경할 시작 시간"
+                    bound="start"
                     className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
                   />
                   <span className="text-sm text-[#8a7b77]">~</span>
@@ -581,6 +582,8 @@ export function ScheduleExceptionManager({
                     value={endTime}
                     onChange={setEndTime}
                     ariaLabel="변경할 종료 시간"
+                    bound="end"
+                    minTime={startTime}
                     className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
                   />
                 </div>

@@ -117,6 +117,7 @@ export function WeekdayTimePicker({
             value={value.startTime}
             onChange={(next) => onChange({ ...value, startTime: next })}
             ariaLabel="시작 시간"
+            bound="start"
             className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
           />
           <span className="text-sm text-[#8a7b77]">~</span>
@@ -125,6 +126,8 @@ export function WeekdayTimePicker({
             value={value.endTime}
             onChange={(next) => onChange({ ...value, endTime: next })}
             ariaLabel="종료 시간"
+            bound="end"
+            minTime={value.startTime}
             className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
           />
         </div>

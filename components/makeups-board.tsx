@@ -168,11 +168,11 @@ function ScheduleDialog({
         <div className="grid grid-cols-2 gap-2">
           <label className="block">
             <span className={labelClass}>시작</span>
-            <TimeSelect value={startTime} onChange={setStartTime} ariaLabel="보충 시작 시간" allowEmpty className={inputClass} />
+            <TimeSelect value={startTime} onChange={setStartTime} ariaLabel="보충 시작 시간" allowEmpty bound="start" className={inputClass} />
           </label>
           <label className="block">
             <span className={labelClass}>종료</span>
-            <TimeSelect value={endTime} onChange={setEndTime} ariaLabel="보충 종료 시간" allowEmpty className={inputClass} />
+            <TimeSelect value={endTime} onChange={setEndTime} ariaLabel="보충 종료 시간" allowEmpty bound="end" minTime={startTime} className={inputClass} />
           </label>
         </div>
         <label className="block">
@@ -367,6 +367,7 @@ function ManualMakeupDialog({
               onChange={setStartTime}
               ariaLabel="직접 등록 시작 시간"
               allowEmpty
+              bound="start"
               className={`${inputClass} min-w-0 max-w-full`}
             />
           </label>
@@ -377,6 +378,8 @@ function ManualMakeupDialog({
               onChange={setEndTime}
               ariaLabel="직접 등록 종료 시간"
               allowEmpty
+              bound="end"
+              minTime={startTime}
               className={`${inputClass} min-w-0 max-w-full`}
             />
           </label>

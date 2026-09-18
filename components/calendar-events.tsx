@@ -174,6 +174,7 @@ function EventFormDialog({
                     ariaLabel="보강 시작 시간"
                     allowEmpty
                     emptyLabel="시간 없음"
+                    bound="start"
                     className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
                   />
                   <span className="text-sm text-[#8a7b77]">~</span>
@@ -183,6 +184,8 @@ function EventFormDialog({
                     ariaLabel="보강 종료 시간"
                     allowEmpty
                     emptyLabel="시간 없음"
+                    bound="end"
+                    minTime={values.startTime}
                     className="rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none"
                   />
                 </div>
