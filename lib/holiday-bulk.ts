@@ -9,11 +9,16 @@ import type { ScheduleExceptionKind } from "@/lib/schedule-exceptions";
 //   (개별 휴강을 지우거나, 다른 날짜로 옮긴 수업을 되살리지 않는다)
 // 보강·옮겨온 수업 같은 1회성 수업은 애초에 반복 시간표에서 나오지 않아 목록에 없다.
 
-export type HolidayBulkItem = { exceptionKind: ScheduleExceptionKind | null };
+export type HolidayBulkItem = {
+  exceptionKind: ScheduleExceptionKind | null;
+  // 그날 이 반에 이미 다른 실제 수업(보강·옮겨온 수업)이 있으면 정상 수업으로 되살리지 않는다 —
+  // 수업일지가 반·날짜마다 하나라 두 수업을 따로 기록할 수 없기 때문이다.
+  blockedByOtherClass?: boolean;
+};
 
 export function selectHolidayBulkTargets<T extends HolidayBulkItem>(items: readonly T[], enabled: boolean) {
   return enabled
-    ? items.filter((item) => item.exceptionKind === null)
+    ? items.filter((item) => item.exceptionKind === null && !item.blockedByOtherClass)
     : items.filter((item) => item.exceptionKind === "holiday_class");
 }
 

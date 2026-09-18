@@ -6,6 +6,8 @@ import { selectHolidayBulkTargets } from "@/lib/holiday-bulk";
 import { getKoreanHolidaysInRange } from "@/lib/korean-holidays";
 import { dayOfWeekOf } from "@/lib/schedule";
 import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
+import { groupHasClassOn } from "@/lib/supabase/queries/occurrences";
+import { getSupplementsInRange } from "@/lib/supabase/queries/supplements";
 import {
   deleteScheduleException,
   deleteScheduleExceptions,
@@ -67,6 +69,17 @@ export async function setHolidayClassAction(input: {
     // 이미 다른 종류의 예외(휴강·시간 변경·이동)가 걸려 있으면 덮어쓰지 않는다 —
     // occurrence당 예외는 하나뿐이라 조용히 지우면 사용자가 설정한 내용이 사라진다.
     const existing = await getScheduleExceptionForOccurrence(input.scheduleId, input.date);
+
+    // 이미 켜져 있으면(재요청) 그대로 성공 — 아래 충돌 검사는 "새로 켤 때"만 의미가 있다.
+    // 그날 이 반 수업이 이미 있으면(보강·옮겨온 수업) 정상 수업으로 되살리지 않는다:
+    // 수업일지 identity가 (반 + 날짜) 하나라 두 수업을 따로 기록할 수 없기 때문이다
+    // (수업 이동·보강 등록과 같은 규칙을 쓴다 — groupHasClassOn).
+    if (!existing && (await groupHasClassOn({ groupId: input.groupId, date: input.date }))) {
+      return {
+        error: "이 날짜에는 이미 이 반 수업이 있어요. 수업일지는 반·날짜마다 하나여서 함께 열 수 없어요.",
+      };
+    }
+
     if (existing && existing.kind !== "holiday_class") {
       return {
         error:
@@ -153,10 +166,13 @@ export async function setHolidayClassBulkAction(input: {
     return { error: "이 날짜는 공휴일이 아니에요." };
   }
 
-  const [closures, schedules, exceptions] = await Promise.all([
+  const [closures, schedules, exceptions, supplements] = await Promise.all([
     getAcademyClosuresInRange(input.date, input.date),
     getCurrentUserSchedulesWithGroup(),
     getScheduleExceptionsInRange(input.date, input.date),
+    // 그날 이미 열려 있는 1회성 수업(보강) — 같은 반 수업이 하루에 둘이 되지 않게 확인만 한다.
+    // 반마다 묻지 않고 그 날짜 1쿼리다 (N+1 금지).
+    getSupplementsInRange(input.date, input.date),
   ]);
 
   if (closures.length > 0) {
@@ -170,10 +186,20 @@ export async function setHolidayClassBulkAction(input: {
     exceptions.filter((entry) => entry.date === input.date).map((entry) => [entry.scheduleId, entry]),
   );
 
+  // 그날 이미 이 반 수업이 있는 경우(보강·옮겨온 수업) — 정상 수업을 하나 더 열면
+  // 같은 반 같은 날 수업이 둘이 되어 수업일지를 따로 남길 수 없다.
+  const occupiedGroupIds = new Set<string>([
+    ...supplements.map((row) => row.groupId),
+    ...exceptions
+      .filter((entry) => entry.kind === "moved" && entry.movedToDate === input.date)
+      .map((entry) => entry.groupId),
+  ]);
+
   // 화면과 같은 규칙으로 대상을 고른다 (예외 없음 = 공휴일 때문에만 쉬는 수업)
   const withKind = regular.map((slot) => ({
     slot,
     exceptionKind: exceptionBySchedule.get(slot.id)?.kind ?? null,
+    blockedByOtherClass: occupiedGroupIds.has(slot.group_id),
   }));
 
   if (input.enabled) {

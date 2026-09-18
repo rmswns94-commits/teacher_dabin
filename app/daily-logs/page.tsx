@@ -391,6 +391,12 @@ export default async function DailyLogsPage({
   // 이미 가져온 시간표/예외 데이터만 쓴다 — 반마다 추가 조회 없음.
   const holidayRowsFor = (date: string) => {
     const dow = dayOfWeekOf(date);
+    // 그날 이미 이 반 수업이 있는 경우(보강·옮겨온 수업) — 정상 수업을 하나 더 열면
+    // 같은 반 같은 날 수업이 둘이 되어 수업일지를 따로 남길 수 없다 (서버도 같은 규칙으로 막는다).
+    const occupiedGroupIds = new Set<string>([
+      ...supplementOccurrences(exceptionIndex, date).map((row) => row.groupId),
+      ...movedInOccurrences(exceptionIndex, date).map((entry) => entry.groupId),
+    ]);
 
     return schedules
       .filter((slot) => slot.day_of_week === dow && slot.group && !slot.group.archived)
@@ -415,6 +421,8 @@ export default async function DailyLogsPage({
           // 일괄 변경 대상 판정용 — 예외가 없는 수업만 "공휴일 때문에만 쉬는" 상태다
           exceptionKind:
             exceptionIndex.byOccurrence.get(scheduleExceptionKey(slot.id, date))?.kind ?? null,
+          // 그날 이 반에 다른 실제 수업이 이미 있으면 정상 수업으로 되살릴 수 없다
+          blockedByOtherClass: occupiedGroupIds.has(slot.group_id),
         };
       })
       .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.scheduleId.localeCompare(b.scheduleId));

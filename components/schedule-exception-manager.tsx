@@ -55,6 +55,7 @@ export function ScheduleExceptionManager({
   slots,
   exceptions,
   closedDates,
+  holidayNamesByDate,
   today,
 }: {
   groupId: string;
@@ -63,6 +64,9 @@ export function ScheduleExceptionManager({
   exceptions: ScheduleExceptionEntry[];
   // 학원 전체 휴강일 (앞으로 2주) — 그날은 수업이 없으므로 목록에서 빠지고 이동 대상도 아니다
   closedDates: string[];
+  // 대한민국 공휴일 (앞으로 2주, 날짜 → 이름들) — 공휴일의 정규수업은 기본 휴강이라
+  // 옮길 수업 목록에 나오면 안 된다. 다른 화면과 같은 판정을 쓰기 위해 함께 넘긴다.
+  holidayNamesByDate?: Record<string, string[]>;
   today: string;
 }) {
   const [step, setStep] = useState<Step | null>(null);
@@ -80,8 +84,16 @@ export function ScheduleExceptionManager({
 
   const slotById = useMemo(() => new Map(slots.map((slot) => [slot.id, slot])), [slots]);
   const index = useMemo(
-    () => buildScheduleExceptionIndex(exceptions, closedDates),
-    [exceptions, closedDates],
+    () =>
+      buildScheduleExceptionIndex(
+        exceptions,
+        closedDates,
+        // 보강은 이 반의 "옮길 수업" 후보가 아니다 (1회성 수업이라 이동 대상이 아님).
+        // 보강이 있는 날짜로의 이동은 서버가 같은 규칙(groupHasClassOn)으로 최종 차단한다.
+        [],
+        new Map(Object.entries(holidayNamesByDate ?? {})),
+      ),
+    [exceptions, closedDates, holidayNamesByDate],
   );
   const closedSet = useMemo(() => new Set(closedDates), [closedDates]);
 

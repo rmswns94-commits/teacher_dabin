@@ -23,6 +23,8 @@ export type HolidayClassRow = {
   isNormalClass: boolean;
   // 이 occurrence에 걸린 1회 변경 종류 (null = 공휴일 때문에만 쉬는 상태)
   exceptionKind: "cancelled" | "time_override" | "moved" | "holiday_class" | null;
+  // 그날 이 반에 이미 다른 실제 수업(보강·옮겨온 수업)이 있어 정상 수업으로 되살릴 수 없는 상태
+  blockedByOtherClass?: boolean;
 };
 
 export function HolidayClassPanel({
@@ -119,12 +121,17 @@ export function HolidayClassPanel({
                   >
                     {row.isNormalClass ? "정상 수업" : "공휴일 휴강"}
                   </span>
+                  {!row.isNormalClass && row.blockedByOtherClass ? (
+                    <span className="secondary-text text-[#8a7b77]">
+                      이미 이 반의 다른 수업이 있는 날이에요
+                    </span>
+                  ) : null}
                 </span>
                 <Button
                   type="button"
                   variant={row.isNormalClass ? "secondary" : "outline"}
                   size="sm"
-                  disabled={isPending}
+                  disabled={isPending || (!row.isNormalClass && Boolean(row.blockedByOtherClass))}
                   aria-label={`${row.groupName} ${row.isNormalClass ? "공휴일 처리" : "정상 수업날로 변경"}`}
                   onClick={() => toggleOne(row)}
                 >

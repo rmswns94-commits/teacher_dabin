@@ -49,6 +49,7 @@ import { activePreparationItems } from "@/lib/preparation";
 import { getCurrentUserMakeups } from "@/lib/supabase/queries/makeups";
 import { ScheduleExceptionManager } from "@/components/schedule-exception-manager";
 import { addDaysStr } from "@/lib/calendar";
+import { getKoreanHolidaysInRange } from "@/lib/korean-holidays";
 import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
 import { getGroupScheduleExceptionsFrom } from "@/lib/supabase/queries/schedule-exceptions";
 import { getGroupSchedules } from "@/lib/supabase/queries/schedules";
@@ -91,6 +92,7 @@ export default async function GroupDetailPage({
     schedules,
     scheduleExceptions,
     academyClosures,
+    publicHolidays,
   ] = await Promise.all([
     getGroupByIdForCurrentUser(id),
     getGroupStudentsForCurrentUser(id),
@@ -103,6 +105,8 @@ export default async function GroupDetailPage({
     getGroupScheduleExceptionsFrom(id, todayDateString()),
     // 학원 전체 휴강일 — 마법사가 보여주는 앞으로 2주 범위 1쿼리
     getAcademyClosuresInRange(todayDateString(), addDaysStr(todayDateString(), 14)),
+    // 대한민국 공휴일 — 같은 범위. 마법사가 다른 화면과 같은 휴강 판정을 쓰게 한다
+    getKoreanHolidaysInRange(todayDateString(), addDaysStr(todayDateString(), 14)),
   ]);
 
   if (!group) {
@@ -255,6 +259,7 @@ export default async function GroupDetailPage({
             }))}
             exceptions={scheduleExceptions}
             closedDates={academyClosures}
+            holidayNamesByDate={Object.fromEntries(publicHolidays)}
           />
         ) : null}
 
