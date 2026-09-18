@@ -23,7 +23,7 @@ import {
 } from "@/lib/calendar";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { groupIconOf } from "@/lib/group-icons";
-import { formatTimeRange } from "@/lib/schedule";
+import { groupClassTimeLabelOn } from "@/lib/schedule";
 import {
   getMonthlyEvents,
   type CalendarEventWithGroup,
@@ -187,44 +187,9 @@ export default async function DailyLogsPage({
   const closedDateSet = new Set(academyClosures);
 
   // 그룹+요일 → 시간표 slot (예외 적용 전 후보)
-  const slotsByGroupDow = new Map<string, typeof schedules>();
-  for (const slot of schedules) {
-    const key = `${slot.group_id}:${slot.day_of_week}`;
-    slotsByGroupDow.set(key, [...(slotsByGroupDow.get(key) ?? []), slot]);
-  }
-  const slotById = new Map(schedules.map((slot) => [slot.id, slot]));
-
-  // 그 날짜 이 반의 실제 수업 시간 (정확히 하나일 때만 표시, 추측 금지).
-  // 1회 휴강은 후보에서 빠지고, 시간 변경/날짜 이동은 변경된 시각으로 잡힌다 —
-  // 요일만 보고 반복 시간표 시각을 그대로 쓰면 옮긴 수업의 시간이 틀리게 나온다.
-  const timeFor = (logGroupId: string, date: string) => {
-    const times: string[] = [];
-
-    for (const slot of slotsByGroupDow.get(`${logGroupId}:${dayOfWeekOf(date)}`) ?? []) {
-      const effective = resolveOccurrence(exceptionIndex, slot.id, date, slot.start_time, slot.end_time);
-      if (effective.cancelled) {
-        continue;
-      }
-      times.push(formatTimeRange(effective.startTime, effective.endTime));
-    }
-
-    for (const moved of movedInOccurrences(exceptionIndex, date)) {
-      const slot = slotById.get(moved.scheduleId);
-      if (!slot || slot.group_id !== logGroupId || !moved.startTime || !moved.endTime) {
-        continue;
-      }
-      times.push(formatTimeRange(moved.startTime, moved.endTime));
-    }
-
-    for (const supplement of supplementOccurrences(exceptionIndex, date)) {
-      if (supplement.groupId !== logGroupId) {
-        continue;
-      }
-      times.push(formatTimeRange(supplement.startTime, supplement.endTime));
-    }
-
-    return times.length === 1 ? times[0] : null;
-  };
+  // 그 날짜 이 반의 실제 수업 시간 (정확히 하나일 때만 표시, 추측 금지) — 공용 helper.
+  const timeFor = (logGroupId: string, date: string) =>
+    groupClassTimeLabelOn(schedules, logGroupId, date, exceptionIndex);
 
   const byDate = new Map<string, MonthlyLogMarker[]>();
   for (const marker of markers) {

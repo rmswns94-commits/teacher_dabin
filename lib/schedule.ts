@@ -506,6 +506,52 @@ export function getDayClassWindows(
   return windows;
 }
 
+// 그 날짜 이 반의 실제 수업 시간 라벨 — 정확히 하나일 때만 돌려준다(추측 금지).
+// 1회 휴강은 후보에서 빠지고, 시간 변경/날짜 이동/보강은 변경된 시각으로 잡힌다.
+// 요일만 보고 반복 시간표 시각을 그대로 쓰면 옮긴 수업의 시간이 틀리게 나오므로
+// 지난 날짜의 시각을 보여주는 화면은 전부 이 helper 하나를 쓴다.
+export function groupClassTimeLabelOn(
+  slots: readonly Pick<ScheduleSlot, "id" | "group_id" | "day_of_week" | "start_time" | "end_time">[],
+  groupId: string,
+  date: string,
+  exceptions?: ScheduleExceptionIndex | null,
+): string | null {
+  const dow = dayOfWeekOf(date);
+  const times: string[] = [];
+
+  for (const slot of slots) {
+    if (slot.group_id !== groupId || slot.day_of_week !== dow) {
+      continue;
+    }
+
+    const effective = resolveOccurrence(exceptions, slot.id, date, slot.start_time, slot.end_time);
+    if (effective.cancelled) {
+      continue;
+    }
+
+    times.push(formatTimeRange(effective.startTime, effective.endTime));
+  }
+
+  const slotById = new Map(slots.map((slot) => [slot.id, slot]));
+
+  for (const moved of movedInOccurrences(exceptions, date)) {
+    const slot = slotById.get(moved.scheduleId);
+    if (!slot || slot.group_id !== groupId || !moved.startTime || !moved.endTime) {
+      continue;
+    }
+    times.push(formatTimeRange(moved.startTime, moved.endTime));
+  }
+
+  for (const supplement of supplementOccurrences(exceptions, date)) {
+    if (supplement.groupId !== groupId) {
+      continue;
+    }
+    times.push(formatTimeRange(supplement.startTime, supplement.endTime));
+  }
+
+  return times.length === 1 ? times[0] : null;
+}
+
 // 기준 날짜 "이후"의 그룹 시간표상 가장 빠른 수업 날짜 (date-only, KST-safe).
 // 다음 수업 계획 기본 날짜 등에 사용 — 시간표가 없으면 null.
 export function nextClassDateAfter(scheduleDays: number[], dateStr: string): string | null {

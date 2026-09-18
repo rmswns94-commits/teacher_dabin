@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { BookOpen, Sparkles, Target } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
@@ -8,6 +9,11 @@ import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { StudentDeleteButton } from "@/components/student-delete-button";
 import { StudentEditDialog } from "@/components/student-edit-dialog";
 import { StudentLifecycleActions } from "@/components/student-lifecycle-actions";
+import { StudentTimeline, StudentTimelineSkeleton } from "@/components/student-timeline";
+import {
+  StudentDetailTabs,
+  StudentTimelineFilter,
+} from "@/components/student-timeline-controls";
 import { StudentVocabCard } from "@/components/student-vocab-card";
 import { StudentWeaknessesCard } from "@/components/student-weaknesses-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +39,11 @@ import {
   scopeMakeupsToWeek,
 } from "@/lib/growth";
 import { nextClassDateAfter } from "@/lib/schedule";
+import {
+  TIMELINE_PAGE_SIZE,
+  parseTimelineCategory,
+  parseTimelineRange,
+} from "@/lib/student-timeline";
 import {
   lifecycleBadgeClasses,
   lifecycleLabels,
@@ -71,10 +82,69 @@ export default async function StudentDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ week?: string }>;
+  searchParams?: Promise<{ week?: string; tab?: string; c?: string; r?: string; n?: string }>;
 }) {
   const { id } = await params;
-  const { week } = (await searchParams) ?? {};
+  const { week, tab, c, r, n } = (await searchParams) ?? {};
+
+  // 타임라인 탭 — 기본 정보 탭의 조회를 그대로 두고, 필요한 source만 따로 읽는다.
+  // (학생 소유 확인은 기존 쿼리 그대로라 다른 학원 학생 id로 열면 404다)
+  if (tab === "timeline") {
+    const student = await getStudentByIdForCurrentUser(id);
+
+    if (!student) {
+      notFound();
+    }
+
+    const category = parseTimelineCategory(c);
+    const range = parseTimelineRange(r);
+    const parsedLimit = Number(n);
+    const limit =
+      Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, TIMELINE_PAGE_SIZE * 20)
+        : TIMELINE_PAGE_SIZE;
+    const timelineHref = (nextLimit: number) => {
+      const query = new URLSearchParams({ tab: "timeline" });
+      if (category !== "all") query.set("c", category);
+      if (range !== "3m") query.set("r", range);
+      if (nextLimit !== TIMELINE_PAGE_SIZE) query.set("n", String(nextLimit));
+      return `/students/${id}?${query.toString()}`;
+    };
+
+    return (
+      <AppShell>
+        <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
+          <PageHeader
+            backHref="/students"
+            title={student.name}
+            description={[
+              gradeDisplay[student.grade as keyof typeof gradeDisplay],
+              student.gender ? genderLabels[student.gender] : "",
+              student.school || "학교 미입력",
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          />
+
+          <div className="mx-auto w-full max-w-[860px] pb-8">
+            <StudentDetailTabs studentId={id} active="timeline" timelineHref={timelineHref(TIMELINE_PAGE_SIZE)} />
+            <StudentTimelineFilter studentId={id} category={category} range={range} />
+
+            <Suspense fallback={<StudentTimelineSkeleton />}>
+              <StudentTimeline
+                studentId={id}
+                studentName={student.name}
+                category={category}
+                range={range}
+                limit={limit}
+                moreHref={timelineHref}
+              />
+            </Suspense>
+          </div>
+        </main>
+      </AppShell>
+    );
+  }
 
   const today = todayDateString();
   const currentWeekStart = weekStartOf(today);
@@ -267,6 +337,12 @@ export default async function StudentDetailPage({
           ]
             .filter(Boolean)
             .join(" · ")}
+        />
+
+        <StudentDetailTabs
+          studentId={id}
+          active="info"
+          timelineHref={`/students/${id}?tab=timeline`}
         />
 
         <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
