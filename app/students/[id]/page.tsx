@@ -553,6 +553,13 @@ export default async function StudentDetailPage({
                           ) : null}
                           <AttendanceBadge status={lesson.attendance} />
                         </div>
+                        {/* 출결 사유 — 지각/조퇴/결석에 사유가 있을 때만 (없으면 표시 없음) */}
+                        {lesson.attendance !== "present" && lesson.attendance_reason ? (
+                          <div className="mt-1 whitespace-pre-wrap break-words text-sm text-[#564d4d]">
+                            <span className="font-semibold text-[#8a7b77]">사유 </span>
+                            {lesson.attendance_reason}
+                          </div>
+                        ) : null}
                         {lesson.progress ? (
                           <div className="mt-1.5 flex items-start gap-1.5 text-sm text-[#564d4d]">
                             <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-[#7c6d69]" />

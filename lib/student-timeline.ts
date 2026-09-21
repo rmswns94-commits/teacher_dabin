@@ -95,6 +95,8 @@ export type LessonTimelineItem = {
   progress: string; // 학생 개인 진도가 있으면 그것, 없으면 공통 진도 (legacy fallback 포함)
   progressIsCommon: boolean;
   attendance: AttendanceStatus;
+  // 출결 사유 (지각/조퇴/결석에서만 의미 — 없으면 null, "-"/"없음" 같은 대체 문구를 만들지 않는다)
+  attendanceReason: string | null;
   evaluation: string | null; // 학생 평가 (줄바꿈 보존)
   // 3-state 그대로: null = 기록 없음
   onlineReviewCompleted: boolean | null;

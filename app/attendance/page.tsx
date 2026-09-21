@@ -363,6 +363,13 @@ export default async function AttendancePage({
                                 <span className="ml-auto">
                                   <AttendanceBadge status={entry.attendance} />
                                 </span>
+                                {/* 출결 사유 — 지각/조퇴/결석에 사유가 있을 때만 다음 줄에 (없으면 표시 없음) */}
+                                {entry.attendance !== "present" && entry.attendanceReason ? (
+                                  <span className="basis-full whitespace-pre-wrap break-words text-sm text-[#564d4d]">
+                                    <span className="secondary-text font-semibold text-[#8a7b77]">사유 </span>
+                                    {entry.attendanceReason}
+                                  </span>
+                                ) : null}
                               </div>
                             ))}
                           </div>

@@ -134,6 +134,14 @@ function LessonCard({ item, category }: { item: LessonTimelineItem; category: Ti
         <AttendanceBadge status={item.attendance} />
       </div>
 
+      {/* 출결 사유 — 지각/조퇴/결석에 사유가 있을 때만 (없으면 줄 자체를 만들지 않는다) */}
+      {item.attendance !== "present" && item.attendanceReason ? (
+        <p className="whitespace-pre-wrap break-words text-sm text-[#564d4d]">
+          <span className="secondary-text font-semibold text-[#8a7b77]">사유 </span>
+          {item.attendanceReason}
+        </p>
+      ) : null}
+
       {item.title ? <div className="text-sm text-[#564d4d]">{item.title}</div> : null}
 
       {showProgress && item.progress ? (
@@ -420,6 +428,7 @@ export async function StudentTimeline({
       progress: personalProgress || commonProgress,
       progressIsCommon: !personalProgress && Boolean(commonProgress),
       attendance: row.attendance,
+      attendanceReason: row.attendance_reason?.trim() || null,
       // 평가는 저장된 그대로 (줄바꿈 보존) — 칭찬/개선점이 따로 있으면 이어 붙인다
       evaluation:
         [row.memo?.trim(), row.strengths?.trim(), row.improvements?.trim()]

@@ -205,6 +205,9 @@ export type StudentLessonLogRecord = {
   daily_log_id: string;
   student_id: string;
   attendance: AttendanceStatus;
+  // 출결 사유 메모 (선택) — 상태와 별개의 nullable text. migration(20260924) 미적용 환경에서는
+  // select("*")에 없을 수 있어 optional.
+  attendance_reason?: string | null;
   progress: string | null;
   strengths: string | null;
   improvements: string | null;

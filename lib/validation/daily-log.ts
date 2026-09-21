@@ -17,6 +17,8 @@ export const studentLessonEntrySchema = z.object({
   attendance: z.enum(["present", "late", "absent", "early_leave"], {
     message: "출결 상태를 확인해주세요.",
   }),
+  // 출결 사유 (선택) — 상태와 별개의 메모. 지각/조퇴/결석에서만 의미가 있고 공백만이면 비운다.
+  attendanceReason: shortText(500, "출결 사유"),
   progress: shortText(300, "진도"),
   strengths: shortText(1000, "잘한 부분"),
   improvements: shortText(1000, "보완할 부분"),

@@ -25,7 +25,8 @@ export async function getMonthlyAttendanceEntries(startDate: string, endDate: st
   const { data, error } = await supabase
     .from("student_lesson_logs")
     .select(
-      "student_id, attendance, students(id, name, grade), daily_logs!inner(id, class_date, group_id, status, class_groups(id, name, icon))",
+      // 학생 기록 컬럼은 *로 — attendance_reason(20260924 migration) 미적용 환경에서도 조회가 깨지지 않게
+      "*, students(id, name, grade), daily_logs!inner(id, class_date, group_id, status, class_groups(id, name, icon))",
     )
     .eq("user_id", user.id)
     .eq("daily_logs.status", "completed")
@@ -64,6 +65,7 @@ export async function getMonthlyAttendanceEntries(startDate: string, endDate: st
       studentName: student.name,
       studentGrade: student.grade,
       attendance: row.attendance as AttendanceStatus,
+      attendanceReason: ((row as { attendance_reason?: string | null }).attendance_reason ?? null) || null,
     });
   }
 

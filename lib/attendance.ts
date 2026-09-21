@@ -32,6 +32,21 @@ export function emptyAttendanceCounts(): AttendanceCounts {
 // Daily Log(작성 완료)의 학생 평가 attendance가 유일한 소스 — 화면과 Excel이
 // 같은 entry 배열을 서로 다른 모양으로 조립만 한다 (별도 저장/복제 없음).
 
+// 출결 사유 저장 규칙 — 폼 payload와 서버 저장이 같은 함수를 쓴다.
+// - 출석(present)이면 사유를 남기지 않는다 ("출석 + 감기" 같은 모순 데이터 방지)
+// - 지각/조퇴/결석은 앞뒤 공백만 정리하고, 공백뿐이면 null
+// 상태 사이(late ↔ early_leave ↔ absent) 이동은 여기서 사유를 건드리지 않는다.
+export function normalizeAttendanceReason(
+  attendance: AttendanceStatus,
+  reason: string | null | undefined,
+): string | null {
+  if (attendance === "present") {
+    return null;
+  }
+  const text = (reason ?? "").trim();
+  return text ? text : null;
+}
+
 export type AttendanceEntry = {
   classDate: string; // lesson_date(class_date) 기준 — created_at 사용 금지
   groupId: string;
@@ -41,6 +56,8 @@ export type AttendanceEntry = {
   studentName: string;
   studentGrade: string;
   attendance: AttendanceStatus;
+  // 출결 사유 (선택) — 출결 현황 화면에서만 표시. Excel 기호(O/△/Φ/X/공란)에는 관여하지 않는다.
+  attendanceReason: string | null;
 };
 
 export type GroupTimeSlot = {

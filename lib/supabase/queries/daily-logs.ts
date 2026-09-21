@@ -1,3 +1,4 @@
+import { normalizeAttendanceReason } from "@/lib/attendance";
 import { formatKoreanDateFull } from "@/lib/dates";
 import {
   dailyLogTaskTodoId,
@@ -1243,7 +1244,9 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   const { data: existingLessonRows } = input.dailyLogId
     ? await supabase
         .from("student_lesson_logs")
-        .select("student_id, parent_note, parent_note_status, parent_note_completed_at")
+        // *로 읽는다 — attendance_reason(20260924 migration) 유무와 무관하게 동작하고,
+        // 컬럼이 있으면 이미 저장된 사유를 함께 받아 출석으로 바뀐 학생의 사유를 지울 수 있다
+        .select("*")
         .eq("user_id", user.id)
         .eq("daily_log_id", dailyLogId)
     : { data: [] };
@@ -1251,6 +1254,21 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   const existingByStudent = new Map(
     (existingLessonRows ?? []).map((row) => [row.student_id as string, row]),
   );
+
+  // 출결 사유 — 폼과 같은 규칙(normalizeAttendanceReason): 출석이면 null, 그 외는 trim(공백뿐이면 null).
+  //
+  // attendance_reason 컬럼은 20260924 migration 이후에만 존재한다. 그래서 컬럼을 "필요할 때만" 싣는다:
+  //  - 이번 저장에 사유가 하나라도 있거나, 이미 저장된 사유가 있는 학생이 있으면 → 전원 payload에 포함
+  //    (upsert 배열은 모든 row의 키가 같아야 하고, 출석으로 바뀐 학생의 예전 사유를 null로 지워야 한다)
+  //  - 둘 다 없으면 → 컬럼을 보내지 않는다. migration 전에도 평소 저장이 그대로 되고, 사유를 실제로
+  //    쓴 저장만 42703/PGRST204 → 기존 schemaMismatchMessage가 migration 안내를 보여준다.
+  const attendanceReasonOf = (entry: (typeof input.students)[number]) =>
+    normalizeAttendanceReason(entry.attendance, entry.attendanceReason);
+  const sendAttendanceReason =
+    input.students.some((entry) => attendanceReasonOf(entry) !== null) ||
+    (existingLessonRows ?? []).some(
+      (row) => ((row as { attendance_reason?: string | null }).attendance_reason ?? null) !== null,
+    );
 
   const lessonPayload = input.students.map((entry) => {
     const isAbsent = entry.attendance === "absent";
@@ -1266,6 +1284,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
       daily_log_id: dailyLogId,
       student_id: entry.studentId,
       attendance: entry.attendance,
+      ...(sendAttendanceReason ? { attendance_reason: attendanceReasonOf(entry) } : {}),
       progress: entry.progress?.trim() || null,
       strengths: isAbsent ? null : entry.strengths?.trim() || null,
       improvements: isAbsent ? null : entry.improvements?.trim() || null,

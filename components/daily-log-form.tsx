@@ -117,6 +117,7 @@ import {
 } from "@/lib/elementary";
 import { gradeDisplay } from "@/lib/grades";
 import type { AttendanceStatus, StudentGrade } from "@/lib/supabase/types";
+import { normalizeAttendanceReason } from "@/lib/attendance";
 import { cn } from "@/lib/utils";
 
 export type DailyLogFormStudent = {
@@ -127,6 +128,7 @@ export type DailyLogFormStudent = {
   school?: string | null;
   entry?: {
     attendance: AttendanceStatus;
+    attendanceReason?: string;
     progress: string;
     strengths: string;
     improvements: string;
@@ -153,6 +155,8 @@ export type DailyLogFormStudent = {
 
 type EntryState = {
   attendance: AttendanceStatus;
+  // 출결 사유 (선택) — 상태 버튼을 잠깐 바꿔도 로컬에서는 유지되고, 저장 시 출석이면 서버가 비운다
+  attendanceReason: string;
   progress: string;
   strengths: string;
   improvements: string;
@@ -182,6 +186,7 @@ function initEntry(student: DailyLogFormStudent): EntryState {
 
   return {
     attendance: student.entry?.attendance ?? "present",
+    attendanceReason: student.entry?.attendanceReason ?? "",
     progress: student.entry?.progress ?? "",
     strengths: student.entry?.strengths ?? "",
     improvements: student.entry?.improvements ?? "",
@@ -2563,6 +2568,8 @@ export function DailyLogForm({
           return {
             studentId: student.studentId,
             attendance: entry.attendance,
+            // 서버와 같은 규칙(normalizeAttendanceReason): 출석이면 비우고, 그 외는 trim
+            attendanceReason: normalizeAttendanceReason(entry.attendance, entry.attendanceReason) ?? "",
             progress: entry.progress,
             strengths: entry.strengths,
             improvements: entry.improvements,
@@ -3489,6 +3496,33 @@ export function DailyLogForm({
               {/* 카드 본문 — 접힘 시 display:none으로만 숨긴다 (mounted 유지: 입력값·미확정
                   편집기 상태 보존, hidden이라 keyboard focus/접근성 트리에서도 제외). */}
               <div id={cardBodyId} className={isCollapsed ? "hidden" : undefined}>
+
+              {/* 출결 사유 (선택) — 지각/조퇴/결석일 때만. 출석으로 바꾸면 숨기기만 하고 로컬 값은
+                  남겨 두어(다시 결석을 누르면 그대로) 저장 시점에만 서버가 비운다.
+                  onChange에서 값 재작성 없음 — 한글 조합이 그대로 보존된다. */}
+              {entry.attendance !== "present" ? (
+                <label className="mt-3 block">
+                  <span className="form-label mb-1 block text-[#8a7b77]">
+                    {entry.attendance === "late"
+                      ? "지각 사유"
+                      : entry.attendance === "early_leave"
+                        ? "조퇴 사유"
+                        : "결석 사유"}{" "}
+                    <span className="font-normal text-[#a79996]">(선택)</span>
+                  </span>
+                  <textarea
+                    value={entry.attendanceReason}
+                    onChange={(event) =>
+                      updateEntry(student.studentId, { attendanceReason: event.target.value })
+                    }
+                    rows={1}
+                    maxLength={500}
+                    aria-label={`${student.name} 출결 사유`}
+                    placeholder="사유를 입력하세요 (선택)"
+                    className="min-h-[44px] w-full min-w-0 max-w-full rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base leading-6 outline-none focus:border-[#e3bcb4] placeholder:text-[#b5a29e]"
+                  />
+                </label>
+              ) : null}
 
               {/* 지난 수업 참고 — 같은 그룹 직전 Finalized 일지의 이 학생 평가 (read-only).
                   값이 하나도 없거나(신규 학생/미평가) 지난 일지가 없으면 영역 자체를 숨긴다.

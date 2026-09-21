@@ -20,6 +20,8 @@ function pickOne<T>(value: unknown): T | null {
 export type TimelineLessonRow = {
   id: string;
   attendance: AttendanceStatus;
+  // 출결 사유 (선택) — migration 미적용이면 undefined→null
+  attendance_reason: string | null;
   progress: string | null;
   strengths: string | null;
   improvements: string | null;
@@ -47,7 +49,8 @@ export async function getStudentTimelineLessons(studentId: string, sinceDate: st
   let query = supabase
     .from("student_lesson_logs")
     .select(
-      "id, attendance, progress, strengths, improvements, memo, online_review_completed, daily_logs!inner(id, class_date, title, default_progress, lesson_content, status, class_groups(id, name, icon))",
+      // 학생 기록 컬럼은 *로 — attendance_reason(20260924 migration) 미적용 환경에서도 조회가 깨지지 않게
+      "*, daily_logs!inner(id, class_date, title, default_progress, lesson_content, status, class_groups(id, name, icon))",
     )
     .eq("user_id", user.id)
     .eq("student_id", studentId)
@@ -74,6 +77,7 @@ export async function getStudentTimelineLessons(studentId: string, sinceDate: st
       {
         id: row.id as string,
         attendance: row.attendance as AttendanceStatus,
+        attendance_reason: (row.attendance_reason ?? null) as string | null,
         progress: (row.progress ?? null) as string | null,
         strengths: (row.strengths ?? null) as string | null,
         improvements: (row.improvements ?? null) as string | null,

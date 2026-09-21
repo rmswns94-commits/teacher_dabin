@@ -338,6 +338,14 @@ export function LessonLogDetail({
                   ))}
                 </div>
 
+                {/* 출결 사유 — 지각/조퇴/결석에 사유가 있을 때만 (없으면 줄 자체를 만들지 않는다) */}
+                {lessonLog.attendance !== "present" && lessonLog.attendance_reason ? (
+                  <div className="secondary-text mt-1 whitespace-pre-wrap break-words text-[#564d4d]">
+                    <span className="font-semibold text-[#8a7b77]">사유 </span>
+                    {lessonLog.attendance_reason}
+                  </div>
+                ) : null}
+
                 {typeof lessonLog.online_review_completed === "boolean" ? (
                   <div className="secondary-text mt-1 text-[#564d4d]">
                     온라인 복습 {lessonLog.online_review_completed ? "완료" : "미완료"}

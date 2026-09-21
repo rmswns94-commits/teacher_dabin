@@ -92,6 +92,7 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
         school: lessonLog.student!.school,
         entry: {
           attendance: lessonLog.attendance,
+          attendanceReason: lessonLog.attendance_reason ?? "",
           progress: lessonLog.progress ?? "",
           strengths: lessonLog.strengths ?? "",
           improvements: lessonLog.improvements ?? "",
