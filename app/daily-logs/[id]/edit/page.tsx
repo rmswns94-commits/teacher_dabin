@@ -33,8 +33,15 @@ import { getVocabMistakesForDailyLog } from "@/lib/supabase/queries/vocab-mistak
 import { getAdjacentScheduledClasses } from "@/lib/adjacent-classes";
 import { dayOfWeekOf } from "@/lib/schedule";
 
-export default async function EditDailyLogPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditDailyLogPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ finalize?: string }>;
+}) {
   const { id } = await params;
+  const query = (await searchParams) ?? {};
   const [log, praiseRows, mistakeRows, draftRow] = await Promise.all([
     getDailyLogDetailForCurrentUser(id),
     getPraisesForDailyLog(id),
@@ -282,6 +289,8 @@ export default async function EditDailyLogPage({ params }: { params: Promise<{ i
               : null
           }
           draftPromptOnly={Boolean(fallbackDraftRow)}
+          // 대시보드 수업 마무리 [수업 일지 완료] 진입 — 기존 완료 요약 모달을 바로 연다 (완료는 모달에서)
+          openCompletion={query.finalize === "1"}
           // 오늘 숙제(구조화) — id 기반 sync를 위해 row id까지 전달
           initialAssignments={log.homeworkAssignments.map((hw) => ({
             id: hw.id,

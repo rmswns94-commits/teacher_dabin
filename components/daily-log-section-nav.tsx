@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import type { DailyLogSectionId } from "@/lib/daily-log-completeness";
 import { cn } from "@/lib/utils";
 
 // Daily Log 섹션 빠른 이동 — 같은 페이지 내부 scroll만 수행한다
@@ -15,9 +16,10 @@ import { cn } from "@/lib/utils";
 // (main 스크롤 컨테이너의 py-6 패딩 때문에 sticky nav 하단이 ~80px에 위치한다)
 const NAV_OFFSET_PX = 96;
 
-export type DailyLogSection = { id: string; label: string };
+export type DailyLogSection = { id: DailyLogSectionId; label: string };
 
-// 폼의 실제 섹션 anchor id (progress/attendance는 대시보드 빠른 실행 hash와 공유되는 기존 id)
+// 폼의 실제 섹션 anchor id (progress/attendance는 대시보드 빠른 실행 hash와 공유되는 기존 id).
+// 대시보드 "수업 마무리"의 [빠진 항목 확인]도 같은 id(DailyLogSectionId)만 hash로 쓴다 — 별도 map 없음.
 export const DAILY_LOG_NAV_SECTIONS: DailyLogSection[] = [
   { id: "progress", label: "진도" },
   { id: "homework", label: "숙제" },

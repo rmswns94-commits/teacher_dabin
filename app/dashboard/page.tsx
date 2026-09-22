@@ -28,6 +28,7 @@ import {
   formatTimeRange,
   getDayClassWindows,
   getScheduleOverview,
+  occurrenceKey,
   previousLessonSourceCutoff,
   type ClassOccurrence,
 } from "@/lib/schedule";
@@ -195,13 +196,20 @@ export default async function DashboardPage() {
   const examPeriodByGroupId = new Map(allGroups.map((group) => [group.id, group.is_exam_period]));
   const isExamPeriodGroup = (groupId: string) => examPeriodByGroupId.get(groupId) ?? false;
 
+  // 오늘의 실제 수업 occurrence 전부 (start ASC) — 수업 브리핑 카드의 이전/다음 탐색·자동 전환 source.
+  // 같은 resolver(getScheduleOverview)의 결과라 휴강/학원 휴강/공휴일 휴강/이동 source는 이미 빠져 있고,
+  // 이동 destination·보강·공휴일 정상수업 override·시간 변경은 실제 시각으로 들어 있다.
+  const todayOccurrences = scheduleOverview.todayOccurrences;
+  const renderNow = currentEpochMs();
+
   // 직전 수업 데이터(오늘 수업 계획/지난 숙제/브리핑) source cutoff — Final Save 시점이 아니라
-  // "hero occurrence가 끝났는가" 기준. 오늘 일지를 수업 전에 미리 완료해도 이 그룹의 오늘
-  // 수업 종료시각 전에는 직전 수업이 그대로 고정된다 (요일별 schedule로 계산된 endEpoch 기준,
-  // 그룹/occurrence별 독립 — 수업 종료 후에는 hero가 다음 occurrence로 넘어가며 오늘 일지가
-  // lesson_date < cutoff 를 만족해 새 previous source가 된다). status 조작/데이터 복제 없음.
-  // 이 cutoff는 브리핑(오늘 진도/지난 숙제)이 직전 수업 데이터를 고를 때 쓴다.
-  const previousBefore = hero ? previousLessonSourceCutoff(hero, currentEpochMs()) : null;
+  // "occurrence가 끝났는가" 기준(previousLessonSourceCutoff). 브리핑 본문은 아직 끝나지 않은 오늘
+  // occurrence에만 보이고(끝난 수업은 마무리 모드), 그런 occurrence의 cutoff는 전부 오늘 날짜라
+  // 첫 미종료 occurrence 기준 cutoff 하나를 오늘 브리핑 batch 전체에 쓴다. 오늘 일지를 수업 전에
+  // 미리 완료해도 그 그룹의 수업 종료 전에는 직전 수업이 그대로 고정된다 (class-end lock 그대로 —
+  // 종료 후 다음 occurrence(내일 등)에서는 오늘 일지가 lesson_date < cutoff를 만족해 새 previous source).
+  const briefingAnchor = todayOccurrences.find((occ) => renderNow < occ.endEpoch) ?? null;
+  const previousBefore = briefingAnchor ? previousLessonSourceCutoff(briefingAnchor, renderNow) : today;
 
   // To do list는 read-only summary: 수업 그룹 상세에서 Teacher가 실제 등록한
   // preparation_items만 보여준다 (Dashboard 직접 입력/추천 생성 없음).
@@ -283,6 +291,40 @@ export default async function DashboardPage() {
     groups: allGroups,
     todayLogsFailed: overview.todayLogsFailed,
   });
+
+  // 수업 브리핑 카드(Smart Briefing) 입력 — occurrence마다 이미 가진 데이터만 조립한다:
+  // 그룹 metadata(allGroups: 아이콘/준비 항목/시험 기간), 시험 D-day(upcomingExams),
+  // 오늘 일지 batch(overview.todayLogs — canonical identity user+group+오늘, Finalized 판정과
+  // 마무리 체크리스트 source). occurrence/탐색별 추가 쿼리 0.
+  const briefingOccurrences = todayOccurrences.map((occ) => {
+    const group = allGroups.find((item) => item.id === occ.group.id) ?? null;
+    const log = overview.todayLogs.find((item) => item.group_id === occ.group.id) ?? null;
+    return {
+      key: occurrenceKey(occ),
+      groupId: occ.group.id,
+      groupName: occ.group.name,
+      groupIcon: group?.icon ?? null,
+      examPeriod: isExamPeriodGroup(occ.group.id),
+      source: occ.source,
+      startTime: occ.startTime,
+      endTime: occ.endTime,
+      startEpoch: occ.startEpoch,
+      endEpoch: occ.endEpoch,
+      exams: upcomingExams
+        .filter((exam) => exam.groupId === occ.group.id)
+        .map((exam) => ({ id: exam.id, title: exam.title, badge: exam.badge })),
+      prepTexts: activePreparationItems(group?.preparation_items)
+        .filter((item) => !item.completed && (!item.dueDate || item.dueDate <= today))
+        .map((item) => formatTextbookLinked(linkedContextLabel(item), item.text)),
+      log: log ? { id: log.id, status: log.status, completeness: log.completeness } : null,
+    };
+  });
+  const wrapUpOccurrences = todayOccurrences.map((occ) => ({
+    key: occurrenceKey(occ),
+    groupId: occ.group.id,
+    startEpoch: occ.startEpoch,
+    endEpoch: occ.endEpoch,
+  }));
 
   const draftToday = overview.todayLogs.filter((log) => log.status === "draft");
 
@@ -516,22 +558,18 @@ export default async function DashboardPage() {
               진행 중인 수업이 따로 있으면 그 카드가 그대로 주인공이고, 이건 옆에 덧붙는 상태 안내다. */}
           <CancelledClassNotice rows={cancelledRows} initialNow={currentEpochMs()} />
 
-          {/* 수업 전 반 브리핑 — 오늘 수업(진행 중 포함)인 hero 그룹 하나만, 기존 데이터 정리(AI 없음).
-              Suspense로 감싸 hero 첫 렌더를 막지 않는다 (브리핑 쿼리는 스트리밍으로 뒤에 채워짐). */}
-          {hero && hero.daysFromNow === 0 && focusGroup && previousBefore ? (
+          {/* 수업 브리핑 카드 (Smart Briefing) — 오늘 실제 수업이 하나라도 있으면 표시. 기존 데이터 정리(AI 없음).
+              카드 하나가 오늘 수업 흐름을 따라간다: 수업 전/중 = 브리핑, 종료 = 수업 마무리(Finalized 여부),
+              다음 실제 수업 시작 = 그 수업 브리핑 (전환은 카드 내부 local tick — DB polling 없음).
+              [← 이전]/[다음 →]로 오늘 다른 수업도 같은 카드에서 본다 (local state만, DB mutation 0).
+              마지막 수업이 끝나도 그 수업의 마무리를 유지한다 (hero의 "오늘 수업 끝" 패널과 공존).
+              Suspense로 감싸 hero 첫 렌더를 막지 않는다 (브리핑 batch 쿼리는 스트리밍으로 뒤에 채워짐). */}
+          {briefingOccurrences.length > 0 ? (
             <Suspense fallback={<ClassBriefingSkeleton />}>
               <ClassBriefing
-                group={{ id: focusGroup.id, name: focusGroup.name, icon: focusGroup.icon ?? null }}
-                isNow={isCurrentClass}
-                startTime={hero.startTime}
+                occurrences={briefingOccurrences}
                 today={today}
                 previousBefore={previousBefore}
-                exams={upcomingExams
-                  .filter((exam) => exam.groupId === focusGroup.id)
-                  .map((exam) => ({ id: exam.id, title: exam.title, badge: exam.badge }))}
-                prepTexts={activePreparationItems(focusGroup.preparation_items)
-                  .filter((item) => !item.completed && (!item.dueDate || item.dueDate <= today))
-                  .map((item) => formatTextbookLinked(linkedContextLabel(item), item.text))}
                 // 학생 체크의 "오늘 보충 예정" — 이미 조회된 오늘 보충 batch 재사용 (추가 쿼리 0),
                 // exact group relation 매칭은 briefing 내부 helper가 groupId로만 한다
                 todayMakeups={todayMakeups.map((makeup) => ({
@@ -539,13 +577,20 @@ export default async function DashboardPage() {
                   groupId: makeup.groupId,
                   startTime: makeup.startTime,
                 }))}
+                initialNow={renderNow}
+                logsUnavailable={overview.todayLogsFailed}
               />
             </Suspense>
           ) : null}
 
           {/* 수업 종료 후 미작성 수업일지 알림 — 기존 단건 nudge를 다건 compact 카드로 확장.
-              종료 판정은 카드 내부 local clock (표시/숨김만 client, 데이터는 서버 파생) */}
-          <UnfinishedLogCard rows={unfinishedLogRows} initialNow={currentEpochMs()} />
+              종료 판정은 카드 내부 local clock (표시/숨김만 client, 데이터는 서버 파생).
+              방금 끝난 가장 최근 수업은 위 브리핑 카드의 마무리가 primary라 여기서 중복 경고하지 않는다. */}
+          <UnfinishedLogCard
+            rows={unfinishedLogRows}
+            initialNow={renderNow}
+            wrapUpOccurrences={wrapUpOccurrences}
+          />
 
           <div className="mt-5 grid gap-5 lg:grid-cols-[1.55fr_1fr]">
             <div className="space-y-4">

@@ -1,6 +1,12 @@
+import {
+  completenessFromPersistedLog,
+  type DailyLogCompletenessSource,
+  type LessonRowForCompleteness,
+  type PersistedLogForCompleteness,
+} from "@/lib/daily-log-completeness";
 import { todayDateString } from "@/lib/dates";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
-import type { AttendanceStatus, ClassGroupRecord, DailyLogRecord } from "@/lib/supabase/types";
+import type { ClassGroupRecord, DailyLogRecord } from "@/lib/supabase/types";
 
 function pickOne<T>(value: unknown): T | null {
   if (Array.isArray(value)) {
@@ -10,8 +16,9 @@ function pickOne<T>(value: unknown): T | null {
   return (value ?? null) as T | null;
 }
 
-// 대시보드 Today class 카드가 실제로 쓰는 필드만. daily_logs에는 진도/계획/회고 같은
-// 긴 text와 jsonb가 여러 개라 select("*")로 받으면 화면에 안 쓰는 데이터를 매번 실어 온다.
+// 대시보드가 실제로 쓰는 필드만 — Today class 카드(상태/출결 수) + 수업 마무리 체크리스트(완성도).
+// 완성도 판정에 필요한 진도/계획/회고 text·jsonb는 오늘 일지(≤ 오늘 수업 수)에 한해 읽되,
+// 서버에서 boolean/count로 줄여 내려보낸다 (긴 본문을 화면으로 실어 나르지 않는다).
 export type TodayLogSummary = Pick<DailyLogRecord, "id" | "status" | "group_id" | "class_date"> & {
   group: Pick<ClassGroupRecord, "id" | "name"> | null;
   attendanceCounts: {
@@ -21,7 +28,12 @@ export type TodayLogSummary = Pick<DailyLogRecord, "id" | "status" | "group_id" 
     absent: number;
     total: number;
   };
+  // 수업 마무리 체크리스트 source — lib/daily-log-completeness가 저장된 row에서 파생 (새 DB field 없음)
+  completeness: DailyLogCompletenessSource;
 };
+
+const TODAY_LOG_SELECT =
+  "id, status, group_id, class_date, default_progress, lesson_content, textbook_progress, school_progress, homework, next_lesson_plan, textbook_plans, school_plans, tasks, task_content, reflection_good, reflection_hard, reflection_next, class_groups(id, name), student_lesson_logs(attendance, homework_status, online_review_completed, strengths, improvements, memo, focus_level, participation_level, question_level, kindness_level, effort_level)";
 
 export async function getDashboardOverview() {
   const supabase = await createServerSupabaseClient();
@@ -43,7 +55,7 @@ export async function getDashboardOverview() {
   // 예전에 여기서도 열린 보충을 전부 받아왔지만 화면에서 쓰이지 않아 제거했다 (왕복 1회 절약).
   const logsResult = await supabase
     .from("daily_logs")
-    .select("id, status, group_id, class_date, class_groups(id, name), student_lesson_logs(attendance)")
+    .select(TODAY_LOG_SELECT)
     .eq("user_id", user.id)
     .eq("class_date", today)
     .order("created_at", { ascending: false });
@@ -53,12 +65,14 @@ export async function getDashboardOverview() {
   }
 
   const todayLogs = (logsResult.data ?? []).map((row) => {
-    const lessonLogs = (row.student_lesson_logs ?? []) as { attendance: AttendanceStatus }[];
+    const lessonLogs = (row.student_lesson_logs ?? []) as LessonRowForCompleteness[];
     const counts = { present: 0, late: 0, early_leave: 0, absent: 0, total: lessonLogs.length };
 
     for (const log of lessonLogs) {
       counts[log.attendance] += 1;
     }
+
+    const persisted = row as unknown as PersistedLogForCompleteness;
 
     return {
       id: row.id as string,
@@ -67,6 +81,7 @@ export async function getDashboardOverview() {
       class_date: row.class_date as string,
       group: pickOne<Pick<ClassGroupRecord, "id" | "name">>(row.class_groups),
       attendanceCounts: counts,
+      completeness: completenessFromPersistedLog({ ...persisted, student_lesson_logs: lessonLogs }),
     };
   });
 

@@ -142,6 +142,34 @@ export async function getDailyLogDraft(identity: {
   return (data as DailyLogDraftRecord | null) ?? null;
 }
 
+// 대시보드 수업 마무리 카드용 — 이 날짜에 "새 작성" 자동 임시저장(daily_log_id null)이 있는 그룹 집합.
+// 오늘 수업 그룹 전체를 in()으로 한 번에 묻는다 (occurrence/탐색마다 조회하지 않는다 — N+1 금지).
+// 존재 여부만 쓰고 payload는 읽지 않는다(폼 state 스냅샷을 대시보드가 해석하지 않는다).
+// 실패하면 빈 집합 — 카드는 "일지 없음" 안내로 degrade하고 canonical create flow가 그대로 draft를 찾는다.
+export async function getAutosaveDraftGroupIdsOn(classDate: string, groupIds: string[]) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user || groupIds.length === 0) {
+    return new Set<string>();
+  }
+
+  const { data, error } = await supabase
+    .from("daily_log_drafts")
+    .select("group_id")
+    .eq("user_id", user.id)
+    .eq("class_date", classDate)
+    .is("daily_log_id", null)
+    .in("group_id", groupIds);
+
+  if (error) {
+    console.error("getAutosaveDraftGroupIdsOn error", { code: error.code, message: error.message });
+    return new Set<string>();
+  }
+
+  return new Set((data ?? []).map((row) => row.group_id as string));
+}
+
 // 같은 draft id로 계속 UPDATE (1분마다 새 row를 만들지 않는다).
 // 첫 저장은 insert — unique index 충돌(다른 탭/이전 세션 draft)이면 그 row를 update.
 export async function upsertDailyLogDraft(input: {

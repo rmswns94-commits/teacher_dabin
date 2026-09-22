@@ -56,6 +56,7 @@ import { buildHomeworkShareText, shareableHomework } from "@/lib/homework-share"
 import { hasShareableContextSection } from "@/lib/lesson-share";
 import { LessonShareDialog } from "@/components/lesson-share-dialog";
 import { DAILY_LOG_NAV_SECTIONS, DailyLogSectionNav } from "@/components/daily-log-section-nav";
+import { completionReminders } from "@/lib/daily-log-completeness";
 import {
   activeTargetSchools,
   classifyStudentsByExamTarget,
@@ -648,6 +649,7 @@ export function DailyLogForm({
   draft = null,
   forceRestoreDraft = false,
   draftPromptOnly = false,
+  openCompletion = false,
   initial,
   initialAssignments = [],
   previousReflection = null,
@@ -692,6 +694,10 @@ export function DailyLogForm({
   // 자동 적용하면 일지 row 내용을 덮어쓰므로, 배너로만 안내하고 사용자가 [불러오기]를 선택한다.
   // autosave도 이 draft id를 이어받지 않는다 (수정 세션은 자기 identity로 새로 저장).
   draftPromptOnly?: boolean;
+  // 대시보드 수업 마무리 [수업 일지 완료] 진입(?finalize=1): 기존 [수업 기록 완료] 요약 모달을 바로 연다.
+  // 완료 자체는 모달의 [수업 마무리 완료] → 기존 save("completed") 그대로 (검증/사이드이펙트 동일, 우회 없음).
+  // 임시저장 [불러오기] 안내가 떠야 하는 경우엔 열지 않는다 (복원 전 완료 방지).
+  openCompletion?: boolean;
   initial?: {
     title: string;
     // 교재별 진도가 있는 일지는 mirror를 뗀 "기타 메모"만 (edit 페이지가 stripDerivedPrefix로 분리)
@@ -905,7 +911,10 @@ export function DailyLogForm({
   const [vocabTotal, setVocabTotal] = useState(
     restoredText(restored?.vocabTotal, initial?.vocabTotal ?? ""),
   );
-  const [showSummary, setShowSummary] = useState(false);
+  // 요약 모달 — 대시보드 [수업 일지 완료] 진입이면 처음부터 열린 상태 (draft 안내가 있으면 제외)
+  const [showSummary, setShowSummary] = useState(
+    () => openCompletion && !(Boolean(draft) && !autoRestored),
+  );
   const [entries, setEntries] = useState<Record<string, EntryState>>(() => {
     const base = Object.fromEntries(
       students.map((student) => [student.studentId, initEntry(student)]),
@@ -4523,6 +4532,8 @@ export function DailyLogForm({
           groupName={group.name}
           defaultProgress={derivedDefaultProgress}
           homework={homework}
+          // 구조화 숙제(내용 있는 행)도 "숙제 있음" — 서버가 homework 컬럼에 mirror를 저장하는 규칙과 동일
+          assignmentCount={assignments.filter((item) => item.content.trim()).length}
           nextLessonPlan={nextLessonPlan}
           reflectionFilled={Boolean(
             reflectionGood.trim() || reflectionHard.trim() || reflectionNext.trim(),
@@ -4542,6 +4553,7 @@ function CompletionSummary({
   groupName,
   defaultProgress,
   homework,
+  assignmentCount,
   nextLessonPlan,
   reflectionFilled,
   students,
@@ -4553,6 +4565,7 @@ function CompletionSummary({
   groupName: string;
   defaultProgress: string;
   homework: string;
+  assignmentCount: number;
   nextLessonPlan: string;
   reflectionFilled: boolean;
   students: DailyLogFormStudent[];
@@ -4595,11 +4608,12 @@ function CompletionSummary({
     }
   }
 
-  const reminders = [
-    !homework.trim() ? "오늘 숙제가 비어 있어요." : null,
-    !nextLessonPlan.trim() ? "다음 수업 계획이 비어 있어요." : null,
-    !reflectionFilled ? "오늘 수업 회고가 비어 있어요." : null,
-  ].filter(Boolean) as string[];
+  // 리마인더 문구/판정은 lib/daily-log-completeness 한 곳 — 대시보드 수업 마무리 체크리스트와 같은 source
+  const reminders = completionReminders({
+    homeworkFilled: Boolean(homework.trim()) || assignmentCount > 0,
+    nextPlanFilled: Boolean(nextLessonPlan.trim()),
+    reflectionFilled,
+  });
 
   return (
     <div

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { ExamPeriodMark } from "@/components/exam-period-mark";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { autoFocusOccurrence, type CardOccurrenceTiming } from "@/lib/class-card-state";
 
 // 수업 종료 후 미작성 수업일지 알림 — 오늘(KST) 요일 schedule이 있는 그룹 중
 // "수업이 끝났는데(now >= endEpoch) 오늘 일지가 Finalized(completed)가 아닌" 것만 묶어 보여준다.
@@ -33,9 +34,14 @@ export type UnfinishedLogRow = {
 export function UnfinishedLogCard({
   rows,
   initialNow,
+  wrapUpOccurrences = [],
 }: {
   rows: UnfinishedLogRow[];
   initialNow: number;
+  // 오늘의 실제 수업 occurrence(시각만) — 수업 브리핑 카드와 같은 resolver(autoFocusOccurrence)로
+  // "방금 끝난 가장 최근 수업"을 판정해, 그 수업의 마무리는 브리핑 카드가 primary로 맡고
+  // 여기서는 중복 경고를 띄우지 않는다. 그보다 이전에 놓친 미작성 수업은 그대로 이 알림이 담당.
+  wrapUpOccurrences?: CardOccurrenceTiming[];
 }) {
   const [now, setNow] = useState(initialNow);
 
@@ -53,7 +59,11 @@ export function UnfinishedLogCard({
     };
   }, []);
 
-  const visible = rows.filter((row) => now >= row.endEpoch);
+  // 진행 중인 수업이 없고 오늘 끝난 수업이 있으면 그 마지막 수업이 브리핑 카드의 wrap-up 대상 —
+  // 같은 화면에서 같은 수업을 두 번 경고하지 않는다 (진행 중인 수업이 있으면 primary가 브리핑이라 제외 없음)
+  const primary = autoFocusOccurrence(wrapUpOccurrences, now);
+  const primaryWrapUpGroupId = primary && now >= primary.endEpoch ? primary.groupId : null;
+  const visible = rows.filter((row) => now >= row.endEpoch && row.groupId !== primaryWrapUpGroupId);
 
   if (visible.length === 0) {
     // 미작성 0개면 카드 자체를 렌더하지 않는다 ("없음" empty 카드 금지)

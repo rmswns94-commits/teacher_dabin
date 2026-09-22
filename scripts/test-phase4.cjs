@@ -67,12 +67,12 @@ function mockDB(logs = [log]) {
       select(columns) { call.columns = columns; return query; },
       eq(k, v) { call.filters.push([k, "eq", v]); return query; },
       lt(k, v) { call.filters.push([k, "lt", v]); return query; },
-      lte() { return query; }, gte() { return query; }, in() { return query; },
+      lte() { return query; }, gte() { return query; }, in() { return query; }, not() { return query; }, is() { return query; }, or() { return query; },
       order(k) { call.order.push(k); return query; }, limit(n) { call.limit = n; return query; },
       maybeSingle() { call.single = true; return query; },
       then(resolve, reject) {
         let data = [];
-        if (table === "student_group_memberships") data = [{ students: { id: "member", name: "현재학생", archived: false } }];
+        if (table === "student_group_memberships") data = [{ group_id: "group", student_id: "member", students: { id: "member", name: "현재학생", archived: false } }];
         if (table === "class_group_schedules") data = logs.map((item, i) => ({ group_id: item.group_id, start_time: `${14 + i}:00`, end_time: `${15 + i}:00` }));
         if (table === "daily_logs") {
           data = logs.filter((item) => call.filters.every(([k, op, v]) => op === "eq" ? item[k] === v : item[k] < v));
@@ -124,7 +124,8 @@ async function main() {
   const todayLog = { ...log, id: "today", class_date: "2026-09-14" };
   db = mockDB([log, todayLog, { ...todayLog, id: "draft", status: "draft" }, { ...todayLog, id: "foreign", user_id: "another" }]);
   const before = await getGroupBriefingData("group", "2026-09-14", "2026-08-15", previousLessonSourceCutoff(occurrence, endEpoch - 1));
-  check("class-end lock excludes early finalized log and draft", () => { assert.equal(before.lastLog.id, "log"); assert.equal(db.calls.length, 4); });
+  // batch: 멤버 1 + 그룹별 마지막 Finalized 1 + 약점 1 + 오답 1 + 밀린 개인 숙제 1 = 5 (그룹 수와 무관한 4 + N)
+  check("class-end lock excludes early finalized log and draft", () => { assert.equal(before.lastLog.id, "log"); assert.equal(db.calls.length, 5); });
   check("previous homework keeps completed records and embedded student names", () => {
     assert.equal(before.lastLog.homeworkAssignments.length, 12);
     assert.equal(before.lastLog.homeworkAssignments[1].assignedStudentName, "김민지");
@@ -135,7 +136,15 @@ async function main() {
   const after = await getGroupBriefingData("group", "2026-09-14", "2026-08-15", previousLessonSourceCutoff(occurrence, endEpoch));
   check("class-end handoff selects today's completed log", () => assert.equal(after.lastLog.id, "today"));
   db = mockDB();
-  const briefingNode = await ClassBriefing({ group: { id: "group", name: "7교시", icon: null }, isNow: true, startTime: "17:00", today: "2026-09-14", previousBefore: "2026-09-14", exams: [], prepTexts: ["한울중학교 - 시험지 출력", "Grammar Inside 2 - 워크북 채점"] });
+  // Smart Briefing: occurrence 목록을 받아 client shell에 본문을 넘긴다 — 진행 중(now < end)이면 브리핑 본문
+  const briefingNode = await ClassBriefing({
+    occurrences: [{
+      key: "regular:s1:2026-09-14:17:00", groupId: "group", groupName: "7교시", groupIcon: null, examPeriod: false, source: "regular",
+      startTime: "17:00", endTime: "18:30", startEpoch: Date.parse("2026-09-14T17:00:00+09:00"), endEpoch: Date.parse("2026-09-14T18:30:00+09:00"),
+      exams: [], prepTexts: ["한울중학교 - 시험지 출력", "Grammar Inside 2 - 워크북 채점"], log: null,
+    }],
+    today: "2026-09-14", previousBefore: "2026-09-14", todayMakeups: [], initialNow: Date.parse("2026-09-14T17:30:00+09:00"),
+  });
   const briefing = renderToStaticMarkup(briefingNode);
   check("briefing all 12 homework entries once, both audiences, no show-more", () => {
     for (let i = 0; i < 12; i++) assert.equal(briefing.split(`숙제내용${i}끝`).length, 2);
@@ -143,6 +152,7 @@ async function main() {
     assert.ok(!/전체 보기|더 보기|접기/.test(briefing));
     assert.ok(briefing.indexOf("준비할 일") < briefing.indexOf("오늘 진도"));
     assert.ok(briefing.indexOf("오늘 진도") < briefing.indexOf("지난 숙제"));
+    assert.ok(briefing.includes("7교시 수업 브리핑")); assert.ok(briefing.includes("지금 수업 중"));
   });
   const detail = {
     ...log, default_progress: raw, lesson_content: null, school_progress: school, textbook_progress: textbook,

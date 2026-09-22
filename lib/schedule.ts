@@ -162,9 +162,23 @@ export type ScheduleOverview<G> = {
   next: ClassOccurrence<G> | null;
   nextAfter: ClassOccurrence<G> | null;
   endedToday: ClassOccurrence<G>[];
+  // 오늘의 실제(effective) 수업 전부 — startEpoch ASC. current/next/endedToday와 같은 배열에서
+  // 파생되므로 휴강/학원 휴강/공휴일 휴강/이동 source는 이미 빠져 있고, 시간 변경·이동 destination·
+  // 보강·공휴일 정상수업 override는 실제 시각으로 들어 있다 (대시보드 브리핑 카드의 이전/다음 탐색 source).
+  todayOccurrences: ClassOccurrence<G>[];
   // 오늘 휴강된 수업들 (실제 수업 목록과 완전히 분리 — 어떤 소비처도 이것을 수업으로 쓰지 않는다)
   cancelledToday: CancelledOccurrence<G>[];
 };
+
+// occurrence의 안정 식별자 — 표시/선택 state 전용 (DB 저장 금지). 같은 그룹이 하루 두 slot이어도
+// 구분되고, 반복 시간표 row가 없는 보강은 그룹+날짜+시각으로 식별한다.
+export function occurrenceKey<G extends { id: string }>(
+  occ: Pick<ClassOccurrence<G>, "schedule" | "group" | "source" | "date" | "startTime">,
+) {
+  return occ.schedule
+    ? `${occ.source}:${occ.schedule.id}:${occ.date}:${occ.startTime}`
+    : `${occ.source}:${occ.group.id}:${occ.date}:${occ.startTime}`;
+}
 
 // Scans today plus the next `horizonDays` days of weekly repeats and returns
 // the class in progress (if any), the next one, the one after that, and
@@ -303,6 +317,7 @@ export function getScheduleOverview<G>(
     next: upcoming[0] ?? null,
     nextAfter: upcoming[1] ?? null,
     endedToday,
+    todayOccurrences: occurrences.filter((occ) => occ.daysFromNow === 0),
     cancelledToday,
   };
 }

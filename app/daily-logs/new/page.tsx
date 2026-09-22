@@ -43,7 +43,7 @@ import { dayOfWeekOf } from "@/lib/schedule";
 export default async function NewDailyLogPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ groupId?: string; date?: string; resume?: string; fresh?: string }>;
+  searchParams?: Promise<{ groupId?: string; date?: string; resume?: string; fresh?: string; finalize?: string }>;
 }) {
   const params = (await searchParams) ?? {};
 
@@ -285,6 +285,8 @@ export default async function NewDailyLogPage({
               // 시간 창과 무관하게 즉시 전체 복원 — 어느 버튼으로 들어와도 같은 Draft 하나
               // (이 화면은 항상 group이 선택된 상태에서만 폼을 렌더하므로 = identity 확정)
               forceRestoreDraft={Boolean(draftRow)}
+              // 대시보드 수업 마무리 [수업 일지 완료] 진입 — 기존 완료 요약 모달을 바로 연다 (완료는 모달에서)
+              openCompletion={params.finalize === "1"}
               group={{ id: selectedGroup.id, name: selectedGroup.name, grade: selectedGroup.grade }}
               students={groupStudents.map((student) => ({
                 studentId: student.id,
