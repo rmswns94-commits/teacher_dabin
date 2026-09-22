@@ -17,7 +17,6 @@ import {
   getDailyLogDetailForCurrentUser,
   getGroupHistoryLogs,
   getPraisesForDailyLog,
-  getPreviousLessonImportSource,
   getPreviousReflectionNext,
   getPreviousStudentEvaluations,
 } from "@/lib/supabase/queries/daily-logs";
@@ -129,7 +128,7 @@ export default async function EditDailyLogPage({
 
   // Students who joined the group after this log was written can still be added.
   const knownIds = new Set(students.map((student) => student.studentId));
-  const [currentMembers, groupSchedules, prevReflection, allGroups, importSource, allSchedules, prevEvaluations, history, dateExceptions, dateClosures, dateSupplements, dateHolidays] = await Promise.all([
+  const [currentMembers, groupSchedules, prevReflection, allGroups, allSchedules, prevEvaluations, history, dateExceptions, dateClosures, dateSupplements, dateHolidays] = await Promise.all([
     getGroupStudentsForCurrentUser(log.group_id),
     // 다음 수업 계획 기본 날짜 계산용 시간표 (legacy row는 저장 전까지 DB 미변경)
     getGroupSchedules(log.group_id),
@@ -137,9 +136,6 @@ export default async function EditDailyLogPage({
     getPreviousReflectionNext(log.group_id, log.class_date),
     // 작성 중(draft) 일지 상단의 그룹/날짜 피커용 — 완료 일지 수정에는 표시하지 않는다
     log.status === "draft" ? getCurrentUserGroups() : Promise.resolve([]),
-    // [지난 수업에서 가져오기] source — 이 일지 class_date "미만"의 최신 Finalized
-    // (자기 자신은 lt 조건으로 자연 제외 — Finalized Edit에서도 안전)
-    getPreviousLessonImportSource(log.group_id, log.class_date),
     // 이전/다음 수업 바로가기 — 전 그룹 시간표 (AppShell과 같은 요청당 1쿼리 cache, N+1 없음)
     getCurrentUserSchedulesWithGroup(),
     // 학생 평가 카드 "지난 수업 참고" — 이 일지 class_date "미만"의 직전 Finalized 학생 평가
@@ -309,8 +305,8 @@ export default async function EditDailyLogPage({
           // PHASE 2 혼합 진도 — 그룹의 시험 대상 학교 설정 (null = legacy, 기존 방식 유지).
           // 기존 저장 항목은 저장 필드가 identity라 설정과 무관하게 그대로 hydrate/보존된다.
           examTargetSchools={log.group?.exam_target_schools ?? null}
-          // [지난 수업에서 가져오기] — 직전 Finalized의 계획/숙제/할 일 (자동 적용 없음)
-          importSource={importSource}
+          // [지난 수업에서 가져오기] 후보는 폼이 다이얼로그를 열 때 (group, 이 일지 class_date) 기준으로 조회한다
+          // (자기 자신은 lt 조건으로 자연 제외 — Finalized Edit에서도 안전)
           // 학생 평가 카드 "지난 수업 참고" (read-only — 오늘 평가로 복사하지 않음)
           previousEvaluations={prevEvaluations}
           initial={{

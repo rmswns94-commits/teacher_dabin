@@ -44,12 +44,15 @@ import {
   PreviousLessonImportDialog,
   type ImportSelection,
 } from "@/components/previous-lesson-import";
+import { getLessonImportCandidatesAction } from "@/app/daily-logs/import-actions";
 import {
   applyTextbookPlanToManualProgress,
   classifyHomeworkImports,
   classifyPlanImports,
   classifyTaskImports,
-  type PreviousLessonImportSource,
+  mergeImportedPlanText,
+  type ClassifiedPlan,
+  type LessonImportCandidates,
 } from "@/lib/lesson-import";
 import { buildTextbookSectionsText, formatTextbookLinked, joinDerivedText } from "@/lib/textbooks";
 import { buildHomeworkShareText, shareableHomework } from "@/lib/homework-share";
@@ -657,7 +660,6 @@ export function DailyLogForm({
   examPeriod = false,
   schools = [],
   examTargetSchools = null,
-  importSource = null,
   previousEvaluations = null,
 }: {
   dailyLogId?: string;
@@ -681,10 +683,6 @@ export function DailyLogForm({
   // null = legacy 미설정 — 시험 기간 ON이어도 기존 전체 학교별 방식을 유지한다(자동 mixed 전환 금지).
   // 배열 = 혼합 모드: 대상 학교만 학교별 진도, 나머지 학생은 일반 교재별 진도.
   examTargetSchools?: string[] | null;
-  // [지난 수업에서 가져오기] source — 현재 폼 lesson_date "미만"의 같은 그룹 최신 Finalized
-  // (서버 getPreviousLessonImportSource가 만들어 내려줌). null = 이전 일지 없음/조회 실패 —
-  // 버튼은 그대로 두고 다이얼로그에서 안내만 한다. 자동 적용은 절대 없다 (USER ACTION만).
-  importSource?: PreviousLessonImportSource | null;
   // 서버에서 발견한 자동 임시저장 draft (있으면 복구 배너 표시 — 자동 덮어쓰기 없음)
   draft?: { id: string; updatedAt: string; payload: unknown } | null;
   // [수업 일지 작성하기] resume 진입: 10분 창과 무관하게 draft를 즉시 전체 복원
@@ -1099,6 +1097,17 @@ export function DailyLogForm({
     },
     [],
   );
+  // 가져오기 결과 안내 (표시 전용 — dirty/autosave/draft payload에 포함되지 않는다)
+  const [importNotice, setImportNotice] = useState("");
+  const importNoticeTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (importNoticeTimerRef.current !== null) {
+        window.clearTimeout(importNoticeTimerRef.current);
+      }
+    },
+    [],
+  );
 
   // 학생 카드 접힘 — 100% 사용자 [접기]/[펴기]로만 바뀌는 UI-only state.
   // 평가 완료 여부와 무관, dirty/autosave/draft·final payload에 절대 관여하지 않는다.
@@ -1388,6 +1397,18 @@ export function DailyLogForm({
     }, 4000);
   };
 
+  // [지난 수업에서 가져오기] 결과 안내 — 일괄 입력 notice와 같은 4초 자동 소멸 표시 전용 state
+  const showImportNotice = (text: string) => {
+    setImportNotice(text);
+    if (importNoticeTimerRef.current !== null) {
+      window.clearTimeout(importNoticeTimerRef.current);
+    }
+    importNoticeTimerRef.current = window.setTimeout(() => {
+      setImportNotice("");
+      importNoticeTimerRef.current = null;
+    }, 4000);
+  };
+
   // 일괄 입력 실행 — 미평가(빈 값)이면서 결석이 아닌 학생만, form state 1회 update.
   // DB 호출 없음: 저장은 기존 autosave/임시 저장/수업 마무리 파이프라인이 그대로 담당한다.
   // 이미 입력된 값은 절대 덮어쓰지 않는다 (대상 0명이면 state 변경도 dirty도 없음).
@@ -1504,31 +1525,55 @@ export function DailyLogForm({
   const assignmentSection = (item: AssignmentItem) => mixedItemSection(item, regularStudentIdSet);
   const taskSection = (item: TaskFormItem) => mixedItemSection(item, regularStudentIdSet);
 
-  // ── [지난 수업에서 가져오기] — 후보 분류는 현재 폼 상태 기준으로 매 렌더 파생된다
-  // (다이얼로그를 다시 열면 이미 가져온 항목은 duplicate로 자동 제외 — 중복 가져오기 방지).
-  // 적용은 아래 applyPreviousLessonImport에서 필요한 섹션만 merge — 폼 전체 교체 금지.
+  // ── [지난 수업에서 가져오기] — 후보는 다이얼로그를 열 때 현재 (group, lesson_date) 기준으로 서버에서
+  // 조회한다 (폼에서 날짜를 바꾸면 새 날짜 기준으로 다시 resolve — 이전 날짜 후보가 남지 않는다).
+  // 분류는 현재 폼 상태 기준으로 매 렌더 파생된다 (다이얼로그를 다시 열면 이미 가져온 항목은
+  // duplicate로 자동 제외 — 중복 가져오기 방지). 적용은 아래 applyPreviousLessonImport에서
+  // 필요한 섹션만 merge — 폼 전체 교체/DB 변경/Todo 생성 없음.
   const [importOpen, setImportOpen] = useState(false);
+  const [importState, setImportState] = useState<{
+    key: string;
+    data: LessonImportCandidates | null;
+    error: string | null;
+    loading: boolean;
+  }>({ key: "", data: null, error: null, loading: false });
+  const importKey = `${group.id}:${classDate}`;
+  const importData = importState.key === importKey ? importState.data : null;
+  const openImport = () => {
+    setImportOpen(true);
+    setImportState({ key: importKey, data: null, error: null, loading: true });
+    void getLessonImportCandidatesAction({ groupId: group.id, lessonDate: classDate }).then((result) => {
+      setImportState((prev) =>
+        prev.key !== importKey
+          ? prev
+          : "candidates" in result
+            ? { key: importKey, data: result.candidates, error: null, loading: false }
+            : { key: importKey, data: null, error: result.error, loading: false },
+      );
+    });
+  };
   const importTextbookTextByName: Record<string, string> =
     progressMode === "mixed"
       ? Object.fromEntries(manualTextbookProgress.map((item) => [item.name, item.text]))
       : textbookProgressMap;
-  const importPlans = importSource
-    ? classifyPlanImports({
-        mode: progressMode,
-        source: importSource,
-        activeTargetSchools: examInputSchools,
-        memberSchools: schools,
-        regularTextbooks: textbooks,
-        canAddRegular: hasRegularStudents,
-        currentSchoolText: schoolProgressMap,
-        currentTextbookText: importTextbookTextByName,
-        currentMemo: defaultProgress,
-      })
-    : [];
-  const importHomework = importSource
+  const classifyPlans = (plans: LessonImportCandidates["plans"]): ClassifiedPlan[] =>
+    classifyPlanImports({
+      mode: progressMode,
+      plans,
+      activeTargetSchools: examInputSchools,
+      memberSchools: schools,
+      regularTextbooks: textbooks,
+      canAddRegular: hasRegularStudents,
+      currentSchoolText: schoolProgressMap,
+      currentTextbookText: importTextbookTextByName,
+      currentMemo: defaultProgress,
+    });
+  const importPlans = importData ? classifyPlans(importData.plans) : [];
+  const importLegacyPlans = importData?.legacy ? classifyPlans(importData.legacy.plans) : [];
+  const importHomework = importData
     ? classifyHomeworkImports({
         mode: progressMode,
-        entries: importSource.homework,
+        entries: importData.homework,
         activeTargetSchools: examInputSchools,
         memberSchools: schools,
         regularTextbooks: textbooks,
@@ -1537,10 +1582,10 @@ export function DailyLogForm({
         existing: assignments,
       })
     : [];
-  const importTasks = importSource
+  const importTasks = importData
     ? classifyTaskImports({
         mode: progressMode,
-        entries: importSource.tasks,
+        entries: importData.tasks,
         activeTargetSchools: examInputSchools,
         memberSchools: schools,
         regularTextbooks: textbooks,
@@ -1549,27 +1594,43 @@ export function DailyLogForm({
     : [];
 
   const applyPreviousLessonImport = (selection: ImportSelection) => {
-    if (selection.plan) {
-      for (const plan of importPlans) {
-        if (plan.status !== "importable") {
-          continue;
-        }
-        if (plan.kind === "school") {
-          // name 키 갱신 — 기존 textarea key가 그대로라 remount/IME 영향 없음
-          setSchoolProgressMap((prev) => ({ ...prev, [plan.name]: plan.text }));
-        } else if (plan.kind === "textbook") {
-          if (progressMode === "mixed") {
-            // 수동 추가 버튼과 같은 shape — 기존 item은 id 유지한 채 내용만 채운다
-            setManualTextbookProgress((prev) =>
-              applyTextbookPlanToManualProgress(prev, plan.name, plan.text),
-            );
-          } else {
-            setTextbookProgressMap((prev) => ({ ...prev, [plan.name]: plan.text }));
-          }
+    let importedCount = 0;
+    // 계획 → 오늘 진도: 같은 이름(교재/학교)에 여러 source(여러 과거 일지)가 있으면 줄바꿈으로 이어 붙인다.
+    // importable = 현재 필드가 비어 있거나 다른 내용이 없는 경우뿐이라 기존 입력을 덮어쓰지 않는다.
+    const grouped = new Map<string, { kind: ClassifiedPlan["kind"]; name: string; texts: string[] }>();
+    for (const plan of [
+      ...(selection.plan ? importPlans : []),
+      ...(selection.legacy ? importLegacyPlans : []),
+    ]) {
+      if (plan.status !== "importable") {
+        continue;
+      }
+      const key = `${plan.kind}:${plan.name}`;
+      const entry = grouped.get(key) ?? { kind: plan.kind, name: plan.name, texts: [] };
+      entry.texts.push(plan.text);
+      grouped.set(key, entry);
+      importedCount += 1;
+    }
+    for (const { kind, name, texts } of grouped.values()) {
+      if (kind === "school") {
+        // name 키 갱신 — 기존 textarea key가 그대로라 remount/IME 영향 없음
+        setSchoolProgressMap((prev) => ({ ...prev, [name]: mergeImportedPlanText(prev[name] ?? "", texts) }));
+      } else if (kind === "textbook") {
+        if (progressMode === "mixed") {
+          // 수동 추가 버튼과 같은 shape — 기존 item은 id 유지한 채 내용만 채운다
+          setManualTextbookProgress((prev) =>
+            applyTextbookPlanToManualProgress(
+              prev,
+              name,
+              mergeImportedPlanText(prev.find((item) => item.name === name)?.text ?? "", texts),
+            ),
+          );
         } else {
-          // legacy raw 계획 — 기타 진도 메모가 비어 있을 때만 importable로 분류되므로 안전
-          setDefaultProgress(plan.text);
+          setTextbookProgressMap((prev) => ({ ...prev, [name]: mergeImportedPlanText(prev[name] ?? "", texts) }));
         }
+      } else {
+        // legacy raw 계획 — canonical destination은 기타 진도 메모 (비어 있을 때만 importable)
+        setDefaultProgress((prev) => mergeImportedPlanText(prev, texts));
       }
     }
     if (selection.homework) {
@@ -1591,6 +1652,7 @@ export function DailyLogForm({
         }));
       if (copies.length > 0) {
         setAssignments((prev) => [...prev, ...copies]);
+        importedCount += copies.length;
       }
     }
     if (selection.tasks) {
@@ -1611,15 +1673,19 @@ export function DailyLogForm({
         }));
       if (copies.length > 0) {
         setTasks((prev) => [...prev, ...copies]);
+        importedCount += copies.length;
       }
     }
     setImportOpen(false);
+    if (importedCount > 0) {
+      showImportNotice(`${importedCount}개 항목을 가져왔어요.`);
+    }
   };
 
   const importButton = (
     <button
       type="button"
-      onClick={() => setImportOpen(true)}
+      onClick={openImport}
       className="flex min-h-9 shrink-0 items-center gap-1 rounded-xl border border-[#e2d8f3] bg-white px-2.5 text-sm font-medium text-[#6652b9] transition hover:bg-[#faf7ff]"
     >
       <History className="h-3.5 w-3.5" aria-hidden /> 지난 수업에서 가져오기
@@ -2855,6 +2921,15 @@ export function DailyLogForm({
                   {/* 직전 Finalized의 다음 수업 계획을 오늘 진도 초안으로 — USER ACTION만, 자동 없음 */}
                   {importButton}
                 </div>
+                {importNotice ? (
+                  <p
+                    role="status"
+                    data-import-notice
+                    className="mb-2 rounded-xl border border-[#d8ebe0] bg-[#f0faf5] px-3 py-2 text-sm text-[#2f6d54]"
+                  >
+                    {importNotice}
+                  </p>
+                ) : null}
                 {progressMode === "legacy_exam" ? (
                   // legacy: 시험 대비 ON + 대상 학교 미설정 — 자동 mixed 전환 없이 안내만
                   <div className="secondary-text mb-2 rounded-xl bg-[#fdf1e6] px-3 py-2 text-[#a2643c]">
@@ -2931,6 +3006,15 @@ export function DailyLogForm({
                   </span>
                   {importButton}
                 </div>
+                {importNotice ? (
+                  <p
+                    role="status"
+                    data-import-notice
+                    className="mb-2 rounded-xl border border-[#d8ebe0] bg-[#f0faf5] px-3 py-2 text-sm text-[#2f6d54]"
+                  >
+                    {importNotice}
+                  </p>
+                ) : null}
                 {examPeriod && schools.length === 0 ? (
                   // 시험 기간 ON인데 그룹 학생 전원이 학교 미등록 — 학교 편집기 없이도
                   // 작성/저장은 그대로 가능 (임의 학교를 만들지 않는다)
@@ -4518,10 +4602,14 @@ export function DailyLogForm({
 
       {importOpen ? (
         <PreviousLessonImportDialog
-          sourceDate={importSource ? importSource.classDate : null}
+          lessonDate={classDate}
+          loading={importState.key !== importKey || importState.loading}
+          error={importState.key === importKey ? importState.error : null}
           plans={importPlans}
           homework={importHomework}
           tasks={importTasks}
+          legacyPlans={importLegacyPlans}
+          legacySourceDate={importData?.legacy?.sourceLessonDate ?? null}
           onConfirm={applyPreviousLessonImport}
           onClose={() => setImportOpen(false)}
         />

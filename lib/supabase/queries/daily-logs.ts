@@ -1,5 +1,17 @@
 import { normalizeAttendanceReason } from "@/lib/attendance";
+import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDateFull } from "@/lib/dates";
+import {
+  datedPlanCandidates,
+  emptyLessonImportCandidates,
+  homeworkCandidatesFromRows,
+  legacyPlanFallback,
+  taskCandidatesFromRows,
+  type HomeworkSourceRow,
+  type LessonImportCandidates,
+  type PlanSourceRow,
+  type TaskSourceRow,
+} from "@/lib/lesson-import";
 import {
   dailyLogTaskTodoId,
   isDailyLogTaskTodoId,
@@ -865,89 +877,111 @@ function schemaMismatchMessage(error: { code?: string } | null | undefined) {
 // class_date가 가장 최근인 Finalized 일지 1개 (Draft 제외, created_at이 아니라 class_date 기준,
 // 다른 그룹 절대 금지 — group_id eq). 숙제는 relation embed로 같은 쿼리에 — 항목별 쿼리 0.
 // 조회 실패/없음은 null — 폼은 "가져올 이전 수업일지가 없어요"로 계속 정상 동작한다.
-export async function getPreviousLessonImportSource(groupId: string, beforeDate: string) {
+// [지난 수업에서 가져오기] source resolver — 현재 폼의 (group, lesson_date=D) 기준 "날짜 대상" 후보.
+// 직전 Finalized 1건이 아니라, 같은 그룹의 과거(lesson_date < D) Finalized 일지들 중 각 항목의
+// 저장된/canonical 날짜가 D와 정확히 일치하는 것만 DB에서 exact filter로 모은다 (created_at 추측 없음).
+//   계획   daily_logs.next_plan_date = D                                  (1쿼리)
+//   숙제   daily_log_homework_assignments.due_date = D (+ daily_logs!inner 그룹/완료/과거 filter) (1쿼리)
+//   할 일  tasks jsonb @> [{dueDate: D}]  ∪  (class_date = D-1 → 기본값 수업일+1 = D, task_due_date = D)  (2쿼리)
+//   fallback  직전 Finalized 1건 — 날짜 미지정 legacy 계획에만 사용 (dated 후보가 없을 때)   (1쿼리)
+// 과거 일지마다 child 쿼리를 돌리지 않는다(N+1 없음). 조회만 — 어떤 row도 만들거나 바꾸지 않는다.
+// Dashboard 브리핑의 previous-lesson resolver(briefing.ts)와는 별개다 — 그쪽은 변경하지 않는다.
+const IMPORT_PLAN_SELECT = "id, class_date, next_plan_date, next_lesson_plan, school_plans, textbook_plans";
+const IMPORT_TASK_SELECT = "id, class_date, tasks, task_content, task_due_date, task_textbook";
+
+export async function getLessonImportCandidates(
+  groupId: string,
+  lessonDate: string,
+): Promise<LessonImportCandidates> {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
-  if (!supabase || !user || !beforeDate) {
-    return null;
+  if (!supabase || !user || !lessonDate) {
+    return emptyLessonImportCandidates(lessonDate);
   }
 
-  const { data, error } = await supabase
-    .from("daily_logs")
-    .select(
-      "id, class_date, next_lesson_plan, school_plans, textbook_plans, tasks, daily_log_homework_assignments(id, content, textbook, school, assigned_student_id, sort_order, assigned_student:students(id, name))",
-    )
-    .eq("user_id", user.id)
-    .eq("group_id", groupId)
-    .eq("status", "completed")
-    .lt("class_date", beforeDate)
-    .order("class_date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // 공통 조건: 같은 강사(+RLS로 현재 workspace) · 같은 그룹 · Finalized · 현재 수업일 "미만"
+  const [planResult, homeworkResult, taskExplicitResult, taskDefaultResult, previousResult] = await Promise.all([
+    supabase
+      .from("daily_logs")
+      .select(IMPORT_PLAN_SELECT)
+      .eq("user_id", user.id)
+      .eq("group_id", groupId)
+      .eq("status", "completed")
+      .lt("class_date", lessonDate)
+      .eq("next_plan_date", lessonDate)
+      .order("class_date", { ascending: true })
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("daily_log_homework_assignments")
+      .select(
+        "id, content, textbook, school, assigned_student_id, sort_order, due_date, daily_log:daily_logs!inner(id, class_date, group_id, status), assigned_student:students(id, name)",
+      )
+      .eq("user_id", user.id)
+      .eq("due_date", lessonDate)
+      .eq("daily_log.group_id", groupId)
+      .eq("daily_log.status", "completed")
+      .lt("daily_log.class_date", lessonDate),
+    supabase
+      .from("daily_logs")
+      .select(IMPORT_TASK_SELECT)
+      .eq("user_id", user.id)
+      .eq("group_id", groupId)
+      .eq("status", "completed")
+      .lt("class_date", lessonDate)
+      // jsonb 배열 containment(@>) — 문자열로 넘겨야 `cs.[{"dueDate":"…"}]`로 직렬화된다
+      // (배열을 넘기면 supabase-js가 Postgres array literal로 바꿔 jsonb에 맞지 않는다)
+      .contains("tasks", JSON.stringify([{ dueDate: lessonDate }])),
+    supabase
+      .from("daily_logs")
+      .select(IMPORT_TASK_SELECT)
+      .eq("user_id", user.id)
+      .eq("group_id", groupId)
+      .eq("status", "completed")
+      .lt("class_date", lessonDate)
+      .or(`class_date.eq.${addDaysStr(lessonDate, -1)},task_due_date.eq.${lessonDate}`),
+    supabase
+      .from("daily_logs")
+      .select(IMPORT_PLAN_SELECT)
+      .eq("user_id", user.id)
+      .eq("group_id", groupId)
+      .eq("status", "completed")
+      .lt("class_date", lessonDate)
+      .order("class_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
-  if (error || !data) {
-    if (error) {
-      console.error("getPreviousLessonImportSource error", error);
+  for (const [label, result] of [
+    ["plan", planResult],
+    ["homework", homeworkResult],
+    ["task", taskExplicitResult],
+    ["task-default", taskDefaultResult],
+    ["previous", previousResult],
+  ] as const) {
+    if (result.error) {
+      console.error(`getLessonImportCandidates ${label} error`, { code: result.error.code, message: result.error.message });
     }
-    return null;
   }
 
-  const row = data as {
-    id: string;
-    class_date: string;
-    next_lesson_plan: string | null;
-    school_plans: { name: string; text: string }[] | null;
-    textbook_plans: { name: string; text: string }[] | null;
-    tasks: { content?: string; textbook?: string | null; school?: string | null }[] | null;
-    daily_log_homework_assignments:
-      | {
-          id: string;
-          content: string;
-          textbook: string | null;
-          school: string | null;
-          assigned_student_id: string | null;
-          sort_order: number | null;
-          assigned_student?: { id: string; name: string } | { id: string; name: string }[] | null;
-        }[]
-      | null;
-  };
-
-  const schoolPlans = (row.school_plans ?? []).filter((s) => s.text?.trim());
-  const textbookPlans = (row.textbook_plans ?? []).filter((s) => s.text?.trim());
+  const planRows = (planResult.data ?? []) as PlanSourceRow[];
+  const plans = datedPlanCandidates(planRows, lessonDate);
+  const homeworkRows = (homeworkResult.data ?? []).map((row) => ({
+    ...row,
+    daily_log: (Array.isArray(row.daily_log) ? row.daily_log[0] : row.daily_log) ?? null,
+  })) as HomeworkSourceRow[];
+  const taskRows = [
+    ...((taskExplicitResult.data ?? []) as TaskSourceRow[]),
+    ...((taskDefaultResult.data ?? []) as TaskSourceRow[]),
+  ];
 
   return {
-    id: row.id,
-    classDate: row.class_date,
-    schoolPlans,
-    textbookPlans,
-    // 구조화 계획이 하나도 없을 때만 legacy free-text로 취급 (mirror 텍스트를 raw로 오인하지 않게)
-    legacyPlanText:
-      schoolPlans.length === 0 && textbookPlans.length === 0 ? row.next_lesson_plan ?? "" : "",
-    homework: [...(row.daily_log_homework_assignments ?? [])]
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-      .filter((hw) => hw.content?.trim())
-      .map((hw) => {
-        const linked = Array.isArray(hw.assigned_student) ? hw.assigned_student[0] : hw.assigned_student;
-        return {
-          sourceId: hw.id,
-          content: hw.content,
-          textbook: hw.textbook ?? "",
-          school: hw.school ?? "",
-          assignedStudentId: hw.assigned_student_id,
-          assignedStudentName: linked?.name ?? null,
-        };
-      }),
-    tasks: meaningfulDailyLogTasks(
-      ((row.tasks ?? []) as { content?: string; textbook?: string | null; school?: string | null }[]).map(
-        (task) => ({
-          content: task.content ?? "",
-          textbook: task.textbook ?? "",
-          school: task.school ?? "",
-        }),
-      ),
-    ),
+    lessonDate,
+    plans,
+    homework: homeworkCandidatesFromRows(homeworkRows, groupId, lessonDate),
+    tasks: taskCandidatesFromRows(taskRows, lessonDate),
+    legacy: legacyPlanFallback((previousResult.data as PlanSourceRow | null) ?? null, plans.length > 0, lessonDate),
   };
 }
 
