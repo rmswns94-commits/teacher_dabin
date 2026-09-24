@@ -545,3 +545,89 @@ export function growthAwardEmptyText(key: GrowthAwardKey, reason: GrowthAwardRes
     ? `${unit}은 ${subject[key]}은 있지만 아직 왕을 정할 만한 성과가 없어요.`
     : `${unit}은 아직 ${subject[key]}이 충분하지 않아요.`;
 }
+
+// ---- 안내 카드 문구 ("이 왕은 무엇인가?" — winner 근거(왜 이 학생인가)와 역할 분리) ----
+// 숫자는 전부 getGrowthAwardMinimums / growthAwardMinimumLabel에서 파생한다.
+// 설명용 minimum을 따로 하드코딩하면 계산과 drift가 생기므로 금지.
+export type GrowthAwardGuideItem = {
+  key: GrowthAwardKey;
+  emoji: string;
+  label: string;
+  primary: string; // 이 왕이 누구인지
+  secondary: string; // 어떤 기준으로 계산하는지 (실제 알고리즘과 일치)
+  minimum: string; // 최소 기록 기준 — growthAwardMinimumLabel 그대로 (근거 패널과 같은 문구)
+};
+
+function growthPeriodWords(mode: GrowthViewMode) {
+  return mode === "month"
+    ? { unit: "이번 달", previous: "지난달" }
+    : { unit: "이번 주", previous: "지난주" };
+}
+
+export function growthAwardGuideIntro(mode: GrowthViewMode): string {
+  const { unit } = growthPeriodWords(mode);
+  return `수업·숙제·복습 기록을 바탕으로 ${unit}에 돋보인 학생을 자동으로 선정해요.`;
+}
+
+export function growthAwardGuideItem(key: GrowthAwardKey, mode: GrowthViewMode): GrowthAwardGuideItem {
+  const { unit, previous } = growthPeriodWords(mode);
+  const min = getGrowthAwardMinimums(mode);
+  const base = { key, emoji: growthAwardMeta[key].emoji, label: growthAwardMeta[key].label, minimum: growthAwardMinimumLabel(key, mode) };
+  switch (key) {
+    case "consistency":
+      return {
+        ...base,
+        primary: "출석 · 숙제 · 온라인 복습을 전반적으로 꾸준히 해낸 학생이에요.",
+        secondary: `세 영역의 수행률을 같은 비중으로 평균 내서 비교해요. 기록이 부족한 영역은 평균에서 빼고, 남은 영역이 ${min.consistencyCategories}가지 이상일 때만 후보가 돼요.`,
+      };
+    case "homework":
+      return {
+        ...base,
+        primary: "배정된 숙제를 가장 성실하게 완료한 학생이에요.",
+        secondary: `${unit}이 마감인 숙제 중 완료한 비율(숙제 완료율)을 기준으로 선정해요.`,
+      };
+    case "review":
+      return {
+        ...base,
+        primary: "온라인 복습을 가장 꾸준히 완료한 학생이에요.",
+        secondary: "완료 · 미완료로 평가한 기록만으로 완료율을 계산해요. 아직 평가하지 않은 복습은 미완료가 아니라 계산에서 제외돼요.",
+      };
+    case "punctuality":
+      return {
+        ...base,
+        primary: "수업 시간 약속을 가장 잘 지킨 학생이에요.",
+        secondary: "정시 출석률을 기준으로 선정해요. 지각 · 조퇴 · 결석은 사유를 적었더라도 정시 출석으로 계산되지 않아요.",
+      };
+    case "homeworkStreak":
+      return {
+        ...base,
+        primary: "숙제를 한 번에 많이 한 학생보다, 여러 번 연속으로 빠짐없이 완료한 학생이에요.",
+        secondary: "숙제 마감일이 있는 날만 이어서 세고, 그날 숙제를 전부 완료해야 연속으로 인정해요. 숙제가 없는 날 때문에 연속이 끊기지는 않아요.",
+      };
+    case "improvement":
+      return {
+        ...base,
+        primary: "이전 기간보다 학습 습관이 가장 많이 좋아진 학생이에요.",
+        secondary: `${previous}보다 ${unit}의 숙제 · 온라인 복습 수행률이 얼마나 올랐는지 비교해요. 실제로 수행률이 오른 학생이 있을 때만 선정돼요.`,
+      };
+  }
+}
+
+export function growthAwardGuideItems(mode: GrowthViewMode): GrowthAwardGuideItem[] {
+  return growthAwardKeys.map((key) => growthAwardGuideItem(key, mode));
+}
+
+// 왕중왕 = 성장 배지 + 새 왕 합산 최다 (동점 전원, 전원 0개면 없음) — lib/growth-note의 isKingOfKings와 동일 의미
+export function growthAwardGuideKingText(mode: GrowthViewMode): string {
+  const { unit } = growthPeriodWords(mode);
+  return `${unit} 성장 배지와 왕을 합쳐 가장 많이 받은 학생이에요. 동점이면 모두 함께 왕중왕이 되고, 아무도 받지 못했다면 왕중왕도 없어요.`;
+}
+
+// 공통 선정 정책 — 3개 이내
+export function growthAwardGuideNotes(): readonly string[] {
+  return [
+    "기록이 충분한 학생끼리만 비교해요. 기록이 너무 적으면 100%여도 왕으로 선정되지 않을 수 있어요.",
+    "점수가 같으면 여러 학생이 함께 왕이 돼요.",
+    "아직 오지 않은 수업이나 마감일이 지나지 않은 숙제는 계산하지 않아요.",
+  ];
+}

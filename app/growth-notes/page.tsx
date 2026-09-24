@@ -41,6 +41,7 @@ import {
   type GrowthLessonRow,
   type GrowthMakeupRow,
 } from "@/lib/supabase/queries/growth-notes";
+import { GrowthAwardGuideCard } from "@/components/growth-award-guide-card";
 import { GrowthAwardsBoard, type AwardBoardCard } from "@/components/growth-awards-board";
 import {
   awardsWonByStudent,
@@ -517,6 +518,10 @@ async function GroupStudentList({
               ) : null}
             </div>
           </div>
+
+          {/* 왕 선정 안내 — 알고리즘 설명 카드 (기본 접힘, local state, 쿼리 0).
+              기간 토글/이동 row 아래·왕 보드 위. 학생 유무와 무관하게 같은 위치라 mode 전환 시 remount 없음. */}
+          <GrowthAwardGuideCard mode={mode} />
 
           {summaries.length === 0 ? (
             <div className="mt-5 rounded-3xl border border-[#efe4de] bg-[#fffdfb] p-8 text-center text-sm text-[#8a7b77]">
