@@ -22,7 +22,7 @@ export function TodayMakeupsCard({ makeups, today }: { makeups: TodayScheduledMa
 
   return (
     <>
-      <Card>
+      <Card className="rounded-3xl border-[#ece6f2] shadow-[0_2px_12px_rgba(90,70,120,0.06)]">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between gap-3">
             <CardTitle className="flex items-center gap-2">

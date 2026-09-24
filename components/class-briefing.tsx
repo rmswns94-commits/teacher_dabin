@@ -522,7 +522,7 @@ export async function ClassBriefing({
 // Suspense fallback — hero 렌더를 막지 않고 브리핑만 늦게 채운다
 export function ClassBriefingSkeleton() {
   return (
-    <Card className="mt-4 border-[#e8ddf3] bg-[#fdfbf8]">
+    <Card className="mt-4 rounded-3xl border-[#e8ddf3] bg-[#fdfbf8] shadow-[0_2px_12px_rgba(90,70,120,0.06)]">
       <CardContent className="p-5 text-sm text-[#a79996]">수업 브리핑 준비 중...</CardContent>
     </Card>
   );

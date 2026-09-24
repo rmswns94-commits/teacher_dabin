@@ -71,7 +71,7 @@ export function UnfinishedLogCard({
   }
 
   return (
-    <Card className="mt-4 border-[#f0ddcb] bg-[#fffaf4]">
+    <Card className="mt-4 rounded-3xl border-[#f0ddcb] bg-[#fffaf4] shadow-[0_2px_12px_rgba(90,70,120,0.06)]">
       <CardContent className="p-4">
         <div className="section-title flex items-center gap-1.5 text-[#a2643c]">
           <NotebookPen className="h-3.5 w-3.5" aria-hidden /> 마무리가 필요한 수업

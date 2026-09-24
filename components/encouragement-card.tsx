@@ -81,7 +81,7 @@ export function EncouragementCard() {
   return (
     <div className="relative">
       <Tape />
-      <Card className="relative overflow-hidden border border-solid border-[#f2ddcf] bg-gradient-to-br from-[#fff8f3] to-[#fdf3ea]">
+      <Card className="relative overflow-hidden rounded-3xl border border-solid border-[#f2ddcf] bg-gradient-to-br from-[#fff8f3] to-[#fdf3ea]">
         <CatDoodle variant="heart" className="absolute bottom-1 right-3 h-14 w-16" />
         <Doodle kind="sparkle" className="absolute right-36 top-4 h-4 w-4 text-[#ecd9c7]" />
 

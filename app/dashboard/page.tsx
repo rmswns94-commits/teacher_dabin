@@ -1,6 +1,19 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { BookCheck, BookOpen, CalendarDays, CirclePlay, Clock3, ListTodo, NotebookPen, UserCheck } from "lucide-react";
+import {
+  BookCheck,
+  BookOpen,
+  CalendarDays,
+  ChevronRight,
+  CirclePlay,
+  Clock3,
+  FastForward,
+  FileText,
+  GraduationCap,
+  ListTodo,
+  NotebookPen,
+  UserCheck,
+} from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { ClassBriefing, ClassBriefingSkeleton } from "@/components/class-briefing";
@@ -55,6 +68,10 @@ const EXAM_DISPLAY_DAYS = 30;
 
 // 현재/다음 수업 탐색 범위(일) — 1회 예외 조회 범위와 동일하게 맞춘다
 const SCHEDULE_HORIZON_DAYS = 7;
+
+// 대시보드 카드 공통 톤 — 시안(라벤더빛 단일 열): 더 둥근 모서리 + 연보라 테두리 + 아주 옅은 그림자.
+// 다른 화면의 Card 기본값은 건드리지 않는다 (이 페이지에서만 className으로 덮어씀).
+const DASH_CARD = "rounded-3xl border-[#ece6f2] bg-white shadow-[0_2px_12px_rgba(90,70,120,0.06)]";
 
 // 시험 일정 제목에서 학교 이름 추출 (예: "문경중학교 기말시험" → 문경중학교, "한울중 시험" → 한울중).
 // 확신할 수 없으면 null을 돌려주고 카드에는 일정 제목을 그대로 쓴다 — 이름을 지어내지 않는다.
@@ -346,37 +363,63 @@ export default async function DashboardPage() {
           {/* 자정이 지나거나 PWA가 복귀하면 새 날짜 기준으로 갱신 — CTA의 date=오늘 링크가
               어제 날짜로 남지 않게 한다 (오늘 할 일 페이지와 같은 공용 컴포넌트) */}
           <TodayRefresher />
-          <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
-            <div className="flex items-end gap-3">
-              <div>
-                <h1 className="page-title text-[#2d2928]">
-                  안녕하세요,
-                  <br />
-                  {displayName} 선생님 <span aria-hidden>🌷</span>
-                </h1>
-                <p className="secondary-text mt-2 flex items-center gap-1.5 text-[#7b746f]">
-                  오늘도 하나씩 준비해볼까요?
-                  <Doodle kind="leaf" className="h-4 w-4 text-[#9dbfa8]" />
-                </p>
-              </div>
+          {/* 상단 바 — 시안의 "☰ 강사 일지 Beta | 이번 주 보기 · 오늘 수업 기록하기".
+              브랜드는 lg+ 에서만 (모바일/iPad 세로는 사이드바의 고정 상단 바가 이미 같은 브랜드를 보여준다). */}
+          <div
+            className="mb-6 flex items-center gap-3 lg:rounded-3xl lg:border lg:border-[#ece6f2] lg:bg-white lg:px-4 lg:py-2.5 lg:shadow-[0_2px_12px_rgba(90,70,120,0.06)]"
+            data-dashboard-topbar
+          >
+            <div className="hidden items-center gap-2 lg:flex">
+              <span className="card-title whitespace-nowrap text-[#232327]">강사 일지</span>
+              <span className="rounded-full bg-[#f3eefc] px-2 py-0.5 text-[11px] font-semibold text-[#6d5aa8]">
+                Beta
+              </span>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            {/* 좁은 화면: 버튼 2개를 같은 줄에 반씩 (세로로 쌓이지 않게) / sm+: 우측 정렬 */}
+            <div className="grid w-full grid-cols-[auto_minmax(0,1fr)] gap-2 sm:ml-auto sm:flex sm:w-auto sm:items-center sm:justify-end">
               {/* 주간 일정 진입 — read-only weekly view (편의성 PHASE 4) */}
-              <Button variant="secondary" className="gap-2" asChild>
+              <Button variant="secondary" className="gap-1.5 max-sm:px-2.5 max-sm:text-sm" asChild>
                 <Link href="/week">
-                  <CalendarDays className="h-4 w-4" />
+                  <CalendarDays className="h-4 w-4 shrink-0" />
                   이번 주 보기
                 </Link>
               </Button>
-              <Button className="gap-2" asChild>
+              <Button className="gap-1.5 max-sm:w-full max-sm:px-2.5 max-sm:text-sm" asChild>
                 {/* 오늘 탭의 CTA는 항상 "오늘(KST)" 일지 작성으로 — date를 명시해
                     bare 진입의 최신 draft resume(다른 날짜일 수 있음)을 타지 않는다.
                     오늘 identity의 draft/일지는 그룹 선택 시 그대로 이어쓰기 된다. */}
                 <Link href={`/daily-logs/new?date=${today}`}>
-                  <NotebookPen className="h-4 w-4" />
+                  <NotebookPen className="h-4 w-4 shrink-0" />
                   오늘 수업 기록하기
                 </Link>
               </Button>
+            </div>
+          </div>
+
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h1 className="page-title text-[#2d2928]">
+                안녕하세요,
+                <br />
+                {displayName} 선생님 <span aria-hidden>🌷</span>
+              </h1>
+              <p className="secondary-text mt-2 flex items-center gap-1.5 text-[#7b746f]">
+                오늘도 하나씩 준비해볼까요?
+                <Doodle kind="leaf" className="h-4 w-4 text-[#9dbfa8]" />
+              </p>
+            </div>
+            {/* 우측 감성 문구 + 장식 — 정보가 아니라 장식(aria-hidden), 좁은 화면에서는 숨긴다 */}
+            <div aria-hidden className="relative hidden items-center gap-5 pr-2 md:flex">
+              <p className="text-right text-base italic leading-7 text-[#8f80c9]">
+                좋은 수업이
+                <br />
+                좋은 하루를 만들어요.
+              </p>
+              <span className="relative text-5xl leading-none drop-shadow-sm">
+                <span className="absolute -inset-4 -z-10 rounded-full bg-[#eeeafb] blur-2xl" />
+                🌷
+              </span>
+              <Doodle kind="sparkle" className="absolute -top-2 right-16 h-4 w-4 text-[#c5b6e3]" />
             </div>
           </div>
 
@@ -592,217 +635,222 @@ export default async function DashboardPage() {
             wrapUpOccurrences={wrapUpOccurrences}
           />
 
-          <div className="mt-5 grid gap-5 lg:grid-cols-[1.55fr_1fr]">
-            <div className="space-y-4">
-              {/* To do list — 수업 시간 기반 노출 (client에서 시간만 갱신, DB polling 없음) */}
-              <DashboardTodoCard
-                focusGroup={focusGroup ? { id: focusGroup.id, name: focusGroup.name } : null}
-                checklistItems={prepItems.map((item) => ({
-                  id: item.id,
-                  // 교재/학교 연결 할 일은 "이름 - 내용"으로 (표시 시점 합성 — 저장은 분리)
-                  text: formatTextbookLinked(linkedContextLabel(item), item.text),
-                  completed: item.completed,
-                }))}
-                checklistWindow={focusGroup ? (todayWindowByGroup.get(focusGroup.id) ?? null) : null}
-                planItems={duePlanItems.map(({ planGroup, item }) => ({
-                  groupId: planGroup.id,
-                  groupName: planGroup.name,
-                  groupIcon: planGroup.icon ?? null,
-                  id: item.id,
-                  text: formatTextbookLinked(linkedContextLabel(item), item.text),
-                  completed: item.completed,
-                  dueDate: item.dueDate!,
-                  window: todayWindowByGroup.get(planGroup.id) ?? null,
-                }))}
-                initialNow={currentEpochMs()}
-              />
+          {/* 아래는 한 열(single column)로 쌓는다 — 시안 순서: To do → 시험 → Today class → 그 다음 →
+              보충 → 밀린 일 → 복습 필요 → 오늘의 한마디. 카드 내용/기능은 그대로, 톤만 정리. */}
+          <div className="mt-4 space-y-4 pb-8">
+            {/* To do list — 수업 시간 기반 노출 (client에서 시간만 갱신, DB polling 없음) */}
+            <DashboardTodoCard
+              focusGroup={focusGroup ? { id: focusGroup.id, name: focusGroup.name } : null}
+              checklistItems={prepItems.map((item) => ({
+                id: item.id,
+                // 교재/학교 연결 할 일은 "이름 - 내용"으로 (표시 시점 합성 — 저장은 분리)
+                text: formatTextbookLinked(linkedContextLabel(item), item.text),
+                completed: item.completed,
+              }))}
+              checklistWindow={focusGroup ? (todayWindowByGroup.get(focusGroup.id) ?? null) : null}
+              planItems={duePlanItems.map(({ planGroup, item }) => ({
+                groupId: planGroup.id,
+                groupName: planGroup.name,
+                groupIcon: planGroup.icon ?? null,
+                id: item.id,
+                text: formatTextbookLinked(linkedContextLabel(item), item.text),
+                completed: item.completed,
+                dueDate: item.dueDate!,
+                window: todayWindowByGroup.get(planGroup.id) ?? null,
+              }))}
+              initialNow={currentEpochMs()}
+            />
 
-              {/* '시험' 일정 D-day 카드 — 30일 전부터, 일정 없으면 카드 숨김 */}
-              {upcomingExams.length > 0 ? (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2">
-                      <CalendarDays className="h-4 w-4 text-[#a05a7c]" /> 다가오는 시험
-                      <span className="text-sm font-normal text-[#8a7b77]">
-                        · {upcomingExams.length}건
-                      </span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ExpandableList className="space-y-2">
-                    {upcomingExams.map((exam) => (
-                      <div
-                        key={exam.id}
-                        className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-2xl bg-[#fdfaf8] px-3.5 py-2.5"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-base font-semibold text-[#2b2323]">
-                              {exam.school ?? exam.title}
-                            </span>
-                            {exam.school ? (
-                              <span className="secondary-text text-[#8a7b77]">{exam.title}</span>
-                            ) : null}
-                          </div>
-                          <div className="secondary-text mt-0.5 tabular-nums text-[#8a7b77]">
-                            {exam.dateLabel}
-                            {exam.groupName ? ` · ${exam.groupName}` : ""}
-                          </div>
-                        </div>
-                        <span
-                          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ${
-                            exam.inPeriod
-                              ? "bg-[#fbeef3] text-[#a05a7c]"
-                              : "bg-[#efe8fb] text-[#5d4ba5]"
-                          }`}
-                        >
-                          {exam.badge}
-                        </span>
-                      </div>
-                    ))}
-                    </ExpandableList>
-                  </CardContent>
-                </Card>
-              ) : null}
-
-              {/* 오늘 수업 계획 / 지난 숙제는 독립 카드 대신 수업 브리핑 안에서 함께 본다
-                  (같은 직전 수업 source — 중복 표시 제거). 일지의 다음 수업 계획 기능 자체는 그대로. */}
-            </div>
-
-            <div className="space-y-4">
-              <Card>
+            {/* 시험 일정 D-day 카드 — 30일 전부터, 일정 없으면 카드 숨김 */}
+            {upcomingExams.length > 0 ? (
+              <Card className={DASH_CARD}>
                 <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <CardTitle>Today class</CardTitle>
-                    {overview.todayLogs.length > 0 ? (
-                      <span className="secondary-text tabular-nums text-[#8a7b77]">{overview.todayLogs.length}개</span>
-                    ) : null}
-                  </div>
+                  <CardTitle className="flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-[#a05a7c]" /> 다가오는 시험
+                    <span className="text-sm font-normal text-[#8a7b77]">
+                      · {upcomingExams.length}건
+                    </span>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {overview.todayLogs.length === 0 ? (
-                    <div className="body-text rounded-2xl bg-[#faf5f0] p-4 text-[#655d5d]">
-                      아직 오늘 작성한 수업일지가 없어요 ☁️
-                    </div>
-                  ) : (
-                    <ExpandableList className="space-y-1.5">
-                    {overview.todayLogs.map((log) => (
-                      <Link key={log.id} href={`/daily-logs/${log.id}`} className="block">
-                        <div className="flex items-start gap-3 rounded-xl px-2 py-2.5 transition hover:bg-[#f2edf9]">
-                          <span
-                            aria-hidden
-                            className={
-                              log.status === "completed"
-                                ? "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#8fc7ab]"
-                                : "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full border-2 border-[#c9bce8] bg-white"
-                            }
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-base font-medium text-[#2d2928]">{log.group?.name ?? "수업"}</span>
-                              <DailyLogStatusBadge status={log.status} />
-                            </div>
-                            <div className="mt-1 flex items-center gap-1.5 text-sm">
-                              <span className="rounded-full bg-[#e4f4ec] px-2 py-0.5 tabular-nums text-[#3d7f64]">
-                                출석 {log.attendanceCounts.present}
-                              </span>
-                              {log.attendanceCounts.early_leave > 0 ? (
-                                <span className="rounded-full bg-[#f3eefc] px-2 py-0.5 tabular-nums text-[#614ea7]">
-                                  조퇴 {log.attendanceCounts.early_leave}
-                                </span>
-                              ) : null}
-                              {log.attendanceCounts.absent > 0 ? (
-                                <span className="rounded-full bg-[#f9e7e5] px-2 py-0.5 tabular-nums text-[#a26660]">
-                                  결석 {log.attendanceCounts.absent}
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
+                  <ExpandableList className="space-y-2">
+                  {upcomingExams.map((exam) => (
+                    <div
+                      key={exam.id}
+                      className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-2xl bg-[#fbf6f3] px-3.5 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-base font-semibold text-[#2b2323]">
+                            {exam.school ?? exam.title}
+                          </span>
+                          {exam.school ? (
+                            <span className="secondary-text text-[#8a7b77]">{exam.title}</span>
+                          ) : null}
                         </div>
-                      </Link>
-                    ))}
-                    </ExpandableList>
-                  )}
+                        <div className="secondary-text mt-0.5 tabular-nums text-[#8a7b77]">
+                          {exam.dateLabel}
+                          {exam.groupName ? ` · ${exam.groupName}` : ""}
+                        </div>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ${
+                          exam.inPeriod
+                            ? "bg-[#fbeef3] text-[#a05a7c]"
+                            : "bg-[#efe8fb] text-[#5d4ba5]"
+                        }`}
+                      >
+                        {exam.badge}
+                      </span>
+                    </div>
+                  ))}
+                  </ExpandableList>
                 </CardContent>
               </Card>
+            ) : null}
 
-              {backlog.length > 0 ? (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle>밀린 일</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ExpandableList className="space-y-1.5">
-                    {backlog.map((item) => (
-                      <Link key={item.key} href={item.href} className="block">
-                        <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-2 transition hover:bg-[#f2edf9]">
-                          <span className="body-text text-[#2d2928]">{item.title}</span>
-                          <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${item.badgeClass}`}>
-                            {item.badge}
-                          </span>
+            {/* 오늘 수업 계획 / 지난 숙제는 독립 카드 대신 수업 브리핑 안에서 함께 본다
+                (같은 직전 수업 source — 중복 표시 제거). 일지의 다음 수업 계획 기능 자체는 그대로. */}
+
+            <Card className={DASH_CARD}>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="flex items-center gap-2">
+                    <GraduationCap className="h-4 w-4 text-[#6852b8]" /> Today class
+                  </CardTitle>
+                  {overview.todayLogs.length > 0 ? (
+                    <span className="secondary-text tabular-nums text-[#8a7b77]">{overview.todayLogs.length}개</span>
+                  ) : null}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {overview.todayLogs.length === 0 ? (
+                  // 빈 상태도 바로 작성으로 이어지게 — 오늘(KST) 일지 작성 CTA와 같은 목적지
+                  <Link
+                    href={`/daily-logs/new?date=${today}`}
+                    className="flex min-h-12 items-center gap-3 rounded-2xl bg-[#fbf6f3] px-4 py-3 transition hover:bg-[#f7efe9]"
+                  >
+                    <FileText className="h-4 w-4 shrink-0 text-[#a2643c]" aria-hidden />
+                    <span className="body-text min-w-0 flex-1 text-[#655d5d]">아직 오늘 작성한 수업일지가 없어요 ☁️</span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-[#c4b6b0]" aria-hidden />
+                  </Link>
+                ) : (
+                  <ExpandableList className="space-y-1.5">
+                  {overview.todayLogs.map((log) => (
+                    <Link key={log.id} href={`/daily-logs/${log.id}`} className="block">
+                      <div className="flex items-start gap-3 rounded-xl px-2 py-2.5 transition hover:bg-[#f2edf9]">
+                        <span
+                          aria-hidden
+                          className={
+                            log.status === "completed"
+                              ? "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#8fc7ab]"
+                              : "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full border-2 border-[#c9bce8] bg-white"
+                          }
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-base font-medium text-[#2d2928]">{log.group?.name ?? "수업"}</span>
+                            <DailyLogStatusBadge status={log.status} />
+                          </div>
+                          <div className="mt-1 flex items-center gap-1.5 text-sm">
+                            <span className="rounded-full bg-[#e4f4ec] px-2 py-0.5 tabular-nums text-[#3d7f64]">
+                              출석 {log.attendanceCounts.present}
+                            </span>
+                            {log.attendanceCounts.early_leave > 0 ? (
+                              <span className="rounded-full bg-[#f3eefc] px-2 py-0.5 tabular-nums text-[#614ea7]">
+                                조퇴 {log.attendanceCounts.early_leave}
+                              </span>
+                            ) : null}
+                            {log.attendanceCounts.absent > 0 ? (
+                              <span className="rounded-full bg-[#f9e7e5] px-2 py-0.5 tabular-nums text-[#a26660]">
+                                결석 {log.attendanceCounts.absent}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
-                      </Link>
-                    ))}
-                    </ExpandableList>
-                  </CardContent>
-                </Card>
-              ) : null}
+                      </div>
+                    </Link>
+                  ))}
+                  </ExpandableList>
+                )}
+              </CardContent>
+            </Card>
 
-              {/* 복습 필요 — 학생 약점 노트 중 다시 확인할 날짜가 오늘이거나 지난 것 (compact) */}
-              {dueWeaknesses.length > 0 ? (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle>복습 필요</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-1.5">
-                    {dueWeaknesses.map((weakness) => (
-                      <Link key={weakness.id} href={`/students/${weakness.student_id}`} className="block">
-                        <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-2 transition hover:bg-[#f2edf9]">
-                          <span className="body-text min-w-0 truncate text-[#2d2928]">
-                            <span className="font-medium">{weakness.student?.name ?? "학생"}</span>
-                            <span className="text-[#8a7b77]"> · {weakness.title}</span>
-                          </span>
-                          <span className="shrink-0 rounded-full bg-[#fdf3e4] px-2 py-1 text-xs font-medium text-[#94702f]">
-                            {weaknessCategoryLabels[weakness.category]}
-                          </span>
-                        </div>
-                      </Link>
-                    ))}
-                  </CardContent>
-                </Card>
-              ) : null}
-
-              {followUp ? (
-                <Card>
-                  <CardContent className="secondary-text flex flex-wrap items-center justify-between gap-3 p-4">
-                    <div className="flex items-center gap-2">
-                      <span className="caption-text font-semibold uppercase tracking-[0.06em] text-[#a8968f]">
-                        그 다음
-                      </span>
-                      <Link href={`/groups/${followUp.group.id}`} className="min-w-0 truncate text-base font-medium text-[#2b2323] hover:underline">
-                        {followUp.group.name}
-                      </Link>
-                      <ExamPeriodMark show={isExamPeriodGroup(followUp.group.id)} />
-                      {followUp.source === "supplement" ? (
-                        <span className="shrink-0 rounded-full bg-[#e4f4ec] px-2 py-0.5 text-xs font-semibold text-[#3d7f64]">
-                          보강
-                        </span>
-                      ) : null}
-                    </div>
-                    <span className="tabular-nums text-[#665b5a]">
-                      {occurrenceDateLabel(followUp)} · {formatTimeRange(followUp.startTime, followUp.endTime)}
+            {/* 그 다음 — compact 한 줄 (그룹 상세로) */}
+            {followUp ? (
+              <Link
+                href={`/groups/${followUp.group.id}`}
+                className={`${DASH_CARD} flex min-h-14 flex-wrap items-center gap-x-3 gap-y-1 border px-5 py-3 transition hover:bg-[#fdfbff]`}
+              >
+                <FastForward className="h-4 w-4 shrink-0 text-[#8b7ae6]" aria-hidden />
+                <span className="caption-text shrink-0 font-semibold uppercase tracking-[0.06em] text-[#a8968f]">
+                  그 다음
+                </span>
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="min-w-0 truncate text-base font-semibold text-[#2b2323]">{followUp.group.name}</span>
+                  <ExamPeriodMark show={isExamPeriodGroup(followUp.group.id)} />
+                  {followUp.source === "supplement" ? (
+                    <span className="shrink-0 rounded-full bg-[#e4f4ec] px-2 py-0.5 text-xs font-semibold text-[#3d7f64]">
+                      보강
                     </span>
-                  </CardContent>
-                </Card>
-              ) : null}
+                  ) : null}
+                </span>
+                <span className="secondary-text basis-full tabular-nums text-[#665b5a] sm:basis-auto">
+                  {occurrenceDateLabel(followUp)} · {formatTimeRange(followUp.startTime, followUp.endTime)}
+                </span>
+                <ChevronRight className="hidden h-4 w-4 shrink-0 text-[#c4b6b0] sm:block" aria-hidden />
+              </Link>
+            ) : null}
 
-              {/* 오늘 보충 수업 — "그 다음" 카드 바로 아래. 오늘 잡혀 있는 미완료 보충만 보여주고,
-                  하나도 없으면 카드 자체가 렌더되지 않는다 (컴포넌트에서 null 반환). */}
-              <TodayMakeupsCard makeups={todayMakeups} today={today} />
-            </div>
-          </div>
+            {/* 오늘 보충 수업 — 오늘 잡혀 있는 미완료 보충만, 없으면 카드 자체가 렌더되지 않는다 */}
+            <TodayMakeupsCard makeups={todayMakeups} today={today} />
 
-          <div className="mt-6 pb-8">
+            {backlog.length > 0 ? (
+              <Card className={DASH_CARD}>
+                <CardHeader className="pb-2">
+                  <CardTitle>밀린 일</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ExpandableList className="space-y-1.5">
+                  {backlog.map((item) => (
+                    <Link key={item.key} href={item.href} className="block">
+                      <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-2 transition hover:bg-[#f2edf9]">
+                        <span className="body-text text-[#2d2928]">{item.title}</span>
+                        <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${item.badgeClass}`}>
+                          {item.badge}
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                  </ExpandableList>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {/* 복습 필요 — 학생 약점 노트 중 다시 확인할 날짜가 오늘이거나 지난 것 (compact) */}
+            {dueWeaknesses.length > 0 ? (
+              <Card className={DASH_CARD}>
+                <CardHeader className="pb-2">
+                  <CardTitle>복습 필요</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-1.5">
+                  {dueWeaknesses.map((weakness) => (
+                    <Link key={weakness.id} href={`/students/${weakness.student_id}`} className="block">
+                      <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-2 transition hover:bg-[#f2edf9]">
+                        <span className="body-text min-w-0 truncate text-[#2d2928]">
+                          <span className="font-medium">{weakness.student?.name ?? "학생"}</span>
+                          <span className="text-[#8a7b77]"> · {weakness.title}</span>
+                        </span>
+                        <span className="shrink-0 rounded-full bg-[#fdf3e4] px-2 py-1 text-xs font-medium text-[#94702f]">
+                          {weaknessCategoryLabels[weakness.category]}
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </CardContent>
+              </Card>
+            ) : null}
+
             <EncouragementCard />
           </div>
         </div>

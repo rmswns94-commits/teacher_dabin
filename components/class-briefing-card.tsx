@@ -92,7 +92,7 @@ export function ClassBriefingCard({
 
   return (
     <Card
-      className="mt-4 border-[#e8ddf3] bg-[#fdfbf8]"
+      className="mt-4 rounded-3xl border-[#e8ddf3] bg-[#fdfbf8] shadow-[0_2px_12px_rgba(90,70,120,0.06)]"
       data-class-card
       data-mode={mode}
       data-occurrence-key={viewed.key}

@@ -66,7 +66,7 @@ function TimeZone({
         {label}
       </div>
       <div className="mt-1.5 flex flex-wrap items-baseline gap-1.5">
-        <span className="text-3xl font-bold tabular-nums tracking-[-0.02em] text-[#3d3450]">
+        <span className="text-2xl font-bold tabular-nums tracking-[-0.02em] text-[#3d3450] lg:text-3xl">
           {big}
         </span>
         {badge ? (
