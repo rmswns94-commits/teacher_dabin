@@ -34,12 +34,23 @@ import {
   getGroupStudentsForCurrentUser,
 } from "@/lib/supabase/queries/groups";
 import {
+  getGrowthHomeworkRows,
   getGrowthLessonRows,
   getGrowthMakeupRows,
   getGrowthPraiseRows,
   type GrowthLessonRow,
   type GrowthMakeupRow,
 } from "@/lib/supabase/queries/growth-notes";
+import { GrowthAwardsBoard, type AwardBoardCard } from "@/components/growth-awards-board";
+import {
+  awardsWonByStudent,
+  buildStudentGrowthMetrics,
+  computeGrowthAwards,
+  growthAwardEmptyText,
+  growthAwardKeys,
+  growthAwardMeta,
+  growthAwardMinimumLabel,
+} from "@/lib/growth-awards";
 import { getCurrentUserMemberships } from "@/lib/supabase/queries/students";
 import type { GrowthAchievementType } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
@@ -272,6 +283,14 @@ async function GroupStudentList({
   const { start: periodStart, end: periodEnd } = growthPeriodRange(anchor, mode);
   const windowStart = addDaysStr(periodStart, -VOCAB_WINDOW_DAYS);
   const isCurrentPeriod = growthPeriodRange(today, mode).start === periodStart;
+  // 새 왕 6종의 집계 기간 — 진행 중인 주/월은 오늘(KST)까지만 (미래 숙제/수업을 실패로 세지 않는다).
+  // 도약왕은 바로 이전 주/달(같은 growthPeriodRange/shiftGrowthAnchor helper)과 비교한다.
+  const effectiveEnd = periodEnd < today ? periodEnd : today;
+  const previousRange = growthPeriodRange(shiftGrowthAnchor(anchor, mode, -1), mode);
+  const previousPeriod = {
+    start: previousRange.start,
+    end: previousRange.end < today ? previousRange.end : today,
+  };
   const hrefFor = (date: string, view: GrowthViewMode) =>
     `/growth-notes?group=${group.id}&view=${view}&date=${date}`;
   const periodLabel =
@@ -285,11 +304,14 @@ async function GroupStudentList({
   const uniqueStudents = [...new Map(students.map((student) => [student.id, student])).values()];
   const studentIds = uniqueStudents.map((student) => student.id);
 
-  // 선택한 반 학생만 batch 조회 (학생별/날짜별 개별 쿼리 금지 — 기간과 무관하게 3쿼리)
-  const [lessonRows, praiseRows, makeupRows] = await Promise.all([
+  // 선택한 반 학생만 batch 조회 (학생별/날짜별 개별 쿼리 금지 — 기간과 무관하게 4쿼리).
+  // 수업 기록 window(기간 시작 -90일)는 도약왕의 이전 주/달까지 자연히 덮는다 — 별도 previous 쿼리 없음.
+  // 숙제는 [이전 기간 시작, effective 끝] 한 범위로 가져와 메모리에서 기간을 나눈다.
+  const [lessonRows, praiseRows, makeupRows, homeworkRows] = await Promise.all([
     getGrowthLessonRows(windowStart, periodEnd, studentIds),
     getGrowthPraiseRows(periodStart, studentIds),
     getGrowthMakeupRows(periodStart, periodEnd, studentIds),
+    getGrowthHomeworkRows(previousPeriod.start, effectiveEnd, studentIds),
   ]);
 
   const rowsByStudent = new Map<string, GrowthLessonRow[]>();
@@ -351,6 +373,69 @@ async function GroupStudentList({
     })
     // 이름순 정렬 — Achievement 개수 정렬은 랭킹처럼 보이므로 금지
     .sort((a, b) => a.studentName.localeCompare(b.studentName, "ko"));
+
+  // ── 새 왕 6종 (derived only — 저장 없음). winner 선정과 근거가 같은 normalized metrics를 공유한다.
+  // 출결/온라인 복습은 이미 받은 수업 기록(class_date 귀속), 숙제는 due_date 귀속 + 완료 시각 cutoff.
+  const metricsByStudent = buildStudentGrowthMetrics({
+    studentIds,
+    lessons: lessonRows.map((row) => ({
+      studentId: row.student_id,
+      classDate: row.class_date,
+      attendance: row.attendance,
+      onlineReviewCompleted: row.online_review_completed,
+    })),
+    homework: homeworkRows.map((row) => ({
+      id: row.id,
+      dueDate: row.due_date,
+      completed: row.completed,
+      completedAt: row.completed_at,
+      assignedStudentId: row.assigned_student_id,
+      attendeeStudentIds: row.attendee_student_ids,
+    })),
+    current: { start: periodStart, end: effectiveEnd },
+    previous: previousPeriod,
+  });
+  const awards = computeGrowthAwards([...metricsByStudent.values()], mode);
+  const awardsWon = awardsWonByStudent(awards);
+  const nameById = new Map(uniqueStudents.map((student) => [student.id, student.name]));
+  const periodUnit = mode === "month" ? "이번 달" : "이번 주";
+  const awardCards: AwardBoardCard[] = growthAwardKeys.map((key) => ({
+    key,
+    ...growthAwardMeta[key],
+    minimumLabel: growthAwardMinimumLabel(key, mode),
+    winners: awards[key].winners
+      .map((metric) => ({
+        studentId: metric.studentId,
+        name: nameById.get(metric.studentId) ?? "학생",
+        evidence: metric.evidence,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "ko")),
+    emptyText: growthAwardEmptyText(key, awards[key].emptyReason, mode),
+  }));
+
+  // 왕중왕 count = 기존 성장 배지 수 + 이번 기간 새 왕 수 (award당 +1, 학생 id 기준 dedupe).
+  // 왕중왕 자체는 count에 포함하지 않는다. 동점 전원, 전원 0개면 없음 (기존 helper 그대로).
+  const titleCountByStudent = new Map(
+    summaries.map((summary) => [
+      summary.studentId,
+      summary.achievements.length + (awardsWon.get(summary.studentId)?.length ?? 0),
+    ]),
+  );
+  const maxTitleCount = kingOfKingsMaxCount([...titleCountByStudent.values()]);
+  const kingWinners = summaries
+    .filter((summary) => isKingOfKings(titleCountByStudent.get(summary.studentId) ?? 0, maxTitleCount))
+    .map((summary) => ({
+      studentId: summary.studentId,
+      name: summary.studentName,
+      titles: [
+        ...summary.achievements.map((badge) => ({ key: badge.type, emoji: badge.emoji, label: badge.label })),
+        ...(awardsWon.get(summary.studentId) ?? []).map((key) => ({
+          key,
+          emoji: growthAwardMeta[key].emoji,
+          label: growthAwardMeta[key].label,
+        })),
+      ],
+    }));
 
   return (
     <AppShell>
@@ -438,17 +523,29 @@ async function GroupStudentList({
               이 반에는 아직 성장노트를 확인할 학생이 없어요.
             </div>
           ) : (
+            <>
+              {/* 이번 기간의 왕 — 반 학생끼리 비교하는 derived 보드 (저장 없음). 학생 클릭 → 근거 inline 펼침. */}
+              <section className="mt-5">
+                <h2 className="card-title text-[#3a2f2c]">{periodUnit}의 왕</h2>
+                <p className="mt-1 text-sm text-[#8a7b77]">
+                  학생을 누르면 왜 왕이 되었는지 바로 볼 수 있어요. 왕중왕은 성장 배지와 왕을 합쳐서 세요.
+                </p>
+                <div className="mt-3">
+                  <GrowthAwardsBoard
+                    cards={awardCards}
+                    king={kingWinners.length > 0 ? { winners: kingWinners } : null}
+                    periodUnit={periodUnit}
+                  />
+                </div>
+              </section>
+
             <div className="mt-5 space-y-3 pb-8">
               {(() => {
-                // 왕중왕(derived UI): 카드에 표시되는 canonical achievements와 같은 소스로
-                // 최대 왕 개수를 계산한다. 동점자는 전부 공동 왕중왕, 전원 0개면 없음.
+                // 왕중왕(derived UI): 성장 배지 + 이번 기간 새 왕을 합친 title count(위 titleCountByStudent)로
+                // 판정한다. 동점자는 전부 공동 왕중왕, 전원 0개면 없음.
                 // 목록 순서는 그대로(이름순) — 랭킹 정렬 금지 정책 유지.
-                const maxTitleCount = kingOfKingsMaxCount(
-                  summaries.map((summary) => summary.achievements.length),
-                );
-
                 return summaries.map((summary) => {
-                  const king = isKingOfKings(summary.achievements.length, maxTitleCount);
+                  const king = isKingOfKings(titleCountByStudent.get(summary.studentId) ?? 0, maxTitleCount);
 
                   return (
                     <Link
@@ -532,6 +629,7 @@ async function GroupStudentList({
                 });
               })()}
             </div>
+            </>
           )}
         </div>
       </main>

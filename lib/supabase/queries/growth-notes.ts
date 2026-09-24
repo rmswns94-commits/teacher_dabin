@@ -35,6 +35,8 @@ export type GrowthLessonRow = {
   kindness_level: KindnessLevel | null;
   effort_level: EffortLevel | null;
   strengths: string | null;
+  // 온라인 복습 (null=미평가 — 복습왕/꾸준왕/도약왕에서 분모 제외)
+  online_review_completed: boolean | null;
 };
 
 // 기간 내 수업 기록을 한 번에 가져온다 (선택된 그룹 학생 batch — N+1 방지).
@@ -54,7 +56,7 @@ export async function getGrowthLessonRows(
   let query = supabase
     .from("student_lesson_logs")
     .select(
-      "student_id, daily_log_id, attendance, homework_status, vocab_correct, vocab_retest, focus_level, participation_level, question_level, kindness_level, effort_level, strengths, daily_logs!inner(class_date, vocab_total)",
+      "student_id, daily_log_id, attendance, homework_status, vocab_correct, vocab_retest, focus_level, participation_level, question_level, kindness_level, effort_level, strengths, online_review_completed, daily_logs!inner(class_date, vocab_total)",
     )
     .eq("user_id", user.id)
     .gte("daily_logs.class_date", startDate)
@@ -93,9 +95,73 @@ export async function getGrowthLessonRows(
         kindness_level: row.kindness_level ?? null,
         effort_level: row.effort_level ?? null,
         strengths: row.strengths ?? null,
+        online_review_completed: (row.online_review_completed ?? null) as boolean | null,
       } as GrowthLessonRow;
     })
     .sort((a, b) => a.class_date.localeCompare(b.class_date));
+}
+
+// 새 왕(숙제왕/꾸준왕/과제꾸준왕/도약왕)용 숙제 — 마감일(due_date) 범위 batch 1쿼리.
+// 대상 판정 재료를 함께 싣는다: 개인/다중 배정은 assigned_student_id, 공통(null)은 그 수업 일지에
+// 기록이 있는 학생들(student_lesson_logs) — 현재 반 소속으로 과거 공통 숙제를 재계산하지 않는다
+// (student-timeline의 공통 숙제 규칙과 동일). 학생별/날짜별 개별 쿼리 없음.
+export type GrowthHomeworkRow = {
+  id: string;
+  due_date: string;
+  completed: boolean;
+  completed_at: string | null;
+  assigned_student_id: string | null;
+  daily_log_id: string;
+  class_date: string;
+  attendee_student_ids: string[];
+};
+
+export async function getGrowthHomeworkRows(
+  startDate: string,
+  endDate: string,
+  studentIds: string[],
+) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user || studentIds.length === 0) {
+    return [] as GrowthHomeworkRow[];
+  }
+
+  const { data, error } = await supabase
+    .from("daily_log_homework_assignments")
+    .select(
+      "id, due_date, completed, completed_at, assigned_student_id, daily_log:daily_logs!inner(id, class_date, student_lesson_logs(student_id))",
+    )
+    .eq("user_id", user.id)
+    .gte("due_date", startDate)
+    .lte("due_date", endDate)
+    .or(`assigned_student_id.is.null,assigned_student_id.in.(${studentIds.join(",")})`);
+
+  if (error) {
+    // migration 미적용 등 — 숙제 기반 왕만 "기록 없음"으로 degrade (다른 왕/배지는 그대로)
+    console.error("getGrowthHomeworkRows error", { code: error.code, message: error.message });
+    return [] as GrowthHomeworkRow[];
+  }
+
+  return (data ?? []).flatMap((row) => {
+    const log = pickOne<{ id: string; class_date: string; student_lesson_logs: { student_id: string }[] | null }>(row.daily_log);
+    if (!log) {
+      return [];
+    }
+    return [
+      {
+        id: row.id as string,
+        due_date: row.due_date as string,
+        completed: Boolean(row.completed),
+        completed_at: (row.completed_at ?? null) as string | null,
+        assigned_student_id: (row.assigned_student_id ?? null) as string | null,
+        daily_log_id: log.id,
+        class_date: log.class_date,
+        attendee_student_ids: (log.student_lesson_logs ?? []).map((item) => item.student_id),
+      },
+    ];
+  });
 }
 
 export type GrowthPraiseRow = {
