@@ -18,6 +18,7 @@ import {
   growthGuideDescriptions,
   growthLabels,
   scopeMakeupsToWeek,
+  VOCAB_WINDOW_DAYS,
 } from "@/lib/growth";
 import {
   growthMonthLabel,
@@ -131,8 +132,6 @@ const growthKingThemes: Record<
   },
 };
 
-// 단어왕 판정용 최근 시험 조회는 90일로 bounded (전체 history 조회 금지)
-const VOCAB_WINDOW_DAYS = 90;
 
 // 성장노트 landing: 9개 성장왕 소개 + 반 선택.
 // 학생 목록/Achievement 계산은 반을 선택한 다음에만 (lazy — 첫 화면은 가볍게).

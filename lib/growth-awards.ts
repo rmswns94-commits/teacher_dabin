@@ -564,11 +564,6 @@ function growthPeriodWords(mode: GrowthViewMode) {
     : { unit: "이번 주", previous: "지난주" };
 }
 
-export function growthAwardGuideIntro(mode: GrowthViewMode): string {
-  const { unit } = growthPeriodWords(mode);
-  return `수업·숙제·복습 기록을 바탕으로 ${unit}에 돋보인 학생을 자동으로 선정해요.`;
-}
-
 export function growthAwardGuideItem(key: GrowthAwardKey, mode: GrowthViewMode): GrowthAwardGuideItem {
   const { unit, previous } = growthPeriodWords(mode);
   const min = getGrowthAwardMinimums(mode);
@@ -617,17 +612,18 @@ export function growthAwardGuideItems(mode: GrowthViewMode): GrowthAwardGuideIte
   return growthAwardKeys.map((key) => growthAwardGuideItem(key, mode));
 }
 
-// 왕중왕 = 성장 배지 + 새 왕 합산 최다 (동점 전원, 전원 0개면 없음) — lib/growth-note의 isKingOfKings와 동일 의미
+// 왕중왕 = 9개 성장왕 + 6개 왕 합산 최다 (동점 전원, 전원 0개면 없음) — lib/growth-note의 isKingOfKings와 동일 의미.
+// 9+6에 포함되지 않는 별도 종합 타이틀.
 export function growthAwardGuideKingText(mode: GrowthViewMode): string {
   const { unit } = growthPeriodWords(mode);
-  return `${unit} 성장 배지와 왕을 합쳐 가장 많이 받은 학생이에요. 동점이면 모두 함께 왕중왕이 되고, 아무도 받지 못했다면 왕중왕도 없어요.`;
+  return `${unit} 받은 성장왕과 왕을 모두 더해 가장 많이 받은 학생이에요. 동점이면 모두 함께 왕중왕이 되고, 아무도 받지 못했다면 왕중왕도 없어요.`;
 }
 
 // 공통 선정 정책 — 3개 이내
 export function growthAwardGuideNotes(): readonly string[] {
   return [
-    "기록이 충분한 학생끼리만 비교해요. 기록이 너무 적으면 100%여도 왕으로 선정되지 않을 수 있어요.",
-    "점수가 같으면 여러 학생이 함께 왕이 돼요.",
-    "아직 오지 않은 수업이나 마감일이 지나지 않은 숙제는 계산하지 않아요.",
+    "왕은 기록이 충분한 학생끼리만 비교해요. 기록이 너무 적으면 100%여도 선정되지 않을 수 있어요.",
+    "점수가 같으면 여러 학생이 함께 왕이 돼요. 성장왕은 비교 없이 기준을 넘긴 학생 모두 받아요.",
+    "평가하지 않은 항목은 계산에서 제외되고, 왕은 오늘까지의 기록만 봐요. 마감일이 지나지 않은 숙제는 계산하지 않아요.",
   ];
 }

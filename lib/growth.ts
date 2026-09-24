@@ -1,3 +1,10 @@
+import {
+  effortLevelLabels,
+  focusLevelLabels,
+  kindnessLevelLabels,
+  participationLevelLabels,
+  questionLevelLabels,
+} from "@/lib/elementary";
 import type { GrowthAchievementType, MakeupStatus } from "@/lib/supabase/types";
 
 // 9개 성장 Achievement 자동 판정 엔진 (단일 소스).
@@ -251,4 +258,115 @@ export function computeWeeklyGrowth(input: WeeklyGrowthInput): WeeklyGrowthResul
   }
 
   return { achieved, stats, vocabTrend };
+}
+
+// ---- 안내 카드 문구 (성장노트 "왕은 어떻게 선정되나요?") ----
+// 숫자는 전부 GROWTH_CONFIG / VOCAB_WINDOW_DAYS에서 파생 — 설명용 threshold를 따로 하드코딩하지 않는다.
+// 9개 성장왕은 학생마다 독립 판정(반 학생끼리 비교 없음)이라 최고 점수/동점 개념이 없다.
+// 주간/월간은 판정 기준이 같고 집계 기간(record 범위)만 다르다.
+
+// 단어왕 판정용 최근 시험 조회 window (전체 history 조회 금지) — 페이지 조회와 안내 문구가 공유
+export const VOCAB_WINDOW_DAYS = 90;
+
+export type GrowthBadgeGuideItem = {
+  type: GrowthAchievementType;
+  emoji: string;
+  label: string;
+  primary: string; // 이 성장왕이 누구인지
+  secondary: string; // 어떤 기록으로 판정하는지 (실제 computeWeeklyGrowth와 일치)
+  minimum: string; // 판정 기준 한 줄 (GROWTH_CONFIG 값)
+};
+
+function percentLabel(ratio: number) {
+  return `${Math.round(ratio * 100)}%`;
+}
+
+function ratioMinimumLabel(
+  name: string,
+  positiveLabel: string,
+  config: { minSamples: number; positiveRatio: number },
+) {
+  return `${name} 평가 ${config.minSamples}회 이상 · ${positiveLabel} ${percentLabel(config.positiveRatio)} 이상`;
+}
+
+function ratioSecondary(name: string, positiveLabel: string) {
+  return `${name} 평가 중 ${positiveLabel}의 비율로 판정해요. 평가하지 않은 수업은 계산에서 제외돼요.`;
+}
+
+export function growthBadgeGuideItem(
+  type: GrowthAchievementType,
+  mode: "week" | "month",
+): GrowthBadgeGuideItem {
+  const unit = mode === "month" ? "이번 달" : "이번 주";
+  const base = { type, emoji: growthEmojis[type], label: growthLabels[type] };
+  switch (type) {
+    case "attendance_master":
+      return {
+        ...base,
+        primary: `${unit} 수업에 한 번도 빠지지 않고 정시에 출석한 학생이에요.`,
+        secondary: "수업 기록이 하나라도 있어야 하고, 지각 · 조퇴 · 결석이 한 번도 없어야 해요. 사유를 적었더라도 마찬가지예요.",
+        minimum: `${unit} 수업 기록 있음 · 전부 정시 출석`,
+      };
+    case "consistency_master":
+      return {
+        ...base,
+        primary: "수업 일지에 남긴 숙제 평가가 모두 완료인 학생이에요.",
+        secondary: "수업마다 기록한 숙제 평가만 보고, 평가하지 않은 수업은 계산에서 제외돼요. 배정 숙제의 마감일 기준 완료율로 뽑는 숙제왕과는 기준이 달라요.",
+        minimum: `숙제 평가 ${GROWTH_CONFIG.homework.minSamples}회 이상 · 완료 ${percentLabel(GROWTH_CONFIG.homework.positiveRatio)}`,
+      };
+    case "vocabulary_master":
+      return {
+        ...base,
+        primary: `최근 단어시험 ${GROWTH_CONFIG.vocabPerfectStreak}회를 연속으로 100점 받은 학생이에요.`,
+        secondary: `${unit}이 끝나는 날까지 본 단어시험 중 최근 ${GROWTH_CONFIG.vocabPerfectStreak}회만 봐요. 최근 ${VOCAB_WINDOW_DAYS}일보다 오래된 시험은 세지 않아요.`,
+        minimum: `최근 단어시험 ${GROWTH_CONFIG.vocabPerfectStreak}회 모두 100점`,
+      };
+    case "focus_master":
+      return {
+        ...base,
+        primary: "수업에 집중하는 모습을 꾸준히 보여준 학생이에요.",
+        secondary: ratioSecondary("집중도", focusLevelLabels.good),
+        minimum: ratioMinimumLabel("집중", focusLevelLabels.good, GROWTH_CONFIG.focus),
+      };
+    case "presentation_master":
+      return {
+        ...base,
+        primary: "수업과 발표에 적극적으로 참여한 학생이에요.",
+        secondary: ratioSecondary("참여도", participationLevelLabels.active),
+        minimum: ratioMinimumLabel("참여", participationLevelLabels.active, GROWTH_CONFIG.participation),
+      };
+    case "question_master":
+      return {
+        ...base,
+        primary: "궁금한 것을 적극적으로 질문한 학생이에요.",
+        secondary: ratioSecondary("질문", questionLevelLabels.high),
+        minimum: ratioMinimumLabel("질문", questionLevelLabels.high, GROWTH_CONFIG.question),
+      };
+    case "kindness_master":
+      return {
+        ...base,
+        primary: "친구를 배려하는 모습을 자주 보여준 학생이에요.",
+        secondary: ratioSecondary("배려", kindnessLevelLabels.good),
+        minimum: ratioMinimumLabel("배려", kindnessLevelLabels.good, GROWTH_CONFIG.kindness),
+      };
+    case "effort_master":
+      return {
+        ...base,
+        primary: "어려운 것도 포기하지 않고 끝까지 노력한 학생이에요.",
+        secondary: ratioSecondary("노력", effortLevelLabels.high),
+        minimum: ratioMinimumLabel("노력", effortLevelLabels.high, GROWTH_CONFIG.effort),
+      };
+    case "makeup_master":
+      return {
+        ...base,
+        primary: `${unit}에 잡힌 보충수업을 빠짐없이 완료한 학생이에요.`,
+        secondary: `${unit}에 실시했거나 예정된 보충수업만 보고, 취소된 보충은 계산에서 제외돼요. 보충이 없던 학생은 받지 않아요.`,
+        minimum: `보충수업 ${GROWTH_CONFIG.makeup.minSamples}개 이상 · 완료 ${percentLabel(GROWTH_CONFIG.makeup.completionRatio)}`,
+      };
+  }
+}
+
+// growthAchievementValues 순서 그대로 (성장노트 첫 화면 소개 순서와 동일)
+export function growthBadgeGuideItems(mode: "week" | "month"): GrowthBadgeGuideItem[] {
+  return growthAchievementValues.map((type) => growthBadgeGuideItem(type, mode));
 }

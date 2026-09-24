@@ -6,7 +6,7 @@ import { AppShell } from "@/components/app-shell";
 import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
 import { formatKoreanDate, toDateString, todayDateString } from "@/lib/dates";
 import { vocabPercent } from "@/lib/elementary";
-import { scopeMakeupsToWeek } from "@/lib/growth";
+import { scopeMakeupsToWeek, VOCAB_WINDOW_DAYS } from "@/lib/growth";
 import { buildGrowthNoteViewModel } from "@/lib/growth-note";
 import {
   getGrowthLessonRows,
@@ -23,7 +23,6 @@ function weekStartOf(ymd: string) {
   return addDaysStr(ymd, -((dayOfWeekOf(ymd) + 6) % 7));
 }
 
-const VOCAB_WINDOW_DAYS = 90;
 
 // 학생에게 iPad로 그대로 보여주는 화면 — Teacher 관리 UI(수정/삭제/메모/학부모 전달)는
 // 이 페이지에 렌더하지 않고, ViewModel에도 private 필드를 넣지 않는다.
