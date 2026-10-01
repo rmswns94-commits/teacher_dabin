@@ -89,7 +89,7 @@ export function InstallAppButton() {
           }}
           className="fixed inset-0 z-[60] flex items-center justify-center bg-[#26262b]/35 px-4"
         >
-          <div className="w-full max-w-sm rounded-2xl border border-[#e6e6ea] bg-white p-6 shadow-xl">
+          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl border border-[#e6e6ea] bg-white p-6 shadow-xl">
             <div className="card-title text-[#232327]">앱처럼 사용하기</div>
             <p className="mt-1.5 text-sm text-[#6b6b74]">
               홈 화면에 추가하면 더 빠르게 강사 일지를 열 수 있어요.

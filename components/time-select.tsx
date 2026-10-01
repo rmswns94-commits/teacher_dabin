@@ -258,7 +258,7 @@ function TimeWheelDialog({
       <div
         // 줄 높이는 rem 기반 — 글씨 크기 설정이 커지면 wheel도 같이 커진다
         style={{ ["--wheel-item-h" as string]: "2.75rem" }}
-        className="w-full max-w-[19rem] rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-4 shadow-[0_22px_60px_rgba(60,48,90,0.25)]"
+        className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-[19rem] rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-4 shadow-[0_22px_60px_rgba(60,48,90,0.25)]"
       >
         <div className="card-title text-center text-[#2a2323]">{title}</div>
         <div className="mt-1 text-center text-lg font-semibold tabular-nums text-[#5c4ca8]">

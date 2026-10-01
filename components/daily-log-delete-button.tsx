@@ -75,7 +75,7 @@ export function DailyLogDeleteButton({
             }
           }}
         >
-          <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
             <div className="text-lg font-semibold text-[#2a2323]">수업일지를 삭제할까요?</div>
 
             <div className="mt-3 rounded-2xl bg-[#f8f3ef] p-3 text-sm">

@@ -98,7 +98,7 @@ export function SchoolSelectDialog({
         }
       }}
     >
-      <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 text-left shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-sm overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 text-left shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
         <div className="card-title text-[#2a2323]">{title}</div>
         <p className="secondary-text mt-2 text-[#655d5d]">{helper}</p>
 

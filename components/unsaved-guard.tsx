@@ -141,7 +141,7 @@ export function ConfirmDiscardDialog({
         }
       }}
     >
-      <div className="w-full max-w-xs rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 text-center shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+      <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-xs rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 text-center shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
         <div className="card-title text-[#2a2323]">
           작성 중인 내용이 있어요
         </div>

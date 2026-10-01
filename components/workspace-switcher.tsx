@@ -214,7 +214,7 @@ export function WorkspaceSwitcher({
             }
           }}
         >
-          <div className="w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
             <div className="card-title text-[#2a2323]">학원 이름 변경</div>
             <p className="mt-2 text-sm leading-6 text-[#655d5d]">
               현재 이름 <span className="font-medium text-[#2d2928]">{active.name}</span>
@@ -278,7 +278,7 @@ export function WorkspaceSwitcher({
             }
           }}
         >
-          <div className="w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
             {step === "explain" ? (
               <>
                 <div className="card-title text-[#2a2323]">학원을 변경하시나요?</div>
@@ -362,7 +362,7 @@ export function WorkspaceSwitcher({
             }
           }}
         >
-          <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
             <div className="card-title text-[#2a2323]">
               {step.switchTo.name}으로 전환할까요?
             </div>

@@ -4326,7 +4326,7 @@ export function DailyLogForm({
                   }
                 }}
               >
-                <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+                <div className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
                   <div className="card-title text-[#2a2323]">여러 학생에게 숙제 배정</div>
                   <p className="mt-1 text-sm leading-5 text-[#8a7b77]">
                     선택한 학생마다 각각의 숙제로 추가돼요 — 나중에 내용·완료를 학생별로 따로
@@ -4507,7 +4507,7 @@ export function DailyLogForm({
           aria-modal="true"
           aria-label="공통 진도 덮어쓰기 확인"
         >
-          <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
             <div className="card-title text-[#2a2323]">
               현재 작성한 공통 진도가 있어요
             </div>
@@ -4551,7 +4551,7 @@ export function DailyLogForm({
             }
           }}
         >
-          <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
             <div className="text-lg font-semibold text-[#2a2323]">수업일지가 이미 있어요</div>
             <p className="mt-3 whitespace-pre-line text-sm leading-5 text-[#564d4d]">
               {`${formatKoreanDate(classDate)}에 이미 등록된 수업 일지가 있어요.\n같은 반의 수업 일지는 하루에 한 번만 등록할 수 있어요.${
@@ -4710,7 +4710,7 @@ function CompletionSummary({
       aria-modal="true"
       aria-label="오늘 수업 마무리"
     >
-      <div className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
         <div className="flex items-center gap-2 text-lg font-semibold text-[#2a2323]">
           <CheckCheck className="h-5 w-5 text-[#6852b8]" />
           오늘 수업 마무리

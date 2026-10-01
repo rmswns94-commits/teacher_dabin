@@ -65,7 +65,7 @@ export function FeedbackDialog() {
           aria-modal="true"
           aria-label="피드백 보내기"
         >
-          <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
             {sent ? (
               <div className="py-6 text-center text-sm leading-5 text-[#3d6d58]">
                 의견 고마워요 🌷

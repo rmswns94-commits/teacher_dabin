@@ -169,7 +169,7 @@ export function StudentLifecycleActions({
             }
           }}
         >
-          <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
             <div className="card-title text-[#2a2323]">
               {confirm === "paused"
                 ? `${studentName} 학생을 휴원 처리할까요?`
@@ -238,7 +238,7 @@ export function StudentLifecycleActions({
             }
           }}
         >
-          <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+          <div className="max-h-[calc(100dvh-3rem)] w-full max-w-sm overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
             <div className="card-title text-[#2a2323]">반 이동</div>
             <p className="mt-2 text-sm leading-5 text-[#655d5d]">
               {studentName} 학생의 선택한 반 소속만 새 반으로 바뀌어요. 다른 반 소속은 그대로

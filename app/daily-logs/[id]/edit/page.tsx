@@ -211,40 +211,44 @@ export default async function EditDailyLogPage({
   return (
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
-        <PageHeader
-          backHref={`/daily-logs/${log.id}`}
-          title={log.status === "draft" ? "수업 일지 이어쓰기" : "수업 일지 수정"}
-          description={`${formatKoreanDate(log.class_date, true)} · ${log.group?.name ?? "그룹 정보 없음"}`}
-        />
-
-        {/* 같은 날짜의 이전/다음 정규 수업 바로가기 — 클릭 시 공용 resolver로만 이동 (DB 무접촉) */}
-        <AdjacentLessonNav
-          previous={adjacentClasses.previous}
-          next={adjacentClasses.next}
-          date={log.class_date}
-        />
-
-        {/* 작성 중(draft) 일지는 새 작성 화면과 같은 그룹/날짜 피커를 유지한다 —
-            draft로 자동 이동했더라도 반을 잘못 골랐다면 여기서 다시 바꿀 수 있다.
-            제출하면 /daily-logs/new?groupId&date로 가서 공용 resolver가 그 identity의
-            일지/draft를 찾아 이어쓰기 또는 새 폼을 연다 (조회만 — draft를 미리 만들지 않음).
-            폼에 저장 안 된 변경이 있으면 기존 beforeunload 확인창이 이동을 막아준다.
-            완료(completed)된 일지 수정에는 표시하지 않는다 (그룹 변경 불가 — 기존 정책). */}
-        {log.status === "draft" ? (
-          <Card className="mb-5">
-            <CardContent className="py-4">
-              <DailyLogPicker
-                groups={allGroups.map((group) => ({ id: group.id, name: group.name }))}
-                date={log.class_date}
-                groupId={log.group_id}
-              />
-            </CardContent>
-          </Card>
-        ) : null}
-
         {/* 이전 수업 기록 사이드바 — 새 작성 화면과 동일한 워크스페이스/데이터 재사용.
             표시 여부는 폼 모드(작성/이어쓰기/완료 수정)가 아니라 group+class_date 기준. */}
+        {/* 페이지 헤더·인접 nav·(draft) 피커는 워크스페이스 왼쪽 컬럼(lead)에 둔다 — xl 사이드바가 페이지 맨 위에서 시작한다. */}
         <LessonHistoryWorkspace
+          lead={
+            <>
+              <PageHeader
+                backHref={`/daily-logs/${log.id}`}
+                title={log.status === "draft" ? "수업 일지 이어쓰기" : "수업 일지 수정"}
+                description={`${formatKoreanDate(log.class_date, true)} · ${log.group?.name ?? "그룹 정보 없음"}`}
+              />
+
+              {/* 같은 날짜의 이전/다음 정규 수업 바로가기 — 클릭 시 공용 resolver로만 이동 (DB 무접촉) */}
+              <AdjacentLessonNav
+                previous={adjacentClasses.previous}
+                next={adjacentClasses.next}
+                date={log.class_date}
+              />
+
+              {/* 작성 중(draft) 일지는 새 작성 화면과 같은 그룹/날짜 피커를 유지한다 —
+                  draft로 자동 이동했더라도 반을 잘못 골랐다면 여기서 다시 바꿀 수 있다.
+                  제출하면 /daily-logs/new?groupId&date로 가서 공용 resolver가 그 identity의
+                  일지/draft를 찾아 이어쓰기 또는 새 폼을 연다 (조회만 — draft를 미리 만들지 않음).
+                  폼에 저장 안 된 변경이 있으면 기존 beforeunload 확인창이 이동을 막아준다.
+                  완료(completed)된 일지 수정에는 표시하지 않는다 (그룹 변경 불가 — 기존 정책). */}
+              {log.status === "draft" ? (
+                <Card className="mb-5">
+                  <CardContent className="py-4">
+                    <DailyLogPicker
+                      groups={allGroups.map((group) => ({ id: group.id, name: group.name }))}
+                      date={log.class_date}
+                      groupId={log.group_id}
+                    />
+                  </CardContent>
+                </Card>
+              ) : null}
+            </>
+          }
           group={{ id: log.group_id, name: log.group?.name ?? "수업 그룹" }}
           currentDate={log.class_date}
           initialRows={history.rows}

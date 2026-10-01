@@ -97,7 +97,7 @@ export function WeaknessFormDialog({
         }
       }}
     >
-      <div className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
         <div className="card-title text-[#2a2323]">{heading}</div>
         <p className="mt-1 text-sm text-[#8a7b77]">
           {studentName} 학생이 자주 헷갈리는 부분을 적어두고, 다음에 다시 확인해요.

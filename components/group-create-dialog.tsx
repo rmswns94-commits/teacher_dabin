@@ -66,7 +66,7 @@ export function GroupCreateDialog({ label = "수업 그룹 등록" }: { label?: 
             }
           }}
         >
-          <div className="max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+          <div className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
             <div className="card-title mb-4 text-[#2a2323]">수업 그룹 등록</div>
             <GroupCreateForm key={sessionKey} onCancel={requestClose} onDirtyChange={setIsDirty} />
           </div>

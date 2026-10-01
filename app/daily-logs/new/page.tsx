@@ -156,33 +156,38 @@ export default async function NewDailyLogPage({
   return (
     <AppShell>
       <main className="h-screen overflow-y-auto px-5 py-6 md:px-8">
-        <PageHeader
-          backHref="/daily-logs"
-          title="오늘 수업 기록하기"
-          description="반을 선택하면 소속 학생이 자동으로 표시돼요."
-        />
-
-        <Card className="mb-5">
-          <CardContent className="py-4">
-            <DailyLogPicker
-              key={`${selectedGroup?.id ?? ""}:${date}`}
-              groups={groups.map((group) => ({ id: group.id, name: group.name }))}
-              date={date}
-              groupId={selectedGroup?.id ?? ""}
-            />
-          </CardContent>
-        </Card>
-
-        {/* 같은 날짜의 이전/다음 정규 수업 바로가기 — 클릭 시 공용 resolver로만 이동 (DB 무접촉) */}
-        {adjacentClasses ? (
-          <AdjacentLessonNav
-            previous={adjacentClasses.previous}
-            next={adjacentClasses.next}
-            date={date}
-          />
-        ) : null}
-
+        {/* 페이지 헤더·피커·인접 수업 nav는 워크스페이스 왼쪽 컬럼(lead)에 둔다 — xl에서 이전 수업 기록 사이드바가
+            페이지 맨 위에서 시작해 sticky max-height(100dvh-3rem) 안에 통째로 들어온다. */}
         <LessonHistoryWorkspace
+          lead={
+            <>
+              <PageHeader
+                backHref="/daily-logs"
+                title="오늘 수업 기록하기"
+                description="반을 선택하면 소속 학생이 자동으로 표시돼요."
+              />
+
+              <Card className="mb-5">
+                <CardContent className="py-4">
+                  <DailyLogPicker
+                    key={`${selectedGroup?.id ?? ""}:${date}`}
+                    groups={groups.map((group) => ({ id: group.id, name: group.name }))}
+                    date={date}
+                    groupId={selectedGroup?.id ?? ""}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* 같은 날짜의 이전/다음 정규 수업 바로가기 — 클릭 시 공용 resolver로만 이동 (DB 무접촉) */}
+              {adjacentClasses ? (
+                <AdjacentLessonNav
+                  previous={adjacentClasses.previous}
+                  next={adjacentClasses.next}
+                  date={date}
+                />
+              ) : null}
+            </>
+          }
           group={selectedGroup ? { id: selectedGroup.id, name: selectedGroup.name } : null}
           currentDate={date}
           initialRows={history.rows}

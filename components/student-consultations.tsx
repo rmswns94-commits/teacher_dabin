@@ -143,7 +143,7 @@ function ConsultationFormDialog({
         }
       }}
     >
-      <div className="max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
         <div className="card-title text-[#2a2323]">{label}</div>
         <p className="mt-1 text-sm text-[#8a7b77]">{studentName} 학생의 상담 기록이에요.</p>
 
@@ -314,7 +314,7 @@ function ConsultationDetailDialog({
         }
       }}
     >
-      <div className="max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
         <div className="card-title tabular-nums text-[#2a2323]">
           {formatKoreanDate(item.consultationDate, true)}
           {item.consultationTime ? ` ${item.consultationTime}` : ""}
@@ -385,7 +385,7 @@ function ConsultationDetailDialog({
             }
           }}
         >
-          <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
             <div className="text-lg font-semibold text-[#2a2323]">이 상담 기록을 삭제할까요?</div>
             <p className="mt-3 text-sm leading-5 text-[#7f5d57]">
               삭제하면 복구할 수 없어요. 학생 정보와 수업 기록은 그대로예요.

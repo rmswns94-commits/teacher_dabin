@@ -167,7 +167,7 @@ export function PreviousLessonImportDialog({
         }
       }}
     >
-      <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 text-left shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 text-left shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
         <div className="card-title flex items-center gap-1.5 text-[#2a2323]">
           <History className="h-4 w-4 text-[#6d5aa8]" aria-hidden /> 지난 수업에서 가져오기
         </div>

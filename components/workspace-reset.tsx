@@ -117,7 +117,7 @@ export function WorkspaceReset() {
             }
           }}
         >
-          <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+          <div className="max-h-[calc(100dvh-3rem)] w-full max-w-sm overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
             {step === "warn" ? (
               <>
                 <div className="card-title text-[#2a2323]">저장된 데이터를 전부 초기화할까요?</div>

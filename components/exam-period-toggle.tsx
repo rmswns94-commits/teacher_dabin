@@ -143,7 +143,7 @@ export function ExamPeriodToggle({
             }
           }}
         >
-          <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 text-left shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 text-left shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
             <div className="text-lg font-semibold text-[#2a2323]">시험이 잘 끝나셨나요?</div>
             <p className="mt-3 text-sm leading-5 text-[#655d5d]">
               시험 기간을 끄면 수업일지가 다시 교재 기준으로 돌아가요. 등록한 시험 대비용 교재는

@@ -405,7 +405,7 @@ export function ScheduleExceptionManager({
             }
           }}
         >
-          <div className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+          <div className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
             {/* 제목 + 닫기. X는 "이전 단계"가 아니라 마법사 전체 종료다 (저장 없음). */}
             <div className="flex items-start justify-between gap-3">
               <div className="card-title min-w-0 text-[#2a2323]">
@@ -636,7 +636,7 @@ export function ScheduleExceptionManager({
             }
           }}
         >
-          <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
             <div className="card-title text-[#2a2323]">수업 변경을 되돌릴까요?</div>
             <p className="mt-2 text-sm leading-5 text-[#655d5d]">
               {confirmRestore.kind === "cancelled"

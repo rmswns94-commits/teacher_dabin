@@ -150,6 +150,7 @@ export function LessonHistoryWorkspace({
   initialHasMore,
   initialLoadFailed = false,
   schedules,
+  lead,
   children,
 }: {
   group: { id: string; name: string } | null;
@@ -158,6 +159,8 @@ export function LessonHistoryWorkspace({
   initialHasMore: boolean;
   initialLoadFailed?: boolean;
   schedules: ScheduleSlot[];
+  // 페이지 헤더/피커 등 폼 위에 올 내용 — 왼쪽 컬럼 안에 두어 xl 사이드바가 페이지 맨 위에서 시작한다
+  lead?: ReactNode;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -332,8 +335,8 @@ export function LessonHistoryWorkspace({
   const preview = historyPreview(rows.length, showOlder);
 
   const panelBody = (
-    <div className="flex h-full flex-col">
-      <div className="flex items-start justify-between gap-2 border-b border-dashed border-[#eee3dc] pb-3">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-start justify-between gap-2 border-b border-dashed border-[#eee3dc] pb-3">
         <div>
           <div className="card-title flex items-center gap-1.5 text-[#2a2323]">
             <History className="h-4 w-4 text-[#8b7ae6]" aria-hidden /> 이전 수업 기록
@@ -352,7 +355,7 @@ export function LessonHistoryWorkspace({
         </button>
       </div>
 
-      <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-0.5">
+      <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5" data-history-scroll>
         {!group ? (
           <p className="rounded-2xl bg-[#faf4ef] px-3 py-3 text-sm text-[#8a7b77]">
             수업 그룹을 먼저 선택해주세요.
@@ -763,6 +766,7 @@ export function LessonHistoryWorkspace({
     <HistoryImportContext.Provider value={importContext}>
       <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start xl:gap-6">
         <div className="min-w-0">
+          {lead}
           <div className="mb-3 flex justify-end xl:hidden">
             <Button
               type="button"
@@ -786,13 +790,16 @@ export function LessonHistoryWorkspace({
           />
         ) : null}
 
-        {/* 단일 패널 인스턴스: xl 이상 persistent / 미만 우측 drawer (state 공유) */}
+        {/* 단일 패널 인스턴스: xl 이상 persistent / 미만 우측 drawer (state 공유).
+            높이 체인: aside(max-h 100dvh-3rem 또는 inset-y-0, flex-col) → panelBody(min-h-0 flex-1 flex-col)
+            → 헤더 shrink-0 + scroll region(min-h-0 flex-1 overflow-y-auto). 퍼센트 높이(h-full)는
+            max-height만 있는 부모에서 auto로 풀려 스크롤이 생기지 않으므로 쓰지 않는다. */}
         <aside
           aria-label="이전 수업 기록"
           className={cn(
-            "xl:sticky xl:top-6 xl:block xl:max-h-[calc(100vh-3rem)] xl:overflow-hidden xl:rounded-3xl xl:border xl:border-[#efe4dc] xl:bg-[#fffdfb] xl:p-4 xl:shadow-[0_1px_3px_rgba(0,0,0,0.05)]",
+            "xl:sticky xl:top-6 xl:flex xl:max-h-[calc(100dvh-3rem)] xl:flex-col xl:overflow-hidden xl:rounded-3xl xl:border xl:border-[#efe4dc] xl:bg-[#fffdfb] xl:p-4 xl:shadow-[0_1px_3px_rgba(0,0,0,0.05)]",
             open
-              ? "max-xl:fixed max-xl:inset-y-0 max-xl:right-0 max-xl:z-[60] max-xl:w-[min(430px,94vw)] max-xl:overflow-hidden max-xl:border-l max-xl:border-[#efe4dc] max-xl:bg-[#fffdfb] max-xl:p-4 max-xl:pb-[max(1rem,env(safe-area-inset-bottom))] max-xl:shadow-[-16px_0_44px_rgba(60,48,90,0.2)] md:max-xl:w-[min(560px,52vw)]"
+              ? "max-xl:fixed max-xl:inset-y-0 max-xl:right-0 max-xl:z-[60] max-xl:flex max-xl:w-[min(430px,94vw)] max-xl:flex-col max-xl:overflow-hidden max-xl:border-l max-xl:border-[#efe4dc] max-xl:bg-[#fffdfb] max-xl:p-4 max-xl:pb-[max(1rem,env(safe-area-inset-bottom))] max-xl:shadow-[-16px_0_44px_rgba(60,48,90,0.2)] md:max-xl:w-[min(560px,52vw)]"
               : "max-xl:hidden",
           )}
         >

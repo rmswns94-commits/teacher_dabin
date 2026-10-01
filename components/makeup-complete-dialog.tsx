@@ -46,7 +46,7 @@ export function DialogShell({
       }}
       className="fixed inset-0 z-[60] flex items-center justify-center bg-[#26262b]/35 px-4"
     >
-      <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[#e6e6ea] bg-white p-5 shadow-xl">
+      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl border border-[#e6e6ea] bg-white p-5 shadow-xl">
         <div className="card-title text-[#232327]">{title}</div>
         {children}
       </div>

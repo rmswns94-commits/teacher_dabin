@@ -94,7 +94,7 @@ function EventFormDialog({
       aria-modal="true"
       aria-label={title}
     >
-      <div className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
         <div className="card-title text-[#2a2323]">{title}</div>
 
         <label className="mt-4 block">
@@ -410,7 +410,7 @@ export function EventCreateButton({
             }
           }}
         >
-          <div className="w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
             <div className="card-title text-[#2a2323]">
               {confirmClosure.next
                 ? `${formatKoreanDate(confirmClosure.date)}을 학원 휴강일로 등록할까요?`

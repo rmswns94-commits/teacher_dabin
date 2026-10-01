@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { updateStudentDetailsAction } from "@/app/students/actions";
 import { ConfirmDiscardDialog, useBeforeUnloadWarning } from "@/components/unsaved-guard";
 import { Button } from "@/components/ui/button";
+import { OverlayPortal } from "@/components/ui/overlay-portal";
 import { todayDateString } from "@/lib/dates";
 import { gradeOptions } from "@/lib/grades";
 import { genderLabels } from "@/lib/validation/student";
@@ -80,7 +81,9 @@ function StudentEditFormDialog({
     );
   };
 
+  // body로 포털: 호출 위치(sticky 액션바 등)의 backdrop-filter/z-index에 갇히지 않고 항상 viewport 중앙
   return (
+    <OverlayPortal>
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2b2323]/30 px-4 py-6"
       role="dialog"
@@ -100,7 +103,7 @@ function StudentEditFormDialog({
         }
       }}
     >
-      <div className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
         <div className="card-title text-[#2a2323]">학생 정보 수정</div>
         <p className="mt-1 text-sm text-[#8a7b77]">학생의 기본 정보와 수업 그룹을 수정할 수 있어요.</p>
 
@@ -241,6 +244,7 @@ function StudentEditFormDialog({
         onDiscard={onCancel}
       />
     </div>
+    </OverlayPortal>
   );
 }
 
