@@ -5,6 +5,7 @@ import {
   type PersistedLogForCompleteness,
 } from "@/lib/daily-log-completeness";
 import { todayDateString } from "@/lib/dates";
+import type { QuickCheckLessonRow } from "@/lib/quick-check";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type { ClassGroupRecord, DailyLogRecord } from "@/lib/supabase/types";
 
@@ -30,10 +31,12 @@ export type TodayLogSummary = Pick<DailyLogRecord, "id" | "status" | "group_id" 
   };
   // 수업 마무리 체크리스트 source — lib/daily-log-completeness가 저장된 row에서 파생 (새 DB field 없음)
   completeness: DailyLogCompletenessSource;
+  // 빠른 체크(출결/숙제 검사) source — 같은 embed row를 학생 id와 함께 그대로 (추가 쿼리 없음)
+  lessonRows: QuickCheckLessonRow[];
 };
 
 const TODAY_LOG_SELECT =
-  "id, status, group_id, class_date, default_progress, lesson_content, textbook_progress, school_progress, homework, next_lesson_plan, textbook_plans, school_plans, tasks, task_content, reflection_good, reflection_hard, reflection_next, class_groups(id, name), student_lesson_logs(attendance, homework_status, online_review_completed, strengths, improvements, memo, focus_level, participation_level, question_level, kindness_level, effort_level)";
+  "id, status, group_id, class_date, default_progress, lesson_content, textbook_progress, school_progress, homework, next_lesson_plan, textbook_plans, school_plans, tasks, task_content, reflection_good, reflection_hard, reflection_next, class_groups(id, name), student_lesson_logs(student_id, attendance, attendance_reason, homework_status, online_review_completed, strengths, improvements, memo, focus_level, participation_level, question_level, kindness_level, effort_level)";
 
 export async function getDashboardOverview() {
   const supabase = await createServerSupabaseClient();
@@ -65,7 +68,7 @@ export async function getDashboardOverview() {
   }
 
   const todayLogs = (logsResult.data ?? []).map((row) => {
-    const lessonLogs = (row.student_lesson_logs ?? []) as LessonRowForCompleteness[];
+    const lessonLogs = (row.student_lesson_logs ?? []) as (LessonRowForCompleteness & QuickCheckLessonRow)[];
     const counts = { present: 0, late: 0, early_leave: 0, absent: 0, total: lessonLogs.length };
 
     for (const log of lessonLogs) {
@@ -82,6 +85,12 @@ export async function getDashboardOverview() {
       group: pickOne<Pick<ClassGroupRecord, "id" | "name">>(row.class_groups),
       attendanceCounts: counts,
       completeness: completenessFromPersistedLog({ ...persisted, student_lesson_logs: lessonLogs }),
+      lessonRows: lessonLogs.map((log) => ({
+        student_id: log.student_id,
+        attendance: log.attendance,
+        attendance_reason: log.attendance_reason ?? null,
+        homework_status: log.homework_status,
+      })),
     };
   });
 

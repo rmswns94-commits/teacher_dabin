@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight, CirclePlay } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { ClassCardClockContext } from "@/components/class-card-clock";
 import { ExamPeriodMark } from "@/components/exam-period-mark";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -191,7 +192,10 @@ export function ClassBriefingCard({
         ) : null}
       </CardHeader>
       {/* 본문 교체는 subtle — 큰 flip/carousel 애니메이션 없음 (reduced-motion 영향 0) */}
-      <CardContent>{mode === "briefing" ? viewed.briefing : viewed.wrapUp}</CardContent>
+      {/* 본문(서버 렌더 ReactNode) 안의 빠른 체크가 카드와 같은 시각/자동 focus로 수정 가능 여부를 판정하게 한다 */}
+      <ClassCardClockContext.Provider value={{ now, autoKey }}>
+        <CardContent>{mode === "briefing" ? viewed.briefing : viewed.wrapUp}</CardContent>
+      </ClassCardClockContext.Provider>
     </Card>
   );
 }

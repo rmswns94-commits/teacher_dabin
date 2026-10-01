@@ -20,6 +20,9 @@ import { vocabPercent } from "@/lib/elementary";
 import { EMPTY_GROUP_BRIEFING, getGroupsBriefingData, type GroupBriefingData } from "@/lib/supabase/queries/briefing";
 import { getAutosaveDraftGroupIdsOn } from "@/lib/supabase/queries/daily-log-drafts";
 import type { DailyLogStatus } from "@/lib/supabase/types";
+import { QuickCheckButtons } from "@/components/quick-checks";
+import { buildQuickCheckModel, type QuickCheckLessonRow, type QuickCheckModel } from "@/lib/quick-check";
+import { formatTimeRange } from "@/lib/schedule";
 import { weaknessCategoryLabels } from "@/lib/validation/weakness";
 import { aggregateVocabMistakes } from "@/lib/vocab";
 
@@ -87,8 +90,63 @@ export type BriefingOccurrence = {
   prepTexts: string[];
   // canonical identity(user+group+오늘)의 Daily Log — Dashboard의 오늘 일지 batch에서 찾은 것.
   // status로 Finalized 판정, completeness로 마무리 체크리스트를 만든다 (created_at 최신 row 아님).
-  log: { id: string; status: DailyLogStatus; completeness: DailyLogCompletenessSource } | null;
+  log: {
+    id: string;
+    status: DailyLogStatus;
+    completeness: DailyLogCompletenessSource;
+    // 빠른 체크(출결/숙제 검사) source — 오늘 일지의 학생 row (같은 batch, 추가 쿼리 없음)
+    lessonRows: QuickCheckLessonRow[];
+  } | null;
 };
+
+// 브리핑 batch(그룹별 멤버/직전 Finalized 일지 등) + 자동 임시저장 존재 여부 — 페이지가 한 번 만들어
+// hero 빠른 실행과 브리핑 카드가 같은 promise를 기다린다 (중복 조회 0, hero 첫 렌더는 막지 않는다).
+export type ClassBriefingLoaded = {
+  data: Promise<Map<string, GroupBriefingData>>;
+  autosave: Promise<Set<string>>;
+};
+
+export function loadClassBriefingData({
+  occurrences,
+  today,
+  previousBefore,
+}: {
+  occurrences: BriefingOccurrence[];
+  today: string;
+  previousBefore: string;
+}): ClassBriefingLoaded {
+  const groupIds = [...new Set(occurrences.map((occ) => occ.groupId))];
+  return {
+    data: getGroupsBriefingData(groupIds, today, addDaysStr(today, -MISTAKE_WINDOW_DAYS), previousBefore),
+    // 새 작성 autosave(그룹+오늘) + 기존 일지의 수정 autosave(daily_log_id) — 전체 1쿼리
+    autosave: getAutosaveDraftGroupIdsOn(
+      today,
+      groupIds,
+      occurrences.map((occ) => occ.log?.id).filter((id): id is string => Boolean(id)),
+    ),
+  };
+}
+
+// 빠른 체크 model — hero/마무리가 같은 builder를 쓴다 (브리핑 "지난 숙제"와 같은 lastLog source).
+export function buildOccurrenceQuickCheckModel(
+  occ: BriefingOccurrence,
+  data: GroupBriefingData,
+  hasAutosaveDraft: boolean,
+  today: string,
+): QuickCheckModel {
+  return buildQuickCheckModel({
+    groupId: occ.groupId,
+    groupName: occ.groupName,
+    classDate: today,
+    timeLabel: formatTimeRange(occ.startTime, occ.endTime),
+    log: occ.log ? { id: occ.log.id, status: occ.log.status } : null,
+    members: data.members,
+    lastLog: data.lastLog,
+    todayRows: occ.log?.lessonRows ?? [],
+    hasAutosaveDraft,
+    formHref: occ.log ? `/daily-logs/${occ.log.id}/edit` : `/daily-logs/new?groupId=${occ.groupId}&date=${today}`,
+  });
+}
 
 // 브리핑 본문 — 기존 데이터(약점/오답/숙제/출결/시험/To Do/진도)의 deterministic 정리.
 // 데이터가 없는 섹션은 숨긴다. 카드 shell/header는 ClassBriefingCard(client)가 그린다.
@@ -368,11 +426,16 @@ function WrapUpBody({
   today,
   hasAutosaveDraft,
   logsUnavailable,
+  quickModel,
+  initialNow,
 }: {
   occ: BriefingOccurrence;
   today: string;
   hasAutosaveDraft: boolean;
   logsUnavailable: boolean;
+  // 빠른 체크(출결/숙제 검사) — 브리핑 batch에서 만든 model (마무리 전용 재구현 없음)
+  quickModel: QuickCheckModel;
+  initialNow: number;
 }) {
   const base = occ.log
     ? `/daily-logs/${occ.log.id}/edit`
@@ -410,6 +473,14 @@ function WrapUpBody({
   // 대시보드가 해석하지 않는다 (작성 중 안내만). 항목/판정은 lib/daily-log-completeness 한 곳.
   const items = occ.log ? buildDailyLogChecklist(occ.log.completeness) : null;
   const missing = items ? firstMissingSection(items) : null;
+  // 출결 항목은 아래 빠른 체크 row([출결 확인 X/Y] → Dialog)가 대신한다 — 같은 저장 row에서 파생, 중복 표시 금지
+  const listedItems = items ? items.filter((item) => item.key !== "attendance") : null;
+  const quickTiming = {
+    key: occ.key,
+    startEpoch: occ.startEpoch,
+    endEpoch: occ.endEpoch,
+    finalized: false, // completed 일지는 위에서 이미 return (마무리 미완료 화면에서만 렌더)
+  };
   const reviewHref = missing ? `${base}#${missing}` : base;
   // [수업 일지 완료]: 작성 내용(일지 row 또는 임시저장)이 있으면 기존 [수업 기록 완료] 요약 화면을 바로 연다.
   // 아무것도 없으면 그냥 작성 화면 — 빈 일지를 대시보드에서 Finalize하는 경로는 없다.
@@ -418,9 +489,11 @@ function WrapUpBody({
   return (
     <div data-wrapup-state="incomplete" className="space-y-3">
       <p className="body-text text-[#655d5d]">아직 수업 일지가 완료되지 않았어요.</p>
-      {items ? (
+      {/* 출결 확인 / 숙제 확인 — 클릭하면 같은 Quick Dialog (방금 끝난 수업만 수정 가능, 과거 탐색은 안내만) */}
+      <QuickCheckButtons model={quickModel} timing={quickTiming} variant="wrapup" initialNow={initialNow} />
+      {listedItems ? (
         <ul className="space-y-1.5" data-wrapup-checklist>
-          {items.map((item) => (
+          {listedItems.map((item) => (
             <ChecklistRow key={item.key} item={item} />
           ))}
         </ul>
@@ -457,16 +530,15 @@ function WrapUpBody({
 export async function ClassBriefing({
   occurrences,
   today,
-  previousBefore,
+  loaded,
   todayMakeups = [],
   initialNow,
   logsUnavailable = false,
 }: {
   occurrences: BriefingOccurrence[];
   today: string;
-  // 직전 수업 source cutoff (exclusive) — 오늘 수업 종료 전에는 오늘 일지를
-  // 미리 완료했어도 브리핑 source에서 제외한다 (Dashboard가 occurrence 기준으로 계산)
-  previousBefore: string;
+  // 브리핑 batch promise — 페이지가 loadClassBriefingData로 만든 것 (hero 빠른 실행과 공유)
+  loaded: ClassBriefingLoaded;
   // 오늘 scheduled 보충 (Dashboard가 이미 조회한 batch 재사용 — 추가 쿼리 0).
   // exact group relation 매칭은 buildStudentCheckSignals가 groupId로만 한다 (추측 금지).
   todayMakeups?: { studentId: string | null; groupId: string | null; startTime: string | null }[];
@@ -475,15 +547,7 @@ export async function ClassBriefing({
   // 오늘 일지 조회 실패 — 마무리 카드가 "미완료"를 단정하지 않게
   logsUnavailable?: boolean;
 }) {
-  const groupIds = [...new Set(occurrences.map((occ) => occ.groupId))];
-  const [dataByGroup, autosaveGroupIds] = await Promise.all([
-    getGroupsBriefingData(groupIds, today, addDaysStr(today, -MISTAKE_WINDOW_DAYS), previousBefore),
-    // 일지 row가 없는 그룹의 "작성 중" 안내용 — 그룹 전체 1쿼리 (탐색마다 조회하지 않는다)
-    getAutosaveDraftGroupIdsOn(
-      today,
-      occurrences.filter((occ) => !occ.log).map((occ) => occ.groupId),
-    ),
-  ]);
+  const [dataByGroup, autosaveGroupIds] = await Promise.all([loaded.data, loaded.autosave]);
 
   const cards: ClassCardEntry[] = occurrences.map((occ) => ({
     key: occ.key,
@@ -512,6 +576,13 @@ export async function ClassBriefing({
         today={today}
         hasAutosaveDraft={autosaveGroupIds.has(occ.groupId)}
         logsUnavailable={logsUnavailable}
+        quickModel={buildOccurrenceQuickCheckModel(
+          occ,
+          dataByGroup.get(occ.groupId) ?? EMPTY_GROUP_BRIEFING,
+          autosaveGroupIds.has(occ.groupId),
+          today,
+        )}
+        initialNow={initialNow}
       />
     ),
   }));

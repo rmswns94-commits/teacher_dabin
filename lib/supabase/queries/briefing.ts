@@ -40,6 +40,8 @@ export type BriefingHomework = {
   sort_order: number;
   textbook: string | null;
   school: string | null;
+  // 학생별 적용 판정용 (null = 공통) — 이름 문자열이 아니라 id로 매칭한다
+  assigned_student_id: string | null;
   assignedStudentName: string | null;
 };
 
@@ -161,7 +163,7 @@ export async function getGroupsBriefingData(
         supabase
           .from("daily_logs")
           .select(
-            "id, class_date, next_lesson_plan, textbook_plans, school_plans, homework, vocab_total, student_lesson_logs(student_id, attendance, homework_status, vocab_correct, vocab_retest, online_review_completed), daily_log_homework_assignments(id, content, due_date, sort_order, textbook, school, assigned_student:students(name))",
+            "id, class_date, next_lesson_plan, textbook_plans, school_plans, homework, vocab_total, student_lesson_logs(student_id, attendance, homework_status, vocab_correct, vocab_retest, online_review_completed), daily_log_homework_assignments(id, content, due_date, sort_order, textbook, school, assigned_student_id, assigned_student:students(name))",
           )
           .eq("user_id", user.id)
           .eq("group_id", groupId)

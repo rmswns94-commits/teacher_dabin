@@ -16,7 +16,8 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
-import { ClassBriefing, ClassBriefingSkeleton } from "@/components/class-briefing";
+import { ClassBriefing, ClassBriefingSkeleton, loadClassBriefingData } from "@/components/class-briefing";
+import { HeroQuickChecks } from "@/components/hero-quick-checks";
 import { TodayRefresher } from "@/components/today-refresher";
 import { Doodle, Tape } from "@/components/doodle";
 import { EncouragementCard } from "@/components/encouragement-card";
@@ -333,9 +334,22 @@ export default async function DashboardPage() {
       prepTexts: activePreparationItems(group?.preparation_items)
         .filter((item) => !item.completed && (!item.dueDate || item.dueDate <= today))
         .map((item) => formatTextbookLinked(linkedContextLabel(item), item.text)),
-      log: log ? { id: log.id, status: log.status, completeness: log.completeness } : null,
+      log: log
+        ? { id: log.id, status: log.status, completeness: log.completeness, lessonRows: log.lessonRows }
+        : null,
     };
   });
+  // 브리핑 batch + autosave 존재 여부 — 여기서 한 번 시작해 hero 빠른 실행(출결/숙제 확인)과 브리핑 카드가
+  // 같은 promise를 기다린다 (Suspense 안에서 await — hero 첫 렌더는 막지 않고, 중복 조회 0).
+  const briefingLoaded =
+    briefingOccurrences.length > 0
+      ? loadClassBriefingData({ occurrences: briefingOccurrences, today, previousBefore })
+      : null;
+  // hero가 실제 현재 수업이면 그 occurrence(브리핑 카드와 같은 key) — 빠른 체크 Dialog의 identity source
+  const heroOccurrence =
+    scheduleOverview.current && briefingLoaded
+      ? briefingOccurrences.find((occ) => occ.key === occurrenceKey(scheduleOverview.current!)) ?? null
+      : null;
   const wrapUpOccurrences = todayOccurrences.map((occ) => ({
     key: occurrenceKey(occ),
     groupId: occ.group.id,
@@ -538,16 +552,45 @@ export default async function DashboardPage() {
                             )}
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            <Button variant="secondary" size="sm" className="gap-1.5" asChild>
-                              <Link href={`${heroLogHref}#attendance`}>
-                                <UserCheck className="h-4 w-4" aria-hidden /> 출결
-                              </Link>
-                            </Button>
-                            <Button variant="secondary" size="sm" className="gap-1.5" asChild>
-                              <Link href="/todos">
-                                <BookCheck className="h-4 w-4" aria-hidden /> 숙제 확인
-                              </Link>
-                            </Button>
+                            {/* [출결 X/Y][숙제 확인 X/Y] — 페이지 이동 없이 Quick Dialog (브리핑 batch 공유, Suspense fallback은 기존 링크) */}
+                            {heroOccurrence && briefingLoaded ? (
+                              <Suspense
+                                fallback={
+                                  <>
+                                    <Button variant="secondary" size="sm" className="gap-1.5" asChild>
+                                      <Link href={`${heroLogHref}#attendance`}>
+                                        <UserCheck className="h-4 w-4" aria-hidden /> 출결
+                                      </Link>
+                                    </Button>
+                                    <Button variant="secondary" size="sm" className="gap-1.5" asChild>
+                                      <Link href="/todos">
+                                        <BookCheck className="h-4 w-4" aria-hidden /> 숙제 확인
+                                      </Link>
+                                    </Button>
+                                  </>
+                                }
+                              >
+                                <HeroQuickChecks
+                                  occurrence={heroOccurrence}
+                                  loaded={briefingLoaded}
+                                  today={today}
+                                  initialNow={renderNow}
+                                />
+                              </Suspense>
+                            ) : (
+                              <>
+                                <Button variant="secondary" size="sm" className="gap-1.5" asChild>
+                                  <Link href={`${heroLogHref}#attendance`}>
+                                    <UserCheck className="h-4 w-4" aria-hidden /> 출결
+                                  </Link>
+                                </Button>
+                                <Button variant="secondary" size="sm" className="gap-1.5" asChild>
+                                  <Link href="/todos">
+                                    <BookCheck className="h-4 w-4" aria-hidden /> 숙제 확인
+                                  </Link>
+                                </Button>
+                              </>
+                            )}
                             <Button variant="secondary" size="sm" className="gap-1.5" asChild>
                               <Link href={`${heroLogHref}#progress`}>
                                 <BookOpen className="h-4 w-4" aria-hidden /> 진도 기록
@@ -612,7 +655,7 @@ export default async function DashboardPage() {
               <ClassBriefing
                 occurrences={briefingOccurrences}
                 today={today}
-                previousBefore={previousBefore}
+                loaded={briefingLoaded!}
                 // 학생 체크의 "오늘 보충 예정" — 이미 조회된 오늘 보충 batch 재사용 (추가 쿼리 0),
                 // exact group relation 매칭은 briefing 내부 helper가 groupId로만 한다
                 todayMakeups={todayMakeups.map((makeup) => ({

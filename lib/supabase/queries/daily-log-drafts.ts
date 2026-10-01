@@ -146,21 +146,24 @@ export async function getDailyLogDraft(identity: {
 // 오늘 수업 그룹 전체를 in()으로 한 번에 묻는다 (occurrence/탐색마다 조회하지 않는다 — N+1 금지).
 // 존재 여부만 쓰고 payload는 읽지 않는다(폼 state 스냅샷을 대시보드가 해석하지 않는다).
 // 실패하면 빈 집합 — 카드는 "일지 없음" 안내로 degrade하고 canonical create flow가 그대로 draft를 찾는다.
-export async function getAutosaveDraftGroupIdsOn(classDate: string, groupIds: string[]) {
+// dailyLogIds: 이미 있는 오늘 일지의 수정 autosave(daily_log_id)도 같은 쿼리로 — 빠른 체크가 "작성 중"을 판정할 때 쓴다
+export async function getAutosaveDraftGroupIdsOn(classDate: string, groupIds: string[], dailyLogIds: string[] = []) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
-  if (!supabase || !user || groupIds.length === 0) {
+  if (!supabase || !user || (groupIds.length === 0 && dailyLogIds.length === 0)) {
     return new Set<string>();
   }
 
+  const conditions = [
+    groupIds.length > 0 ? `and(daily_log_id.is.null,class_date.eq.${classDate},group_id.in.(${groupIds.join(",")}))` : "",
+    dailyLogIds.length > 0 ? `daily_log_id.in.(${dailyLogIds.join(",")})` : "",
+  ].filter(Boolean);
   const { data, error } = await supabase
     .from("daily_log_drafts")
     .select("group_id")
     .eq("user_id", user.id)
-    .eq("class_date", classDate)
-    .is("daily_log_id", null)
-    .in("group_id", groupIds);
+    .or(conditions.join(","));
 
   if (error) {
     console.error("getAutosaveDraftGroupIdsOn error", { code: error.code, message: error.message });
