@@ -11,6 +11,7 @@ import { todayDateString } from "@/lib/dates";
 import { gradeOptions } from "@/lib/grades";
 import { genderLabels } from "@/lib/validation/student";
 import { cn } from "@/lib/utils";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 
 type GroupOption = { id: string; name: string };
 
@@ -82,6 +83,9 @@ function StudentEditFormDialog({
   };
 
   // body로 포털: 호출 위치(sticky 액션바 등)의 backdrop-filter/z-index에 갇히지 않고 항상 viewport 중앙
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
+
   return (
     <OverlayPortal>
     <div
@@ -103,8 +107,8 @@ function StudentEditFormDialog({
         }
       }}
     >
-      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-        <div className="card-title text-[#2a2323]">학생 정보 수정</div>
+      <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+        <div {...dialogHandleProps} className={`card-title text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />학생 정보 수정</div>
         <p className="mt-1 text-sm text-[#8a7b77]">학생의 기본 정보와 수업 그룹을 수정할 수 있어요.</p>
 
         <label className="mt-4 block">

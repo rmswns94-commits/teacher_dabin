@@ -76,6 +76,7 @@ import {
 import { createStudentWeaknessAction } from "@/app/students/weakness-actions";
 import { WeaknessFormDialog, type WeaknessFormValues } from "@/components/weakness-form-dialog";
 import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comments";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 import {
   applyBulkEvaluation,
   bulkUnevaluatedTargets,
@@ -2725,6 +2726,9 @@ export function DailyLogForm({
     });
   };
 
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachMultiAssignPanel, handleProps: multiAssignHandleProps } = useDraggableDialog();
+
   return (
     <div
       className="space-y-5"
@@ -4326,8 +4330,8 @@ export function DailyLogForm({
                   }
                 }}
               >
-                <div className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
-                  <div className="card-title text-[#2a2323]">여러 학생에게 숙제 배정</div>
+                <div ref={attachMultiAssignPanel} className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+                  <div {...multiAssignHandleProps} className={`card-title text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />여러 학생에게 숙제 배정</div>
                   <p className="mt-1 text-sm leading-5 text-[#8a7b77]">
                     선택한 학생마다 각각의 숙제로 추가돼요 — 나중에 내용·완료를 학생별로 따로
                     관리할 수 있어요.
@@ -4703,6 +4707,9 @@ function CompletionSummary({
     reflectionFilled,
   });
 
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-[#2b2323]/30 px-4"
@@ -4710,8 +4717,8 @@ function CompletionSummary({
       aria-modal="true"
       aria-label="오늘 수업 마무리"
     >
-      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-        <div className="flex items-center gap-2 text-lg font-semibold text-[#2a2323]">
+      <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+        <div {...dialogHandleProps} className={`flex items-center gap-2 text-lg font-semibold text-[#2a2323] ${dialogDragHandleClass}`}><DragGrip />
           <CheckCheck className="h-5 w-5 text-[#6852b8]" />
           오늘 수업 마무리
         </div>

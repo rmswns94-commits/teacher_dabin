@@ -24,6 +24,7 @@ import {
   type ConsultationTarget,
 } from "@/lib/validation/consultation";
 import { cn } from "@/lib/utils";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 
 // 학생/학부모 상담 기록 — 학생 상세의 [상담 기록] 탭.
 // 저장/수정/조회만 한다: 할 일·알림·리마인더를 만들지 않는다.
@@ -122,6 +123,9 @@ function ConsultationFormDialog({
   const canSave = values.summary.trim().length > 0 && values.content.trim().length > 0;
   const label = mode === "create" ? "상담 기록 추가" : "상담 기록 수정";
 
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2b2323]/30 px-4 py-6"
@@ -143,8 +147,8 @@ function ConsultationFormDialog({
         }
       }}
     >
-      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-        <div className="card-title text-[#2a2323]">{label}</div>
+      <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+        <div {...dialogHandleProps} className={`card-title text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />{label}</div>
         <p className="mt-1 text-sm text-[#8a7b77]">{studentName} 학생의 상담 기록이에요.</p>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -297,6 +301,9 @@ function ConsultationDetailDialog({
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2b2323]/30 px-4 py-6"
@@ -314,8 +321,8 @@ function ConsultationDetailDialog({
         }
       }}
     >
-      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-        <div className="card-title tabular-nums text-[#2a2323]">
+      <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+        <div {...dialogHandleProps} className={`card-title tabular-nums text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />
           {formatKoreanDate(item.consultationDate, true)}
           {item.consultationTime ? ` ${item.consultationTime}` : ""}
         </div>

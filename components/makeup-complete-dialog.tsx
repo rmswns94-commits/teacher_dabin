@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 
 import { completeMakeupAction } from "@/app/makeups/actions";
 import { Button } from "@/components/ui/button";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 
 // 보충 완료 입력창 — 구현은 이 파일 한 벌뿐이고, 보충 수업 탭과 Today Dashboard가
 // 같은 컴포넌트를 그대로 쓴다 (같은 form / 같은 validation / 같은 server action).
@@ -31,6 +32,9 @@ export function DialogShell({
     }
   };
 
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
+
   return (
     <div
       role="dialog"
@@ -46,8 +50,8 @@ export function DialogShell({
       }}
       className="fixed inset-0 z-[60] flex items-center justify-center bg-[#26262b]/35 px-4"
     >
-      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl border border-[#e6e6ea] bg-white p-5 shadow-xl">
-        <div className="card-title text-[#232327]">{title}</div>
+      <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl border border-[#e6e6ea] bg-white p-5 shadow-xl">
+        <div {...dialogHandleProps} className={`card-title text-[#232327] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />{title}</div>
         {children}
       </div>
     </div>

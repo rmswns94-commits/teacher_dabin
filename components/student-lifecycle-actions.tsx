@@ -16,6 +16,7 @@ import { setStudentStatusAction, transferStudentGroupAction } from "@/app/studen
 import { Button } from "@/components/ui/button";
 import type { StudentLifecycleStatus } from "@/lib/student-lifecycle";
 import { lifecycleLabels } from "@/lib/student-lifecycle";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 
 type GroupOption = { id: string; name: string };
 
@@ -105,6 +106,9 @@ export function StudentLifecycleActions({
       }
     });
   };
+
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
 
   return (
     <div className="mt-5 border-t border-dashed border-[#f0e7e2] pt-4">
@@ -238,8 +242,8 @@ export function StudentLifecycleActions({
             }
           }}
         >
-          <div className="max-h-[calc(100dvh-3rem)] w-full max-w-sm overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
-            <div className="card-title text-[#2a2323]">반 이동</div>
+          <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] w-full max-w-sm overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+            <div {...dialogHandleProps} className={`card-title text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />반 이동</div>
             <p className="mt-2 text-sm leading-5 text-[#655d5d]">
               {studentName} 학생의 선택한 반 소속만 새 반으로 바뀌어요. 다른 반 소속은 그대로
               유지되고, 지난 수업 일지 기록은 원래 반에 그대로 남아요. 이동은 지금부터의 새 수업에

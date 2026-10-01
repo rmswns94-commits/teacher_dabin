@@ -6,6 +6,7 @@ import { useState } from "react";
 import { GroupCreateForm } from "@/components/group-create-form";
 import { ConfirmDiscardDialog, useBeforeUnloadWarning } from "@/components/unsaved-guard";
 import { Button } from "@/components/ui/button";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 
 // 그룹 등록은 기존 GroupCreateForm(수업 시간/교재 포함)을 다이얼로그로 감싼다.
 // 등록 성공 시 서버 액션이 새 그룹 상세로 redirect하므로 다이얼로그는 자연히 닫힌다.
@@ -39,6 +40,9 @@ export function GroupCreateDialog({ label = "수업 그룹 등록" }: { label?: 
     setOpen(false);
   };
 
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
+
   return (
     <>
       <Button type="button" className="gap-2" onClick={openDialog}>
@@ -66,8 +70,8 @@ export function GroupCreateDialog({ label = "수업 그룹 등록" }: { label?: 
             }
           }}
         >
-          <div className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-            <div className="card-title mb-4 text-[#2a2323]">수업 그룹 등록</div>
+          <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+            <div {...dialogHandleProps} className={`card-title mb-4 text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />수업 그룹 등록</div>
             <GroupCreateForm key={sessionKey} onCancel={requestClose} onDirtyChange={setIsDirty} />
           </div>
 

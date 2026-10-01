@@ -10,6 +10,7 @@ import type {
   ClassifiedPlan,
   ClassifiedTask,
 } from "@/lib/lesson-import";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 
 // [지난 수업에서 가져오기] 다이얼로그 — presentational.
 // 후보는 "현재 수업일(lesson_date)로 예정된 항목"(같은 그룹 과거 Finalized의 날짜 일치 항목)이며,
@@ -150,6 +151,9 @@ export function PreviousLessonImportDialog({
     </ul>
   );
 
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
+
   return (
     <div
       role="dialog"
@@ -167,8 +171,8 @@ export function PreviousLessonImportDialog({
         }
       }}
     >
-      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 text-left shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-        <div className="card-title flex items-center gap-1.5 text-[#2a2323]">
+      <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 text-left shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+        <div {...dialogHandleProps} className={`card-title flex items-center gap-1.5 text-[#2a2323] ${dialogDragHandleClass}`}><DragGrip />
           <History className="h-4 w-4 text-[#6d5aa8]" aria-hidden /> 지난 수업에서 가져오기
         </div>
 

@@ -10,6 +10,7 @@ import {
   hasShareableContextSection,
   type ShareContextSections,
 } from "@/lib/lesson-share";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 
 // "수업 안내 공유" 다이얼로그 — 현재 폼 state의 진도/숙제/다음 계획 중 선택한 항목만
 // OS share sheet(카카오톡 선택 가능) 또는 클립보드로 공유한다. read-only projection:
@@ -123,6 +124,9 @@ export function LessonShareDialog({ onClose, progress, nextPlan, homeworkItems, 
     </label>
   );
 
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
+
   return (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-[#2b2323]/40 px-4"
@@ -136,8 +140,8 @@ export function LessonShareDialog({ onClose, progress, nextPlan, homeworkItems, 
         }
       }}
     >
-      <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
-        <div className="card-title text-[#2a2323]">오늘 수업 안내 공유</div>
+      <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+        <div {...dialogHandleProps} className={`card-title text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />오늘 수업 안내 공유</div>
         <p className="secondary-text mt-1 text-[#655d5d]">공유할 내용을 선택해주세요.</p>
 
         <div className="mt-4 space-y-2">

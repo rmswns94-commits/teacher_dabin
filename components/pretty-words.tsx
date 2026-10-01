@@ -19,6 +19,7 @@ import {
   type PrettyWordCategory,
 } from "@/lib/validation/pretty-word";
 import { cn } from "@/lib/utils";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 
 /* ---------- Hero: 오늘 꺼내본 문장 ---------- */
 
@@ -105,6 +106,9 @@ function WordFormDialog({
   const [author, setAuthor] = useState(initial.author);
   const [category, setCategory] = useState(initial.category);
 
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2b2323]/30 px-4"
@@ -112,8 +116,8 @@ function WordFormDialog({
       aria-modal="true"
       aria-label={title}
     >
-      <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-        <div className="card-title text-[#2a2323]">{title}</div>
+      <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+        <div {...dialogHandleProps} className={`card-title text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />{title}</div>
 
         <label className="mt-4 block">
           <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">문장</span>

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { gradeDisplay, gradeOptions } from "@/lib/grades";
 import { examTypeLabels, examTypeValues, semesterLabels } from "@/lib/validation/school-exam";
 import { cn } from "@/lib/utils";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 
 export type ExamStudentOption = {
   id: string;
@@ -156,6 +157,9 @@ function SchoolExamFormDialog({
     .filter(Boolean)
     .sort();
 
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2b2323]/30 px-4 py-6"
@@ -176,8 +180,8 @@ function SchoolExamFormDialog({
         }
       }}
     >
-      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-        <div className="card-title text-[#2a2323]">{heading}</div>
+      <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+        <div {...dialogHandleProps} className={`card-title text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />{heading}</div>
         <p className="mt-1 text-sm text-[#8a7b77]">
           학교별 시험 일정과 대상 학생을 정리해요. 등록한 시험은 캘린더와 대시보드에도 함께 보여요.
         </p>

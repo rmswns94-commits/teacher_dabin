@@ -7,6 +7,7 @@ import { useState, useTransition } from "react";
 import { sendFeedbackAction } from "@/app/feedback-actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 
 const categories = [
   { value: "bug", label: "버그" },
@@ -47,6 +48,9 @@ export function FeedbackDialog() {
     });
   };
 
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
+
   return (
     <>
       <button
@@ -65,7 +69,7 @@ export function FeedbackDialog() {
           aria-modal="true"
           aria-label="피드백 보내기"
         >
-          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+          <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
             {sent ? (
               <div className="py-6 text-center text-sm leading-5 text-[#3d6d58]">
                 의견 고마워요 🌷
@@ -73,7 +77,7 @@ export function FeedbackDialog() {
               </div>
             ) : (
               <>
-                <div className="text-base font-semibold text-[#2a2323]">피드백 보내기 💌</div>
+                <div {...dialogHandleProps} className={`text-base font-semibold text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />피드백 보내기 💌</div>
                 <p className="mt-1 text-sm text-[#8a7b77]">어떤 점이 불편했나요?</p>
 
                 <div className="mt-3 flex flex-wrap gap-1.5">

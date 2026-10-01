@@ -16,6 +16,7 @@ import {
 } from "@/app/settings/workspace-actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 
 export type WorkspaceOption = { id: string; name: string };
 
@@ -35,6 +36,8 @@ export function WorkspaceSwitcher({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [isPending, startTransition] = useTransition();
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
   const busyRef = useRef(false);
 
   const active = workspaces.find((workspace) => workspace.id === activeId) ?? null;
@@ -214,8 +217,8 @@ export function WorkspaceSwitcher({
             }
           }}
         >
-          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
-            <div className="card-title text-[#2a2323]">학원 이름 변경</div>
+          <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+            <div {...dialogHandleProps} className={`card-title text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />학원 이름 변경</div>
             <p className="mt-2 text-sm leading-6 text-[#655d5d]">
               현재 이름 <span className="font-medium text-[#2d2928]">{active.name}</span>
             </p>
@@ -278,10 +281,10 @@ export function WorkspaceSwitcher({
             }
           }}
         >
-          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+          <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
             {step === "explain" ? (
               <>
-                <div className="card-title text-[#2a2323]">학원을 변경하시나요?</div>
+                <div {...dialogHandleProps} className={`card-title text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />학원을 변경하시나요?</div>
                 <p className="mt-2 text-sm leading-6 text-[#655d5d]">
                   기존 학원의 학생, 수업일지, 숙제, 출결 및 기타 기록은 삭제되지 않고 그대로
                   보관됩니다. 새 학원에서는 모든 업무 데이터를 처음부터 시작합니다.
@@ -300,7 +303,7 @@ export function WorkspaceSwitcher({
               </>
             ) : (
               <>
-                <div className="card-title text-[#2a2323]">새 학원 시작</div>
+                <div {...dialogHandleProps} className={`card-title text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />새 학원 시작</div>
                 <p className="mt-2 text-sm leading-6 text-[#8a7b77]">
                   기존 학원의 데이터는 삭제되지 않아요. 새 학원에서는 모든 업무 데이터를 처음부터
                   시작합니다.

@@ -6,6 +6,7 @@ import { CalendarDays, Plus } from "lucide-react";
 import { createTodoAction } from "@/app/groups/actions";
 import { Button } from "@/components/ui/button";
 import { groupIconOf } from "@/lib/group-icons";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 
 // 오늘 할 일 페이지의 [+ 할 일 추가] — 기존 그룹 준비(manual preparation)와
 // 같은 실제 row를 만들 뿐이라, Dashboard/그룹 상세에도 같은 항목이 그대로 연동된다.
@@ -55,6 +56,9 @@ export function TodoCreateDialog({
     });
   };
 
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
+
   return (
     <>
       <Button type="button" className="min-h-11 gap-1.5" onClick={() => setOpen(true)}>
@@ -82,8 +86,8 @@ export function TodoCreateDialog({
             }
           }}
         >
-          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-            <div className="card-title text-[#2a2323]">할 일 추가</div>
+          <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-md rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+            <div {...dialogHandleProps} className={`card-title text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />할 일 추가</div>
             <p className="mt-1 text-sm text-[#8a7b77]">수업 그룹과 할 일을 선택해주세요.</p>
 
             <div className="mt-4 space-y-3.5">

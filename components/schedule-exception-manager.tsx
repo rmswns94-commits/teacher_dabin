@@ -30,6 +30,7 @@ import {
   type ScheduleExceptionEntry,
 } from "@/lib/schedule-exceptions";
 import { cn } from "@/lib/utils";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 
 export type ExceptionScheduleSlot = {
   id: string;
@@ -81,6 +82,8 @@ export function ScheduleExceptionManager({
   const [isPending, startTransition] = useTransition();
   const busyRef = useRef(false);
   const noticeTimerRef = useRef<number | null>(null);
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
 
   const slotById = useMemo(() => new Map(slots.map((slot) => [slot.id, slot])), [slots]);
   const index = useMemo(
@@ -405,10 +408,10 @@ export function ScheduleExceptionManager({
             }
           }}
         >
-          <div className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
+          <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
             {/* 제목 + 닫기. X는 "이전 단계"가 아니라 마법사 전체 종료다 (저장 없음). */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="card-title min-w-0 text-[#2a2323]">
+            <div {...dialogHandleProps} className={`flex items-start justify-between gap-3 ${dialogDragHandleClass}`}>
+              <div className="card-title min-w-0 text-[#2a2323] flex items-center gap-2"><DragGrip />
                 {step === "list" ? "어떤 수업을 변경할까요?" : step === "date" ? "언제로 옮길까요?" : "몇 시에 할까요?"}
               </div>
               <button

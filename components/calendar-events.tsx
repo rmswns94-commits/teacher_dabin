@@ -19,6 +19,7 @@ import { groupIconOf } from "@/lib/group-icons";
 import type { CalendarEventWithGroup } from "@/lib/supabase/queries/calendar-events";
 import { calendarEventTypes, calendarEventMeta, eventMetaOf } from "@/lib/validation/calendar-event";
 import { cn } from "@/lib/utils";
+import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 
 type GroupOption = { id: string; name: string; icon?: string | null };
 
@@ -87,6 +88,9 @@ function EventFormDialog({
   const closureDirty = Boolean(closure) && dateKnown && closureOn !== savedClosed;
   const makeupCount = closure?.makeupCountByDate[values.startDate] ?? 0;
 
+  // header를 끌어 Dialog 이동 (Desktop/iPad) — 위치는 transform만, 폼 state 무관
+  const { attachPanel: attachDialogPanel, handleProps: dialogHandleProps } = useDraggableDialog();
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2b2323]/30 px-4"
@@ -94,8 +98,8 @@ function EventFormDialog({
       aria-modal="true"
       aria-label={title}
     >
-      <div className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
-        <div className="card-title text-[#2a2323]">{title}</div>
+      <div ref={attachDialogPanel} className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.25)]">
+        <div {...dialogHandleProps} className={`card-title text-[#2a2323] flex items-center gap-2 ${dialogDragHandleClass}`}><DragGrip />{title}</div>
 
         <label className="mt-4 block">
           <span className="mb-1.5 block text-sm font-medium text-[#4d3a3a]">일정 이름</span>
