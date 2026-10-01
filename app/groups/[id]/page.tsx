@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
-import { ExamAutoOffStatus } from "@/components/exam-auto-off-status";
 import { ExamPeriodToggle } from "@/components/exam-period-toggle";
 import { GroupIconPicker } from "@/components/group-icon-picker";
 import { GroupStudentList } from "@/components/group-student-list";
@@ -47,9 +46,7 @@ import {
 import { gradeDisplay, gradeOptions, isElementaryGrade } from "@/lib/grades";
 import { groupIconOf } from "@/lib/group-icons";
 import { activePreparationItems } from "@/lib/preparation";
-import { resolveGroupAutoOff, toAutoOffExamSources } from "@/lib/supabase/queries/exam-mode-auto-off";
 import { getCurrentUserMakeups } from "@/lib/supabase/queries/makeups";
-import { getSchoolExams } from "@/lib/supabase/queries/school-exams";
 import { ScheduleExceptionManager } from "@/components/schedule-exception-manager";
 import { addDaysStr } from "@/lib/calendar";
 import { getKoreanHolidaysInRange } from "@/lib/korean-holidays";
@@ -135,20 +132,6 @@ export default async function GroupDetailPage({
   // 시험 대상 학교 선택지 = 현재 소속 학생들의 Student.school (trim/중복 제거/가나다).
   // 이미 조회한 멤버 목록에서 유도하므로 학교/학생별 추가 쿼리 0.
   const memberSchools = uniqueSchoolList(members.map((student) => student.school));
-  // 시험 대비 ON일 때만 자동 종료 상태 — reconciliation(앱 진입/이동 시 자동 OFF)과 같은 resolver, 시험 목록 1쿼리
-  const examAutoOff = group.is_exam_period
-    ? await (async () => {
-        const exams = await getSchoolExams();
-        return exams.failed
-          ? null
-          : resolveGroupAutoOff(
-              group,
-              allMembers.map((student) => ({ school: student.school, archived: student.archived })),
-              toAutoOffExamSources(exams.rows),
-              todayDateString(),
-            );
-      })()
-    : null;
   const memberSet = new Set(allMembers.map((student) => student.id));
   const availableToAdd = availableStudents.filter((student) => !memberSet.has(student.id));
   const isEditMode = edit === "1";
@@ -429,11 +412,6 @@ export default async function GroupDetailPage({
                     일반 교재는 위 목록 그대로 — 두 목록은 서로 영향을 주지 않는다. */}
                 {group.is_exam_period ? (
                   <>
-                    {examAutoOff ? (
-                      <div className="mt-4 border-t border-dashed border-[#f0e2d8] pt-3">
-                        <ExamAutoOffStatus result={examAutoOff} />
-                      </div>
-                    ) : null}
                     {/* 시험 대상 학교 — PHASE 1: 설정 저장/표시만 (일지 동작은 아직 그대로) */}
                     <div className="mt-4 border-t border-dashed border-[#f0e2d8] pt-3">
                       <ExamTargetSchoolsSection

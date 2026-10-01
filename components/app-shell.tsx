@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-import { ExamModeReconciler } from "@/components/exam-mode-reconciler";
 import { ScrollJumpControls } from "@/components/scroll-jump-controls";
 import { Sidebar } from "@/components/sidebar";
 import { getGroupNextOccurrences } from "@/lib/schedule";
@@ -75,8 +74,6 @@ export async function AppShell({ children }: { children: ReactNode }) {
       <div className="app-main flex-1 overflow-hidden max-lg:pt-14">
         {children}
         <ScrollJumpControls />
-        {/* 시험 대비 자동 종료 — ON 그룹이 있을 때만 앱 진입/이동/복귀/KST 자정에 reconcile (polling 없음) */}
-        <ExamModeReconciler active={groups.some((group) => group.is_exam_period)} />
       </div>
     </div>
   );

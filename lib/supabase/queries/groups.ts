@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { cache } from "react";
 
-import { todayDateString } from "@/lib/dates";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type {
   ClassGroupRecord,
@@ -294,22 +293,14 @@ export async function updateGroupExamTargets(
     throw new Error("로그인이 필요합니다.");
   }
 
-  // ON(activate)일 때만 시험 대비 시작일(KST)을 함께 기록한다 — 자동 OFF resolver의 현재 cycle anchor.
-  // 자동 ON은 없으므로 이 값은 사용자의 명시적 ON에서만 바뀐다. OFF는 지우지 않는다.
-  const basePayload = {
-    exam_target_schools: schools,
-    ...(options.activate ? { is_exam_period: true } : {}),
-  };
-  const payload = options.activate ? { ...basePayload, exam_period_started_on: todayDateString() } : basePayload;
-
-  let { error } = await supabase.from("class_groups").update(payload).eq("id", groupId).eq("user_id", user.id);
-
-  // 20261001 migration(exam_period_started_on) 미적용 환경: 컬럼 없음(42703/PGRST204)이면 기존 payload로 재시도 —
-  // ON 자체는 그대로 동작하고, 자동 OFF만 anchor 없음으로 비활성(직접 OFF) 상태가 된다.
-  if (error && options.activate && (error.code === "42703" || error.code === "PGRST204")) {
-    console.warn("updateGroupExamTargets: exam_period_started_on 컬럼 없음 — 20261001 migration 적용 전 (자동 종료 비활성)");
-    ({ error } = await supabase.from("class_groups").update(basePayload).eq("id", groupId).eq("user_id", user.id));
-  }
+  const { error } = await supabase
+    .from("class_groups")
+    .update({
+      exam_target_schools: schools,
+      ...(options.activate ? { is_exam_period: true } : {}),
+    })
+    .eq("id", groupId)
+    .eq("user_id", user.id);
 
   if (error) {
     console.error("updateGroupExamTargets error", { code: error.code, message: error.message });

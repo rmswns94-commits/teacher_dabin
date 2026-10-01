@@ -70,9 +70,6 @@ export type ClassGroupRecord = {
   // null = 아직 명시적으로 설정 안 함(legacy 포함) — 자동 backfill 금지.
   // OFF로 꺼도 유지한다 (다음 시험 대비 시작 때 prefill 참고용).
   exam_target_schools: string[] | null;
-  // 시험 대비를 사용자가 ON한 날짜(KST, date-only) — 20261001 migration 이후에만 존재(optional).
-  // 자동 OFF resolver의 현재 시험 cycle anchor. null/없음 = 자동 OFF 안 함 (직접 OFF만).
-  exam_period_started_on?: string | null;
   highlight_memo: string | null;
   preparation_items: PreparationItem[];
   archived: boolean;
