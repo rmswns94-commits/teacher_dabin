@@ -1716,6 +1716,11 @@ export type DailyLogHistorySummary = {
   title: string | null;
   default_progress: string | null;
   lesson_content: string | null;
+  // 구조화 진도/계획 — 이전 수업 기록 패널의 가져오기가 교재/학교 칸으로 routing하는 source
+  textbook_progress: { name: string; text: string }[] | null;
+  school_progress: { name: string; text: string }[] | null;
+  textbook_plans: { name: string; text: string }[] | null;
+  school_plans: { name: string; text: string }[] | null;
   homework: string | null;
   homework_due_date: string | null;
   next_lesson_plan: string | null;
@@ -1746,7 +1751,7 @@ export async function getGroupHistoryLogs(
   const { data, error } = await supabase
     .from("daily_logs")
     .select(
-      "id, class_date, group_id, status, title, default_progress, lesson_content, homework, homework_due_date, next_lesson_plan, next_plan_date, memo, reflection_good, reflection_hard, reflection_next, updated_at, student_lesson_logs(count)",
+      "id, class_date, group_id, status, title, default_progress, lesson_content, textbook_progress, school_progress, textbook_plans, school_plans, homework, homework_due_date, next_lesson_plan, next_plan_date, memo, reflection_good, reflection_hard, reflection_next, updated_at, student_lesson_logs(count)",
     )
     .eq("user_id", user.id)
     .eq("group_id", groupId)

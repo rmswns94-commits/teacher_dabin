@@ -52,6 +52,7 @@ import {
   classifyTaskImports,
   mergeImportedPlanText,
   type ClassifiedPlan,
+  type ImportPlanCandidate,
   type LessonImportCandidates,
 } from "@/lib/lesson-import";
 import { buildTextbookSectionsText, formatTextbookLinked, joinDerivedText } from "@/lib/textbooks";
@@ -943,20 +944,14 @@ export function DailyLogForm({
   const [duplicateExistingId, setDuplicateExistingId] = useState<string | null>(null);
 
   // 이전 수업 기록 패널의 [현재 일지에 참고하기] — provider가 없으면 no-op.
-  // 패널 버튼 클릭(이벤트 핸들러)에서만 handler가 호출된다: 값이 비어 있으면
-  // 바로 반영, 이미 작성한 내용이 있으면 덮어쓰기 확인을 거친다.
+  // 패널은 구조화 candidate(교재/학교/메모)를 넘기고, 폼은 본문 [지난 수업에서 가져오기]와 같은
+  // classifyPlanImports + applyClassifiedPlans로 같은 칸에 넣는다 (handler는 최신 state를 ref로 본다).
   const historyImport = useHistoryImport();
-  const [importConfirmText, setImportConfirmText] = useState<string | null>(null);
+  const sidebarImportRef = useRef<((candidates: ImportPlanCandidate[]) => void) | null>(null);
 
   useEffect(() => {
-    return historyImport.register((text) => {
-      if (!defaultProgress.trim() || defaultProgress === text) {
-        setDefaultProgress(text);
-      } else {
-        setImportConfirmText(text);
-      }
-    });
-  }, [historyImport, defaultProgress]);
+    return historyImport.register((candidates) => sidebarImportRef.current?.(candidates));
+  }, [historyImport]);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -1594,23 +1589,16 @@ export function DailyLogForm({
       })
     : [];
 
-  const applyPreviousLessonImport = (selection: ImportSelection) => {
-    let importedCount = 0;
-    // 계획 → 오늘 진도: 같은 이름(교재/학교)에 여러 source(여러 과거 일지)가 있으면 줄바꿈으로 이어 붙인다.
-    // importable = 현재 필드가 비어 있거나 다른 내용이 없는 경우뿐이라 기존 입력을 덮어쓰지 않는다.
+  // 진도 import의 canonical destination — 본문 [지난 수업에서 가져오기]와 이전 수업 기록 패널이 공유한다.
+  // 같은 이름(교재/학교)에 여러 source가 있으면 줄바꿈으로 이어 붙인다 (mergeImportedPlanText: 기존 내용 유지 +
+  // 이미 들어 있는 블록은 다시 붙이지 않음). kind는 저장된 structured context 그대로 (문자열 추론 없음).
+  const applyClassifiedPlans = (plans: readonly ClassifiedPlan[]) => {
     const grouped = new Map<string, { kind: ClassifiedPlan["kind"]; name: string; texts: string[] }>();
-    for (const plan of [
-      ...(selection.plan ? importPlans : []),
-      ...(selection.legacy ? importLegacyPlans : []),
-    ]) {
-      if (plan.status !== "importable") {
-        continue;
-      }
+    for (const plan of plans) {
       const key = `${plan.kind}:${plan.name}`;
       const entry = grouped.get(key) ?? { kind: plan.kind, name: plan.name, texts: [] };
       entry.texts.push(plan.text);
       grouped.set(key, entry);
-      importedCount += 1;
     }
     for (const { kind, name, texts } of grouped.values()) {
       if (kind === "school") {
@@ -1630,10 +1618,40 @@ export function DailyLogForm({
           setTextbookProgressMap((prev) => ({ ...prev, [name]: mergeImportedPlanText(prev[name] ?? "", texts) }));
         }
       } else {
-        // legacy raw 계획 — canonical destination은 기타 진도 메모 (비어 있을 때만 importable)
+        // legacy raw — canonical destination은 기타 진도 메모
         setDefaultProgress((prev) => mergeImportedPlanText(prev, texts));
       }
     }
+  };
+
+  // 이전 수업 기록 패널 [가져오기] — 본문과 같은 분류. 명시적 1회 클릭이라 conflict(다른 내용이 이미 있음)도
+  // 덮어쓰지 않고 이어 붙인다. duplicate(이미 들어 있음)/incompatible(현재 모드에 맞는 칸 없음)은 건너뛴다.
+  // DB 호출 없음 — 저장은 기존 autosave/임시 저장/수업 기록 완료.
+  useEffect(() => {
+    sidebarImportRef.current = (candidates) => {
+      const classified = classifyPlans(candidates);
+      const apply = classified.filter((plan) => plan.status === "importable" || plan.status === "conflict");
+      const duplicates = classified.filter((plan) => plan.status === "duplicate").length;
+      const incompatible = classified.filter((plan) => plan.status === "incompatible");
+      applyClassifiedPlans(apply);
+      const parts = [
+        apply.length > 0 ? `${apply.length}개 항목을 가져왔어요.` : "",
+        duplicates > 0 ? `이미 들어 있는 항목 ${duplicates}개는 건너뛰었어요.` : "",
+        incompatible.length > 0 ? `${incompatible.length}개는 가져올 수 없어요 (${incompatible[0].reason})` : "",
+      ].filter(Boolean);
+      showImportNotice(parts.length > 0 ? parts.join(" ") : "가져올 내용이 없어요.");
+    };
+  });
+
+  const applyPreviousLessonImport = (selection: ImportSelection) => {
+    let importedCount = 0;
+    // 계획 → 오늘 진도: importable(현재 필드가 비어 있거나 같은 내용)만 — 기존 입력을 덮어쓰지 않는다.
+    const plansToApply = [
+      ...(selection.plan ? importPlans : []),
+      ...(selection.legacy ? importLegacyPlans : []),
+    ].filter((plan) => plan.status === "importable");
+    applyClassifiedPlans(plansToApply);
+    importedCount += plansToApply.length;
     if (selection.homework) {
       const copies = importHomework
         .filter((item) => item.status === "importable")
@@ -4503,45 +4521,6 @@ export function DailyLogForm({
             );
           })()
         : null}
-
-      {importConfirmText !== null ? (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-[#2b2323]/30 px-4"
-          role="alertdialog"
-          aria-modal="true"
-          aria-label="공통 진도 덮어쓰기 확인"
-        >
-          <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl border border-[#efe4dc] bg-[#fffdfb] p-5 shadow-[0_22px_60px_rgba(60,48,90,0.3)]">
-            <div className="card-title text-[#2a2323]">
-              현재 작성한 공통 진도가 있어요
-            </div>
-            <p className="mt-2 text-sm leading-5 text-[#655d5d]">
-              기존 내용을 이전 기록에서 가져온 내용으로 바꿀까요?
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setImportConfirmText(null)}
-              >
-                취소
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                autoFocus
-                onClick={() => {
-                  setDefaultProgress(importConfirmText);
-                  setImportConfirmText(null);
-                }}
-              >
-                바꾸기
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {duplicateOpen ? (
         <div

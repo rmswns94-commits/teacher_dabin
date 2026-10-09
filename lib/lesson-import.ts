@@ -11,6 +11,8 @@
 // DB enum이 아니라 UI/판정 전용 derived type이다. 원본 일지는 어떤 경우에도 수정하지 않는다.
 // 모드 판정은 PHASE 2/3과 동일한 resolveProgressMode 결과를 받아 쓴다 (별도 판단 로직 금지).
 
+import { mergeLegacyLessonContent } from "@/lib/progress";
+import { buildTextbookSectionsText, stripDerivedPrefix } from "@/lib/textbooks";
 import { resolveDailyLogTaskDueDate } from "@/lib/daily-log-tasks";
 import type { ManualProgressItem } from "@/lib/manual-progress";
 import type { ProgressMode } from "@/lib/progress-mode";
@@ -98,6 +100,34 @@ export function planCandidatesFromRow(row: PlanSourceRow): ImportPlanCandidate[]
     return [{ ...base, id: `${row.id}:memo`, kind: "memo", name: LEGACY_PLAN_NAME, text: row.next_lesson_plan ?? "" }];
   }
   return [...school, ...textbook];
+}
+
+export type ProgressSourceRow = {
+  id: string;
+  class_date: string;
+  default_progress: string | null;
+  lesson_content: string | null;
+  textbook_progress: { name: string; text: string }[] | null;
+  school_progress: { name: string; text: string }[] | null;
+};
+
+const LEGACY_PROGRESS_NAME = "지난 수업 진도 (자유 입력)";
+
+// 한 일지의 "오늘 진도" 항목들 — 계획과 같은 candidate shape(교재/학교/메모).
+// 구조화 섹션은 저장된 name 그대로 교재/학교 칸으로, 자유 텍스트는 edit 화면과 같은 규칙
+// (mergeLegacyLessonContent 후 결정적 mirror만 stripDerivedPrefix로 제거)으로 남은 "기타 메모"만 memo 후보.
+// 문자열에서 교재/학교를 추론하지 않는다 (mirror로 시작하지 않는 legacy 텍스트는 통째로 기타 메모).
+export function progressCandidatesFromRow(row: ProgressSourceRow): ImportPlanCandidate[] {
+  const base = { sourceLogId: row.id, sourceLessonDate: row.class_date, targetDate: null };
+  const schools = (row.school_progress ?? []).filter((item) => item.text?.trim());
+  const textbooks = (row.textbook_progress ?? []).filter((item) => item.text?.trim());
+  const mirror = [buildTextbookSectionsText(textbooks), buildTextbookSectionsText(schools)].filter(Boolean).join("\n\n");
+  const extra = stripDerivedPrefix(mergeLegacyLessonContent(row.default_progress, row.lesson_content), mirror).trim();
+  return [
+    ...schools.map((item) => ({ ...base, id: `${row.id}:progress:school:${item.name}`, kind: "school" as const, name: item.name, text: item.text })),
+    ...textbooks.map((item) => ({ ...base, id: `${row.id}:progress:textbook:${item.name}`, kind: "textbook" as const, name: item.name, text: item.text })),
+    ...(extra ? [{ ...base, id: `${row.id}:progress:memo`, kind: "memo" as const, name: LEGACY_PROGRESS_NAME, text: extra }] : []),
+  ];
 }
 
 function byLessonDateAsc<T extends { sourceLessonDate: string }>(a: T, b: T) {

@@ -41,6 +41,7 @@ import {
   participationLevelLabels,
   questionLevelLabels,
 } from "@/lib/elementary";
+import { planCandidatesFromRow, progressCandidatesFromRow, type ImportPlanCandidate } from "@/lib/lesson-import";
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import { formatTimeRange } from "@/lib/schedule";
 import type {
@@ -57,8 +58,8 @@ import { cn } from "@/lib/utils";
 /* ------------------------------------------------------------------ */
 
 const HistoryImportContext = createContext<{
-  register: (handler: (text: string) => void) => () => void;
-  requestImport: (text: string) => void;
+  register: (handler: (candidates: ImportPlanCandidate[]) => void) => () => void;
+  requestImport: (candidates: ImportPlanCandidate[]) => void;
 }>({ register: () => () => {}, requestImport: () => {} });
 
 export function useHistoryImport() {
@@ -186,9 +187,9 @@ export function LessonHistoryWorkspace({
   const [isPending, startTransition] = useTransition();
 
   // 현재 작성 폼이 등록한 import handler (폼이 없으면 no-op)
-  const importHandlerRef = useRef<((text: string) => void) | null>(null);
+  const importHandlerRef = useRef<((candidates: ImportPlanCandidate[]) => void) | null>(null);
 
-  const register = useCallback((handler: (text: string) => void) => {
+  const register = useCallback((handler: (candidates: ImportPlanCandidate[]) => void) => {
     importHandlerRef.current = handler;
     return () => {
       if (importHandlerRef.current === handler) {
@@ -197,8 +198,8 @@ export function LessonHistoryWorkspace({
     };
   }, []);
 
-  const requestImport = useCallback((text: string) => {
-    importHandlerRef.current?.(text);
+  const requestImport = useCallback((candidates: ImportPlanCandidate[]) => {
+    importHandlerRef.current?.(candidates);
     // 좁은 화면에서는 drawer가 폼을 덮고 있으므로 닫아서 반영된 값을 보여준다
     setOpen(false);
   }, []);
@@ -614,39 +615,29 @@ export function LessonHistoryWorkspace({
                 <div className="rounded-2xl border border-[#e8ddf3] bg-[#fbf8ff] px-3.5 py-3">
                   <div className="text-sm font-medium text-[#4d3a3a]">현재 일지에 참고하기</div>
                   <p className="mt-0.5 text-sm leading-5 text-[#8a7b77]">
-                    선택한 값이 현재 작성 중인 공통 진도에 들어가요. 저장 전까지 DB에는 반영되지
-                    않아요.
+                    교재·학교별 진도는 같은 교재·학교 칸에, 교재 정보가 없는 기록만 기타 진도 메모에
+                    들어가요. 이미 쓴 내용은 지우지 않고 이어 붙여요. 저장 전까지 DB에는 반영되지 않아요.
                   </p>
                   <div className="mt-2 flex flex-col gap-1.5">
                     <Button
                       type="button"
                       variant="secondary"
                       size="sm"
-                      disabled={!selected.next_lesson_plan?.trim()}
-                      onClick={() => requestImport(selected.next_lesson_plan?.trim() ?? "")}
+                      disabled={planCandidatesFromRow(selected).length === 0}
+                      onClick={() => requestImport(planCandidatesFromRow(selected))}
+                      data-history-import="plan"
                     >
-                      다음 수업 계획 → 현재 공통 진도
+                      다음 수업 계획 → 오늘 진도
                     </Button>
                     <Button
                       type="button"
                       variant="secondary"
                       size="sm"
-                      disabled={
-                        !mergeLegacyLessonContent(
-                          selected.default_progress,
-                          selected.lesson_content,
-                        )
-                      }
-                      onClick={() =>
-                        requestImport(
-                          mergeLegacyLessonContent(
-                            selected.default_progress,
-                            selected.lesson_content,
-                          ),
-                        )
-                      }
+                      disabled={progressCandidatesFromRow(selected).length === 0}
+                      onClick={() => requestImport(progressCandidatesFromRow(selected))}
+                      data-history-import="progress"
                     >
-                      공통 진도 → 현재 공통 진도
+                      그날 진도 → 오늘 진도
                     </Button>
                   </div>
                 </div>
