@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
 import { formatKoreanDate, toDateString, todayDateString } from "@/lib/dates";
+import { assessmentPercentsByCategory } from "@/lib/assessments";
 import { vocabPercent } from "@/lib/elementary";
 import { scopeMakeupsToWeek, VOCAB_WINDOW_DAYS } from "@/lib/growth";
 import { buildGrowthNoteViewModel } from "@/lib/growth-note";
@@ -88,6 +89,7 @@ export default async function GrowthNoteDetailPage({
     recentVocabPercents: lessonRows
       .filter((row) => row.vocab_correct !== null && (row.vocab_total ?? 0) > 0)
       .map((row) => vocabPercent(row.vocab_correct!, row.vocab_total!)!),
+    recentAssessmentPercents: (({ grammar, reading }) => ({ grammar, reading }))(assessmentPercentsByCategory(lessonRows)),
     weekPraiseComments,
     weekMakeups: scopeMakeupsToWeek(makeupRows, weekStart, weekEnd),
   });

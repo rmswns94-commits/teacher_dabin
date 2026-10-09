@@ -232,6 +232,8 @@ export type GrowthAchievementType =
   | "question_master"
   | "attendance_master"
   | "vocabulary_master"
+  | "grammar_master"
+  | "reading_master"
   | "effort_master"
   | "consistency_master"
   | "presentation_master"

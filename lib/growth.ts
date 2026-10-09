@@ -5,15 +5,16 @@ import {
   participationLevelLabels,
   questionLevelLabels,
 } from "@/lib/elementary";
+import { ASSESSMENT_CATEGORIES, assessmentMeta, type AssessmentCategory } from "@/lib/assessments";
 import type { GrowthAchievementType, MakeupStatus } from "@/lib/supabase/types";
 
-// 9개 성장 Achievement 자동 판정 엔진 (단일 소스).
+// 11개 성장 Achievement 자동 판정 엔진 (단일 소스).
 //
 // Teacher는 왕을 직접 고르지 않는다 — Daily Log에 실제 관찰값만 기록하고,
 // 이 rule engine이 주간 누적 데이터로 자동 계산한다.
 //
 // Mapping:
-//   출결 → 개근 / 숙제 → 꾸준함왕 / 단어시험 → 단어왕 / 집중 → 집중왕
+//   출결 → 개근 / 숙제 → 꾸준함왕 / 단어·문법·독해 시험 → 단어왕·문법왕·독해왕 (같은 판정, category만 다름) / 집중 → 집중왕
 //   참여 → 발표왕 / 질문 → 질문왕 / 배려 → 배려왕 / 노력 → 노력왕
 //   보충수업 완료 → 틈새왕
 //
@@ -24,6 +25,8 @@ export const growthAchievementValues = [
   "attendance_master",
   "consistency_master",
   "vocabulary_master",
+  "grammar_master",
+  "reading_master",
   "focus_master",
   "presentation_master",
   "question_master",
@@ -36,6 +39,8 @@ export const growthLabels: Record<GrowthAchievementType, string> = {
   question_master: "질문왕",
   attendance_master: "개근",
   vocabulary_master: "단어왕",
+  grammar_master: "문법왕",
+  reading_master: "독해왕",
   effort_master: "노력왕",
   consistency_master: "꾸준함왕",
   presentation_master: "발표왕",
@@ -48,6 +53,8 @@ export const growthEmojis: Record<GrowthAchievementType, string> = {
   attendance_master: "🏫",
   consistency_master: "📚",
   vocabulary_master: "🏆",
+  grammar_master: "✏️",
+  reading_master: "📖",
   focus_master: "🎯",
   presentation_master: "🙋",
   question_master: "💬",
@@ -60,6 +67,8 @@ export const growthAchievedSentences: Record<GrowthAchievementType, string> = {
   attendance_master: "이번 주 수업에 빠짐없이 참여했어요!",
   consistency_master: "이번 주 숙제를 빠짐없이 완료했어요!",
   vocabulary_master: "최근 단어시험에서 100점을 3번 연속 달성했어요!",
+  grammar_master: "최근 문법시험에서 100점을 3번 연속 달성했어요!",
+  reading_master: "최근 독해시험에서 100점을 3번 연속 달성했어요!",
   focus_master: "이번 주 수업에 집중하는 모습이 정말 좋았어요!",
   presentation_master: "수업과 발표에 적극적으로 참여했어요!",
   question_master: "궁금한 것을 적극적으로 질문했어요!",
@@ -73,6 +82,8 @@ export const growthGuideDescriptions: Record<GrowthAchievementType, string> = {
   attendance_master: "수업에 빠짐없이 성실하게 참여해요!",
   consistency_master: "숙제를 꾸준히 잘 챙기는 멋진 습관을 보여줘요!",
   vocabulary_master: "단어 공부를 꾸준히 하며 멋진 실력을 보여줘요!",
+  grammar_master: "문법 공부를 꾸준히 하며 멋진 실력을 보여줘요!",
+  reading_master: "독해 공부를 꾸준히 하며 멋진 실력을 보여줘요!",
   focus_master: "수업에 귀 기울이고 집중하는 모습을 보여줘요!",
   presentation_master: "수업과 발표에 자신 있게 참여해요!",
   question_master: "궁금한 것을 그냥 지나치지 않고 적극적으로 질문해요!",
@@ -174,6 +185,8 @@ export type WeeklyGrowthInput = {
   }[];
   // 최근 유효 단어시험 % (오래된 → 최신)
   recentVocabPercents: number[];
+  // 최근 유효 문법/독해 시험 % (단어와 같은 순서 규칙) — 없으면 그 왕은 없음
+  recentAssessmentPercents?: Partial<Record<Exclude<AssessmentCategory, "vocabulary">, number[]>>;
   // 이번 주 평가 대상 보충수업 (scopeMakeupsToWeek로 미리 주간 범위에 귀속시켜 전달)
   weekMakeups?: MakeupLike[];
 };
@@ -184,6 +197,12 @@ export type WeeklyGrowthResult = {
   // 단어 점수 상승은 노력왕 판정과 분리된 "성장 사실"로만 제공
   vocabTrend: { from: number; to: number; rise: number } | null;
 };
+
+// 시험 성장왕 공통 판정 — 최근 유효 시험 vocabPerfectStreak(3)회가 모두 100%
+export function assessmentPerfectStreak(percents: readonly number[]): boolean {
+  const last = percents.slice(-GROWTH_CONFIG.vocabPerfectStreak);
+  return last.length === GROWTH_CONFIG.vocabPerfectStreak && last.every((percent) => percent === 100);
+}
 
 function meets(stat: GrowthStat, config: { minSamples: number; positiveRatio: number }) {
   return stat.evaluated >= config.minSamples && stat.ratio >= config.positiveRatio;
@@ -204,13 +223,15 @@ export function computeWeeklyGrowth(input: WeeklyGrowthInput): WeeklyGrowthResul
   stats.consistency_master = homework;
   if (meets(homework, GROWTH_CONFIG.homework)) achieved.push("consistency_master");
 
-  // 단어왕: 최근 유효 시험 3회 모두 100%
+  // 단어왕 / 문법왕 / 독해왕: 같은 엔진(assessmentPerfectStreak) — category별 최근 유효 시험 3회 모두 100%.
+  // 점수는 category끼리 섞지 않는다 (단어왕은 단어시험만, 문법왕은 문법시험만 …).
   const lastThree = input.recentVocabPercents.slice(-GROWTH_CONFIG.vocabPerfectStreak);
-  if (
-    lastThree.length === GROWTH_CONFIG.vocabPerfectStreak &&
-    lastThree.every((percent) => percent === 100)
-  ) {
-    achieved.push("vocabulary_master");
+  for (const meta of ASSESSMENT_CATEGORIES) {
+    const percents =
+      meta.key === "vocabulary" ? input.recentVocabPercents : input.recentAssessmentPercents?.[meta.key] ?? [];
+    if (assessmentPerfectStreak(percents)) {
+      achieved.push(meta.awardType);
+    }
   }
 
   // 집중왕 / 발표왕 / 질문왕 / 배려왕 / 노력왕: 평가된 값 기준 ratio rule
@@ -315,12 +336,17 @@ export function growthBadgeGuideItem(
         minimum: `숙제 평가 ${GROWTH_CONFIG.homework.minSamples}회 이상 · 완료 ${percentLabel(GROWTH_CONFIG.homework.positiveRatio)}`,
       };
     case "vocabulary_master":
+    case "grammar_master":
+    case "reading_master": {
+      // 단어왕/문법왕/독해왕 — 같은 판정, 문구의 시험 이름만 category metadata에서
+      const meta = assessmentMeta(type === "vocabulary_master" ? "vocabulary" : type === "grammar_master" ? "grammar" : "reading");
       return {
         ...base,
-        primary: `최근 단어시험 ${GROWTH_CONFIG.vocabPerfectStreak}회를 연속으로 100점 받은 학생이에요.`,
-        secondary: `${unit}이 끝나는 날까지 본 단어시험 중 최근 ${GROWTH_CONFIG.vocabPerfectStreak}회만 봐요. 최근 ${VOCAB_WINDOW_DAYS}일보다 오래된 시험은 세지 않아요.`,
-        minimum: `최근 단어시험 ${GROWTH_CONFIG.vocabPerfectStreak}회 모두 100점`,
+        primary: `최근 ${meta.testLabel} ${GROWTH_CONFIG.vocabPerfectStreak}회를 연속으로 100점 받은 학생이에요.`,
+        secondary: `${unit}이 끝나는 날까지 본 ${meta.testLabel} 중 최근 ${GROWTH_CONFIG.vocabPerfectStreak}회만 봐요. 최근 ${VOCAB_WINDOW_DAYS}일보다 오래된 시험은 세지 않아요.`,
+        minimum: `최근 ${meta.testLabel} ${GROWTH_CONFIG.vocabPerfectStreak}회 모두 100점`,
       };
+    }
     case "focus_master":
       return {
         ...base,

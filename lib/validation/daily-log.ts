@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { ASSESSMENT_CATEGORIES, EXTRA_ASSESSMENT_CATEGORIES, validateAssessmentInput } from "@/lib/assessments";
+
 const dateString = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "날짜 형식을 확인해주세요.");
@@ -32,6 +34,13 @@ export const studentLessonEntrySchema = z.object({
   onlineReviewCompleted: z.boolean().nullable().optional(),
   vocabCorrect: numberString.optional().or(z.literal("")),
   vocabRetest: z.boolean().optional(),
+  // 문법/독해 시험 학생 결과 — 단어와 같은 모델(맞은 개수 + 재시험). 입력 안 한 category는 저장 안 함.
+  assessmentResults: z
+    .object({
+      grammar: z.object({ correct: numberString.optional().or(z.literal("")), retest: z.boolean().optional() }).optional(),
+      reading: z.object({ correct: numberString.optional().or(z.literal("")), retest: z.boolean().optional() }).optional(),
+    })
+    .optional(),
   // 단어시험 틀린 단어: 빈 문자열/같은 시험 내 중복(정규화 기준)은 서버에서 걸러 저장된다.
   vocabMistakes: z
     .array(z.string().trim().max(60, "단어는 60자 이내로 입력해주세요."))
@@ -114,6 +123,13 @@ export const dailyLogSchema = z
     schoolProgress: z.array(textbookSectionSchema).max(20).optional(),
     schoolPlans: z.array(textbookSectionSchema).max(20).optional(),
     vocabTotal: numberString.optional().or(z.literal("")),
+    // 문법/독해 시험 총 문항 (빈 값 = 그 시험 없음)
+    assessmentTotals: z
+      .object({
+        grammar: numberString.optional().or(z.literal("")),
+        reading: numberString.optional().or(z.literal("")),
+      })
+      .optional(),
     // 수업 회고 (강사 자기 성찰) — 전부 선택 입력
     reflectionGood: shortText(1000, "잘된 점"),
     reflectionHard: shortText(1000, "아쉬웠던 점"),
@@ -166,38 +182,33 @@ export const dailyLogSchema = z
       }
     }
 
-    const total = value.vocabTotal ? Number(value.vocabTotal) : null;
-
-    if (total !== null && total <= 0) {
-      ctx.addIssue({
-        code: "custom",
-        message: "단어시험 총 문항 수는 1 이상이어야 해요.",
-        path: ["vocabTotal"],
-      });
-      return;
-    }
-
-    for (const [index, student] of value.students.entries()) {
-      if (!student.vocabCorrect) {
-        continue;
-      }
-
-      const correct = Number(student.vocabCorrect);
-
-      if (total === null) {
+    // 단어/문법/독해 시험 — 같은 검증 함수(validateAssessmentInput)를 category마다 적용
+    for (const meta of ASSESSMENT_CATEGORIES) {
+      const isVocab = meta.key === "vocabulary";
+      const extra = meta.key === "vocabulary" ? null : meta.key;
+      const issues = validateAssessmentInput(
+        meta.key,
+        isVocab ? value.vocabTotal : value.assessmentTotals?.[extra!],
+        value.students.map((student) =>
+          isVocab ? student.vocabCorrect : student.assessmentResults?.[extra!]?.correct,
+        ),
+      );
+      for (const issue of issues) {
         ctx.addIssue({
           code: "custom",
-          message: "단어시험 점수를 입력하려면 총 문항 수를 먼저 입력해주세요.",
-          path: ["students", index, "vocabCorrect"],
-        });
-      } else if (correct > total) {
-        ctx.addIssue({
-          code: "custom",
-          message: `맞은 개수는 총 문항 수(${total})를 넘을 수 없어요.`,
-          path: ["students", index, "vocabCorrect"],
+          message: issue.message,
+          path:
+            issue.field === "total"
+              ? isVocab
+                ? ["vocabTotal"]
+                : ["assessmentTotals", extra!]
+              : isVocab
+                ? ["students", issue.field.studentIndex, "vocabCorrect"]
+                : ["students", issue.field.studentIndex, "assessmentResults", extra!, "correct"],
         });
       }
     }
+    void EXTRA_ASSESSMENT_CATEGORIES;
   });
 
 export type DailyLogFormInput = z.infer<typeof dailyLogSchema>;

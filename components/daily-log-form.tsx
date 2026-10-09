@@ -105,6 +105,19 @@ import {
 import { sortByKoreanName } from "@/lib/korean-sort";
 import { nextClassDateAfter } from "@/lib/schedule";
 import { vocabWordKey } from "@/lib/vocab";
+import {
+  ASSESSMENT_CATEGORIES,
+  EXTRA_ASSESSMENT_CATEGORIES,
+  assessmentEntryStateFrom,
+  assessmentMeta,
+  assessmentPercentRaw,
+  assessmentTotalsStateFrom,
+  restoreAssessmentTotalsState,
+  type AssessmentCategory,
+  type AssessmentEntryInput,
+  type AssessmentEntryState,
+  type AssessmentTotalsState,
+} from "@/lib/assessments";
 import { currentEpochMs } from "@/lib/todo-window";
 import {
   effortLevelLabels,
@@ -143,6 +156,8 @@ export type DailyLogFormStudent = {
     onlineReviewCompleted?: boolean | null;
     vocabCorrect?: string;
     vocabRetest?: boolean;
+    // 문법/독해 시험 결과 (저장된 jsonb 그대로 — assessmentEntryStateFrom이 해석)
+    assessmentResults?: unknown;
     focusLevel?: string;
     participationLevel?: string;
     questionLevel?: string;
@@ -176,6 +191,8 @@ type EntryState = {
   vocabCorrect: string;
   vocabRetest: boolean;
   vocabMistakes: string[];
+  // 문법/독해 시험 — category별 독립 입력 (탭을 바꿔도 다른 category 값은 그대로)
+  assessmentResults: AssessmentEntryState;
   focusLevel: string;
   participationLevel: string;
   questionLevel: string;
@@ -206,6 +223,7 @@ function initEntry(student: DailyLogFormStudent): EntryState {
     vocabCorrect: student.entry?.vocabCorrect ?? "",
     vocabRetest: student.entry?.vocabRetest ?? false,
     vocabMistakes: student.vocabMistakes ?? [],
+    assessmentResults: assessmentEntryStateFrom(student.entry?.assessmentResults),
     focusLevel: student.entry?.focusLevel ?? "",
     participationLevel: student.entry?.participationLevel ?? "",
     questionLevel: student.entry?.questionLevel ?? "",
@@ -337,6 +355,8 @@ type DraftPayload = {
   // 이전 draft의 단일 taskContent/taskDate/taskTextbook은 복원 시 항목 1개로 변환된다.
   tasks: { id: string; textbook: string; school: string; content: string; dueDate: string }[];
   vocabTotal: string;
+  // 문법/독해 시험 총 문항 (단어는 vocabTotal 그대로 — 기존 draft 호환)
+  assessmentTotals?: AssessmentTotalsState;
   reflectionGood: string;
   reflectionHard: string;
   reflectionNext: string;
@@ -456,6 +476,64 @@ function restoredSections(value: unknown): Record<string, string> | null {
     }
   }
   return map;
+}
+
+// 문법/독해 학생 점수 입력 — 단어시험 행과 같은 UX(맞은 개수 / 총 문항 · %, 재시험 필요). 단어 행을 대체하지 않고
+// 선택된 category에서만 보인다 (단어 행은 숨김 — unmount하지 않아 입력/IME 보존).
+function AssessmentScoreInput({
+  studentName,
+  category,
+  total,
+  value,
+  onChange,
+}: {
+  studentName: string;
+  category: AssessmentCategory;
+  total: string;
+  value: AssessmentEntryInput;
+  onChange: (next: AssessmentEntryInput) => void;
+}) {
+  const meta = assessmentMeta(category);
+  const percent =
+    value.correct && total.trim() && Number(value.correct) <= Number(total)
+      ? assessmentPercentRaw(Number(value.correct), Number(total))
+      : null;
+  return (
+    <div className="flex items-center gap-2" role="group" aria-label={`${studentName} ${meta.testLabel}`} data-assessment-input={category}>
+      <span className="form-label shrink-0 font-semibold text-[#7c6d69]">{meta.label}</span>
+      <input
+        inputMode="numeric"
+        value={value.correct}
+        onChange={(event) =>
+          onChange({
+            ...value,
+            correct: isComposingEvent(event) ? event.target.value : digitsOnly(event.target.value),
+          })
+        }
+        onCompositionEnd={(event) => onChange({ ...value, correct: digitsOnly(event.currentTarget.value) })}
+        className="w-14 rounded-xl border border-[#ece0db] bg-white px-2 py-1.5 text-center text-base tabular-nums outline-none focus:border-[#c9b9e8]"
+        placeholder="-"
+        aria-label={`${studentName} ${meta.testLabel} 맞은 개수`}
+      />
+      <span className="text-sm tabular-nums text-[#8a7b77]">
+        / {total.trim() || "?"}
+        {percent !== null ? ` · ${percent}%` : ""}
+      </span>
+      <button
+        type="button"
+        aria-pressed={value.retest}
+        onClick={() => onChange({ ...value, retest: !value.retest })}
+        className={cn(
+          "min-h-[38px] rounded-xl border px-2.5 py-1.5 text-sm font-medium transition",
+          value.retest
+            ? "border-[#d8cdf0] bg-[#f3eefc] text-[#5d4ba5]"
+            : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
+        )}
+      >
+        재시험 필요
+      </button>
+    </div>
+  );
 }
 
 function restoredText(value: unknown, fallback: string) {
@@ -719,6 +797,8 @@ export function DailyLogForm({
     schoolProgress?: { name: string; text: string }[];
     schoolPlans?: { name: string; text: string }[];
     vocabTotal?: string;
+    // 문법/독해 시험 총 문항 (daily_logs.assessment_totals jsonb 그대로)
+    assessmentTotals?: unknown;
     reflectionGood?: string;
     reflectionHard?: string;
     reflectionNext?: string;
@@ -911,6 +991,27 @@ export function DailyLogForm({
   const [vocabTotal, setVocabTotal] = useState(
     restoredText(restored?.vocabTotal, initial?.vocabTotal ?? ""),
   );
+  // 문법/독해 시험 총 문항 — category별 독립 state (draft 복원 우선, 없으면 저장된 일지)
+  const [assessmentTotals, setAssessmentTotals] = useState<AssessmentTotalsState>(
+    () => restoreAssessmentTotalsState(restored?.assessmentTotals) ?? assessmentTotalsStateFrom(initial?.assessmentTotals),
+  );
+  // 지금 입력 중인 시험 종류 (UI 전용 — 저장/draft에 넣지 않는다). 기본 단어, 단어가 비어 있고 다른 시험만
+  // 기록돼 있으면 그 시험부터 보여준다 (기존 기록이 "없는 것처럼" 보이지 않게).
+  const [assessmentCategory, setAssessmentCategory] = useState<AssessmentCategory>(() => {
+    if (vocabTotal.trim()) {
+      return "vocabulary";
+    }
+    return EXTRA_ASSESSMENT_CATEGORIES.find((category) => assessmentTotals[category].trim()) ?? "vocabulary";
+  });
+  const assessmentTotalOf = (category: AssessmentCategory) =>
+    category === "vocabulary" ? vocabTotal : assessmentTotals[category];
+  const setAssessmentTotalOf = (category: AssessmentCategory, value: string) => {
+    if (category === "vocabulary") {
+      setVocabTotal(value);
+    } else {
+      setAssessmentTotals((prev) => ({ ...prev, [category]: value }));
+    }
+  };
   // 요약 모달 — 대시보드 [수업 일지 완료] 진입이면 처음부터 열린 상태 (draft 안내가 있으면 제외)
   const [showSummary, setShowSummary] = useState(
     () => openCompletion && !(Boolean(draft) && !autoRestored),
@@ -1008,6 +1109,7 @@ export function DailyLogForm({
         ...(section ? { section } : {}),
       })),
       vocabTotal,
+      assessmentTotals,
       reflectionGood,
       reflectionHard,
       reflectionNext,
@@ -1016,7 +1118,7 @@ export function DailyLogForm({
     if (initialSnapshotRef.current === null) {
       initialSnapshotRef.current = JSON.stringify(formStateRef.current);
     }
-  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, schoolProgressMap, schoolPlanMap, tasks, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries, progressMode, manualTextbookProgress, manualTextbookPlans]);
+  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, schoolProgressMap, schoolPlanMap, tasks, vocabTotal, assessmentTotals, reflectionGood, reflectionHard, reflectionNext, entries, progressMode, manualTextbookProgress, manualTextbookPlans]);
   useEffect(
     () =>
       registerDirtyCheck(
@@ -1269,6 +1371,10 @@ export function DailyLogForm({
       if (data.nextPlanDate) setPlanDateTouched(true);
     }
     if (typeof data.vocabTotal === "string") setVocabTotal(data.vocabTotal);
+    {
+      const restoredTotals = restoreAssessmentTotalsState((data as { assessmentTotals?: unknown }).assessmentTotals);
+      if (restoredTotals) setAssessmentTotals(restoredTotals);
+    }
     if (typeof data.reflectionGood === "string") setReflectionGood(data.reflectionGood);
     if (typeof data.reflectionHard === "string") setReflectionHard(data.reflectionHard);
     if (typeof data.reflectionNext === "string") setReflectionNext(data.reflectionNext);
@@ -2653,6 +2759,7 @@ export function DailyLogForm({
             dueDate,
           })),
         vocabTotal,
+        assessmentTotals,
         reflectionGood,
         reflectionHard,
         reflectionNext,
@@ -2676,6 +2783,7 @@ export function DailyLogForm({
             vocabCorrect: entry.vocabCorrect,
             vocabRetest: entry.vocabRetest,
             vocabMistakes: entry.vocabMistakes,
+            assessmentResults: entry.assessmentResults,
             focusLevel: entry.focusLevel as "" | "good" | "normal" | "distracted",
             participationLevel: entry.participationLevel as "" | "active" | "normal" | "passive",
             questionLevel: entry.questionLevel as "" | "high" | "normal" | "low",
@@ -3413,20 +3521,52 @@ export function DailyLogForm({
       <Card className="p-4">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
             <span className="section-title text-[#2b2323]">빠른 체크</span>
-            <label className="flex items-center gap-2 text-sm text-[#564d4d]">
-              오늘 단어시험 총 문항
+            {/* 시험 종류 — 탭처럼 고르고, 각 시험의 총 문항/학생 점수는 따로 보존된다 (전환해도 다른 시험 값 유지).
+                ✓ = 그 시험의 총 문항이 입력돼 있음 (학생 전원 입력 완료라는 뜻은 아님) */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-[#564d4d]">시험 종류</span>
+              <div role="group" aria-label="시험 종류" className="flex flex-wrap gap-1.5" data-assessment-categories>
+                {ASSESSMENT_CATEGORIES.map((meta) => {
+                  const selected = assessmentCategory === meta.key;
+                  const hasData = Boolean(assessmentTotalOf(meta.key).trim());
+                  return (
+                    <button
+                      key={meta.key}
+                      type="button"
+                      aria-pressed={selected}
+                      data-assessment-category={meta.key}
+                      data-has-data={hasData ? "true" : "false"}
+                      onClick={() => setAssessmentCategory(meta.key)}
+                      className={cn(
+                        "min-h-[40px] rounded-xl border px-3 py-1.5 text-sm transition",
+                        selected
+                          ? "border-[#c9b9e8] bg-[#f3eefc] font-semibold text-[#5d4ba5]"
+                          : "border-[#ece0db] bg-white font-medium text-[#7c6d69] hover:bg-[#faf6f3]",
+                      )}
+                    >
+                      {meta.label}
+                      {hasData ? <span aria-label="입력 있음"> ✓</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <label className="flex flex-wrap items-center gap-2 text-sm text-[#564d4d]">
+              오늘 {assessmentMeta(assessmentCategory).testLabel} 총 문항
               <input
+                key={`assessment-total-${assessmentCategory}`}
                 inputMode="numeric"
-                value={vocabTotal}
+                value={assessmentTotalOf(assessmentCategory)}
                 onChange={(event) =>
-                  setVocabTotal(
+                  setAssessmentTotalOf(
+                    assessmentCategory,
                     isComposingEvent(event) ? event.target.value : digitsOnly(event.target.value),
                   )
                 }
-                onCompositionEnd={(event) => setVocabTotal(digitsOnly(event.currentTarget.value))}
+                onCompositionEnd={(event) => setAssessmentTotalOf(assessmentCategory, digitsOnly(event.currentTarget.value))}
                 className="w-16 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-center text-base tabular-nums outline-none focus:border-[#c9b9e8]"
                 placeholder="20"
-                aria-label="오늘 단어시험 총 문항 수"
+                aria-label={`오늘 ${assessmentMeta(assessmentCategory).testLabel} 총 문항 수`}
               />
               문제
             </label>
@@ -3808,7 +3948,27 @@ export function DailyLogForm({
                             : "border-[#bfe3d2] bg-[#edf9f3] text-[#2f6d54]"}
                         />
 
-                        <div className="flex items-center gap-2" role="group" aria-label={`${student.name} 단어시험`}>
+                        {assessmentCategory !== "vocabulary" ? (
+                          <AssessmentScoreInput
+                            studentName={student.name}
+                            category={assessmentCategory}
+                            total={assessmentTotals[assessmentCategory]}
+                            value={entry.assessmentResults?.[assessmentCategory] ?? { correct: "", retest: false }}
+                            onChange={(next) =>
+                              updateEntry(student.studentId, {
+                                assessmentResults: {
+                                  ...(entry.assessmentResults ?? { grammar: { correct: "", retest: false }, reading: { correct: "", retest: false } }),
+                                  [assessmentCategory]: next,
+                                },
+                              })
+                            }
+                          />
+                        ) : null}
+                        <div
+                          className={cn("flex items-center gap-2", assessmentCategory !== "vocabulary" && "hidden")}
+                          role="group"
+                          aria-label={`${student.name} 단어시험`}
+                        >
                           <span className="form-label shrink-0 font-semibold text-[#7c6d69]">단어</span>
                           <input
                             inputMode="numeric"
@@ -4669,6 +4829,11 @@ function CompletionSummary({
     }
     if (entry.vocabRetest) {
       items.push("단어 재시험 필요");
+    }
+    for (const category of EXTRA_ASSESSMENT_CATEGORIES) {
+      if (entry.assessmentResults?.[category]?.retest) {
+        items.push(`${assessmentMeta(category).label} 재시험 필요`);
+      }
     }
     if (entry.parentNoteNeeded && entry.parentNote.trim()) {
       items.push("학부모 전달 필요");

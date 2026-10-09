@@ -107,6 +107,8 @@ export default async function EditDailyLogPage({
           onlineReviewCompleted: lessonLog.online_review_completed ?? null,
           vocabCorrect: lessonLog.vocab_correct === null ? "" : String(lessonLog.vocab_correct),
           vocabRetest: lessonLog.vocab_retest,
+          // 문법/독해 시험 결과 (migration 전 row에는 없음 → 빈 입력)
+          assessmentResults: (lessonLog as { assessment_results?: unknown }).assessment_results ?? null,
           focusLevel: lessonLog.focus_level ?? "",
           participationLevel: lessonLog.participation_level ?? "",
           questionLevel: lessonLog.question_level ?? "",
@@ -356,6 +358,7 @@ export default async function EditDailyLogPage({
             taskDate: log.task_due_date ?? "",
             taskTextbook: log.task_textbook ?? "",
             vocabTotal: log.vocab_total === null ? "" : String(log.vocab_total),
+            assessmentTotals: (log as { assessment_totals?: unknown }).assessment_totals ?? null,
             reflectionGood: log.reflection_good ?? "",
             reflectionHard: log.reflection_hard ?? "",
             reflectionNext: log.reflection_next ?? "",

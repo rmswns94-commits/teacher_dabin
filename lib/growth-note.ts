@@ -160,6 +160,8 @@ const encouragementPriority: GrowthAchievementType[] = [
   "effort_master",
   "makeup_master",
   "vocabulary_master",
+  "grammar_master",
+  "reading_master",
   "consistency_master",
   "focus_master",
   "presentation_master",
@@ -171,6 +173,8 @@ const connectiveFragments: Record<GrowthAchievementType, string> = {
   kindness_master: "친구를 배려하고",
   effort_master: "어려운 것도 포기하지 않고 노력하고",
   vocabulary_master: "단어시험을 완벽하게 준비하고",
+  grammar_master: "문법시험을 완벽하게 준비하고",
+  reading_master: "독해시험을 완벽하게 준비하고",
   consistency_master: "숙제를 꾸준히 챙기고",
   focus_master: "수업에 집중하고",
   presentation_master: "자신 있게 발표하고",
@@ -183,6 +187,8 @@ const finalFragments: Record<GrowthAchievementType, string> = {
   kindness_master: "친구를 배려한",
   effort_master: "어려운 것도 끝까지 노력한",
   vocabulary_master: "단어시험을 완벽하게 해낸",
+  grammar_master: "문법시험을 완벽하게 해낸",
+  reading_master: "독해시험을 완벽하게 해낸",
   consistency_master: "숙제를 빠짐없이 해온",
   focus_master: "수업에 집중한",
   presentation_master: "자신 있게 발표한",
@@ -195,6 +201,8 @@ const singleAchievementEncouragements: Record<GrowthAchievementType, string> = {
   kindness_master: "친구를 배려하는 따뜻한 마음이 정말 멋졌어요! 💗",
   effort_master: "이번 주에도 포기하지 않고 끝까지 노력하는 모습이 정말 멋졌어요! 🌱",
   vocabulary_master: "꾸준히 준비한 만큼 멋진 결과가 따라왔어요. 정말 잘했어요! ⭐",
+  grammar_master: "문법시험을 꾸준히 완벽하게 해냈어요. 정말 잘했어요! ✏️",
+  reading_master: "독해시험을 꾸준히 완벽하게 해냈어요. 정말 잘했어요! 📖",
   consistency_master: "숙제를 꾸준히 챙기는 성실한 모습이 정말 멋졌어요!",
   focus_master: "수업에 집중하는 모습이 한 주 내내 반짝반짝 빛났어요!",
   presentation_master: "수업에 자신 있게 참여하는 모습이 정말 멋졌어요!",
@@ -232,6 +240,8 @@ export type BuildGrowthNoteInput = {
   weekRecords: GrowthNoteLessonRecord[];
   // 선택한 주 이전까지의 최근 유효 단어시험 % (오래된 → 최신, bounded)
   recentVocabPercents: number[];
+  // 같은 규칙의 문법/독해 시험 % (문법왕/독해왕)
+  recentAssessmentPercents?: WeeklyGrowthInput["recentAssessmentPercents"];
   // 이번 주 Teacher manual 칭찬 코멘트 원문 (오래된 → 최신)
   weekPraiseComments: string[];
   // 이번 주 평가 대상 보충수업 (scopeMakeupsToWeek 적용 후)
@@ -252,6 +262,7 @@ export function buildGrowthNoteViewModel(input: BuildGrowthNoteInput): StudentGr
   const growth = computeWeeklyGrowth({
     weekRecords,
     recentVocabPercents: input.recentVocabPercents,
+    recentAssessmentPercents: input.recentAssessmentPercents,
     weekMakeups: input.weekMakeups,
   });
 

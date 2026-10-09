@@ -34,7 +34,8 @@ export async function getStudentLessonHistory(studentId: string, sinceDate?: str
 
   let query = supabase
     .from("student_lesson_logs")
-    .select("*, daily_logs!inner(id, class_date, title, default_progress, vocab_total, class_groups(id, name))")
+    // daily_logs는 *로 — 문법/독해 시험 총 문항(assessment_totals, 20261010 migration) 유무와 무관하게 동작
+    .select("*, daily_logs!inner(*, class_groups(id, name))")
     .eq("user_id", user.id)
     .eq("student_id", studentId);
 

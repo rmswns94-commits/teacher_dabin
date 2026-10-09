@@ -37,6 +37,9 @@ export type GrowthLessonRow = {
   strengths: string | null;
   // 온라인 복습 (null=미평가 — 복습왕/꾸준왕/도약왕에서 분모 제외)
   online_review_completed: boolean | null;
+  // 문법/독해 시험 (lib/assessments jsonb — migration 전에는 null)
+  assessment_results: unknown;
+  assessment_totals: unknown;
 };
 
 // 기간 내 수업 기록을 한 번에 가져온다 (선택된 그룹 학생 batch — N+1 방지).
@@ -53,32 +56,42 @@ export async function getGrowthLessonRows(
     return [] as GrowthLessonRow[];
   }
 
-  let query = supabase
-    .from("student_lesson_logs")
-    .select(
-      "student_id, daily_log_id, attendance, homework_status, vocab_correct, vocab_retest, focus_level, participation_level, question_level, kindness_level, effort_level, strengths, online_review_completed, daily_logs!inner(class_date, vocab_total)",
-    )
-    .eq("user_id", user.id)
-    .gte("daily_logs.class_date", startDate)
-    .lte("daily_logs.class_date", endDate);
-
-  if (studentIds) {
-    if (studentIds.length === 0) {
-      return [] as GrowthLessonRow[];
-    }
-    query = query.in("student_id", studentIds);
+  if (studentIds && studentIds.length === 0) {
+    return [] as GrowthLessonRow[];
   }
+  // 문법/독해 시험 컬럼(20261010 migration)이 없으면 단어시험만으로 재조회 — 성장노트가 migration 전에도 그대로 동작
+  const run = (withAssessments: boolean) => {
+    let query = supabase
+      .from("student_lesson_logs")
+      .select(
+        withAssessments
+          ? "student_id, daily_log_id, attendance, homework_status, vocab_correct, vocab_retest, focus_level, participation_level, question_level, kindness_level, effort_level, strengths, online_review_completed, assessment_results, daily_logs!inner(class_date, vocab_total, assessment_totals)"
+          : "student_id, daily_log_id, attendance, homework_status, vocab_correct, vocab_retest, focus_level, participation_level, question_level, kindness_level, effort_level, strengths, online_review_completed, daily_logs!inner(class_date, vocab_total)",
+      )
+      .eq("user_id", user.id)
+      .gte("daily_logs.class_date", startDate)
+      .lte("daily_logs.class_date", endDate);
+    if (studentIds) {
+      query = query.in("student_id", studentIds);
+    }
+    return query;
+  };
 
-  const { data, error } = await query;
+  let { data, error } = await run(true);
+  if (error && (error.code === "42703" || error.code === "PGRST204")) {
+    ({ data, error } = await run(false));
+  }
 
   if (error) {
     console.error("getGrowthLessonRows error", error);
     return [] as GrowthLessonRow[];
   }
 
-  return (data ?? [])
+  // select 문자열이 조건부라 타입 추론 대신 필요한 필드만 명시한 raw row로 읽는다
+  type RawGrowthRow = Omit<GrowthLessonRow, "class_date" | "vocab_total" | "assessment_totals"> & { daily_logs: unknown };
+  return ((data ?? []) as unknown as RawGrowthRow[])
     .map((row) => {
-      const dailyLog = pickOne<{ class_date: string; vocab_total: number | null }>(row.daily_logs);
+      const dailyLog = pickOne<{ class_date: string; vocab_total: number | null; assessment_totals?: unknown }>(row.daily_logs);
 
       return {
         student_id: row.student_id,
@@ -96,6 +109,8 @@ export async function getGrowthLessonRows(
         effort_level: row.effort_level ?? null,
         strengths: row.strengths ?? null,
         online_review_completed: (row.online_review_completed ?? null) as boolean | null,
+        assessment_results: (row as { assessment_results?: unknown }).assessment_results ?? null,
+        assessment_totals: dailyLog?.assessment_totals ?? null,
       } as GrowthLessonRow;
     })
     .sort((a, b) => a.class_date.localeCompare(b.class_date));

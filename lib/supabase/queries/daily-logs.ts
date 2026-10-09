@@ -24,6 +24,7 @@ import { resolveProgressMode, scopedMissedProgressCandidate } from "@/lib/progre
 import { buildTextbookSectionsText, stripDerivedPrefix } from "@/lib/textbooks";
 import { sortByKoreanName } from "@/lib/korean-sort";
 import { dedupeVocabWords } from "@/lib/vocab";
+import { assessmentResultsForSave, assessmentTotalsForSave } from "@/lib/assessments";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type {
   PreparationItem,
@@ -1091,6 +1092,19 @@ export async function saveDailyLog(input: DailyLogFormInput) {
       : input.defaultProgress?.trim() ?? "";
 
   const vocabTotal = input.vocabTotal ? Number(input.vocabTotal) : null;
+  // 문법/독해 시험 — 총 문항이 있는 category만 (빈 category에 가짜 시험 record를 만들지 않는다)
+  const assessmentTotals = assessmentTotalsForSave(input.assessmentTotals);
+  const assessmentResultsOf = (entry: (typeof input.students)[number]) =>
+    entry.attendance === "absent" ? {} : assessmentResultsForSave(entry.assessmentResults, assessmentTotals);
+  const hasAssessmentData =
+    Object.keys(assessmentTotals).length > 0 ||
+    input.students.some((entry) => Object.keys(assessmentResultsOf(entry)).length > 0);
+  // 20261010 migration(assessment_totals/assessment_results) 적용 여부 — 컬럼이 없으면 평소 저장은 그대로,
+  // 문법/독해 시험을 실제로 쓴 저장만 기존 schemaMismatchMessage 경로로 migration 안내를 보여준다.
+  const { error: assessmentProbeError } = await supabase.from("daily_logs").select("assessment_totals").limit(1);
+  const assessmentColumns = !assessmentProbeError;
+  const sendAssessments = assessmentColumns || hasAssessmentData;
+  const assessmentTotalsPayload = Object.keys(assessmentTotals).length > 0 ? assessmentTotals : null;
 
   // 오늘 숙제(구조화): legacy free-text가 비어 있으면 homework 필드에 파생 mirror 텍스트를
   // 기록한다 — 지난 숙제 카드/브리핑/그룹 요약 등 기존 소비처가 코드 변경 없이 계속 동작.
@@ -1160,6 +1174,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     school_progress: (input.schoolProgress ?? []).length > 0 ? input.schoolProgress : null,
     school_plans: (input.schoolPlans ?? []).length > 0 ? input.schoolPlans : null,
     vocab_total: vocabTotal,
+    ...(sendAssessments ? { assessment_totals: assessmentTotalsPayload } : {}),
     reflection_good: input.reflectionGood?.trim() || null,
     reflection_hard: input.reflectionHard?.trim() || null,
     reflection_next: input.reflectionNext?.trim() || null,
@@ -1329,6 +1344,11 @@ export async function saveDailyLog(input: DailyLogFormInput) {
       homework_status: isAbsent ? null : entry.homeworkStatus || null,
       vocab_correct: isAbsent || !entry.vocabCorrect ? null : Number(entry.vocabCorrect),
       vocab_retest: isAbsent ? false : Boolean(entry.vocabRetest),
+      ...(sendAssessments
+        ? {
+            assessment_results: Object.keys(assessmentResultsOf(entry)).length > 0 ? assessmentResultsOf(entry) : null,
+          }
+        : {}),
       focus_level: isAbsent ? null : entry.focusLevel || null,
       participation_level: isAbsent ? null : entry.participationLevel || null,
       question_level: isAbsent ? null : entry.questionLevel || null,

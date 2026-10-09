@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { BookOpen, Sparkles, Target } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { assessmentPercentsByCategory } from "@/lib/assessments";
 import { PageHeader } from "@/components/page-header";
 import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { StudentDeleteButton } from "@/components/student-delete-button";
@@ -373,6 +374,19 @@ export default async function StudentDetailPage({
       .filter((item) => item.vocab_correct !== null && (item.dailyLog?.vocab_total ?? 0) > 0)
       .sort((a, b) => (a.dailyLog?.class_date ?? "").localeCompare(b.dailyLog?.class_date ?? ""))
       .map((item) => vocabPercent(item.vocab_correct!, item.dailyLog!.vocab_total!)!),
+    // 문법왕/독해왕 — 같은 최신순 정렬 규칙, category 점수만
+    recentAssessmentPercents: (({ grammar, reading }) => ({ grammar, reading }))(
+      assessmentPercentsByCategory(
+        [...history]
+          .sort((a, b) => (a.dailyLog?.class_date ?? "").localeCompare(b.dailyLog?.class_date ?? ""))
+          .map((item) => ({
+            vocab_correct: null,
+            vocab_total: null,
+            assessment_results: (item as { assessment_results?: unknown }).assessment_results,
+            assessment_totals: (item.dailyLog as { assessment_totals?: unknown } | null)?.assessment_totals,
+          })),
+      ),
+    ),
     // 틈새왕: 이미 불러온 보충 기록에서 선택 주에 귀속되는 것만
     weekMakeups: scopeMakeupsToWeek(makeups, weekStart, weekEnd),
   });

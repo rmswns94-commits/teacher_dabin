@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/page-header";
 import { dailyQuoteOf } from "@/lib/constants/daily-quotes";
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate, toDateString, todayDateString } from "@/lib/dates";
+import { assessmentPercentsByCategory } from "@/lib/assessments";
 import { vocabPercent } from "@/lib/elementary";
 import {
   computeWeeklyGrowth,
@@ -61,7 +62,7 @@ import { cn } from "@/lib/utils";
 // (주간: 한국 기준 월요일 시작 — 기존과 동일 결과, 월간: 1일~말일, 전부 KST date-only).
 
 
-// 9개 성장왕 카드 테마 — 왕의 성격에 맞는 파스텔 그라데이션 + 반짝 포인트색.
+// 성장왕 카드 테마 — 왕의 성격에 맞는 파스텔 그라데이션 + 반짝 포인트색.
 // 장식은 정적(sparkle 아이콘 + 빛번짐)이라 iPad 성능 부담이 없다.
 const growthKingThemes: Record<
   GrowthAchievementType,
@@ -80,6 +81,20 @@ const growthKingThemes: Record<
     title: "text-[#5c4a9c]",
     desc: "text-[#7c6fa8]",
     sparkle: "text-[#a88fd8]",
+  },
+  // 문법왕 — 차근차근 구조: 연보라+크림, 라벤더 포인트
+  grammar_master: {
+    card: "border-[#e2d8f0] bg-gradient-to-br from-[#fbf9ff] via-[#f4effb] to-[#f7f1e8]",
+    title: "text-[#5a4a8c]",
+    desc: "text-[#7d7096]",
+    sparkle: "text-[#b09ad6]",
+  },
+  // 독해왕 — 깊이 읽기: 하늘+민트
+  reading_master: {
+    card: "border-[#d2e4ee] bg-gradient-to-br from-[#f5fafd] via-[#ebf4f9] to-[#e6f3ee]",
+    title: "text-[#3a6a80]",
+    desc: "text-[#628497]",
+    sparkle: "text-[#86bcd2]",
   },
   // 집중왕 — 차분한 몰입: 민트+세이지, 청록 포인트
   focus_master: {
@@ -133,7 +148,7 @@ const growthKingThemes: Record<
 };
 
 
-// 성장노트 landing: 9개 성장왕 소개 + 반 선택.
+// 성장노트 landing: 성장왕 소개 + 반 선택.
 // 학생 목록/Achievement 계산은 반을 선택한 다음에만 (lazy — 첫 화면은 가볍게).
 export default async function GrowthNotesPage({
   searchParams,
@@ -174,9 +189,9 @@ export default async function GrowthNotesPage({
           {/* 오늘의 명언 — 날짜(KST) 기준 365개 문구 중 하루 하나 */}
           <DailyQuoteCard quote={dailyQuoteOf(todayDateString())} />
 
-          {/* 9개의 성장왕 — 순수 소개 화면 (달성 여부/랭킹/카운트 표시 금지) */}
+          {/* 성장왕 소개 — 순수 소개 화면 (달성 여부/랭킹/카운트 표시 금지). 개수는 registry 길이 */}
           <section>
-            <h2 className="card-title text-[#3a2f2c]">9개의 성장왕</h2>
+            <h2 className="card-title text-[#3a2f2c]">{growthAchievementValues.length}개의 성장왕</h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {growthAchievementValues.map((type) => {
                 const theme = growthKingThemes[type];
@@ -357,6 +372,8 @@ async function GroupStudentList({
         recentVocabPercents: rows
           .filter((row) => row.vocab_correct !== null && (row.vocab_total ?? 0) > 0)
           .map((row) => vocabPercent(row.vocab_correct!, row.vocab_total!)!),
+        // 문법왕/독해왕 — 같은 rows·같은 순서에서 category별 점수만 (단어 점수와 섞지 않는다)
+        recentAssessmentPercents: (({ grammar, reading }) => ({ grammar, reading }))(assessmentPercentsByCategory(rows)),
         weekMakeups: scopeMakeupsToWeek(
           makeupsByStudent.get(student.id) ?? [],
           periodStart,
