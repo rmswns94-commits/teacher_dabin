@@ -107,16 +107,17 @@ import { nextClassDateAfter } from "@/lib/schedule";
 import { vocabWordKey } from "@/lib/vocab";
 import {
   ASSESSMENT_CATEGORIES,
-  EXTRA_ASSESSMENT_CATEGORIES,
-  assessmentEntryStateFrom,
   assessmentMeta,
+  assessmentOrdinals,
   assessmentPercentRaw,
-  assessmentTotalsStateFrom,
-  restoreAssessmentTotalsState,
+  newAssessmentId,
+  restoreAssessmentDrafts,
+  restoreScoreInputs,
+  scoreExceedsTotal,
   type AssessmentCategory,
-  type AssessmentEntryInput,
-  type AssessmentEntryState,
-  type AssessmentTotalsState,
+  type AssessmentDraft,
+  type ScoreInput,
+  type ScoreInputs,
 } from "@/lib/assessments";
 import { currentEpochMs } from "@/lib/todo-window";
 import {
@@ -132,7 +133,6 @@ import {
   participationLevelValues,
   questionLevelLabels,
   questionLevelValues,
-  vocabPercent,
 } from "@/lib/elementary";
 import { gradeDisplay } from "@/lib/grades";
 import type { AttendanceStatus, StudentGrade } from "@/lib/supabase/types";
@@ -154,10 +154,8 @@ export type DailyLogFormStudent = {
     memo: string;
     homeworkStatus?: string;
     onlineReviewCompleted?: boolean | null;
-    vocabCorrect?: string;
-    vocabRetest?: boolean;
-    // 문법/독해 시험 결과 (저장된 jsonb 그대로 — assessmentEntryStateFrom이 해석)
-    assessmentResults?: unknown;
+    // 오늘 시험별 결과 (key = 시험 id — 같은 종류 시험이 여러 개여도 독립)
+    assessmentScores?: ScoreInputs;
     focusLevel?: string;
     participationLevel?: string;
     questionLevel?: string;
@@ -188,11 +186,9 @@ type EntryState = {
   makeupCompleted: boolean;
   homeworkStatus: string;
   onlineReviewCompleted: boolean | null;
-  vocabCorrect: string;
-  vocabRetest: boolean;
   vocabMistakes: string[];
-  // 문법/독해 시험 — category별 독립 입력 (탭을 바꿔도 다른 category 값은 그대로)
-  assessmentResults: AssessmentEntryState;
+  // 오늘 시험별 결과 — key = 시험 id (category/순서가 아니라 id로 연결). 빠른 체크 [일괄 입력]과 학생 카드가 같은 state를 쓴다.
+  assessmentScores: ScoreInputs;
   focusLevel: string;
   participationLevel: string;
   questionLevel: string;
@@ -220,10 +216,8 @@ function initEntry(student: DailyLogFormStudent): EntryState {
     makeupCompleted: makeup?.status === "completed",
     homeworkStatus: student.entry?.homeworkStatus ?? "",
     onlineReviewCompleted: student.entry?.onlineReviewCompleted ?? null,
-    vocabCorrect: student.entry?.vocabCorrect ?? "",
-    vocabRetest: student.entry?.vocabRetest ?? false,
     vocabMistakes: student.vocabMistakes ?? [],
-    assessmentResults: assessmentEntryStateFrom(student.entry?.assessmentResults),
+    assessmentScores: student.entry?.assessmentScores ?? {},
     focusLevel: student.entry?.focusLevel ?? "",
     participationLevel: student.entry?.participationLevel ?? "",
     questionLevel: student.entry?.questionLevel ?? "",
@@ -233,6 +227,19 @@ function initEntry(student: DailyLogFormStudent): EntryState {
     parentNote: student.entry?.parentNote ?? "",
     praiseComments: student.praiseComments ?? [],
   };
+}
+
+// draft entry 복원 — 이전 draft의 단일 시험 필드(vocabCorrect/vocabRetest/assessmentResults)는 시험 id 기준 점수로 변환
+function mergeRestoredEntry(base: EntryState, saved: unknown): EntryState {
+  const {
+    vocabCorrect,
+    vocabRetest,
+    assessmentResults,
+    assessmentScores,
+    ...rest
+  } = saved as Partial<EntryState> & { vocabCorrect?: unknown; vocabRetest?: unknown; assessmentResults?: unknown };
+  const scores = restoreScoreInputs({ assessmentScores, vocabCorrect, vocabRetest, assessmentResults });
+  return { ...base, ...rest, assessmentScores: scores ?? base.assessmentScores };
 }
 
 const digitsOnly = (value: string) => value.replace(/\D/g, "").slice(0, 3);
@@ -354,9 +361,8 @@ type DraftPayload = {
   // 해야 할 일 다중 항목 (공용 Todo 연결) — draft 단계에서는 payload에만 유지 (Todo 생성 없음).
   // 이전 draft의 단일 taskContent/taskDate/taskTextbook은 복원 시 항목 1개로 변환된다.
   tasks: { id: string; textbook: string; school: string; content: string; dueDate: string }[];
-  vocabTotal: string;
-  // 문법/독해 시험 총 문항 (단어는 vocabTotal 그대로 — 기존 draft 호환)
-  assessmentTotals?: AssessmentTotalsState;
+  // 오늘 시험 목록 (추가한 순서, stable id). 이전 draft의 vocabTotal/assessmentTotals는 복원 시 목록으로 변환된다.
+  assessments: AssessmentDraft[];
   reflectionGood: string;
   reflectionHard: string;
   reflectionNext: string;
@@ -478,60 +484,72 @@ function restoredSections(value: unknown): Record<string, string> | null {
   return map;
 }
 
-// 문법/독해 학생 점수 입력 — 단어시험 행과 같은 UX(맞은 개수 / 총 문항 · %, 재시험 필요). 단어 행을 대체하지 않고
-// 선택된 category에서만 보인다 (단어 행은 숨김 — unmount하지 않아 입력/IME 보존).
+// 시험 1개의 학생 점수 입력 — 맞은 개수 / 총 문항 · %, 재시험 필요. 학생 카드와 빠른 체크 [일괄 입력]이 같은 컴포넌트·같은 state.
+// 빈 값 = 미입력(null), 0 = 0점. 총 문항을 넘으면 값을 바꾸지 않고(조용한 보정 없음) 오류만 보여준다.
 function AssessmentScoreInput({
   studentName,
-  category,
-  total,
+  assessment,
+  name,
+  label,
   value,
   onChange,
 }: {
   studentName: string;
-  category: AssessmentCategory;
-  total: string;
-  value: AssessmentEntryInput;
-  onChange: (next: AssessmentEntryInput) => void;
+  assessment: AssessmentDraft;
+  name: string; // 단어시험 / 단어시험 2
+  label?: string; // 시험 1 · 20문제
+  value: ScoreInput;
+  onChange: (next: ScoreInput) => void;
 }) {
-  const meta = assessmentMeta(category);
-  const percent =
-    value.correct && total.trim() && Number(value.correct) <= Number(total)
-      ? assessmentPercentRaw(Number(value.correct), Number(total))
-      : null;
+  const total = assessment.total.trim();
+  const exceeds = scoreExceedsTotal(value.correct, assessment.total);
+  const percent = value.correct && total && !exceeds ? assessmentPercentRaw(Number(value.correct), Number(total)) : null;
   return (
-    <div className="flex items-center gap-2" role="group" aria-label={`${studentName} ${meta.testLabel}`} data-assessment-input={category}>
-      <span className="form-label shrink-0 font-semibold text-[#7c6d69]">{meta.label}</span>
-      <input
-        inputMode="numeric"
-        value={value.correct}
-        onChange={(event) =>
-          onChange({
-            ...value,
-            correct: isComposingEvent(event) ? event.target.value : digitsOnly(event.target.value),
-          })
-        }
-        onCompositionEnd={(event) => onChange({ ...value, correct: digitsOnly(event.currentTarget.value) })}
-        className="w-14 rounded-xl border border-[#ece0db] bg-white px-2 py-1.5 text-center text-base tabular-nums outline-none focus:border-[#c9b9e8]"
-        placeholder="-"
-        aria-label={`${studentName} ${meta.testLabel} 맞은 개수`}
-      />
-      <span className="text-sm tabular-nums text-[#8a7b77]">
-        / {total.trim() || "?"}
-        {percent !== null ? ` · ${percent}%` : ""}
-      </span>
-      <button
-        type="button"
-        aria-pressed={value.retest}
-        onClick={() => onChange({ ...value, retest: !value.retest })}
-        className={cn(
-          "min-h-[38px] rounded-xl border px-2.5 py-1.5 text-sm font-medium transition",
-          value.retest
-            ? "border-[#d8cdf0] bg-[#f3eefc] text-[#5d4ba5]"
-            : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
-        )}
-      >
-        재시험 필요
-      </button>
+    <div role="group" aria-label={`${studentName} ${name}`} data-assessment-input={assessment.id} className="min-w-0">
+      {label ? <div className="mb-1 text-xs font-medium text-[#8a7b77]">{label}</div> : null}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          inputMode="numeric"
+          value={value.correct}
+          onChange={(event) =>
+            onChange({
+              ...value,
+              correct: isComposingEvent(event) ? event.target.value : digitsOnly(event.target.value),
+            })
+          }
+          onCompositionEnd={(event) => onChange({ ...value, correct: digitsOnly(event.currentTarget.value) })}
+          className={cn(
+            "w-14 rounded-xl border bg-white px-2 py-1.5 text-center text-base tabular-nums outline-none",
+            exceeds ? "border-[#e8b4ad] focus:border-[#d98c82]" : "border-[#ece0db] focus:border-[#c9b9e8]",
+          )}
+          placeholder="-"
+          aria-label={`${studentName} ${name} 맞은 개수`}
+          aria-invalid={exceeds || undefined}
+        />
+        <span className="text-sm tabular-nums text-[#8a7b77]">
+          / {total || "?"}
+          {percent !== null ? ` · ${percent}%` : ""}
+        </span>
+        <button
+          type="button"
+          aria-pressed={value.retest}
+          aria-label={`${studentName} ${name} 재시험 필요`}
+          onClick={() => onChange({ ...value, retest: !value.retest })}
+          className={cn(
+            "min-h-[38px] rounded-xl border px-2.5 py-1.5 text-sm font-medium transition",
+            value.retest
+              ? "border-[#d8cdf0] bg-[#f3eefc] text-[#5d4ba5]"
+              : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
+          )}
+        >
+          재시험 필요
+        </button>
+      </div>
+      {exceeds ? (
+        <p role="alert" className="mt-1 text-xs text-[#b4554b]">
+          맞은 개수는 총 문항 수({total})를 넘을 수 없어요.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -796,9 +814,8 @@ export function DailyLogForm({
     // 학교 context 진도/다음 수업 계획 (시험 기간 ON 당시 기록 복원용)
     schoolProgress?: { name: string; text: string }[];
     schoolPlans?: { name: string; text: string }[];
-    vocabTotal?: string;
-    // 문법/독해 시험 총 문항 (daily_logs.assessment_totals jsonb 그대로)
-    assessmentTotals?: unknown;
+    // 오늘 시험 목록 (저장된 순서 + stable id — lessonAssessmentsOf로 이전 형식도 목록으로 읽음)
+    assessments?: AssessmentDraft[];
     reflectionGood?: string;
     reflectionHard?: string;
     reflectionNext?: string;
@@ -988,30 +1005,14 @@ export function DailyLogForm({
     return legacyTaskItem(initial?.taskContent ?? "", initial?.taskDate ?? "", initial?.taskTextbook ?? "");
   });
   // 학생 평가 UI는 초등/중등/고등 모든 학년 공통으로 사용한다.
-  const [vocabTotal, setVocabTotal] = useState(
-    restoredText(restored?.vocabTotal, initial?.vocabTotal ?? ""),
+  // 오늘 시험 목록 — 추가한 순서 그대로, 시험 identity는 id (draft 복원 우선, 없으면 저장된 일지)
+  const [assessments, setAssessments] = useState<AssessmentDraft[]>(
+    () => (restored ? restoreAssessmentDrafts(restored) : null) ?? initial?.assessments ?? [],
   );
-  // 문법/독해 시험 총 문항 — category별 독립 state (draft 복원 우선, 없으면 저장된 일지)
-  const [assessmentTotals, setAssessmentTotals] = useState<AssessmentTotalsState>(
-    () => restoreAssessmentTotalsState(restored?.assessmentTotals) ?? assessmentTotalsStateFrom(initial?.assessmentTotals),
-  );
-  // 지금 입력 중인 시험 종류 (UI 전용 — 저장/draft에 넣지 않는다). 기본 단어, 단어가 비어 있고 다른 시험만
-  // 기록돼 있으면 그 시험부터 보여준다 (기존 기록이 "없는 것처럼" 보이지 않게).
-  const [assessmentCategory, setAssessmentCategory] = useState<AssessmentCategory>(() => {
-    if (vocabTotal.trim()) {
-      return "vocabulary";
-    }
-    return EXTRA_ASSESSMENT_CATEGORIES.find((category) => assessmentTotals[category].trim()) ?? "vocabulary";
-  });
-  const assessmentTotalOf = (category: AssessmentCategory) =>
-    category === "vocabulary" ? vocabTotal : assessmentTotals[category];
-  const setAssessmentTotalOf = (category: AssessmentCategory, value: string) => {
-    if (category === "vocabulary") {
-      setVocabTotal(value);
-    } else {
-      setAssessmentTotals((prev) => ({ ...prev, [category]: value }));
-    }
-  };
+  // 빠른 체크 시험 목록 UI 상태 (저장/draft에 넣지 않는다)
+  const [assessmentAdder, setAssessmentAdder] = useState<{ category: AssessmentCategory; total: string } | null>(null);
+  const [assessmentBulkId, setAssessmentBulkId] = useState<string | null>(null);
+  const [assessmentDeleteId, setAssessmentDeleteId] = useState<string | null>(null);
   // 요약 모달 — 대시보드 [수업 일지 완료] 진입이면 처음부터 열린 상태 (draft 안내가 있으면 제외)
   const [showSummary, setShowSummary] = useState(
     () => openCompletion && !(Boolean(draft) && !autoRestored),
@@ -1024,7 +1025,7 @@ export function DailyLogForm({
       for (const studentId of Object.keys(base)) {
         const saved = restored.entries[studentId];
         if (saved) {
-          base[studentId] = { ...base[studentId], ...saved };
+          base[studentId] = mergeRestoredEntry(base[studentId], saved);
         }
       }
     }
@@ -1108,8 +1109,7 @@ export function DailyLogForm({
         dueDate,
         ...(section ? { section } : {}),
       })),
-      vocabTotal,
-      assessmentTotals,
+      assessments,
       reflectionGood,
       reflectionHard,
       reflectionNext,
@@ -1118,7 +1118,7 @@ export function DailyLogForm({
     if (initialSnapshotRef.current === null) {
       initialSnapshotRef.current = JSON.stringify(formStateRef.current);
     }
-  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, schoolProgressMap, schoolPlanMap, tasks, vocabTotal, assessmentTotals, reflectionGood, reflectionHard, reflectionNext, entries, progressMode, manualTextbookProgress, manualTextbookPlans]);
+  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, schoolProgressMap, schoolPlanMap, tasks, assessments, reflectionGood, reflectionHard, reflectionNext, entries, progressMode, manualTextbookProgress, manualTextbookPlans]);
   useEffect(
     () =>
       registerDirtyCheck(
@@ -1318,7 +1318,6 @@ export function DailyLogForm({
       taskTextbook: string;
       nextLessonPlan: string;
       nextPlanDate: string;
-      vocabTotal: string;
       reflectionGood: string;
       reflectionHard: string;
       reflectionNext: string;
@@ -1370,10 +1369,11 @@ export function DailyLogForm({
       setNextPlanDate(data.nextPlanDate);
       if (data.nextPlanDate) setPlanDateTouched(true);
     }
-    if (typeof data.vocabTotal === "string") setVocabTotal(data.vocabTotal);
     {
-      const restoredTotals = restoreAssessmentTotalsState((data as { assessmentTotals?: unknown }).assessmentTotals);
-      if (restoredTotals) setAssessmentTotals(restoredTotals);
+      const restoredAssessments = restoreAssessmentDrafts(
+        data as { assessments?: unknown; vocabTotal?: unknown; assessmentTotals?: unknown },
+      );
+      if (restoredAssessments) setAssessments(restoredAssessments);
     }
     if (typeof data.reflectionGood === "string") setReflectionGood(data.reflectionGood);
     if (typeof data.reflectionHard === "string") setReflectionHard(data.reflectionHard);
@@ -1387,7 +1387,7 @@ export function DailyLogForm({
         for (const studentId of Object.keys(next)) {
           const saved = data.entries?.[studentId];
           if (saved) {
-            next[studentId] = { ...next[studentId], ...saved };
+            next[studentId] = mergeRestoredEntry(next[studentId], saved);
           }
         }
         return next;
@@ -1441,7 +1441,7 @@ export function DailyLogForm({
       const baseline = lastSavedSnapshotRef.current ?? initialSnapshotRef.current;
       return JSON.stringify(formStateRef.current) === baseline ? prev : { status: "dirty" };
     });
-  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, schoolProgressMap, schoolPlanMap, tasks, vocabTotal, reflectionGood, reflectionHard, reflectionNext, entries, progressMode, manualTextbookProgress, manualTextbookPlans]);
+  }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, schoolProgressMap, schoolPlanMap, tasks, assessments, reflectionGood, reflectionHard, reflectionNext, entries, progressMode, manualTextbookProgress, manualTextbookPlans]);
 
   // 칭찬 한표 인라인 에디터: 열려 있는 학생 id + 작성 중인 draft
   // editIndex가 null이면 새 칭찬 추가, 숫자면 해당 index 칭찬 수정
@@ -1486,6 +1486,52 @@ export function DailyLogForm({
 
   const updateEntry = (studentId: string, patch: Partial<EntryState>) => {
     setEntries((prev) => ({ ...prev, [studentId]: { ...prev[studentId], ...patch } }));
+  };
+
+  // 학생 1명 × 시험 1개 점수. 빈 값 + 재시험 해제 = 미입력 (key 제거 — 처음 상태와 같게)
+  const updateScore = (studentId: string, assessmentId: string, next: ScoreInput) => {
+    setEntries((prev) => {
+      const scores = { ...prev[studentId].assessmentScores };
+      if (!next.correct && !next.retest) {
+        delete scores[assessmentId];
+      } else {
+        scores[assessmentId] = next;
+      }
+      return { ...prev, [studentId]: { ...prev[studentId], assessmentScores: scores } };
+    });
+  };
+  const assessmentNameOf = assessmentOrdinals(assessments);
+  const scoredCountOf = (assessmentId: string) =>
+    students.filter((student) => {
+      const score = entries[student.studentId]?.assessmentScores[assessmentId];
+      return Boolean(score && (score.correct || score.retest));
+    }).length;
+  const addAssessment = () => {
+    if (!assessmentAdder || !(Number(assessmentAdder.total) > 0)) {
+      return;
+    }
+    setAssessments((prev) => [
+      ...prev,
+      { id: newAssessmentId(), category: assessmentAdder.category, total: String(Number(assessmentAdder.total)) },
+    ]);
+    setAssessmentAdder(null);
+  };
+  // 시험 삭제 — 그 시험의 학생 점수도 함께 지운다 (다른 시험 점수는 그대로)
+  const removeAssessment = (assessmentId: string) => {
+    setAssessments((prev) => prev.filter((item) => item.id !== assessmentId));
+    setEntries((prev) => {
+      const next = { ...prev };
+      for (const studentId of Object.keys(next)) {
+        if (assessmentId in next[studentId].assessmentScores) {
+          const scores = { ...next[studentId].assessmentScores };
+          delete scores[assessmentId];
+          next[studentId] = { ...next[studentId], assessmentScores: scores };
+        }
+      }
+      return next;
+    });
+    setAssessmentDeleteId(null);
+    setAssessmentBulkId((open) => (open === assessmentId ? null : open));
   };
 
   const showBulkNotice = (text: string) => {
@@ -2758,8 +2804,7 @@ export function DailyLogForm({
             content,
             dueDate,
           })),
-        vocabTotal,
-        assessmentTotals,
+        assessments: assessments.map(({ id, category, total }) => ({ id, category, total })),
         reflectionGood,
         reflectionHard,
         reflectionNext,
@@ -2780,10 +2825,8 @@ export function DailyLogForm({
             makeupScheduledDate: entry.makeupScheduledDate,
             homeworkStatus: entry.homeworkStatus as "" | "completed" | "partial" | "missing",
             onlineReviewCompleted: entry.onlineReviewCompleted ?? null,
-            vocabCorrect: entry.vocabCorrect,
-            vocabRetest: entry.vocabRetest,
             vocabMistakes: entry.vocabMistakes,
-            assessmentResults: entry.assessmentResults,
+            assessmentScores: entry.assessmentScores,
             focusLevel: entry.focusLevel as "" | "good" | "normal" | "distracted",
             participationLevel: entry.participationLevel as "" | "active" | "normal" | "passive",
             questionLevel: entry.questionLevel as "" | "high" | "normal" | "low",
@@ -3521,55 +3564,6 @@ export function DailyLogForm({
       <Card className="p-4">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
             <span className="section-title text-[#2b2323]">빠른 체크</span>
-            {/* 시험 종류 — 탭처럼 고르고, 각 시험의 총 문항/학생 점수는 따로 보존된다 (전환해도 다른 시험 값 유지).
-                ✓ = 그 시험의 총 문항이 입력돼 있음 (학생 전원 입력 완료라는 뜻은 아님) */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm text-[#564d4d]">시험 종류</span>
-              <div role="group" aria-label="시험 종류" className="flex flex-wrap gap-1.5" data-assessment-categories>
-                {ASSESSMENT_CATEGORIES.map((meta) => {
-                  const selected = assessmentCategory === meta.key;
-                  const hasData = Boolean(assessmentTotalOf(meta.key).trim());
-                  return (
-                    <button
-                      key={meta.key}
-                      type="button"
-                      aria-pressed={selected}
-                      data-assessment-category={meta.key}
-                      data-has-data={hasData ? "true" : "false"}
-                      onClick={() => setAssessmentCategory(meta.key)}
-                      className={cn(
-                        "min-h-[40px] rounded-xl border px-3 py-1.5 text-sm transition",
-                        selected
-                          ? "border-[#c9b9e8] bg-[#f3eefc] font-semibold text-[#5d4ba5]"
-                          : "border-[#ece0db] bg-white font-medium text-[#7c6d69] hover:bg-[#faf6f3]",
-                      )}
-                    >
-                      {meta.label}
-                      {hasData ? <span aria-label="입력 있음"> ✓</span> : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <label className="flex flex-wrap items-center gap-2 text-sm text-[#564d4d]">
-              오늘 {assessmentMeta(assessmentCategory).testLabel} 총 문항
-              <input
-                key={`assessment-total-${assessmentCategory}`}
-                inputMode="numeric"
-                value={assessmentTotalOf(assessmentCategory)}
-                onChange={(event) =>
-                  setAssessmentTotalOf(
-                    assessmentCategory,
-                    isComposingEvent(event) ? event.target.value : digitsOnly(event.target.value),
-                  )
-                }
-                onCompositionEnd={(event) => setAssessmentTotalOf(assessmentCategory, digitsOnly(event.currentTarget.value))}
-                className="w-16 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-center text-base tabular-nums outline-none focus:border-[#c9b9e8]"
-                placeholder="20"
-                aria-label={`오늘 ${assessmentMeta(assessmentCategory).testLabel} 총 문항 수`}
-              />
-              문제
-            </label>
             <Button
               type="button"
               variant="outline"
@@ -3578,12 +3572,208 @@ export function DailyLogForm({
               aria-controls="bulk-evaluation-panel"
               onClick={() => setBulkOpen((open) => !open)}
             >
-              일괄 입력
+              평가 일괄 입력
             </Button>
-            <span className="text-sm text-[#8a7b77]">
-              시험이 없는 날은 비워두면 돼요. 저장 전까지 학생별로 수정할 수 있어요.
-            </span>
           </div>
+          {/* 오늘 시험 — 본 시험을 하나씩 추가 (같은 종류 여러 개 가능, 추가한 순서 유지).
+              시험 identity는 id — 학생 점수는 (학생, 시험 id)로 연결되고, [일괄 입력]과 학생 카드는 같은 state를 쓴다. */}
+          <section aria-label="오늘 시험" data-assessment-list className="mt-3 rounded-2xl border border-[#efe6f7] bg-[#fcfbff] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-[#4d3a3a]">
+                오늘 시험{assessments.length > 0 ? ` ${assessments.length}개` : ""}
+              </span>
+              {assessmentAdder ? null : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-[40px] gap-1"
+                  onClick={() => setAssessmentAdder({ category: "vocabulary", total: "" })}
+                >
+                  <Plus className="h-4 w-4" aria-hidden /> 시험 추가
+                </Button>
+              )}
+            </div>
+            {assessments.length === 0 && !assessmentAdder ? (
+              <p className="mt-1.5 text-sm text-[#8a7b77]">시험이 없는 날은 비워두면 돼요.</p>
+            ) : null}
+            {assessments.length > 0 ? (
+              <ol className="mt-2 space-y-2">
+                {assessments.map((assessment) => {
+                  const meta = assessmentMeta(assessment.category);
+                  const { name } = assessmentNameOf(assessment);
+                  const scored = scoredCountOf(assessment.id);
+                  const totalMissing = !(Number(assessment.total) > 0);
+                  const overCount = students.filter((student) =>
+                    scoreExceedsTotal(entries[student.studentId]?.assessmentScores[assessment.id]?.correct ?? "", assessment.total),
+                  ).length;
+                  const bulkPanelId = `assessment-bulk-${assessment.id}`;
+                  return (
+                    <li
+                      key={assessment.id}
+                      data-assessment-row={assessment.id}
+                      data-assessment-category={assessment.category}
+                      className="rounded-xl border border-[#ece0db] bg-white p-2.5"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-[#f3eefc] px-2.5 py-0.5 text-sm font-semibold text-[#5d4ba5]">
+                          {name === meta.testLabel ? meta.label : name.replace("시험", "")}
+                        </span>
+                        <label className="flex items-center gap-1.5 text-sm text-[#564d4d]">
+                          <input
+                            inputMode="numeric"
+                            value={assessment.total}
+                            onChange={(event) => {
+                              const value = isComposingEvent(event) ? event.target.value : digitsOnly(event.target.value);
+                              setAssessments((prev) => prev.map((item) => (item.id === assessment.id ? { ...item, total: value } : item)));
+                            }}
+                            onCompositionEnd={(event) => {
+                              const value = digitsOnly(event.currentTarget.value);
+                              setAssessments((prev) => prev.map((item) => (item.id === assessment.id ? { ...item, total: value } : item)));
+                            }}
+                            className={cn(
+                              "w-16 rounded-xl border bg-white px-2 py-1.5 text-center text-base tabular-nums outline-none",
+                              totalMissing || overCount > 0 ? "border-[#e8b4ad]" : "border-[#ece0db] focus:border-[#c9b9e8]",
+                            )}
+                            aria-label={`${name} 총 문항 수`}
+                            aria-invalid={totalMissing || overCount > 0 || undefined}
+                          />
+                          문제
+                        </label>
+                        <span className="text-xs text-[#8a7b77]">입력 {scored}/{students.length}명</span>
+                        <div className="ml-auto flex gap-1.5">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="min-h-[40px]"
+                            aria-expanded={assessmentBulkId === assessment.id}
+                            aria-controls={bulkPanelId}
+                            aria-label={`${name} 일괄 입력`}
+                            onClick={() => setAssessmentBulkId((open) => (open === assessment.id ? null : assessment.id))}
+                          >
+                            일괄 입력
+                          </Button>
+                          <button
+                            type="button"
+                            aria-label={`${name} 삭제`}
+                            onClick={() => (scored > 0 ? setAssessmentDeleteId(assessment.id) : removeAssessment(assessment.id))}
+                            className="flex min-h-[40px] min-w-[40px] items-center justify-center rounded-xl border border-[#ece0db] bg-white text-[#96534c] transition hover:bg-[#fff0ef]"
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden />
+                          </button>
+                        </div>
+                      </div>
+                      {totalMissing ? (
+                        <p role="alert" className="mt-1.5 text-xs text-[#b4554b]">총 문항 수를 1 이상으로 입력해주세요.</p>
+                      ) : overCount > 0 ? (
+                        <p role="alert" className="mt-1.5 text-xs text-[#b4554b]">
+                          맞은 개수가 총 문항 수보다 큰 학생이 {overCount}명 있어요. 점수나 총 문항 수를 확인해주세요.
+                        </p>
+                      ) : null}
+                      {assessmentDeleteId === assessment.id ? (
+                        <div role="alertdialog" aria-label={`${name} 삭제 확인`} className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-[#fff6f4] px-3 py-2 text-sm text-[#8a4a42]">
+                          <span>입력된 학생 점수 {scored}개도 함께 지워져요. 삭제할까요?</span>
+                          <div className="ml-auto flex gap-1.5">
+                            <Button type="button" variant="outline" size="sm" onClick={() => setAssessmentDeleteId(null)}>
+                              취소
+                            </Button>
+                            <Button type="button" size="sm" className="bg-[#b4554b] hover:bg-[#9c463d]" onClick={() => removeAssessment(assessment.id)}>
+                              삭제
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                      {assessmentBulkId === assessment.id ? (
+                        <div id={bulkPanelId} className="mt-2 grid grid-cols-1 gap-2 rounded-xl bg-[#f8f6fc] p-2.5 sm:grid-cols-2" data-assessment-bulk={assessment.id}>
+                          {students.map((student) => {
+                            const entry = entries[student.studentId];
+                            return entry.attendance === "absent" ? (
+                              <div key={student.studentId} className="flex items-center gap-2 text-sm text-[#a79996]">
+                                <span className="font-medium">{student.name}</span> 결석
+                              </div>
+                            ) : (
+                              <div key={student.studentId} className="flex items-start gap-2">
+                                <span className="w-14 shrink-0 truncate pt-2 text-sm font-medium text-[#4d3a3a]">{student.name}</span>
+                                <AssessmentScoreInput
+                                  studentName={student.name}
+                                  assessment={assessment}
+                                  name={name}
+                                  value={entry.assessmentScores[assessment.id] ?? { correct: "", retest: false }}
+                                  onChange={(next) => updateScore(student.studentId, assessment.id, next)}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : null}
+            {assessmentAdder ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-[#d9c8f0] bg-white p-2.5" data-assessment-adder>
+                <div role="group" aria-label="추가할 시험 종류" className="flex gap-1.5">
+                  {ASSESSMENT_CATEGORIES.map((meta) => (
+                    <button
+                      key={meta.key}
+                      type="button"
+                      aria-pressed={assessmentAdder.category === meta.key}
+                      data-adder-category={meta.key}
+                      onClick={() => setAssessmentAdder((prev) => (prev ? { ...prev, category: meta.key } : prev))}
+                      className={cn(
+                        "min-h-[40px] rounded-xl border px-3 py-1.5 text-sm transition",
+                        assessmentAdder.category === meta.key
+                          ? "border-[#c9b9e8] bg-[#f3eefc] font-semibold text-[#5d4ba5]"
+                          : "border-[#ece0db] bg-white font-medium text-[#7c6d69] hover:bg-[#faf6f3]",
+                      )}
+                    >
+                      {meta.label}
+                    </button>
+                  ))}
+                </div>
+                <label className="flex items-center gap-1.5 text-sm text-[#564d4d]">
+                  총
+                  <input
+                    inputMode="numeric"
+                    value={assessmentAdder.total}
+                    onChange={(event) => {
+                      const value = isComposingEvent(event) ? event.target.value : digitsOnly(event.target.value);
+                      setAssessmentAdder((prev) => (prev ? { ...prev, total: value } : prev));
+                    }}
+                    onCompositionEnd={(event) => {
+                      const value = digitsOnly(event.currentTarget.value);
+                      setAssessmentAdder((prev) => (prev ? { ...prev, total: value } : prev));
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                        event.preventDefault();
+                        addAssessment();
+                      }
+                    }}
+                    className="w-16 rounded-xl border border-[#ece0db] bg-white px-2 py-1.5 text-center text-base tabular-nums outline-none focus:border-[#c9b9e8]"
+                    placeholder="20"
+                    aria-label="추가할 시험 총 문항 수"
+                  />
+                  문제
+                </label>
+                <div className="ml-auto flex gap-1.5">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setAssessmentAdder(null)}>
+                    취소
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!(Number(assessmentAdder.total) > 0)}
+                    onClick={addAssessment}
+                  >
+                    추가
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </section>
           {/* 학생 평가 일괄 입력 — 미평가 학생에게만 적용하는 안전한 bulk.
               count는 form state에서 파생(저장 안 함), 클릭은 DB 호출 없이 state 1회 update. */}
           {bulkOpen ? (
@@ -3948,67 +4138,42 @@ export function DailyLogForm({
                             : "border-[#bfe3d2] bg-[#edf9f3] text-[#2f6d54]"}
                         />
 
-                        {assessmentCategory !== "vocabulary" ? (
-                          <AssessmentScoreInput
-                            studentName={student.name}
-                            category={assessmentCategory}
-                            total={assessmentTotals[assessmentCategory]}
-                            value={entry.assessmentResults?.[assessmentCategory] ?? { correct: "", retest: false }}
-                            onChange={(next) =>
-                              updateEntry(student.studentId, {
-                                assessmentResults: {
-                                  ...(entry.assessmentResults ?? { grammar: { correct: "", retest: false }, reading: { correct: "", retest: false } }),
-                                  [assessmentCategory]: next,
-                                },
-                              })
-                            }
-                          />
-                        ) : null}
-                        <div
-                          className={cn("flex items-center gap-2", assessmentCategory !== "vocabulary" && "hidden")}
-                          role="group"
-                          aria-label={`${student.name} 단어시험`}
-                        >
-                          <span className="form-label shrink-0 font-semibold text-[#7c6d69]">단어</span>
-                          <input
-                            inputMode="numeric"
-                            value={entry.vocabCorrect}
-                            onChange={(event) =>
-                              updateEntry(student.studentId, {
-                                vocabCorrect: isComposingEvent(event)
-                                  ? event.target.value
-                                  : digitsOnly(event.target.value),
-                              })
-                            }
-                            onCompositionEnd={(event) =>
-                              updateEntry(student.studentId, {
-                                vocabCorrect: digitsOnly(event.currentTarget.value),
-                              })
-                            }
-                            className="w-14 rounded-xl border border-[#ece0db] bg-white px-2 py-1.5 text-center text-base tabular-nums outline-none focus:border-[#c9b9e8]"
-                            placeholder="-"
-                            aria-label={`${student.name} 단어시험 맞은 개수`}
-                          />
-                          <span className="text-sm tabular-nums text-[#8a7b77]">
-                            / {vocabTotal.trim() || "?"}
-                            {entry.vocabCorrect && vocabTotal.trim() &&
-                            Number(entry.vocabCorrect) <= Number(vocabTotal)
-                              ? ` · ${vocabPercent(Number(entry.vocabCorrect), Number(vocabTotal))}%`
-                              : ""}
-                          </span>
-                          <button
-                            type="button"
-                            aria-pressed={entry.vocabRetest}
-                            onClick={() => updateEntry(student.studentId, { vocabRetest: !entry.vocabRetest })}
-                            className={cn(
-                              "min-h-[38px] rounded-xl border px-2.5 py-1.5 text-sm font-medium transition",
-                              entry.vocabRetest
-                                ? "border-[#d8cdf0] bg-[#f3eefc] text-[#5d4ba5]"
-                                : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
-                            )}
-                          >
-                            재시험 필요
-                          </button>
+                      </div>
+
+                      {/* 시험 결과 — 단어/문법/독해 3칸 고정. 그 종류 시험이 없으면 "오늘 시험 없음"(가짜 입력칸 없음),
+                          같은 종류가 여러 개면 추가한 순서대로 쌓는다. 빠른 체크 [일괄 입력]과 같은 state. */}
+                      <div role="group" aria-label={`${student.name} 시험 결과`} data-student-assessments>
+                        <div className="form-label mb-1.5 font-semibold text-[#7c6d69]">시험 결과</div>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          {ASSESSMENT_CATEGORIES.map((meta) => {
+                            const items = assessments.filter((item) => item.category === meta.key);
+                            return (
+                              <div
+                                key={meta.key}
+                                data-assessment-column={meta.key}
+                                className="min-w-0 rounded-xl border border-[#efe6f7] bg-white/80 p-2.5"
+                              >
+                                <div className="mb-1.5 text-sm font-semibold text-[#4d3a3a]">{meta.label}</div>
+                                {items.length === 0 ? (
+                                  <p className="text-sm text-[#a79996]">오늘 시험 없음</p>
+                                ) : (
+                                  <div className="space-y-2.5">
+                                    {items.map((item, index) => (
+                                      <AssessmentScoreInput
+                                        key={item.id}
+                                        studentName={student.name}
+                                        assessment={item}
+                                        name={assessmentNameOf(item).name}
+                                        label={`시험 ${index + 1} · ${item.total.trim() || "?"}문제`}
+                                        value={entry.assessmentScores[item.id] ?? { correct: "", retest: false }}
+                                        onChange={(next) => updateScore(student.studentId, item.id, next)}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -4771,6 +4936,7 @@ export function DailyLogForm({
           )}
           students={students}
           entries={entries}
+          assessments={assessments}
           isPending={isPending}
           onBack={() => setShowSummary(false)}
           onComplete={() => save("completed")}
@@ -4789,6 +4955,7 @@ function CompletionSummary({
   reflectionFilled,
   students,
   entries,
+  assessments,
   isPending,
   onBack,
   onComplete,
@@ -4801,6 +4968,7 @@ function CompletionSummary({
   reflectionFilled: boolean;
   students: DailyLogFormStudent[];
   entries: Record<string, EntryState>;
+  assessments: AssessmentDraft[];
   isPending: boolean;
   onBack: () => void;
   onComplete: () => void;
@@ -4827,12 +4995,11 @@ function CompletionSummary({
     } else if (entry.homeworkStatus === "partial") {
       items.push("숙제 일부 완료");
     }
-    if (entry.vocabRetest) {
-      items.push("단어 재시험 필요");
-    }
-    for (const category of EXTRA_ASSESSMENT_CATEGORIES) {
-      if (entry.assessmentResults?.[category]?.retest) {
-        items.push(`${assessmentMeta(category).label} 재시험 필요`);
+    // 시험별 재시험 (추가한 순서) — 같은 종류가 여러 개면 번호로 구분
+    const nameOf = assessmentOrdinals(assessments);
+    for (const assessment of assessments) {
+      if (entry.attendance !== "absent" && entry.assessmentScores[assessment.id]?.retest) {
+        items.push(`${nameOf(assessment).name.replace("시험", "")} 재시험 필요`);
       }
     }
     if (entry.parentNoteNeeded && entry.parentNote.trim()) {

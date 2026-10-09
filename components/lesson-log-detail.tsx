@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { EXTRA_ASSESSMENT_CATEGORIES, assessmentMeta, assessmentPercentRaw, parseAssessmentResults, parseAssessmentTotals } from "@/lib/assessments";
+import { assessmentOrdinals, assessmentPercentRaw, lessonAssessmentsOf, studentScoreFor } from "@/lib/assessments";
 import { BookOpen, CheckCheck, CircleArrowRight, NotebookTabs, PencilLine } from "lucide-react";
 
 import { DailyLogDeleteButton } from "@/components/daily-log-delete-button";
@@ -27,7 +27,6 @@ import {
   participationLevelLabels,
   praiseCategoryLabels,
   questionLevelLabels,
-  vocabPercent,
 } from "@/lib/elementary";
 import type { DailyLogDetail } from "@/lib/supabase/queries/daily-logs";
 import type { PraiseCategory } from "@/lib/supabase/types";
@@ -75,18 +74,26 @@ export function LessonLogDetail({
     ]);
   }
 
-  const vocabRows = detail.lessonLogs.filter((log) => log.vocab_correct !== null);
-  // 문법/독해 시험 (assessment_totals/results jsonb — migration 전 일지에는 없음)
-  const extraTotals = parseAssessmentTotals((detail as { assessment_totals?: unknown }).assessment_totals);
-  const extraResultsOf = (lessonLog: unknown) =>
-    parseAssessmentResults((lessonLog as { assessment_results?: unknown }).assessment_results);
-  const extraSections = EXTRA_ASSESSMENT_CATEGORIES.map((category) => ({
-    category,
-    total: extraTotals[category] ?? null,
-    rows: detail.lessonLogs
-      .map((lessonLog) => ({ lessonLog, result: extraResultsOf(lessonLog)[category] }))
-      .filter((item) => item.result),
-  })).filter((section) => section.rows.length > 0);
+  // 오늘 시험 목록 (추가한 순서) — 시험마다 섹션 1개. 이전 형식(단어 컬럼 + 문법/독해 객체)도 목록으로 읽는다
+  const lessonAssessments = lessonAssessmentsOf(detail as { vocab_total: number | null; assessment_totals?: unknown });
+  const assessmentNameOf = assessmentOrdinals(lessonAssessments);
+  type ScoreSource = { vocab_correct: number | null; vocab_retest: boolean | null; assessment_results?: unknown };
+  const assessmentSections = lessonAssessments
+    .map((assessment) => ({
+      assessment,
+      name: assessmentNameOf(assessment).name,
+      rows: detail.lessonLogs
+        .map((lessonLog) => ({ lessonLog, result: studentScoreFor(lessonLog as ScoreSource, assessment) }))
+        .filter((item) => item.result),
+    }))
+    .filter((section) => section.rows.length > 0);
+  const scoreChipsOf = (lessonLog: unknown) =>
+    lessonAssessments.flatMap((assessment) => {
+      const result = studentScoreFor(lessonLog as ScoreSource, assessment);
+      return result
+        ? [`${assessmentNameOf(assessment).name.replace("시험", "")} ${result.correct}/${assessment.total} (${assessmentPercentRaw(result.correct, assessment.total)}%)${result.retest ? " · 재시험 필요" : ""}`]
+        : [];
+    });
   const parentNoteRows = detail.lessonLogs.filter((log) => log.parent_note);
 
   const mergedProgress = mergeLegacyLessonContent(detail.default_progress, detail.lesson_content) ?? "";
@@ -393,8 +400,7 @@ export function LessonLogDetail({
                       <div className="whitespace-pre-line break-words text-[#564d4d]">진도 · {lessonLog.progress}</div>
                     ) : null}
                     {lessonLog.homework_status ||
-                    lessonLog.vocab_correct !== null ||
-                    Object.keys(extraResultsOf(lessonLog)).length > 0 ||
+                    scoreChipsOf(lessonLog).length > 0 ||
                     lessonLog.focus_level ||
                     lessonLog.participation_level ? (
                       <div className="tabular-nums text-[#564d4d]">
@@ -402,16 +408,7 @@ export function LessonLogDetail({
                           lessonLog.homework_status
                             ? `숙제 ${homeworkStatusLabels[lessonLog.homework_status]}`
                             : null,
-                          lessonLog.vocab_correct !== null && detail.vocab_total
-                            ? `단어 ${lessonLog.vocab_correct}/${detail.vocab_total} (${vocabPercent(lessonLog.vocab_correct, detail.vocab_total)}%)${lessonLog.vocab_retest ? " · 재시험 필요" : ""}`
-                            : null,
-                          ...EXTRA_ASSESSMENT_CATEGORIES.map((category) => {
-                            const result = extraResultsOf(lessonLog)[category];
-                            const total = extraTotals[category];
-                            return result && total
-                              ? `${assessmentMeta(category).label} ${result.correct}/${total} (${assessmentPercentRaw(result.correct, total)}%)${result.retest ? " · 재시험 필요" : ""}`
-                              : null;
-                          }),
+                          ...scoreChipsOf(lessonLog),
                           lessonLog.focus_level ? `집중 ${focusLevelLabels[lessonLog.focus_level]}` : null,
                           lessonLog.participation_level
                             ? `참여 ${participationLevelLabels[lessonLog.participation_level]}`
@@ -446,59 +443,27 @@ export function LessonLogDetail({
           })}
         </div>
 
-        {/* 단어시험 (기록이 있는 날만) */}
-        {vocabRows.length > 0 ? (
-          <>
+        {/* 오늘 시험 (기록이 있는 시험만, 추가한 순서) — 같은 종류가 여러 개면 번호로 구분 */}
+        {assessmentSections.map((section) => (
+          <div
+            key={section.assessment.id}
+            data-assessment-section={section.assessment.id}
+            data-assessment-category={section.assessment.category}
+          >
             <SectionHeading>
-              단어시험{detail.vocab_total ? ` · 총 ${detail.vocab_total}문제` : ""}
-            </SectionHeading>
-            <div className="mt-2 space-y-1">
-              {vocabRows.map((lessonLog) => (
-                <div
-                  key={`vocab-${lessonLog.id}`}
-                  className="secondary-text flex flex-wrap items-center gap-2 rounded-xl bg-[#f8f6fc] px-3 py-1.5 tabular-nums"
-                >
-                  <span className="w-16 truncate font-medium text-[#2d2928]">
-                    {lessonLog.student?.name ?? "학생"}
-                  </span>
-                  <span className="text-[#564d4d]">
-                    {lessonLog.vocab_correct} / {detail.vocab_total ?? "?"}
-                  </span>
-                  {detail.vocab_total ? (
-                    <span className="text-[#54479c]">
-                      {vocabPercent(lessonLog.vocab_correct!, detail.vocab_total)}%
-                    </span>
-                  ) : null}
-                  {lessonLog.vocab_retest ? (
-                    <span className="rounded-full bg-[#efe8fb] px-1.5 py-0.5 text-xs text-[#5d4ba5]">
-                      재시험 필요
-                    </span>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </>
-        ) : null}
-
-        {/* 문법/독해 시험 (기록이 있는 날만) — 단어시험 섹션과 같은 표시 */}
-        {extraSections.map((section) => (
-          <div key={section.category} data-assessment-section={section.category}>
-            <SectionHeading>
-              {assessmentMeta(section.category).testLabel}{section.total ? ` · 총 ${section.total}문제` : ""}
+              {section.name} · 총 {section.assessment.total}문제
             </SectionHeading>
             <div className="mt-2 space-y-1">
               {section.rows.map(({ lessonLog, result }) => (
                 <div
-                  key={`${section.category}-${lessonLog.id}`}
+                  key={`${section.assessment.id}-${lessonLog.id}`}
                   className="secondary-text flex flex-wrap items-center gap-2 rounded-xl bg-[#f8f6fc] px-3 py-1.5 tabular-nums"
                 >
                   <span className="w-16 truncate font-medium text-[#2d2928]">{lessonLog.student?.name ?? "학생"}</span>
                   <span className="text-[#564d4d]">
-                    {result!.correct} / {section.total ?? "?"}
+                    {result!.correct} / {section.assessment.total}
                   </span>
-                  {section.total ? (
-                    <span className="text-[#54479c]">{assessmentPercentRaw(result!.correct, section.total)}%</span>
-                  ) : null}
+                  <span className="text-[#54479c]">{assessmentPercentRaw(result!.correct, section.assessment.total)}%</span>
                   {result!.retest ? (
                     <span className="rounded-full bg-[#efe8fb] px-1.5 py-0.5 text-xs text-[#5d4ba5]">재시험 필요</span>
                   ) : null}

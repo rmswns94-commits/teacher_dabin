@@ -359,6 +359,18 @@ export default async function StudentDetailPage({
   const nextWeek = addDaysStr(weekStart, 7);
 
   // ---- 이번 주 성장 성취 자동 판정 (Teacher가 왕을 고르지 않음 — 관찰값 기반 rule) ----
+  // 시험 점수 — 전체 최근 기록 (오래된 → 최신). 이전 형식(단어 컬럼 + 문법/독해 객체)도 시험 목록으로 읽는다
+  const percentsByCategory = assessmentPercentsByCategory(
+    [...history]
+      .sort((a, b) => (a.dailyLog?.class_date ?? "").localeCompare(b.dailyLog?.class_date ?? ""))
+      .map((item) => ({
+        vocab_correct: item.vocab_correct,
+        vocab_retest: item.vocab_retest,
+        vocab_total: item.dailyLog?.vocab_total ?? null,
+        assessment_results: (item as { assessment_results?: unknown }).assessment_results,
+        assessment_totals: (item.dailyLog as { assessment_totals?: unknown } | null)?.assessment_totals,
+      })),
+  );
   const weeklyGrowth = computeWeeklyGrowth({
     weekRecords: weekRecords.map((item) => ({
       attendance: item.attendance,
@@ -370,23 +382,9 @@ export default async function StudentDetailPage({
       effortLevel: item.effort_level,
     })),
     // 단어시험 추이는 전체 최근 기록 기준 (오래된 → 최신)
-    recentVocabPercents: history
-      .filter((item) => item.vocab_correct !== null && (item.dailyLog?.vocab_total ?? 0) > 0)
-      .sort((a, b) => (a.dailyLog?.class_date ?? "").localeCompare(b.dailyLog?.class_date ?? ""))
-      .map((item) => vocabPercent(item.vocab_correct!, item.dailyLog!.vocab_total!)!),
-    // 문법왕/독해왕 — 같은 최신순 정렬 규칙, category 점수만
-    recentAssessmentPercents: (({ grammar, reading }) => ({ grammar, reading }))(
-      assessmentPercentsByCategory(
-        [...history]
-          .sort((a, b) => (a.dailyLog?.class_date ?? "").localeCompare(b.dailyLog?.class_date ?? ""))
-          .map((item) => ({
-            vocab_correct: null,
-            vocab_total: null,
-            assessment_results: (item as { assessment_results?: unknown }).assessment_results,
-            assessment_totals: (item.dailyLog as { assessment_totals?: unknown } | null)?.assessment_totals,
-          })),
-      ),
-    ),
+    // 단어왕/문법왕/독해왕 — 전체 최근 기록 (오래된 → 최신), 시험마다 자기 category로 1회씩
+    recentVocabPercents: percentsByCategory.vocabulary,
+    recentAssessmentPercents: { grammar: percentsByCategory.grammar, reading: percentsByCategory.reading },
     // 틈새왕: 이미 불러온 보충 기록에서 선택 주에 귀속되는 것만
     weekMakeups: scopeMakeupsToWeek(makeups, weekStart, weekEnd),
   });

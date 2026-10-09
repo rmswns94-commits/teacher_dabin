@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ASSESSMENT_CATEGORIES, EXTRA_ASSESSMENT_CATEGORIES, validateAssessmentInput } from "@/lib/assessments";
+import { validateAssessmentInput } from "@/lib/assessments";
 
 const dateString = z
   .string()
@@ -32,14 +32,13 @@ export const studentLessonEntrySchema = z.object({
   // 학생 평가 quick check — 모든 학년 공통 (전부 optional — 입력 안 한 값은 null로 저장)
   homeworkStatus: z.enum(["completed", "partial", "missing"]).optional().or(z.literal("")),
   onlineReviewCompleted: z.boolean().nullable().optional(),
-  vocabCorrect: numberString.optional().or(z.literal("")),
-  vocabRetest: z.boolean().optional(),
-  // 문법/독해 시험 학생 결과 — 단어와 같은 모델(맞은 개수 + 재시험). 입력 안 한 category는 저장 안 함.
-  assessmentResults: z
-    .object({
-      grammar: z.object({ correct: numberString.optional().or(z.literal("")), retest: z.boolean().optional() }).optional(),
-      reading: z.object({ correct: numberString.optional().or(z.literal("")), retest: z.boolean().optional() }).optional(),
-    })
+  // 오늘 시험별 학생 결과 — key = 시험 id (같은 종류 시험이 여러 개여도 서로 덮어쓰지 않는다).
+  // 빈 문자열 = 미입력(null로 저장), "0" = 0점(유효한 결과).
+  assessmentScores: z
+    .record(
+      z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+      z.object({ correct: numberString.optional().or(z.literal("")), retest: z.boolean().optional() }),
+    )
     .optional(),
   // 단어시험 틀린 단어: 빈 문자열/같은 시험 내 중복(정규화 기준)은 서버에서 걸러 저장된다.
   vocabMistakes: z
@@ -122,13 +121,16 @@ export const dailyLogSchema = z
     // 학교 context 진도/다음 수업 계획 (시험 기간 ON — name=학교명)
     schoolProgress: z.array(textbookSectionSchema).max(20).optional(),
     schoolPlans: z.array(textbookSectionSchema).max(20).optional(),
-    vocabTotal: numberString.optional().or(z.literal("")),
-    // 문법/독해 시험 총 문항 (빈 값 = 그 시험 없음)
-    assessmentTotals: z
-      .object({
-        grammar: numberString.optional().or(z.literal("")),
-        reading: numberString.optional().or(z.literal("")),
-      })
+    // 오늘 시험 목록 (추가한 순서) — id는 stable (draft/저장/다시 열기에서 유지), category는 시험 종류일 뿐 identity 아님
+    assessments: z
+      .array(
+        z.object({
+          id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+          category: z.enum(["vocabulary", "grammar", "reading"]),
+          total: numberString,
+        }),
+      )
+      .max(30, "시험은 한 수업에 30개까지 기록할 수 있어요.")
       .optional(),
     // 수업 회고 (강사 자기 성찰) — 전부 선택 입력
     reflectionGood: shortText(1000, "잘된 점"),
@@ -182,16 +184,12 @@ export const dailyLogSchema = z
       }
     }
 
-    // 단어/문법/독해 시험 — 같은 검증 함수(validateAssessmentInput)를 category마다 적용
-    for (const meta of ASSESSMENT_CATEGORIES) {
-      const isVocab = meta.key === "vocabulary";
-      const extra = meta.key === "vocabulary" ? null : meta.key;
+    // 시험마다 같은 검증 함수(validateAssessmentInput) — 단어/문법/독해 공통
+    for (const [assessmentIndex, assessment] of (value.assessments ?? []).entries()) {
       const issues = validateAssessmentInput(
-        meta.key,
-        isVocab ? value.vocabTotal : value.assessmentTotals?.[extra!],
-        value.students.map((student) =>
-          isVocab ? student.vocabCorrect : student.assessmentResults?.[extra!]?.correct,
-        ),
+        assessment.category,
+        assessment.total,
+        value.students.map((student) => student.assessmentScores?.[assessment.id]?.correct),
       );
       for (const issue of issues) {
         ctx.addIssue({
@@ -199,16 +197,11 @@ export const dailyLogSchema = z
           message: issue.message,
           path:
             issue.field === "total"
-              ? isVocab
-                ? ["vocabTotal"]
-                : ["assessmentTotals", extra!]
-              : isVocab
-                ? ["students", issue.field.studentIndex, "vocabCorrect"]
-                : ["students", issue.field.studentIndex, "assessmentResults", extra!, "correct"],
+              ? ["assessments", assessmentIndex, "total"]
+              : ["students", issue.field.studentIndex, "assessmentScores", assessment.id, "correct"],
         });
       }
     }
-    void EXTRA_ASSESSMENT_CATEGORIES;
   });
 
 export type DailyLogFormInput = z.infer<typeof dailyLogSchema>;

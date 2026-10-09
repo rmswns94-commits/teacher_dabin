@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { DailyLogExamPreview } from "@/components/daily-log-exam-preview";
 import { DailyLogForm, type DailyLogFormStudent } from "@/components/daily-log-form";
 import { DailyLogPicker } from "@/components/daily-log-picker";
+import { assessmentsToDrafts, lessonAssessmentsOf, scoresToInputs } from "@/lib/assessments";
 import { LessonHistoryWorkspace } from "@/components/lesson-history-panel";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -86,6 +87,9 @@ export default async function EditDailyLogPage({
     log.makeups.filter((makeup) => makeup.student_lesson_log_id).map((makeup) => [makeup.student_lesson_log_id, makeup]),
   );
 
+  // 오늘 시험 목록 (저장 순서 + stable id) — 이전 형식(단어 컬럼 + 문법/독해 객체)도 목록으로 읽는다
+  const lessonAssessments = lessonAssessmentsOf(log as { vocab_total: number | null; assessment_totals?: unknown });
+
   const students: DailyLogFormStudent[] = log.lessonLogs
     .filter((lessonLog) => lessonLog.student)
     .map((lessonLog) => {
@@ -105,10 +109,11 @@ export default async function EditDailyLogPage({
           memo: lessonLog.memo ?? "",
           homeworkStatus: lessonLog.homework_status ?? "",
           onlineReviewCompleted: lessonLog.online_review_completed ?? null,
-          vocabCorrect: lessonLog.vocab_correct === null ? "" : String(lessonLog.vocab_correct),
-          vocabRetest: lessonLog.vocab_retest,
-          // 문법/독해 시험 결과 (migration 전 row에는 없음 → 빈 입력)
-          assessmentResults: (lessonLog as { assessment_results?: unknown }).assessment_results ?? null,
+          // 시험별 결과 (key = 시험 id). migration 전 row에는 assessment_results가 없음 → 단어 컬럼만
+          assessmentScores: scoresToInputs(
+            lessonLog as { vocab_correct: number | null; vocab_retest: boolean | null; assessment_results?: unknown },
+            lessonAssessments,
+          ),
           focusLevel: lessonLog.focus_level ?? "",
           participationLevel: lessonLog.participation_level ?? "",
           questionLevel: lessonLog.question_level ?? "",
@@ -357,8 +362,7 @@ export default async function EditDailyLogPage({
             taskContent: log.task_content ?? "",
             taskDate: log.task_due_date ?? "",
             taskTextbook: log.task_textbook ?? "",
-            vocabTotal: log.vocab_total === null ? "" : String(log.vocab_total),
-            assessmentTotals: (log as { assessment_totals?: unknown }).assessment_totals ?? null,
+            assessments: assessmentsToDrafts(lessonAssessments),
             reflectionGood: log.reflection_good ?? "",
             reflectionHard: log.reflection_hard ?? "",
             reflectionNext: log.reflection_next ?? "",

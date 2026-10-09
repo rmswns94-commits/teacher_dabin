@@ -11,7 +11,6 @@ import { dailyQuoteOf } from "@/lib/constants/daily-quotes";
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate, toDateString, todayDateString } from "@/lib/dates";
 import { assessmentPercentsByCategory } from "@/lib/assessments";
-import { vocabPercent } from "@/lib/elementary";
 import {
   computeWeeklyGrowth,
   growthAchievementValues,
@@ -359,6 +358,7 @@ async function GroupStudentList({
       const rows = rowsByStudent.get(student.id) ?? [];
       // 기존 판정 엔진 그대로 — 기간 record만 주/월 range로 바꿔 전달한다
       const periodRows = rows.filter((row) => row.class_date >= periodStart);
+      const percentsByCategory = assessmentPercentsByCategory(rows);
       const growth = computeWeeklyGrowth({
         weekRecords: periodRows.map((row) => ({
           attendance: row.attendance,
@@ -369,11 +369,9 @@ async function GroupStudentList({
           kindnessLevel: row.kindness_level,
           effortLevel: row.effort_level,
         })),
-        recentVocabPercents: rows
-          .filter((row) => row.vocab_correct !== null && (row.vocab_total ?? 0) > 0)
-          .map((row) => vocabPercent(row.vocab_correct!, row.vocab_total!)!),
-        // 문법왕/독해왕 — 같은 rows·같은 순서에서 category별 점수만 (단어 점수와 섞지 않는다)
-        recentAssessmentPercents: (({ grammar, reading }) => ({ grammar, reading }))(assessmentPercentsByCategory(rows)),
+        // 단어왕/문법왕/독해왕 — 같은 rows·같은 순서, 시험마다 자기 category로 1회씩 (한 수업에 같은 종류가 여러 개면 각각)
+        recentVocabPercents: percentsByCategory.vocabulary,
+        recentAssessmentPercents: { grammar: percentsByCategory.grammar, reading: percentsByCategory.reading },
         weekMakeups: scopeMakeupsToWeek(
           makeupsByStudent.get(student.id) ?? [],
           periodStart,

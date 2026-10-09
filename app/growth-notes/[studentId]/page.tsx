@@ -6,7 +6,6 @@ import { AppShell } from "@/components/app-shell";
 import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
 import { formatKoreanDate, toDateString, todayDateString } from "@/lib/dates";
 import { assessmentPercentsByCategory } from "@/lib/assessments";
-import { vocabPercent } from "@/lib/elementary";
 import { scopeMakeupsToWeek, VOCAB_WINDOW_DAYS } from "@/lib/growth";
 import { buildGrowthNoteViewModel } from "@/lib/growth-note";
 import {
@@ -70,6 +69,7 @@ export default async function GrowthNoteDetailPage({
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
     .map((praise) => praise.comment!);
 
+  const percentsByCategory = assessmentPercentsByCategory(lessonRows);
   const note = buildGrowthNoteViewModel({
     studentName: student.name,
     groupNames: studentGroups.map((group) => group.name),
@@ -86,10 +86,9 @@ export default async function GrowthNoteDetailPage({
       vocabRetest: row.vocab_retest,
       strengths: row.strengths,
     })),
-    recentVocabPercents: lessonRows
-      .filter((row) => row.vocab_correct !== null && (row.vocab_total ?? 0) > 0)
-      .map((row) => vocabPercent(row.vocab_correct!, row.vocab_total!)!),
-    recentAssessmentPercents: (({ grammar, reading }) => ({ grammar, reading }))(assessmentPercentsByCategory(lessonRows)),
+    // 시험마다 자기 category로 1회씩 (한 수업에 같은 종류 시험이 여러 개면 각각)
+    recentVocabPercents: percentsByCategory.vocabulary,
+    recentAssessmentPercents: { grammar: percentsByCategory.grammar, reading: percentsByCategory.reading },
     weekPraiseComments,
     weekMakeups: scopeMakeupsToWeek(makeupRows, weekStart, weekEnd),
   });
