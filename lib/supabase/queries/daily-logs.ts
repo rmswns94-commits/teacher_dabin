@@ -25,6 +25,8 @@ import { buildTextbookSectionsText, stripDerivedPrefix } from "@/lib/textbooks";
 import { sortByKoreanName } from "@/lib/korean-sort";
 import { dedupeVocabWords } from "@/lib/vocab";
 import { assessmentsForSave, firstVocabularyAssessment, scoresForSave } from "@/lib/assessments";
+import { retestSourcesOf } from "@/lib/retests";
+import { deleteUnprocessedRetests, syncDailyLogRetests } from "@/lib/supabase/queries/retests";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type {
   PreparationItem,
@@ -1440,6 +1442,28 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     }
   }
 
+  // 재시험 관리 sync — [수업 기록 완료]에서만 (임시저장/autosave는 운영 목록에 side effect 없음).
+  // 재시험 1건 = (이 수업의 학생 기록, 시험 id). 다시 저장해도 같은 source면 같은 1건이고,
+  // 미통과/통과는 그대로 둔다 (pending으로 되돌리지 않음). 진도는 보충 수업 snapshot과 같은 규칙
+  // (학생 직접 입력 → 모드별 scope의 공통 진도 — mixed에서 다른 학교 진도가 섞이지 않게).
+  if (input.status === "completed") {
+    await syncDailyLogRetests(supabase, user.id, {
+      lessonLogIds: savedLessonLogs.map((row) => row.id as string),
+      classDate: input.classDate,
+      groupId: input.groupId,
+      sources: retestSourcesOf({
+        assessments,
+        students: input.students.map((entry) => ({
+          studentId: entry.studentId,
+          lessonLogId: lessonLogIdByStudent.get(entry.studentId),
+          absent: entry.attendance === "absent",
+          scores: scoresOf(entry),
+          progress: entry.progress?.trim() || missedProgressFallback(entry.studentId) || null,
+        })),
+      }),
+    });
+  }
+
   // 칭찬 한표 동기화: 이 일지의 "코멘트 칭찬"만 폼 상태 그대로 교체한다 (멱등).
   // - 한 학생이 한 수업에서 칭찬을 여러 개 받을 수 있다 (row 단위 독립 record).
   // - 자동 생성 없음: 집중/참여/질문/배려/노력 등 관찰값은 Praise를 만들지 않는다.
@@ -1641,6 +1665,9 @@ export async function deleteDailyLog(dailyLogId: string) {
       throw new Error("보충 기록을 정리하지 못했어요. 다시 시도해주세요.");
     }
   }
+
+  // 이 일지의 처리 전(대기/취소) 재시험만 함께 삭제 (미통과/통과 이력은 snapshot과 함께 보존)
+  await deleteUnprocessedRetests(supabase, user.id, lessonLogIds);
 
   // 이 일지의 칭찬 한표 삭제 (FK가 SET NULL이라 명시적으로 지워 orphan 방지)
   const { error: praiseError } = await supabase
