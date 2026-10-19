@@ -1,8 +1,15 @@
 import type { AssessmentCategory } from "@/lib/assessments";
 import { sortByKoreanName } from "@/lib/korean-sort";
-import { NO_GROUP_KEY, assignRetestGroups, compareActiveRetests, type RetestStatus } from "@/lib/retests";
+import {
+  NO_GROUP_KEY,
+  assignRetestGroups,
+  compareActiveRetests,
+  groupAttemptsByRetestId,
+  type RetestAttempt,
+  type RetestStatus,
+} from "@/lib/retests";
 import { getCurrentUserGroups } from "@/lib/supabase/queries/groups";
-import { dailyLogIdOf, getActiveRetestRows, getPassedRetestRows } from "@/lib/supabase/queries/retests";
+import { dailyLogIdOf, getActiveRetestRows, getPassedRetestRows, getRetestAttempts } from "@/lib/supabase/queries/retests";
 import { getCurrentUserMemberships, getCurrentUserStudents } from "@/lib/supabase/queries/students";
 import type { ClassGroupRecord } from "@/lib/supabase/types";
 
@@ -28,7 +35,15 @@ export type RetestView = {
   homeGroupId: string | null;
   // 등록 당시 반과 지금 관리하는 반이 다름 → "OO반에서 등록" 표시
   moved: boolean;
+  // 미통과 시도 이력 (1회 → 2회 …) — 반 상세/통과 기록에서만 채운다 (메인 카드는 count만 필요)
+  attempts: RetestAttempt[];
 };
+
+// 보이는 재시험들의 시도 이력을 batch 1쿼리로 붙인다 (재시험마다 쿼리하지 않는다)
+async function withAttempts(items: RetestView[]) {
+  const byRetest = groupAttemptsByRetestId(await getRetestAttempts(items.map((item) => item.id)));
+  return items.map((item) => ({ ...item, attempts: byRetest.get(item.id) ?? [] }));
+}
 
 async function context() {
   const [students, memberships, groups] = await Promise.all([
@@ -72,6 +87,7 @@ function toViews(
         sourceGroupName: row.group_id ? groupById.get(row.group_id)?.name ?? null : null,
         homeGroupId: homeGroupId && groupById.has(homeGroupId) ? homeGroupId : null,
         moved,
+        attempts: [],
       } satisfies RetestView,
       // 휴원/퇴원 학생은 진행중 목록에서 제외 (기록은 그대로 — 통과 기록/복귀 시 다시 보임)
       archived: student ? student.archived : true,
@@ -115,10 +131,12 @@ export async function getGroupRetestBoard(groupKey: string) {
   }
   const memberIds = group ? ctx.memberships.filter((m) => m.group_id === group.id).map((m) => m.student_id) : [];
   const { available, rows } = await getActiveRetestRows(group ? { groupId: group.id, studentIds: memberIds } : undefined);
-  const items = toViews(rows, ctx)
-    .filter((item) => !item.archived && (item.view.homeGroupId ?? NO_GROUP_KEY) === groupKey)
-    .map((item) => item.view)
-    .sort(compareActiveRetests);
+  const items = await withAttempts(
+    toViews(rows, ctx)
+      .filter((item) => !item.archived && (item.view.homeGroupId ?? NO_GROUP_KEY) === groupKey)
+      .map((item) => item.view)
+      .sort(compareActiveRetests),
+  );
   // 학생 순서 = 기존 반 학생 정렬 규칙 (이름 가나다순, 동명이인 id)
   const studentOrder = sortByKoreanName(
     [...new Map(items.map((item) => [item.studentId, item])).values()],
@@ -131,5 +149,6 @@ export async function getGroupRetestBoard(groupKey: string) {
 // 통과 기록: 최근 통과순 (더 보기)
 export async function getPassedRetestHistory(limit: number) {
   const [{ available, rows, hasMore }, ctx] = await Promise.all([getPassedRetestRows(limit), context()]);
-  return { available, items: toViews(rows, ctx).map((item) => item.view), hasMore, groups: ctx.groups };
+  const items = await withAttempts(toViews(rows, ctx).map((item) => item.view));
+  return { available, items, hasMore, groups: ctx.groups };
 }

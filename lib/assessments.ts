@@ -226,20 +226,47 @@ export function restoreScoreInputs(entry: {
 // ---- 검증 (단어/문법/독해 공통 — 함수 하나) ----
 export type AssessmentValidationIssue = { message: string; field: "total" | { studentIndex: number } };
 
+// 맞은 개수/총 문항 규칙의 단일 소스 — 수업 시험 입력과 재시험 시도 점수가 같은 규칙·같은 문구를 쓴다.
+// 총 문항: 정수 ≥ 1 / 맞은 개수: 정수 ≥ 0 (0점 유효), 총 문항 이하.
+export function parseTotalQuestions(totalInput: string | undefined) {
+  const total = totalInput?.trim() ? Number(totalInput) : null;
+  return total !== null && Number.isInteger(total) && total > 0 ? total : null;
+}
+
+export const scoreOverTotalMessage = (total: number) => `맞은 개수는 총 문항 수(${total})를 넘을 수 없어요.`;
+
+// 점수 한 쌍(맞은 개수 + 총 문항, 둘 다 필수) — 재시험 시도처럼 빈 값을 허용하지 않는 입력용
+export function validateScorePair(correctInput: string, totalInput: string):
+  | { ok: true; correct: number; total: number }
+  | { ok: false; field: "correct" | "total"; message: string } {
+  const total = parseTotalQuestions(totalInput);
+  if (total === null) {
+    return { ok: false, field: "total", message: "총 문항 수는 1 이상이어야 해요." };
+  }
+  const correct = correctInput.trim() ? Number(correctInput) : null;
+  if (correct === null || !Number.isInteger(correct) || correct < 0) {
+    return { ok: false, field: "correct", message: "맞은 개수를 입력해주세요." };
+  }
+  if (correct > total) {
+    return { ok: false, field: "correct", message: scoreOverTotalMessage(total) };
+  }
+  return { ok: true, correct, total };
+}
+
 export function validateAssessmentInput(
   category: AssessmentCategory,
   totalInput: string | undefined,
   corrects: readonly (string | undefined)[],
 ): AssessmentValidationIssue[] {
   const { testLabel } = assessmentMeta(category);
-  const total = totalInput ? Number(totalInput) : null;
-  if (total === null || total <= 0) {
+  const total = parseTotalQuestions(totalInput);
+  if (total === null) {
     return [{ message: `${testLabel} 총 문항 수는 1 이상이어야 해요.`, field: "total" }];
   }
   const issues: AssessmentValidationIssue[] = [];
   corrects.forEach((correctInput, studentIndex) => {
     if (correctInput && Number(correctInput) > total) {
-      issues.push({ message: `맞은 개수는 총 문항 수(${total})를 넘을 수 없어요.`, field: { studentIndex } });
+      issues.push({ message: scoreOverTotalMessage(total), field: { studentIndex } });
     }
   });
   return issues;

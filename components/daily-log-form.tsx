@@ -105,6 +105,7 @@ import {
 import { sortByKoreanName } from "@/lib/korean-sort";
 import { nextClassDateAfter } from "@/lib/schedule";
 import { vocabWordKey } from "@/lib/vocab";
+import { digitsOnly, isComposingEvent } from "@/lib/numeric-input";
 import {
   ASSESSMENT_CATEGORIES,
   assessmentMeta,
@@ -242,14 +243,7 @@ function mergeRestoredEntry(base: EntryState, saved: unknown): EntryState {
   return { ...base, ...rest, assessmentScores: scores ?? base.assessmentScores };
 }
 
-const digitsOnly = (value: string) => value.replace(/\D/g, "").slice(0, 3);
-
-// 숫자 전용 필드의 IME-safe onChange: 한글 조합(composition) 도중 값을 재작성하면
-// iPad Safari에서 자모가 씹힐 수 있어, 조합 중에는 raw를 유지하고
-// 조합이 끝나는 시점(onCompositionEnd)과 일반 입력에서만 정리한다.
-function isComposingEvent(event: { nativeEvent: object }) {
-  return Boolean((event.nativeEvent as { isComposing?: boolean }).isComposing);
-}
+// 숫자 전용 필드의 IME-safe onChange (digitsOnly/isComposingEvent — lib/numeric-input 공용)
 
 // 학생 평가 일괄 입력 대상 — 실제 존재하는 카드 평가 컨트롤 전부
 // (숙제/온라인 복습/집중/참여/질문/배려/노력). value/label은 기존 enum·라벨 단일

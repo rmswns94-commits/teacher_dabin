@@ -236,3 +236,33 @@ export function assignRetestGroups<T extends { studentId: string; sourceGroupId:
     return { ...row, homeGroupId: home.groupId, moved: home.moved };
   });
 }
+
+// ── 재시험 시도 점수 이력 (student_retest_attempts) ──
+// 시도 1회 = row 1개 (append-only). parent는 재시험 id — 시험 종류로 묶지 않는다.
+// 점수는 시도 row에 저장된 값 그대로 표시한다 (원래 시험 총 문항으로 분모를 다시 계산하지 않는다).
+export type RetestAttempt = {
+  id: string;
+  retestId: string;
+  attemptNo: number;
+  result: "failed";
+  correctCount: number;
+  totalQuestions: number;
+  attemptedAt: string;
+};
+
+// "미통과 1회 · 14/24"
+export function formatRetestAttempt(attempt: Pick<RetestAttempt, "attemptNo" | "correctCount" | "totalQuestions">) {
+  return `미통과 ${attempt.attemptNo}회 · ${attempt.correctCount}/${attempt.totalQuestions}`;
+}
+
+// 재시험 id별 시도 목록 (1회 → 2회 → 3회)
+export function groupAttemptsByRetestId(attempts: readonly RetestAttempt[]) {
+  const out = new Map<string, RetestAttempt[]>();
+  for (const attempt of attempts) {
+    out.set(attempt.retestId, [...(out.get(attempt.retestId) ?? []), attempt]);
+  }
+  for (const list of out.values()) {
+    list.sort((a, b) => a.attemptNo - b.attemptNo);
+  }
+  return out;
+}

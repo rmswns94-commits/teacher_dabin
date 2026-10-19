@@ -4,6 +4,7 @@ import {
   ACTIVE_RETEST_STATUSES,
   planRetestSync,
   type ExistingRetest,
+  type RetestAttempt,
   type RetestSource,
   type RetestStatus,
 } from "@/lib/retests";
@@ -19,6 +20,12 @@ const MISSING_TABLE_CODES = new Set(["42P01", "PGRST205"]);
 function isMissingTable(error: { code?: string } | null | undefined) {
   return Boolean(error?.code && MISSING_TABLE_CODES.has(error.code));
 }
+
+export const RETEST_ATTEMPT_MIGRATION_MESSAGE =
+  "재시험 점수 기록에 필요한 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20261020_create_student_retest_attempts.sql을 실행한 뒤 다시 시도해주세요.";
+
+// 함수(RPC)가 아직 없을 때의 코드 (PostgREST / Postgres)
+const MISSING_FUNCTION_CODES = new Set(["PGRST202", "42883"]);
 
 export const RETEST_MIGRATION_MESSAGE =
   "재시험 관리에 필요한 데이터베이스 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 20261019_create_student_retests.sql을 실행한 뒤 다시 시도해주세요.";
@@ -122,9 +129,9 @@ export async function getPassedRetestRows(limit: number) {
   return { available: true, rows: rows.slice(0, limit), hasMore: rows.length > limit };
 }
 
-// [통과] / [미통과] — 진행중(pending/failed)인 것만 바꾼다. 이미 통과한 재시험은 되돌리지 않는다.
-// 원래 시험 점수(student_lesson_logs)는 건드리지 않는다.
-export async function setRetestResult(retestId: string, result: "passed" | "failed") {
+// [통과] — 진행중(pending/failed)인 것만 통과로 바꾼다. 이미 통과한 재시험은 되돌리지 않는다.
+// 시도 점수 이력과 원래 시험 점수(student_lesson_logs)는 건드리지 않는다.
+export async function passRetest(retestId: string) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
@@ -135,11 +142,7 @@ export async function setRetestResult(retestId: string, result: "passed" | "fail
   const now = new Date().toISOString();
   const { data, error } = await supabase
     .from("student_retests")
-    .update(
-      result === "passed"
-        ? { status: "passed", passed_at: now, last_checked_at: now }
-        : { status: "failed", last_checked_at: now },
-    )
+    .update({ status: "passed", passed_at: now, last_checked_at: now })
     .eq("id", retestId)
     .eq("user_id", user.id)
     .in("status", [...ACTIVE_RETEST_STATUSES])
@@ -150,7 +153,7 @@ export async function setRetestResult(retestId: string, result: "passed" | "fail
     if (isMissingTable(error)) {
       throw new Error(RETEST_MIGRATION_MESSAGE);
     }
-    console.error("setRetestResult error", { code: error.code, message: error.message });
+    console.error("passRetest error", { code: error.code, message: error.message });
     throw new Error("재시험 결과를 저장하지 못했어요. 다시 시도해주세요.");
   }
   if (!data) {
@@ -158,6 +161,96 @@ export async function setRetestResult(retestId: string, result: "passed" | "fail
   }
 
   return data as { id: string; status: RetestStatus };
+}
+
+type AttemptRow = {
+  id: string;
+  retest_id: string;
+  attempt_no: number;
+  result: "failed";
+  correct_count: number;
+  total_questions: number;
+  attempted_at: string;
+};
+
+const toAttempt = (row: AttemptRow): RetestAttempt => ({
+  id: row.id,
+  retestId: row.retest_id,
+  attemptNo: row.attempt_no,
+  result: row.result,
+  correctCount: row.correct_count,
+  totalQuestions: row.total_questions,
+  attemptedAt: row.attempted_at,
+});
+
+// 화면에 보이는 재시험들의 시도 이력 — 재시험 id를 모아 한 번에 (재시험마다 쿼리하지 않는다).
+// migration 전(테이블 없음)이면 이력 없이 그대로 보여준다.
+export async function getRetestAttempts(retestIds: readonly string[]) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user || retestIds.length === 0) {
+    return [] as RetestAttempt[];
+  }
+
+  const { data, error } = await supabase
+    .from("student_retest_attempts")
+    .select("id, retest_id, attempt_no, result, correct_count, total_questions, attempted_at")
+    .eq("user_id", user.id)
+    .in("retest_id", [...retestIds])
+    .order("attempt_no", { ascending: true });
+
+  if (error) {
+    if (!isMissingTable(error)) {
+      console.error("getRetestAttempts error", { code: error.code, message: error.message });
+    }
+    return [] as RetestAttempt[];
+  }
+
+  return ((data ?? []) as AttemptRow[]).map(toAttempt);
+}
+
+// [미통과 저장] — 시도 1개 추가 + 재시험 status=failed (DB 함수 한 번 = 한 트랜잭션).
+// requestId가 같으면 두 번 와도 시도는 1개다.
+export async function recordRetestFailure(input: {
+  retestId: string;
+  correctCount: number;
+  totalQuestions: number;
+  requestId: string;
+}) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  const { data, error } = await supabase.rpc("record_retest_failure", {
+    p_retest_id: input.retestId,
+    p_correct_count: input.correctCount,
+    p_total_questions: input.totalQuestions,
+    p_request_id: input.requestId,
+  });
+
+  if (error) {
+    if (MISSING_FUNCTION_CODES.has(error.code ?? "") || isMissingTable(error)) {
+      throw new Error(RETEST_ATTEMPT_MIGRATION_MESSAGE);
+    }
+    if (error.message?.includes("retest_not_active") || error.message?.includes("retest_not_found")) {
+      throw new Error("이미 통과 처리됐거나 찾을 수 없는 재시험이에요. 화면을 새로고침해주세요.");
+    }
+    if (error.message?.includes("invalid_retest_score") || error.code === "23514") {
+      throw new Error("재시험 점수를 확인해주세요. 맞은 개수는 총 문항 수를 넘을 수 없어요.");
+    }
+    console.error("recordRetestFailure error", { code: error.code, message: error.message });
+    throw new Error("재시험 결과를 저장하지 못했어요. 다시 시도해주세요.");
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as AttemptRow | null;
+  if (!row?.id) {
+    throw new Error("재시험 결과를 저장하지 못했어요. 다시 시도해주세요.");
+  }
+  return toAttempt(row);
 }
 
 // 수업일지 Final Save sync — 이 일지의 학생 기록들에 대해 "재시험 필요" 표시와 재시험 목록을 맞춘다.

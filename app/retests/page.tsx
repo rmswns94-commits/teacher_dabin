@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
+import { RetestAttemptHistory } from "@/components/retest-attempt-history";
 import { RetestViewTabs } from "@/components/retest-view-tabs";
 import { Card } from "@/components/ui/card";
 import { ASSESSMENT_CATEGORIES } from "@/lib/assessments";
@@ -154,6 +155,15 @@ async function PassedHistory({ limit }: { limit: number }) {
               </p>
               <p className="secondary-text mt-1 whitespace-pre-line break-words text-[#7c6d69]">
                 {item.progress ?? "진도 정보 없음"}
+              </p>
+              {/* 통과 전 미통과 시도 이력 — 통과해도 지우거나 숨기지 않는다 */}
+              {item.attempts.length > 0 ? (
+                <div className="mt-2">
+                  <RetestAttemptHistory attempts={item.attempts} />
+                </div>
+              ) : null}
+              <p className="mt-2 text-sm font-medium text-[#2f6d54]" data-retest-final>
+                최종 통과{item.passedAt ? ` · ${retestDateLabel(toDateString(new Date(item.passedAt)))}` : ""}
               </p>
             </Card>
           </li>
