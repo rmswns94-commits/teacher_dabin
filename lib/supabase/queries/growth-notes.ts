@@ -346,3 +346,55 @@ export async function getCompletedAssessmentHistory(studentIds: readonly string[
   }
   return rows;
 }
+
+// 특정 완료 일지들의 학생 기록 전체 — 월말평가 석차를 "당시 응시자" 기준으로 계산하기 위해
+// (현재 반 명단으로 걸러진 기록만 쓰면 반을 옮긴 학생이 빠져 과거 석차가 바뀐다). 일지 id 묶음으로 한 번에.
+export async function getCompletedLogResults(dailyLogIds: readonly string[]) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user || dailyLogIds.length === 0) {
+    return [] as AssessmentHistoryRow[];
+  }
+
+  const { data, error } = await supabase
+    .from("student_lesson_logs")
+    .select(
+      "student_id, daily_log_id, attendance, vocab_correct, vocab_retest, assessment_results, daily_logs!inner(class_date, status, created_at, vocab_total, assessment_totals)",
+    )
+    .eq("user_id", user.id)
+    .eq("daily_logs.status", "completed")
+    .in("daily_log_id", [...dailyLogIds]);
+
+  if (error) {
+    console.error("getCompletedLogResults error", { code: error.code, message: error.message });
+    return [] as AssessmentHistoryRow[];
+  }
+
+  type Raw = {
+    student_id: string;
+    daily_log_id: string;
+    attendance: AttendanceStatus;
+    vocab_correct: number | null;
+    vocab_retest: boolean | null;
+    assessment_results?: unknown;
+    daily_logs: unknown;
+  };
+  return ((data ?? []) as unknown as Raw[]).flatMap((row) => {
+    const log = pickOne<{ class_date: string; created_at: string | null; vocab_total: number | null; assessment_totals?: unknown }>(row.daily_logs);
+    return log
+      ? [{
+          student_id: row.student_id,
+          daily_log_id: row.daily_log_id,
+          attendance: row.attendance,
+          class_date: log.class_date,
+          log_created_at: log.created_at ?? null,
+          vocab_correct: row.vocab_correct ?? null,
+          vocab_retest: Boolean(row.vocab_retest),
+          vocab_total: log.vocab_total ?? null,
+          assessment_results: row.assessment_results ?? null,
+          assessment_totals: log.assessment_totals ?? null,
+        } satisfies AssessmentHistoryRow]
+      : [];
+  });
+}

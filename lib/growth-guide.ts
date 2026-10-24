@@ -14,7 +14,7 @@ import {
   type GrowthAwardGuideItem,
 } from "@/lib/growth-awards";
 import type { GrowthViewMode } from "@/lib/growth-note";
-import { ASSESSMENT_CATEGORIES, ASSESSMENT_RANKS, assessmentRankEmoji } from "@/lib/assessments";
+import { ASSESSMENT_CATEGORIES, TOP_RANK_EMOJI, TOP_RANK_LIMIT } from "@/lib/assessments";
 
 export type GrowthGuideSection<T> = { title: string; subtitle: string; items: T[] };
 
@@ -61,13 +61,13 @@ export function buildGrowthGuide(mode: GrowthViewMode): GrowthGuide {
 }
 
 function rankBadgeGuide(unit: string): GrowthGuide["rankBadges"] {
-  const meta = ASSESSMENT_CATEGORIES.find((item) => item.supportsRank);
+  const meta = ASSESSMENT_CATEGORIES.find((item) => item.rankedByScore);
   if (!meta) {
     return null;
   }
   return {
     title: `${meta.label} 배지`,
-    text: `${unit} ${meta.label}에서 선생님이 고른 등수대로 보여줘요. 공동 등수도 함께 받아요. 왕이 아니라 시험 결과 배지라 왕중왕 개수에는 넣지 않아요.`,
-    items: ASSESSMENT_RANKS.map((rank) => ({ key: `rank-${rank}`, emoji: assessmentRankEmoji[rank], label: `${meta.label} ${rank}등` })),
+    text: `${unit} ${meta.label}에서 맞은 개수로 반 안 석차를 자동으로 매겨 ${TOP_RANK_LIMIT}등까지 배지를 줘요. 같은 점수는 같은 등수예요 (공동 1등이 둘이면 다음은 3등). 왕이 아니라 시험 결과 배지라 왕중왕 개수에는 넣지 않아요.`,
+    items: Array.from({ length: TOP_RANK_LIMIT }, (_, index) => index + 1).map((rank) => ({ key: `rank-${rank}`, emoji: TOP_RANK_EMOJI[rank], label: `${meta.label} ${rank}등` })),
   };
 }

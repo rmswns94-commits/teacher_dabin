@@ -109,8 +109,9 @@ import { digitsOnly, isComposingEvent } from "@/lib/numeric-input";
 import { previewVocabularyStreak, type VocabularyStreakPreview } from "@/lib/vocabulary-streak";
 import {
   ASSESSMENT_CATEGORIES,
-  ASSESSMENT_RANKS,
+  TOP_RANK_EMOJI,
   assessmentMeta,
+  calculateAssessmentRanks,
   assessmentOrdinals,
   assessmentPercentRaw,
   newAssessmentId,
@@ -491,6 +492,7 @@ function AssessmentScoreInput({
   onChange,
   streak = null,
   finalized = false,
+  rank = null,
 }: {
   studentName: string;
   assessment: AssessmentDraft;
@@ -502,6 +504,8 @@ function AssessmentScoreInput({
   streak?: VocabularyStreakPreview | null;
   // 이미 완료된 일지 수정 중 (저장 전 안내 문구만 다르다)
   finalized?: boolean;
+  // 월말평가 자동 석차 (맞은 개수에서 계산한 파생 값 — 입력/수정 불가). 미입력이면 null
+  rank?: number | null;
 }) {
   const meta = assessmentMeta(assessment.category);
   const total = assessment.total.trim();
@@ -555,33 +559,13 @@ function AssessmentScoreInput({
           맞은 개수는 총 문항 수({total})를 넘을 수 없어요.
         </p>
       ) : null}
-      {/* 월말평가 등수 — 1·2·3등 / 해당 없음 (공동 등수 허용) */}
-      {meta.supportsRank ? (
-        <div role="group" aria-label={`${studentName} ${name} 등수`} className="mt-1.5 flex flex-wrap items-center gap-1.5" data-assessment-rank>
-          <span className="text-xs font-medium text-[#8a7b77]">등수</span>
-          {[...ASSESSMENT_RANKS, null].map((rank) => {
-            const selected = (value.rank ?? null) === rank;
-            return (
-              <button
-                key={rank ?? "none"}
-                type="button"
-                aria-pressed={selected}
-                data-rank={rank ?? "none"}
-                onClick={() => onChange({ ...value, rank })}
-                className={cn(
-                  "min-h-[38px] rounded-xl border px-2.5 py-1.5 text-sm font-medium transition",
-                  selected
-                    ? rank
-                      ? "border-[#e5cf9a] bg-[#fdf6e0] font-semibold text-[#8a6a25]"
-                      : "border-[#d9cec9] bg-[#f6f1ee] text-[#655a56]"
-                    : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
-                )}
-              >
-                {rank ? `${rank}등` : "해당 없음"}
-              </button>
-            );
-          })}
-        </div>
+      {/* 월말평가 석차 — 반 안 같은 시험 응시자의 맞은 개수로 자동 계산 (읽기 전용, 저장 전에는 "현재") */}
+      {meta.rankedByScore && rank ? (
+        <p className="mt-1 text-sm font-semibold text-[#8a6a25]" data-assessment-rank={rank}>
+          {TOP_RANK_EMOJI[rank] ? `${TOP_RANK_EMOJI[rank]} ` : ""}
+          {finalized ? "" : "현재 "}
+          {rank}등
+        </p>
       ) : null}
       {/* 단어시험 연속 만점 — 3·5회 달성은 눈에 띄게, 1·2·4회는 작게. 5회째에는 5연속만 (3연속 재표시 없음) */}
       {streak && streak.milestone ? (
@@ -1551,7 +1535,7 @@ export function DailyLogForm({
   const updateScore = (studentId: string, assessmentId: string, next: ScoreInput) => {
     setEntries((prev) => {
       const scores = { ...prev[studentId].assessmentScores };
-      if (!next.correct && !next.retest && !next.rank) {
+      if (!next.correct && !next.retest) {
         delete scores[assessmentId];
       } else {
         scores[assessmentId] = next;
@@ -1560,6 +1544,32 @@ export function DailyLogForm({
     });
   };
   const assessmentNameOf = assessmentOrdinals(assessments);
+  // 월말평가 자동 석차 — 지금 폼에 입력된 맞은 개수로 시험마다 따로 계산 (DB 조회 없음, 입력할 때마다 전원 재계산).
+  // 대상: 이 일지의 학생 중 결석이 아니고 맞은 개수가 유효한 학생 (미입력 제외, 0점 포함).
+  // 학생 카드와 [일괄 입력]이 이 같은 값을 쓴다.
+  const rankByAssessment = useMemo(() => {
+    const out = new Map<string, Map<string, number>>();
+    for (const assessment of assessments) {
+      if (!assessmentMeta(assessment.category).rankedByScore) {
+        continue;
+      }
+      const total = Number(assessment.total);
+      out.set(
+        assessment.id,
+        calculateAssessmentRanks(
+          students.map((student) => {
+            const entry = entries[student.studentId];
+            const input = entry?.assessmentScores[assessment.id]?.correct ?? "";
+            const correct = Number(input);
+            const valid = entry && entry.attendance !== "absent" && input !== "" && Number.isInteger(correct) && !(total > 0 && correct > total);
+            return { studentId: student.studentId, correct: valid ? correct : null };
+          }),
+        ),
+      );
+    }
+    return out;
+  }, [assessments, entries, students]);
+  const rankOf = (assessmentId: string, studentId: string) => rankByAssessment.get(assessmentId)?.get(studentId) ?? null;
   const scoredCountOf = (assessmentId: string) =>
     students.filter((student) => {
       const score = entries[student.studentId]?.assessmentScores[assessmentId];
@@ -3757,6 +3767,8 @@ export function DailyLogForm({
                                 <AssessmentScoreInput
                                   studentName={student.name}
                                   assessment={assessment}
+                                  rank={rankOf(assessment.id, student.studentId)}
+                                  finalized={finalized}
                                   name={name}
                                   value={entry.assessmentScores[assessment.id] ?? { correct: "", retest: false }}
                                   onChange={(next) => updateScore(student.studentId, assessment.id, next)}
@@ -4256,6 +4268,8 @@ export function DailyLogForm({
                                     key={item.id}
                                     studentName={student.name}
                                     assessment={item}
+                                    rank={rankOf(item.id, student.studentId)}
+                                    finalized={finalized}
                                     name={assessmentNameOf(item).name}
                                     label={items.length > 1 ? `시험 ${index + 1} · ${item.total.trim() || "?"}문제` : `${item.total.trim() || "?"}문제`}
                                     value={entry.assessmentScores[item.id] ?? { correct: "", retest: false }}

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { assessmentOrdinals, assessmentPercentRaw, lessonAssessmentsOf, studentScoreFor } from "@/lib/assessments";
+import { assessmentMeta, assessmentOrdinals, assessmentPercentRaw, assessmentRanksOfLog, lessonAssessmentsOf, studentScoreFor } from "@/lib/assessments";
 import { BookOpen, CheckCheck, CircleArrowRight, NotebookTabs, PencilLine } from "lucide-react";
 
 import { DailyLogDeleteButton } from "@/components/daily-log-delete-button";
@@ -87,11 +87,30 @@ export function LessonLogDetail({
         .filter((item) => item.result),
     }))
     .filter((section) => section.rows.length > 0);
+  // 월말평가 석차 — 이 일지의 학생 기록 전체(당시 응시자)에서 맞은 개수로 자동 계산 (저장 값 아님)
+  const ranksByAssessment = new Map(
+    lessonAssessments
+      .filter((assessment) => assessmentMeta(assessment.category).rankedByScore)
+      .map((assessment) => [
+        assessment.id,
+        assessmentRanksOfLog(
+          detail.lessonLogs.map((lessonLog) => ({
+            ...(lessonLog as ScoreSource),
+            student_id: lessonLog.student_id,
+            class_date: detail.class_date,
+            daily_log_id: detail.id,
+            vocab_total: detail.vocab_total,
+          })),
+          assessment,
+        ),
+      ]),
+  );
+  const rankOf = (assessmentId: string, studentId: string) => ranksByAssessment.get(assessmentId)?.get(studentId) ?? null;
   const scoreChipsOf = (lessonLog: unknown) =>
     lessonAssessments.flatMap((assessment) => {
       const result = studentScoreFor(lessonLog as ScoreSource, assessment);
       return result
-        ? [`${assessmentNameOf(assessment).name.replace("시험", "")} ${result.correct}/${assessment.total} (${assessmentPercentRaw(result.correct, assessment.total)}%)${result.rank ? ` · ${result.rank}등` : ""}${result.retest ? " · 재시험 필요" : ""}`]
+        ? [`${assessmentNameOf(assessment).name.replace("시험", "")} ${result.correct}/${assessment.total} (${assessmentPercentRaw(result.correct, assessment.total)}%)${rankOf(assessment.id, (lessonLog as { student_id: string }).student_id) ? ` · ${rankOf(assessment.id, (lessonLog as { student_id: string }).student_id)}등` : ""}${result.retest ? " · 재시험 필요" : ""}`]
         : [];
     });
   const parentNoteRows = detail.lessonLogs.filter((log) => log.parent_note);
@@ -464,9 +483,9 @@ export function LessonLogDetail({
                     {result!.correct} / {section.assessment.total}
                   </span>
                   <span className="text-[#54479c]">{assessmentPercentRaw(result!.correct, section.assessment.total)}%</span>
-                  {result!.rank ? (
+                  {rankOf(section.assessment.id, lessonLog.student_id) ? (
                     <span className="rounded-full bg-[#fdf6e0] px-1.5 py-0.5 text-xs font-semibold text-[#8a6a25]" data-assessment-rank-chip>
-                      {result!.rank}등
+                      {rankOf(section.assessment.id, lessonLog.student_id)}등
                     </span>
                   ) : null}
                   {result!.retest ? (

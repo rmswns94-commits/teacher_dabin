@@ -26,17 +26,17 @@ export type AssessmentCategoryMeta = {
   awardType: GrowthAchievementType | null;
   // 학생 카드에서 고정 3칸(단어/문법/독해) 중 하나인지 — 아니면 시험이 있을 때만 별도 섹션
   cardColumn: boolean;
-  // 학생별 1·2·3등 입력 (월말평가) — 공동 등수 허용
-  supportsRank: boolean;
+  // 맞은 개수로 반 안 석차를 자동 계산해 보여주는 종류 (월말평가). 사용자가 등수를 입력하지 않는다
+  rankedByScore: boolean;
   // [재시험 필요] 표시 → 재시험 관리 등록 대상인지
   supportsRetest: boolean;
 };
 
 export const ASSESSMENT_CATEGORIES: readonly AssessmentCategoryMeta[] = [
-  { key: "vocabulary", label: "단어", testLabel: "단어시험", awardType: "vocabulary_master", cardColumn: true, supportsRank: false, supportsRetest: true },
-  { key: "grammar", label: "문법", testLabel: "문법시험", awardType: "grammar_master", cardColumn: true, supportsRank: false, supportsRetest: true },
-  { key: "reading", label: "독해", testLabel: "독해시험", awardType: "reading_master", cardColumn: true, supportsRank: false, supportsRetest: true },
-  { key: "month_end", label: "월말평가", testLabel: "월말평가", awardType: null, cardColumn: false, supportsRank: true, supportsRetest: false },
+  { key: "vocabulary", label: "단어", testLabel: "단어시험", awardType: "vocabulary_master", cardColumn: true, rankedByScore: false, supportsRetest: true },
+  { key: "grammar", label: "문법", testLabel: "문법시험", awardType: "grammar_master", cardColumn: true, rankedByScore: false, supportsRetest: true },
+  { key: "reading", label: "독해", testLabel: "독해시험", awardType: "reading_master", cardColumn: true, rankedByScore: false, supportsRetest: true },
+  { key: "month_end", label: "월말평가", testLabel: "월말평가", awardType: null, cardColumn: false, rankedByScore: true, supportsRetest: false },
 ];
 
 export function assessmentMeta(category: AssessmentCategory): AssessmentCategoryMeta {
@@ -47,13 +47,23 @@ export function isAssessmentCategory(value: unknown): value is AssessmentCategor
   return value === "vocabulary" || value === "grammar" || value === "reading" || value === "month_end";
 }
 
-// 월말평가 등수 — 1·2·3등만 (null = 해당 없음). 같은 등수 여러 명(공동 등수) 허용
-export type AssessmentRank = 1 | 2 | 3;
-export const ASSESSMENT_RANKS: readonly AssessmentRank[] = [1, 2, 3];
-export const assessmentRankEmoji: Record<AssessmentRank, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
-export function parseAssessmentRank(value: unknown): AssessmentRank | null {
-  return value === 1 || value === 2 || value === 3 ? value : null;
+// ── 월말평가 자동 석차 ──
+// 등수는 저장하지 않는 파생 값이다 — 맞은 개수(correct_count)만 source of truth.
+// 범위: 시험 1개(stable assessment id) 안의 응시자 — 그 시험은 한 수업일지(= 한 학원·한 반)에만 속하므로
+// 다른 반/다른 월말평가와 섞이지 않는다. 미입력(null)은 제외, 0점은 포함.
+// 방식: standard competition ranking — 같은 점수는 같은 등수, 다음 등수는 그만큼 건너뛴다 (48,48,45 → 1,1,3).
+export function calculateAssessmentRanks(scores: readonly { studentId: string; correct: number | null }[]): Map<string, number> {
+  const valid = scores.filter((item): item is { studentId: string; correct: number } => item.correct !== null && Number.isFinite(item.correct));
+  const out = new Map<string, number>();
+  for (const item of valid) {
+    out.set(item.studentId, 1 + valid.filter((other) => other.correct > item.correct).length);
+  }
+  return out;
 }
+
+// 상위 3등 배지 (성장노트) — 4등 이하는 배지 없음
+export const TOP_RANK_EMOJI: Readonly<Record<number, string>> = { 1: "🥇", 2: "🥈", 3: "🥉" };
+export const TOP_RANK_LIMIT = 3;
 
 export function assessmentPercentRaw(correct: number, total: number) {
   return total > 0 ? Math.round((correct / total) * 100) : null;
@@ -61,8 +71,7 @@ export function assessmentPercentRaw(correct: number, total: number) {
 
 // ---- 저장된 모델 ----
 export type LessonAssessment = { id: string; category: AssessmentCategory; total: number };
-// rank는 등수를 받는 종류(월말평가)에서 고른 경우에만 존재한다 — 다른 종류의 저장 형식은 그대로
-export type AssessmentScore = { correct: number; retest: boolean; rank?: AssessmentRank };
+export type AssessmentScore = { correct: number; retest: boolean };
 
 export type LessonAssessmentSource = { vocab_total: number | null; assessment_totals?: unknown };
 export type StudentAssessmentSource = {
@@ -113,8 +122,7 @@ function parseScore(value: unknown): AssessmentScore | null {
   if (typeof correct !== "number" || !Number.isInteger(correct) || correct < 0) {
     return null;
   }
-  const rank = parseAssessmentRank((value as { rank?: unknown }).rank);
-  return { correct, retest: Boolean((value as { retest?: unknown }).retest), ...(rank ? { rank } : {}) };
+  return { correct, retest: Boolean((value as { retest?: unknown }).retest) };
 }
 
 // 한 학생의 한 시험 결과 — null = 미입력 (0점은 유효한 결과)
@@ -153,7 +161,7 @@ export function assessmentPercentsByCategory(
 
 // ---- 폼 state (문자열 입력) ----
 export type AssessmentDraft = { id: string; category: AssessmentCategory; total: string };
-export type ScoreInput = { correct: string; retest: boolean; rank?: AssessmentRank | null };
+export type ScoreInput = { correct: string; retest: boolean };
 export type ScoreInputs = Record<string, ScoreInput>; // key = assessment id
 
 export function newAssessmentId() {
@@ -169,7 +177,7 @@ export function scoresToInputs(row: StudentAssessmentSource, list: readonly Less
   for (const assessment of list) {
     const score = studentScoreFor(row, assessment);
     if (score) {
-      out[assessment.id] = { correct: String(score.correct), retest: score.retest, ...(score.rank ? { rank: score.rank } : {}) };
+      out[assessment.id] = { correct: String(score.correct), retest: score.retest };
     }
   }
   return out;
@@ -220,13 +228,8 @@ export function restoreScoreInputs(entry: {
     const out: ScoreInputs = {};
     for (const [id, value] of Object.entries(entry.assessmentScores as Record<string, unknown>)) {
       const correct = (value as { correct?: unknown })?.correct;
-      const rank = parseAssessmentRank((value as { rank?: unknown })?.rank);
-      if (ID_PATTERN.test(id) && (typeof correct === "string" || rank)) {
-        out[id] = {
-          correct: typeof correct === "string" ? correct : "",
-          retest: Boolean((value as { retest?: unknown }).retest),
-          ...(rank ? { rank } : {}),
-        };
+      if (ID_PATTERN.test(id) && typeof correct === "string") {
+        out[id] = { correct, retest: Boolean((value as { retest?: unknown }).retest) };
       }
     }
     return out;
@@ -317,9 +320,9 @@ export function assessmentsForSave(input: readonly { id: string; category: strin
 }
 
 // 학생 결과 — 존재하는 시험 + 맞은 개수 입력된 것만 (빈 값은 저장 안 함 = null, 0은 저장)
-// 재시험 표시는 재시험을 받는 종류만, 등수는 등수를 받는 종류만 저장한다 (capability metadata 기준).
+// 재시험 표시는 재시험을 받는 종류만 저장한다 (capability metadata 기준). 등수는 저장하지 않는다 (파생 값).
 export function scoresForSave(
-  input: Record<string, { correct?: string; retest?: boolean; rank?: number | null }> | undefined,
+  input: Record<string, { correct?: string; retest?: boolean }> | undefined,
   list: readonly LessonAssessment[],
 ): Record<string, AssessmentScore> {
   const out: Record<string, AssessmentScore> = {};
@@ -327,11 +330,9 @@ export function scoresForSave(
     const value = input?.[assessment.id];
     if (value?.correct !== undefined && value.correct !== "" && Number.isInteger(Number(value.correct))) {
       const meta = assessmentMeta(assessment.category);
-      const rank = meta.supportsRank ? parseAssessmentRank(value.rank) : null;
       out[assessment.id] = {
         correct: Number(value.correct),
         retest: meta.supportsRetest ? Boolean(value.retest) : false,
-        ...(rank ? { rank } : {}),
       };
     }
   }
@@ -362,35 +363,43 @@ export function assessmentOrdinals(list: readonly { id: string; category: Assess
   });
 }
 
-// ── 월말평가 등수 배지 (성장노트) ──
-// 선택 기간 안 수업일의 등수 결과만 — 시험마다 1개 (같은 달 월말평가가 둘이면 배지도 둘).
-// 성장왕/왕이 아니라 시험 결과 배지라 왕중왕 개수에 넣지 않는다.
-export type AssessmentRankBadge = { assessmentId: string; date: string; rank: AssessmentRank; label: string; emoji: string };
+// ── 월말평가 석차 배지 (성장노트) ──
+// 완료된 일지의 결과만. 석차는 그 일지(그 수업)의 "당시 응시자 전체" 결과로 계산한다 — 현재 반 명단으로
+// 다시 계산하지 않으므로, 이후 반 이동/퇴원이 있어도 과거 석차는 바뀌지 않는다 (rows에 그 일지의 모든 학생 기록을 넘길 것).
+// 배지는 상위 3등만, 시험마다 1개 (같은 달 월말평가가 둘이면 배지도 둘). 왕중왕 개수에는 넣지 않는다.
+export type AssessmentRankBadge = { assessmentId: string; date: string; rank: number; label: string; emoji: string };
 
-export function assessmentRankBadgesOf(
-  rows: readonly (LessonAssessmentSource & StudentAssessmentSource & { student_id: string; class_date: string })[],
-  start: string,
-  end: string,
-): Map<string, AssessmentRankBadge[]> {
-  const out = new Map<string, AssessmentRankBadge[]>();
+type RankRow = LessonAssessmentSource & StudentAssessmentSource & { student_id: string; class_date: string; daily_log_id: string };
+
+export function assessmentRanksOfLog(rows: readonly RankRow[], assessment: LessonAssessment) {
+  return calculateAssessmentRanks(
+    rows.map((row) => ({ studentId: row.student_id, correct: studentScoreFor(row, assessment)?.correct ?? null })),
+  );
+}
+
+export function assessmentRankBadgesOf(rows: readonly RankRow[], start: string, end: string): Map<string, AssessmentRankBadge[]> {
+  const byLog = new Map<string, RankRow[]>();
   for (const row of rows) {
-    if (row.class_date < start || row.class_date > end) {
-      continue;
+    if (row.class_date >= start && row.class_date <= end) {
+      byLog.set(row.daily_log_id, [...(byLog.get(row.daily_log_id) ?? []), row]);
     }
-    for (const assessment of lessonAssessmentsOf(row)) {
+  }
+  const out = new Map<string, AssessmentRankBadge[]>();
+  for (const logRows of byLog.values()) {
+    for (const assessment of lessonAssessmentsOf(logRows[0])) {
       const meta = assessmentMeta(assessment.category);
-      if (!meta.supportsRank) {
+      if (!meta.rankedByScore) {
         continue;
       }
-      const rank = studentScoreFor(row, assessment)?.rank;
-      if (!rank) {
-        continue;
+      for (const [studentId, rank] of assessmentRanksOfLog(logRows, assessment)) {
+        if (rank > TOP_RANK_LIMIT) {
+          continue;
+        }
+        out.set(studentId, [
+          ...(out.get(studentId) ?? []),
+          { assessmentId: assessment.id, date: logRows[0].class_date, rank, label: `${meta.label} ${rank}등`, emoji: TOP_RANK_EMOJI[rank] },
+        ]);
       }
-      const list = out.get(row.student_id) ?? [];
-      if (!list.some((badge) => badge.assessmentId === assessment.id)) {
-        list.push({ assessmentId: assessment.id, date: row.class_date, rank, label: `${meta.label} ${rank}등`, emoji: assessmentRankEmoji[rank] });
-      }
-      out.set(row.student_id, list);
     }
   }
   for (const list of out.values()) {

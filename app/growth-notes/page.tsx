@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/page-header";
 import { dailyQuoteOf } from "@/lib/constants/daily-quotes";
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate, toDateString, todayDateString } from "@/lib/dates";
-import { assessmentPercentsByCategory, assessmentRankBadgesOf } from "@/lib/assessments";
+import { assessmentMeta, assessmentPercentsByCategory, assessmentRankBadgesOf, lessonAssessmentsOf } from "@/lib/assessments";
 import { computeVocabularyStreak, vocabularyPassStats, vocabularyTestsOf } from "@/lib/vocabulary-streak";
 import {
   computeWeeklyGrowth,
@@ -37,6 +37,7 @@ import {
 } from "@/lib/supabase/queries/groups";
 import {
   getCompletedAssessmentHistory,
+  getCompletedLogResults,
   getGrowthHomeworkRows,
   getGrowthLessonRows,
   getGrowthMakeupRows,
@@ -335,7 +336,17 @@ async function GroupStudentList({
   const vocabularyStreaks = new Map(
     studentIds.map((id) => [id, computeVocabularyStreak(vocabularyTests.get(id) ?? [])] as const),
   );
-  const rankBadges = assessmentRankBadgesOf(historyRows, periodStart, periodEnd);
+  // 월말평가 석차 배지 — 이 반 학생이 본 기간 안 월말평가 일지들의 "당시 응시자 전체" 기록으로 계산 (일지 id batch 1쿼리).
+  // 현재 반 명단으로 다시 계산하지 않으므로 이후 반 이동/퇴원이 있어도 과거 석차는 그대로다.
+  const rankedLogIds = [
+    ...new Set(
+      historyRows
+        .filter((row) => row.class_date >= periodStart && row.class_date <= periodEnd)
+        .filter((row) => lessonAssessmentsOf(row).some((assessment) => assessmentMeta(assessment.category).rankedByScore))
+        .map((row) => row.daily_log_id),
+    ),
+  ];
+  const rankBadges = assessmentRankBadgesOf(await getCompletedLogResults(rankedLogIds), periodStart, periodEnd);
 
   const rowsByStudent = new Map<string, GrowthLessonRow[]>();
   for (const row of lessonRows) {
