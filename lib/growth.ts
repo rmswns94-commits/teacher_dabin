@@ -14,7 +14,7 @@ import type { GrowthAchievementType, MakeupStatus } from "@/lib/supabase/types";
 // 이 rule engine이 주간 누적 데이터로 자동 계산한다.
 //
 // Mapping:
-//   출결 → 개근 / 숙제 → 꾸준함왕 / 단어·문법·독해 시험 → 단어왕·문법왕·독해왕 (같은 판정, category만 다름) / 집중 → 집중왕
+//   출결 → 개근 / 숙제 → 꾸준함왕 / 단어시험 → 단어왕(기간 통과율) / 문법·독해 시험 → 문법왕·독해왕(최근 3회 100점) / 집중 → 집중왕
 //   참여 → 발표왕 / 질문 → 질문왕 / 배려 → 배려왕 / 노력 → 노력왕
 //   보충수업 완료 → 틈새왕
 //
@@ -66,7 +66,7 @@ export const growthEmojis: Record<GrowthAchievementType, string> = {
 export const growthAchievedSentences: Record<GrowthAchievementType, string> = {
   attendance_master: "이번 주 수업에 빠짐없이 참여했어요!",
   consistency_master: "이번 주 숙제를 빠짐없이 완료했어요!",
-  vocabulary_master: "최근 단어시험에서 100점을 3번 연속 달성했어요!",
+  vocabulary_master: "단어시험을 꾸준히 통과했어요! (통과율 80% 이상)",
   grammar_master: "최근 문법시험에서 100점을 3번 연속 달성했어요!",
   reading_master: "최근 독해시험에서 100점을 3번 연속 달성했어요!",
   focus_master: "이번 주 수업에 집중하는 모습이 정말 좋았어요!",
@@ -100,7 +100,11 @@ export const GROWTH_CONFIG = {
   focus: { minSamples: 2, positiveRatio: 0.7 },
   participation: { minSamples: 2, positiveRatio: 0.6 },
   homework: { minSamples: 2, positiveRatio: 1.0 },
+  // 문법왕/독해왕: 최근 유효 시험 3회 모두 100%
   vocabPerfectStreak: 3,
+  // 단어왕: 기간(주/월) 안 확정된 단어시험 통과율 80% 이상. 최소 3회는 이전 단어왕의 "최근 3회" 표본 기준을 유지한 것.
+  // 통과 = [재시험 필요]를 표시하지 않은 시험 (재시험 관리와 같은 판단)
+  vocabularyPass: { minSamples: 3, positiveRatio: 0.8 },
   // 틈새왕: 주간 평가 대상 보충이 1개 이상 + 완료율 100% (0개면 미획득 — 0/0 ≠ 100%)
   makeup: { minSamples: 1, completionRatio: 1.0 },
 } as const;
@@ -185,8 +189,10 @@ export type WeeklyGrowthInput = {
   }[];
   // 최근 유효 단어시험 % (오래된 → 최신)
   recentVocabPercents: number[];
-  // 최근 유효 문법/독해 시험 % (단어와 같은 순서 규칙) — 없으면 그 왕은 없음
-  recentAssessmentPercents?: Partial<Record<Exclude<AssessmentCategory, "vocabulary">, number[]>>;
+  // 최근 유효 문법/독해 시험 % (오래된 → 최신) — 없으면 그 왕은 없음
+  recentAssessmentPercents?: Partial<Record<Exclude<AssessmentCategory, "vocabulary" | "month_end">, number[]>>;
+  // 단어왕: 이번 기간 확정된 단어시험 수 / 그중 통과 수 (lib/vocabulary-streak vocabularyPassStats)
+  periodVocabulary?: { evaluated: number; passed: number };
   // 이번 주 평가 대상 보충수업 (scopeMakeupsToWeek로 미리 주간 범위에 귀속시켜 전달)
   weekMakeups?: MakeupLike[];
 };
@@ -223,13 +229,24 @@ export function computeWeeklyGrowth(input: WeeklyGrowthInput): WeeklyGrowthResul
   stats.consistency_master = homework;
   if (meets(homework, GROWTH_CONFIG.homework)) achieved.push("consistency_master");
 
-  // 단어왕 / 문법왕 / 독해왕: 같은 엔진(assessmentPerfectStreak) — category별 최근 유효 시험 3회 모두 100%.
-  // 점수는 category끼리 섞지 않는다 (단어왕은 단어시험만, 문법왕은 문법시험만 …).
+  // 단어왕: 이번 기간 단어시험 통과율 ≥ 80% (확정된 시험 3회 이상). 통과 = 재시험 필요 표시 없음.
+  const vocabulary = input.periodVocabulary ?? { evaluated: 0, passed: 0 };
+  const vocabularyStat: GrowthStat = {
+    evaluated: vocabulary.evaluated,
+    positive: vocabulary.passed,
+    ratio: vocabulary.evaluated > 0 ? vocabulary.passed / vocabulary.evaluated : 0,
+  };
+  stats.vocabulary_master = vocabularyStat;
+  if (meets(vocabularyStat, GROWTH_CONFIG.vocabularyPass)) achieved.push("vocabulary_master");
+
+  // 문법왕 / 독해왕: 기존 엔진 그대로(assessmentPerfectStreak) — category별 최근 유효 시험 3회 모두 100%.
+  // 점수는 category끼리 섞지 않는다. 성장왕이 없는 종류(월말평가)는 건너뛴다.
   const lastThree = input.recentVocabPercents.slice(-GROWTH_CONFIG.vocabPerfectStreak);
   for (const meta of ASSESSMENT_CATEGORIES) {
-    const percents =
-      meta.key === "vocabulary" ? input.recentVocabPercents : input.recentAssessmentPercents?.[meta.key] ?? [];
-    if (assessmentPerfectStreak(percents)) {
+    if (meta.key === "vocabulary" || meta.key === "month_end" || !meta.awardType) {
+      continue;
+    }
+    if (assessmentPerfectStreak(input.recentAssessmentPercents?.[meta.key] ?? [])) {
       achieved.push(meta.awardType);
     }
   }
@@ -283,7 +300,7 @@ export function computeWeeklyGrowth(input: WeeklyGrowthInput): WeeklyGrowthResul
 
 // ---- 안내 카드 문구 (성장노트 "왕은 어떻게 선정되나요?") ----
 // 숫자는 전부 GROWTH_CONFIG / VOCAB_WINDOW_DAYS에서 파생 — 설명용 threshold를 따로 하드코딩하지 않는다.
-// 9개 성장왕은 학생마다 독립 판정(반 학생끼리 비교 없음)이라 최고 점수/동점 개념이 없다.
+// 성장왕은 학생마다 독립 판정(반 학생끼리 비교 없음)이라 최고 점수/동점 개념이 없다 — 단어왕도 기준(80%)을 넘긴 학생 모두.
 // 주간/월간은 판정 기준이 같고 집계 기간(record 범위)만 다르다.
 
 // 단어왕 판정용 최근 시험 조회 window (전체 history 조회 금지) — 페이지 조회와 안내 문구가 공유
@@ -336,10 +353,16 @@ export function growthBadgeGuideItem(
         minimum: `숙제 평가 ${GROWTH_CONFIG.homework.minSamples}회 이상 · 완료 ${percentLabel(GROWTH_CONFIG.homework.positiveRatio)}`,
       };
     case "vocabulary_master":
+      return {
+        ...base,
+        primary: `${unit} 단어시험 통과율이 ${percentLabel(GROWTH_CONFIG.vocabularyPass.positiveRatio)} 이상인 학생이에요.`,
+        secondary: `${unit} 수업 기록을 완료한 단어시험 중 [재시험 필요]가 아닌 시험을 통과로 세요. 점수를 입력하지 않은 시험과 재시험 점수는 계산에 넣지 않아요.`,
+        minimum: `단어시험 ${GROWTH_CONFIG.vocabularyPass.minSamples}회 이상 · 통과 ${percentLabel(GROWTH_CONFIG.vocabularyPass.positiveRatio)} 이상`,
+      };
     case "grammar_master":
     case "reading_master": {
-      // 단어왕/문법왕/독해왕 — 같은 판정, 문구의 시험 이름만 category metadata에서
-      const meta = assessmentMeta(type === "vocabulary_master" ? "vocabulary" : type === "grammar_master" ? "grammar" : "reading");
+      // 문법왕/독해왕 — 같은 판정, 문구의 시험 이름만 category metadata에서
+      const meta = assessmentMeta(type === "grammar_master" ? "grammar" : "reading");
       return {
         ...base,
         primary: `최근 ${meta.testLabel} ${GROWTH_CONFIG.vocabPerfectStreak}회를 연속으로 100점 받은 학생이에요.`,

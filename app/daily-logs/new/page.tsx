@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { sortByKoreanName } from "@/lib/korean-sort";
+import { vocabularyStreakBefore, vocabularyTestsOf } from "@/lib/vocabulary-streak";
+import { getCompletedAssessmentHistory } from "@/lib/supabase/queries/growth-notes";
 import { uniqueSchoolList } from "@/lib/textbooks";
 import {
   getActiveDraftResumeTarget,
@@ -152,6 +154,16 @@ export default async function NewDailyLogPage({
         (student) => student.id,
       )
     : [];
+  // 단어시험 연속 만점 미리보기 — 학생별 이 수업 직전까지 streak (완료된 일지, 반 학생 batch 1쿼리)
+  const vocabularyTests = vocabularyTestsOf(
+    await getCompletedAssessmentHistory(groupStudents.map((student) => student.id), date),
+  );
+  const vocabStreakBefore = Object.fromEntries(
+    groupStudents.map((student) => [
+      student.id,
+      vocabularyStreakBefore(vocabularyTests.get(student.id) ?? [], { date, logOrder: "", logId: null }),
+    ]),
+  );
 
   return (
     <AppShell>
@@ -261,6 +273,7 @@ export default async function NewDailyLogPage({
               // key로 remount를 강제해 이전 날짜/학생 목록의 stale state를 제거한다.
               key={`${selectedGroup.id}:${date}`}
               classDate={date}
+              vocabStreakBefore={vocabStreakBefore}
               scheduleDays={groupSchedules.map((slot) => slot.day_of_week)}
               // 수업 제목 옆 교재 LIST — 이 그룹의 교재 목록 (그룹 상세와 같은 줄바꿈 포맷)
               textbooks={(selectedGroup.textbook ?? "")

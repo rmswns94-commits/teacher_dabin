@@ -165,7 +165,9 @@ export function RetestGroupBoard({
 
       <div role="group" aria-label="시험 종류" className="mb-4 flex flex-wrap gap-1.5">
         {([{ key: "all", label: "전체", count: summary.retestCount }] as { key: Filter; label: string; count: number }[])
-          .concat(ASSESSMENT_CATEGORIES.map((meta) => ({ key: meta.key, label: meta.label, count: summary.byCategory[meta.key] })))
+          .concat(
+            ASSESSMENT_CATEGORIES.filter((meta) => meta.supportsRetest).map((meta) => ({ key: meta.key, label: meta.label, count: summary.byCategory[meta.key] })),
+          )
           .map((option) => (
             <button
               key={option.key}

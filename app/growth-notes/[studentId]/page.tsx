@@ -6,9 +6,11 @@ import { AppShell } from "@/components/app-shell";
 import { addDaysStr, dayOfWeekOf } from "@/lib/calendar";
 import { formatKoreanDate, toDateString, todayDateString } from "@/lib/dates";
 import { assessmentPercentsByCategory } from "@/lib/assessments";
+import { vocabularyPassStats, vocabularyTestsOf } from "@/lib/vocabulary-streak";
 import { scopeMakeupsToWeek, VOCAB_WINDOW_DAYS } from "@/lib/growth";
 import { buildGrowthNoteViewModel } from "@/lib/growth-note";
 import {
+  getCompletedAssessmentHistory,
   getGrowthLessonRows,
   getGrowthMakeupRows,
   getGrowthPraiseRows,
@@ -44,12 +46,14 @@ export default async function GrowthNoteDetailPage({
   const weekEnd = addDaysStr(weekStart, 6);
   const windowStart = addDaysStr(weekStart, -VOCAB_WINDOW_DAYS);
 
-  const [student, studentGroups, lessonRows, praiseRows, makeupRows] = await Promise.all([
+  const [student, studentGroups, lessonRows, praiseRows, makeupRows, weekHistory] = await Promise.all([
     getStudentByIdForCurrentUser(studentId),
     getStudentGroupsForCurrentUser(studentId),
     getGrowthLessonRows(windowStart, weekEnd, [studentId]),
     getGrowthPraiseRows(weekStart, [studentId]),
     getGrowthMakeupRows(weekStart, weekEnd, [studentId]),
+    // 단어왕 — 이번 주 완료된 일지의 단어시험만
+    getCompletedAssessmentHistory([studentId], weekEnd, weekStart),
   ]);
 
   if (!student) {
@@ -89,6 +93,7 @@ export default async function GrowthNoteDetailPage({
     // 시험마다 자기 category로 1회씩 (한 수업에 같은 종류 시험이 여러 개면 각각)
     recentVocabPercents: percentsByCategory.vocabulary,
     recentAssessmentPercents: { grammar: percentsByCategory.grammar, reading: percentsByCategory.reading },
+    periodVocabulary: vocabularyPassStats(vocabularyTestsOf(weekHistory).get(studentId) ?? [], weekStart, weekEnd),
     weekPraiseComments,
     weekMakeups: scopeMakeupsToWeek(makeupRows, weekStart, weekEnd),
   });

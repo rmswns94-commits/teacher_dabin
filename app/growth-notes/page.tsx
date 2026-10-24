@@ -10,7 +10,8 @@ import { PageHeader } from "@/components/page-header";
 import { dailyQuoteOf } from "@/lib/constants/daily-quotes";
 import { addDaysStr } from "@/lib/calendar";
 import { formatKoreanDate, toDateString, todayDateString } from "@/lib/dates";
-import { assessmentPercentsByCategory } from "@/lib/assessments";
+import { assessmentPercentsByCategory, assessmentRankBadgesOf } from "@/lib/assessments";
+import { computeVocabularyStreak, vocabularyPassStats, vocabularyTestsOf } from "@/lib/vocabulary-streak";
 import {
   computeWeeklyGrowth,
   growthAchievementValues,
@@ -35,6 +36,7 @@ import {
   getGroupStudentsForCurrentUser,
 } from "@/lib/supabase/queries/groups";
 import {
+  getCompletedAssessmentHistory,
   getGrowthHomeworkRows,
   getGrowthLessonRows,
   getGrowthMakeupRows,
@@ -321,12 +323,19 @@ async function GroupStudentList({
   // 선택한 반 학생만 batch 조회 (학생별/날짜별 개별 쿼리 금지 — 기간과 무관하게 4쿼리).
   // 수업 기록 window(기간 시작 -90일)는 도약왕의 이전 주/달까지 자연히 덮는다 — 별도 previous 쿼리 없음.
   // 숙제는 [이전 기간 시작, effective 끝] 한 범위로 가져와 메모리에서 기간을 나눈다.
-  const [lessonRows, praiseRows, makeupRows, homeworkRows] = await Promise.all([
+  // 완료된 일지의 시험 결과(기간 끝까지 전체) — 단어 연속 만점 누적·단어왕 통과율·월말평가 배지가 같은 batch 1회를 쓴다.
+  const [lessonRows, praiseRows, makeupRows, homeworkRows, historyRows] = await Promise.all([
     getGrowthLessonRows(windowStart, periodEnd, studentIds),
     getGrowthPraiseRows(periodStart, studentIds),
     getGrowthMakeupRows(periodStart, periodEnd, studentIds),
     getGrowthHomeworkRows(previousPeriod.start, effectiveEnd, studentIds),
+    getCompletedAssessmentHistory(studentIds, periodEnd),
   ]);
+  const vocabularyTests = vocabularyTestsOf(historyRows);
+  const vocabularyStreaks = new Map(
+    studentIds.map((id) => [id, computeVocabularyStreak(vocabularyTests.get(id) ?? [])] as const),
+  );
+  const rankBadges = assessmentRankBadgesOf(historyRows, periodStart, periodEnd);
 
   const rowsByStudent = new Map<string, GrowthLessonRow[]>();
   for (const row of lessonRows) {
@@ -372,6 +381,8 @@ async function GroupStudentList({
         // 단어왕/문법왕/독해왕 — 같은 rows·같은 순서, 시험마다 자기 category로 1회씩 (한 수업에 같은 종류가 여러 개면 각각)
         recentVocabPercents: percentsByCategory.vocabulary,
         recentAssessmentPercents: { grammar: percentsByCategory.grammar, reading: percentsByCategory.reading },
+        // 단어왕 — 이번 기간 확정된 단어시험 통과율
+        periodVocabulary: vocabularyPassStats(vocabularyTests.get(student.id) ?? [], periodStart, periodEnd),
         weekMakeups: scopeMakeupsToWeek(
           makeupsByStudent.get(student.id) ?? [],
           periodStart,
@@ -383,6 +394,11 @@ async function GroupStudentList({
         studentId: student.id,
         studentName: student.name,
         achievements: growth.achieved.map(toGrowthBadge),
+        rankBadges: (rankBadges.get(student.id) ?? []).map((badge) => ({
+          key: badge.assessmentId,
+          emoji: badge.emoji,
+          label: badge.label,
+        })),
         praiseCount: praiseCountByStudent.get(student.id) ?? 0,
       };
     })
@@ -409,6 +425,7 @@ async function GroupStudentList({
     })),
     current: { start: periodStart, end: effectiveEnd },
     previous: previousPeriod,
+    vocabularyStreaks,
   });
   const awards = computeGrowthAwards([...metricsByStudent.values()], mode);
   const awardsWon = awardsWonByStudent(awards);
@@ -619,7 +636,7 @@ async function GroupStudentList({
                       </div>
 
                       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 sm:justify-end">
-                        {summary.achievements.length === 0 ? (
+                        {summary.achievements.length === 0 && !(summary.rankBadges ?? []).length ? (
                           <span className="text-sm text-[#8a7b77]">🌱 성장 기록이 쌓이는 중이에요</span>
                         ) : (
                           // 획득한 왕 title 전부 표시 — "+N" 축약 없음, 카드 안에서 wrap
@@ -632,6 +649,16 @@ async function GroupStudentList({
                             </span>
                           ))
                         )}
+                        {/* 월말평가 등수 배지 — 이 기간 시험 결과 (왕중왕 개수에 넣지 않음) */}
+                        {(summary.rankBadges ?? []).map((badge) => (
+                          <span
+                            key={badge.key}
+                            data-rank-badge
+                            className="rounded-full border border-[#efdcb0] bg-[#fffaf0] px-2.5 py-1 text-xs font-semibold text-[#8a6a25]"
+                          >
+                            {badge.emoji} {badge.label}
+                          </span>
+                        ))}
                         {summary.praiseCount > 0 ? (
                           <span className="rounded-full bg-[#fdf8ec] px-2.5 py-1 text-xs font-semibold text-[#8a6828]">
                             💜 {mode === "month" ? "이번 달" : "이번 주"} 칭찬 {summary.praiseCount}회

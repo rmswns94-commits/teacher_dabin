@@ -49,6 +49,8 @@ export type StudentGrowthCardSummary = {
   studentId: string;
   studentName: string;
   achievements: GrowthBadge[];
+  // 시험 결과 배지 (월말평가 1·2·3등) — 성장왕/왕이 아니라 왕중왕 개수에 넣지 않는다
+  rankBadges?: { key: string; emoji: string; label: string }[];
   praiseCount: number;
 };
 
@@ -242,6 +244,8 @@ export type BuildGrowthNoteInput = {
   recentVocabPercents: number[];
   // 같은 규칙의 문법/독해 시험 % (문법왕/독해왕)
   recentAssessmentPercents?: WeeklyGrowthInput["recentAssessmentPercents"];
+  // 단어왕 — 이번 주 확정된 단어시험 수 / 통과 수
+  periodVocabulary?: WeeklyGrowthInput["periodVocabulary"];
   // 이번 주 Teacher manual 칭찬 코멘트 원문 (오래된 → 최신)
   weekPraiseComments: string[];
   // 이번 주 평가 대상 보충수업 (scopeMakeupsToWeek 적용 후)
@@ -263,6 +267,7 @@ export function buildGrowthNoteViewModel(input: BuildGrowthNoteInput): StudentGr
     weekRecords,
     recentVocabPercents: input.recentVocabPercents,
     recentAssessmentPercents: input.recentAssessmentPercents,
+    periodVocabulary: input.periodVocabulary,
     weekMakeups: input.weekMakeups,
   });
 

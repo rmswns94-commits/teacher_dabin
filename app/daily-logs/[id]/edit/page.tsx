@@ -11,6 +11,8 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
 import { sortByKoreanName } from "@/lib/korean-sort";
+import { vocabularyStreakBefore, vocabularyTestsOf } from "@/lib/vocabulary-streak";
+import { getCompletedAssessmentHistory } from "@/lib/supabase/queries/growth-notes";
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import { buildTextbookSectionsText, stripDerivedPrefix, uniqueSchoolList } from "@/lib/textbooks";
 import { getDailyLogDraft } from "@/lib/supabase/queries/daily-log-drafts";
@@ -196,6 +198,21 @@ export default async function EditDailyLogPage({
     (student) => student.studentId,
   );
 
+  // 단어시험 연속 만점 미리보기 — 이 일지를 뺀, 그보다 앞선 완료 일지까지의 학생별 streak (batch 1쿼리)
+  const vocabularyTests = vocabularyTestsOf(
+    await getCompletedAssessmentHistory(sortedStudents.map((student) => student.studentId), log.class_date),
+  );
+  const vocabStreakBefore = Object.fromEntries(
+    sortedStudents.map((student) => [
+      student.studentId,
+      vocabularyStreakBefore(vocabularyTests.get(student.studentId) ?? [], {
+        date: log.class_date,
+        logOrder: log.created_at,
+        logId: log.id,
+      }),
+    ]),
+  );
+
   // 시험 기간 ON: 학교별 시험 대비 캘린더 read-only 미리보기 (새 작성 화면과 동일 —
   // 현재 그룹 학생 학교 기준. 저장된 일지 데이터는 어떤 것도 변환/복제하지 않는다)
   // PHASE 2: 시험 대상 학교가 설정된 그룹은 대상 학교만 미리보기에 표시
@@ -275,6 +292,8 @@ export default async function EditDailyLogPage({
         <DailyLogForm
           dailyLogId={log.id}
           classDate={log.class_date}
+          vocabStreakBefore={vocabStreakBefore}
+          finalized={log.status === "completed"}
           group={{ id: log.group_id, name: log.group?.name ?? "수업 그룹", grade: log.group?.grade }}
           students={sortedStudents}
           currentHomeworkStudents={currentMembers.filter((member) => !member.archived).map((member) => ({

@@ -14,6 +14,7 @@ import {
   type GrowthAwardGuideItem,
 } from "@/lib/growth-awards";
 import type { GrowthViewMode } from "@/lib/growth-note";
+import { ASSESSMENT_CATEGORIES, ASSESSMENT_RANKS, assessmentRankEmoji } from "@/lib/assessments";
 
 export type GrowthGuideSection<T> = { title: string; subtitle: string; items: T[] };
 
@@ -26,8 +27,10 @@ export type GrowthGuide = {
   totalCount: number; // 15
   badges: GrowthGuideSection<GrowthBadgeGuideItem>;
   awards: GrowthGuideSection<GrowthAwardGuideItem>;
-  kingText: string; // 왕중왕 — 9+6에 포함되지 않는 종합 타이틀
+  kingText: string; // 왕중왕 — 성장왕+왕에 포함되지 않는 종합 타이틀
   notes: readonly string[];
+  // 시험 결과 배지 (월말평가 1·2·3등) — 성장왕/왕이 아니고 왕중왕 개수에도 넣지 않는다
+  rankBadges: { title: string; text: string; items: { key: string; emoji: string; label: string }[] } | null;
 };
 
 export function buildGrowthGuide(mode: GrowthViewMode): GrowthGuide {
@@ -53,5 +56,18 @@ export function buildGrowthGuide(mode: GrowthViewMode): GrowthGuide {
     },
     kingText: growthAwardGuideKingText(mode),
     notes: growthAwardGuideNotes(),
+    rankBadges: rankBadgeGuide(unit),
+  };
+}
+
+function rankBadgeGuide(unit: string): GrowthGuide["rankBadges"] {
+  const meta = ASSESSMENT_CATEGORIES.find((item) => item.supportsRank);
+  if (!meta) {
+    return null;
+  }
+  return {
+    title: `${meta.label} 배지`,
+    text: `${unit} ${meta.label}에서 선생님이 고른 등수대로 보여줘요. 공동 등수도 함께 받아요. 왕이 아니라 시험 결과 배지라 왕중왕 개수에는 넣지 않아요.`,
+    items: ASSESSMENT_RANKS.map((rank) => ({ key: `rank-${rank}`, emoji: assessmentRankEmoji[rank], label: `${meta.label} ${rank}등` })),
   };
 }

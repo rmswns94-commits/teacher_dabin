@@ -140,7 +140,22 @@ export function GrowthAwardGuideCard({ mode }: { mode: GrowthViewMode }) {
             </dl>
           </div>
 
-          {/* 왕중왕 — 15개에 포함되지 않는 종합 타이틀 (별도 설명) */}
+          {/* 월말평가 배지 — 왕 목록과 섞지 않는 시험 결과 배지 (개수에 포함 안 함) */}
+          {guide.rankBadges ? (
+            <div data-guide-rank-badges className="rounded-2xl border border-[#e6dcf3] bg-white/70 px-3.5 py-3">
+              <div className="text-base font-bold text-[#4e3f8a]">{guide.rankBadges.title}</div>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {guide.rankBadges.items.map((item) => (
+                  <span key={item.key} className="rounded-full bg-[#fdf6e6] px-2.5 py-1 text-xs font-semibold text-[#8a6a25]">
+                    {item.emoji} {item.label}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-1.5 text-sm leading-6 text-[#7b6f8d]">{guide.rankBadges.text}</p>
+            </div>
+          ) : null}
+
+          {/* 왕중왕 — 성장왕/왕 개수에 포함되지 않는 종합 타이틀 (별도 설명) */}
           <div data-guide-king className="rounded-2xl border border-[#eadfbf] bg-[#fffbee]/80 px-3.5 py-3">
             <div className="flex items-center gap-1.5 text-base font-bold text-[#8a6a25]">
               <span aria-hidden>👑</span>

@@ -91,7 +91,7 @@ export function LessonLogDetail({
     lessonAssessments.flatMap((assessment) => {
       const result = studentScoreFor(lessonLog as ScoreSource, assessment);
       return result
-        ? [`${assessmentNameOf(assessment).name.replace("시험", "")} ${result.correct}/${assessment.total} (${assessmentPercentRaw(result.correct, assessment.total)}%)${result.retest ? " · 재시험 필요" : ""}`]
+        ? [`${assessmentNameOf(assessment).name.replace("시험", "")} ${result.correct}/${assessment.total} (${assessmentPercentRaw(result.correct, assessment.total)}%)${result.rank ? ` · ${result.rank}등` : ""}${result.retest ? " · 재시험 필요" : ""}`]
         : [];
     });
   const parentNoteRows = detail.lessonLogs.filter((log) => log.parent_note);
@@ -464,6 +464,11 @@ export function LessonLogDetail({
                     {result!.correct} / {section.assessment.total}
                   </span>
                   <span className="text-[#54479c]">{assessmentPercentRaw(result!.correct, section.assessment.total)}%</span>
+                  {result!.rank ? (
+                    <span className="rounded-full bg-[#fdf6e0] px-1.5 py-0.5 text-xs font-semibold text-[#8a6a25]" data-assessment-rank-chip>
+                      {result!.rank}등
+                    </span>
+                  ) : null}
                   {result!.retest ? (
                     <span className="rounded-full bg-[#efe8fb] px-1.5 py-0.5 text-xs text-[#5d4ba5]">재시험 필요</span>
                   ) : null}

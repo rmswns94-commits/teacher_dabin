@@ -5,6 +5,7 @@ import { BookOpen, Sparkles, Target } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { assessmentPercentsByCategory } from "@/lib/assessments";
+import { vocabularyPassStats, vocabularyTestsOf } from "@/lib/vocabulary-streak";
 import { PageHeader } from "@/components/page-header";
 import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { StudentDeleteButton } from "@/components/student-delete-button";
@@ -371,6 +372,24 @@ export default async function StudentDetailPage({
         assessment_totals: (item.dailyLog as { assessment_totals?: unknown } | null)?.assessment_totals,
       })),
   );
+  // 단어왕 — 이번 주 완료된 일지의 단어시험 통과율 (이미 불러온 기록에서, 추가 쿼리 없음)
+  const completedVocabularyTests =
+    vocabularyTestsOf(
+      history
+        .filter((item) => (item.dailyLog as { status?: string } | null)?.status === "completed")
+        .map((item) => ({
+          student_id: id,
+          daily_log_id: (item.dailyLog as { id?: string } | null)?.id ?? "",
+          class_date: item.dailyLog?.class_date ?? "",
+          log_created_at: (item.dailyLog as { created_at?: string } | null)?.created_at ?? null,
+          attendance: item.attendance,
+          vocab_correct: item.vocab_correct,
+          vocab_retest: item.vocab_retest,
+          vocab_total: item.dailyLog?.vocab_total ?? null,
+          assessment_results: (item as { assessment_results?: unknown }).assessment_results,
+          assessment_totals: (item.dailyLog as { assessment_totals?: unknown } | null)?.assessment_totals,
+        })),
+    ).get(id) ?? [];
   const weeklyGrowth = computeWeeklyGrowth({
     weekRecords: weekRecords.map((item) => ({
       attendance: item.attendance,
@@ -385,6 +404,7 @@ export default async function StudentDetailPage({
     // 단어왕/문법왕/독해왕 — 전체 최근 기록 (오래된 → 최신), 시험마다 자기 category로 1회씩
     recentVocabPercents: percentsByCategory.vocabulary,
     recentAssessmentPercents: { grammar: percentsByCategory.grammar, reading: percentsByCategory.reading },
+    periodVocabulary: vocabularyPassStats(completedVocabularyTests, weekStart, weekEnd),
     // 틈새왕: 이미 불러온 보충 기록에서 선택 주에 귀속되는 것만
     weekMakeups: scopeMakeupsToWeek(makeups, weekStart, weekEnd),
   });

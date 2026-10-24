@@ -15,19 +15,28 @@
 //   그대로 매칭된다. 다시 저장하면 그 id를 유지한 채 배열 형식으로 저장된다.
 import type { GrowthAchievementType } from "@/lib/supabase/types";
 
-export type AssessmentCategory = "vocabulary" | "grammar" | "reading";
+export type AssessmentCategory = "vocabulary" | "grammar" | "reading" | "month_end";
 
+// 시험 종류별 capability — 화면/저장/성장노트가 category 이름으로 if/else 하지 않고 이 metadata를 본다.
 export type AssessmentCategoryMeta = {
   key: AssessmentCategory;
   label: string; // 단어
   testLabel: string; // 단어시험
-  awardType: GrowthAchievementType; // vocabulary_master
+  // 이 종류의 성장왕 (단어왕/문법왕/독해왕). 없으면 null — 월말평가는 성장왕이 아니라 순위 배지
+  awardType: GrowthAchievementType | null;
+  // 학생 카드에서 고정 3칸(단어/문법/독해) 중 하나인지 — 아니면 시험이 있을 때만 별도 섹션
+  cardColumn: boolean;
+  // 학생별 1·2·3등 입력 (월말평가) — 공동 등수 허용
+  supportsRank: boolean;
+  // [재시험 필요] 표시 → 재시험 관리 등록 대상인지
+  supportsRetest: boolean;
 };
 
 export const ASSESSMENT_CATEGORIES: readonly AssessmentCategoryMeta[] = [
-  { key: "vocabulary", label: "단어", testLabel: "단어시험", awardType: "vocabulary_master" },
-  { key: "grammar", label: "문법", testLabel: "문법시험", awardType: "grammar_master" },
-  { key: "reading", label: "독해", testLabel: "독해시험", awardType: "reading_master" },
+  { key: "vocabulary", label: "단어", testLabel: "단어시험", awardType: "vocabulary_master", cardColumn: true, supportsRank: false, supportsRetest: true },
+  { key: "grammar", label: "문법", testLabel: "문법시험", awardType: "grammar_master", cardColumn: true, supportsRank: false, supportsRetest: true },
+  { key: "reading", label: "독해", testLabel: "독해시험", awardType: "reading_master", cardColumn: true, supportsRank: false, supportsRetest: true },
+  { key: "month_end", label: "월말평가", testLabel: "월말평가", awardType: null, cardColumn: false, supportsRank: true, supportsRetest: false },
 ];
 
 export function assessmentMeta(category: AssessmentCategory): AssessmentCategoryMeta {
@@ -35,7 +44,15 @@ export function assessmentMeta(category: AssessmentCategory): AssessmentCategory
 }
 
 export function isAssessmentCategory(value: unknown): value is AssessmentCategory {
-  return value === "vocabulary" || value === "grammar" || value === "reading";
+  return value === "vocabulary" || value === "grammar" || value === "reading" || value === "month_end";
+}
+
+// 월말평가 등수 — 1·2·3등만 (null = 해당 없음). 같은 등수 여러 명(공동 등수) 허용
+export type AssessmentRank = 1 | 2 | 3;
+export const ASSESSMENT_RANKS: readonly AssessmentRank[] = [1, 2, 3];
+export const assessmentRankEmoji: Record<AssessmentRank, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
+export function parseAssessmentRank(value: unknown): AssessmentRank | null {
+  return value === 1 || value === 2 || value === 3 ? value : null;
 }
 
 export function assessmentPercentRaw(correct: number, total: number) {
@@ -44,7 +61,8 @@ export function assessmentPercentRaw(correct: number, total: number) {
 
 // ---- 저장된 모델 ----
 export type LessonAssessment = { id: string; category: AssessmentCategory; total: number };
-export type AssessmentScore = { correct: number; retest: boolean };
+// rank는 등수를 받는 종류(월말평가)에서 고른 경우에만 존재한다 — 다른 종류의 저장 형식은 그대로
+export type AssessmentScore = { correct: number; retest: boolean; rank?: AssessmentRank };
 
 export type LessonAssessmentSource = { vocab_total: number | null; assessment_totals?: unknown };
 export type StudentAssessmentSource = {
@@ -92,9 +110,11 @@ function parseScore(value: unknown): AssessmentScore | null {
     return null;
   }
   const correct = (value as { correct?: unknown }).correct;
-  return typeof correct === "number" && Number.isInteger(correct) && correct >= 0
-    ? { correct, retest: Boolean((value as { retest?: unknown }).retest) }
-    : null;
+  if (typeof correct !== "number" || !Number.isInteger(correct) || correct < 0) {
+    return null;
+  }
+  const rank = parseAssessmentRank((value as { rank?: unknown }).rank);
+  return { correct, retest: Boolean((value as { retest?: unknown }).retest), ...(rank ? { rank } : {}) };
 }
 
 // 한 학생의 한 시험 결과 — null = 미입력 (0점은 유효한 결과)
@@ -118,7 +138,7 @@ export function studentScoreFor(row: StudentAssessmentSource, assessment: Lesson
 export function assessmentPercentsByCategory(
   rows: readonly (LessonAssessmentSource & StudentAssessmentSource)[],
 ): Record<AssessmentCategory, number[]> {
-  const out = { vocabulary: [], grammar: [], reading: [] } as Record<AssessmentCategory, number[]>;
+  const out = { vocabulary: [], grammar: [], reading: [], month_end: [] } as Record<AssessmentCategory, number[]>;
   for (const row of rows) {
     for (const assessment of lessonAssessmentsOf(row)) {
       const score = studentScoreFor(row, assessment);
@@ -133,7 +153,7 @@ export function assessmentPercentsByCategory(
 
 // ---- 폼 state (문자열 입력) ----
 export type AssessmentDraft = { id: string; category: AssessmentCategory; total: string };
-export type ScoreInput = { correct: string; retest: boolean };
+export type ScoreInput = { correct: string; retest: boolean; rank?: AssessmentRank | null };
 export type ScoreInputs = Record<string, ScoreInput>; // key = assessment id
 
 export function newAssessmentId() {
@@ -149,7 +169,7 @@ export function scoresToInputs(row: StudentAssessmentSource, list: readonly Less
   for (const assessment of list) {
     const score = studentScoreFor(row, assessment);
     if (score) {
-      out[assessment.id] = { correct: String(score.correct), retest: score.retest };
+      out[assessment.id] = { correct: String(score.correct), retest: score.retest, ...(score.rank ? { rank: score.rank } : {}) };
     }
   }
   return out;
@@ -200,8 +220,13 @@ export function restoreScoreInputs(entry: {
     const out: ScoreInputs = {};
     for (const [id, value] of Object.entries(entry.assessmentScores as Record<string, unknown>)) {
       const correct = (value as { correct?: unknown })?.correct;
-      if (ID_PATTERN.test(id) && typeof correct === "string") {
-        out[id] = { correct, retest: Boolean((value as { retest?: unknown }).retest) };
+      const rank = parseAssessmentRank((value as { rank?: unknown })?.rank);
+      if (ID_PATTERN.test(id) && (typeof correct === "string" || rank)) {
+        out[id] = {
+          correct: typeof correct === "string" ? correct : "",
+          retest: Boolean((value as { retest?: unknown }).retest),
+          ...(rank ? { rank } : {}),
+        };
       }
     }
     return out;
@@ -292,15 +317,22 @@ export function assessmentsForSave(input: readonly { id: string; category: strin
 }
 
 // 학생 결과 — 존재하는 시험 + 맞은 개수 입력된 것만 (빈 값은 저장 안 함 = null, 0은 저장)
+// 재시험 표시는 재시험을 받는 종류만, 등수는 등수를 받는 종류만 저장한다 (capability metadata 기준).
 export function scoresForSave(
-  input: Record<string, { correct?: string; retest?: boolean }> | undefined,
+  input: Record<string, { correct?: string; retest?: boolean; rank?: number | null }> | undefined,
   list: readonly LessonAssessment[],
 ): Record<string, AssessmentScore> {
   const out: Record<string, AssessmentScore> = {};
   for (const assessment of list) {
     const value = input?.[assessment.id];
     if (value?.correct !== undefined && value.correct !== "" && Number.isInteger(Number(value.correct))) {
-      out[assessment.id] = { correct: Number(value.correct), retest: Boolean(value.retest) };
+      const meta = assessmentMeta(assessment.category);
+      const rank = meta.supportsRank ? parseAssessmentRank(value.rank) : null;
+      out[assessment.id] = {
+        correct: Number(value.correct),
+        retest: meta.supportsRetest ? Boolean(value.retest) : false,
+        ...(rank ? { rank } : {}),
+      };
     }
   }
   return out;
@@ -313,7 +345,7 @@ export function firstVocabularyAssessment(list: readonly LessonAssessment[]) {
 
 // 같은 종류 시험 안에서의 번호 (추가한 순서, 1부터) — 화면 표시용. 같은 종류가 하나뿐이면 번호 없이 표시한다.
 export function assessmentOrdinals(list: readonly { id: string; category: AssessmentCategory }[]) {
-  const counts: Record<AssessmentCategory, number> = { vocabulary: 0, grammar: 0, reading: 0 };
+  const counts: Record<AssessmentCategory, number> = { vocabulary: 0, grammar: 0, reading: 0, month_end: 0 };
   const ordinals: Record<string, number> = {};
   for (const item of list) {
     counts[item.category] += 1;
@@ -328,4 +360,41 @@ export function assessmentOrdinals(list: readonly { id: string; category: Assess
         ? `${assessmentMeta(item.category).testLabel} ${ordinals[item.id] ?? 1}`
         : assessmentMeta(item.category).testLabel,
   });
+}
+
+// ── 월말평가 등수 배지 (성장노트) ──
+// 선택 기간 안 수업일의 등수 결과만 — 시험마다 1개 (같은 달 월말평가가 둘이면 배지도 둘).
+// 성장왕/왕이 아니라 시험 결과 배지라 왕중왕 개수에 넣지 않는다.
+export type AssessmentRankBadge = { assessmentId: string; date: string; rank: AssessmentRank; label: string; emoji: string };
+
+export function assessmentRankBadgesOf(
+  rows: readonly (LessonAssessmentSource & StudentAssessmentSource & { student_id: string; class_date: string })[],
+  start: string,
+  end: string,
+): Map<string, AssessmentRankBadge[]> {
+  const out = new Map<string, AssessmentRankBadge[]>();
+  for (const row of rows) {
+    if (row.class_date < start || row.class_date > end) {
+      continue;
+    }
+    for (const assessment of lessonAssessmentsOf(row)) {
+      const meta = assessmentMeta(assessment.category);
+      if (!meta.supportsRank) {
+        continue;
+      }
+      const rank = studentScoreFor(row, assessment)?.rank;
+      if (!rank) {
+        continue;
+      }
+      const list = out.get(row.student_id) ?? [];
+      if (!list.some((badge) => badge.assessmentId === assessment.id)) {
+        list.push({ assessmentId: assessment.id, date: row.class_date, rank, label: `${meta.label} ${rank}등`, emoji: assessmentRankEmoji[rank] });
+      }
+      out.set(row.student_id, list);
+    }
+  }
+  for (const list of out.values()) {
+    list.sort((a, b) => a.date.localeCompare(b.date) || a.rank - b.rank);
+  }
+  return out;
 }

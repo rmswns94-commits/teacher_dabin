@@ -6,6 +6,9 @@
 //   ⏰ 시간약속왕    정시(present) 출석률 — 지각/조퇴/결석은 모두 non-success, 출결 사유는 무관
 //   📝 과제꾸준왕    숙제 마감일(opportunity date) 기준 최장 연속 "그날 숙제 전부 완료"
 //   🚀 도약왕        학습 실행률(숙제+복습)의 직전 기간 대비 향상(%p, 양수만)
+//   ✨ 3연속 만점왕  이번 달 단어시험 3회 연속 만점 달성 횟수 (월간 보기에서만 선정)
+//   🏆 5연속 만점왕  이번 달 단어시험 5회 연속 만점 달성 횟수 (월간 보기에서만 선정)
+//                    — 연속 만점 계산은 lib/vocabulary-streak (완료된 일지의 단어시험만, 달이 바뀌어도 이어짐)
 //
 // 원칙:
 // - Winner 선정과 근거(evidence) 표시는 같은 normalized metric 객체를 쓴다 (따로 재계산 금지).
@@ -24,7 +27,9 @@ export type GrowthAwardKey =
   | "review"
   | "punctuality"
   | "homeworkStreak"
-  | "improvement";
+  | "improvement"
+  | "vocabStreak3"
+  | "vocabStreak5";
 
 export const growthAwardKeys: readonly GrowthAwardKey[] = [
   "consistency",
@@ -33,7 +38,12 @@ export const growthAwardKeys: readonly GrowthAwardKey[] = [
   "punctuality",
   "homeworkStreak",
   "improvement",
+  "vocabStreak3",
+  "vocabStreak5",
 ];
+
+// 월간 보기에서만 선정하는 왕 — 주간 보기에서는 카드만 두고 "월간에서 선정" 안내 (한 달 동안의 달성 횟수 비교라)
+export const monthlyOnlyGrowthAwards: ReadonlySet<GrowthAwardKey> = new Set(["vocabStreak3", "vocabStreak5"]);
 
 export const growthAwardMeta: Record<GrowthAwardKey, { emoji: string; label: string; description: string }> = {
   consistency: { emoji: "🔥", label: "꾸준왕", description: "출결·숙제·복습을 꾸준히 해낸 학생" },
@@ -42,6 +52,8 @@ export const growthAwardMeta: Record<GrowthAwardKey, { emoji: string; label: str
   punctuality: { emoji: "⏰", label: "시간약속왕", description: "정시 출석률이 가장 높은 학생" },
   homeworkStreak: { emoji: "📝", label: "과제꾸준왕", description: "숙제를 가장 오래 연속으로 완료한 학생" },
   improvement: { emoji: "🚀", label: "도약왕", description: "이전 기간보다 학습 수행률이 가장 많이 오른 학생" },
+  vocabStreak3: { emoji: "✨", label: "3연속 만점왕", description: "한 달 동안 단어시험 3회 연속 만점을 가장 많이 달성한 학생" },
+  vocabStreak5: { emoji: "🏆", label: "5연속 만점왕", description: "한 달 동안 단어시험 5회 연속 만점을 가장 많이 달성한 학생" },
 };
 
 // ---- Eligibility minimums (주/월별 최소 표본 — 컴포넌트에 숫자 하드코딩 금지) ----
@@ -54,6 +66,7 @@ export type GrowthAwardMinimums = {
   homeworkStreakDates: number;
   improvementPrevious: number;
   improvementCurrent: number;
+  vocabStreakAchievements: number;
 };
 
 export function getGrowthAwardMinimums(mode: GrowthViewMode): GrowthAwardMinimums {
@@ -67,6 +80,7 @@ export function getGrowthAwardMinimums(mode: GrowthViewMode): GrowthAwardMinimum
       homeworkStreakDates: 3,
       improvementPrevious: 6,
       improvementCurrent: 6,
+      vocabStreakAchievements: 1,
     };
   }
   return {
@@ -78,6 +92,7 @@ export function getGrowthAwardMinimums(mode: GrowthViewMode): GrowthAwardMinimum
     homeworkStreakDates: 2,
     improvementPrevious: 3,
     improvementCurrent: 3,
+    vocabStreakAchievements: 1,
   };
 }
 
@@ -98,6 +113,9 @@ export function growthAwardMinimumLabel(key: GrowthAwardKey, mode: GrowthViewMod
       return `${unit} 숙제 마감일 ${min.homeworkStreakDates}일 이상`;
     case "improvement":
       return `이전 기간·이번 기간 각각 숙제+복습 기록 ${min.improvementPrevious}개 이상`;
+    case "vocabStreak3":
+    case "vocabStreak5":
+      return `이번 달 단어시험 ${key === "vocabStreak3" ? 3 : 5}회 연속 만점 ${min.vocabStreakAchievements}번 이상 (월간 보기)`;
   }
 }
 
@@ -186,6 +204,13 @@ export type StudentGrowthMetrics = {
     homework: { applicable: number; completed: number };
     review: { evaluated: number; completed: number };
   };
+  // 단어 연속 만점 달성일 (시간순) — 이번 기간 / 기간 끝까지의 전체 누적
+  vocabularyStreak: {
+    periodThrees: string[];
+    periodFives: string[];
+    lifetimeThrees: number;
+    lifetimeFives: number;
+  };
 };
 
 function inPeriod(date: string, period: AwardPeriod) {
@@ -198,15 +223,25 @@ export function buildStudentGrowthMetrics(input: {
   homework: readonly AwardHomeworkRecord[];
   current: AwardPeriod;
   previous: AwardPeriod;
+  // 학생별 단어 연속 만점 달성일 전체 (lib/vocabulary-streak computeVocabularyStreak의 threes/fives)
+  vocabularyStreaks?: ReadonlyMap<string, { threes: readonly string[]; fives: readonly string[] }>;
 }): Map<string, StudentGrowthMetrics> {
   const map = new Map<string, StudentGrowthMetrics>();
   for (const studentId of input.studentIds) {
+    const streak = input.vocabularyStreaks?.get(studentId);
+    const upToEnd = (dates: readonly string[] | undefined) => (dates ?? []).filter((date) => date <= input.current.end);
     map.set(studentId, {
       studentId,
       attendance: { present: 0, late: 0, earlyLeave: 0, absent: 0, evaluated: 0 },
       homework: { applicable: 0, completed: 0, byDate: [] },
       review: { completed: 0, incomplete: 0, evaluated: 0, unevaluated: 0 },
       previous: { homework: { applicable: 0, completed: 0 }, review: { evaluated: 0, completed: 0 } },
+      vocabularyStreak: {
+        periodThrees: upToEnd(streak?.threes).filter((date) => date >= input.current.start),
+        periodFives: upToEnd(streak?.fives).filter((date) => date >= input.current.start),
+        lifetimeThrees: upToEnd(streak?.threes).length,
+        lifetimeFives: upToEnd(streak?.fives).length,
+      },
     });
   }
 
@@ -297,7 +332,8 @@ export type GrowthAwardEvidence =
       deltaPoints: number | null;
       currentHomework: { completed: number; applicable: number };
       currentReview: { completed: number; evaluated: number };
-    };
+    }
+  | { kind: "vocabStreak"; milestone: 3 | 5; periodCount: number; lifetimeCount: number; dates: string[] };
 
 export type GrowthAwardMetric = {
   studentId: string;
@@ -312,7 +348,7 @@ export type GrowthAwardResult = {
   winners: GrowthAwardMetric[];
   eligibleCount: number;
   // winner가 없는 이유 — 표시 문구 결정용
-  emptyReason: "none" | "no_eligible" | "no_positive";
+  emptyReason: "none" | "no_eligible" | "no_positive" | "monthly_only";
 };
 
 const categoryLabels: Record<ConsistencyCategoryKey, string> = {
@@ -459,6 +495,24 @@ export function computeGrowthAwardMetric(
         },
       };
     }
+    case "vocabStreak3":
+    case "vocabStreak5": {
+      // 점수 = 이번 기간 달성 횟수. 0회는 후보 아님. 동점은 전부 winner (공통 규칙).
+      const milestone = key === "vocabStreak3" ? 3 : 5;
+      const dates = milestone === 3 ? metrics.vocabularyStreak.periodThrees : metrics.vocabularyStreak.periodFives;
+      return {
+        studentId: metrics.studentId,
+        eligible: dates.length >= min.vocabStreakAchievements,
+        score: { num: dates.length, den: 1 },
+        evidence: {
+          kind: "vocabStreak",
+          milestone,
+          periodCount: dates.length,
+          lifetimeCount: milestone === 3 ? metrics.vocabularyStreak.lifetimeThrees : metrics.vocabularyStreak.lifetimeFives,
+          dates: [...dates],
+        },
+      };
+    }
   }
 }
 
@@ -507,7 +561,10 @@ export function computeGrowthAwards(
   const min = getGrowthAwardMinimums(mode);
   const out = {} as Record<GrowthAwardKey, GrowthAwardResult>;
   for (const key of growthAwardKeys) {
-    out[key] = computeGrowthAward(key, metricsList, min);
+    out[key] =
+      mode === "week" && monthlyOnlyGrowthAwards.has(key)
+        ? { key, winners: [], eligibleCount: 0, emptyReason: "monthly_only" }
+        : computeGrowthAward(key, metricsList, min);
   }
   return out;
 }
@@ -530,6 +587,12 @@ export function awardsWonByStudent(results: Record<GrowthAwardKey, GrowthAwardRe
 // winner 없음 안내 문구
 export function growthAwardEmptyText(key: GrowthAwardKey, reason: GrowthAwardResult["emptyReason"], mode: GrowthViewMode): string {
   const unit = mode === "month" ? "이번 달" : "이번 주";
+  if (reason === "monthly_only") {
+    return `${growthAwardMeta[key].label}은 한 달 동안의 기록으로 월간 보기에서 선정돼요.`;
+  }
+  if (key === "vocabStreak3" || key === "vocabStreak5") {
+    return `${unit}은 아직 단어시험 ${key === "vocabStreak3" ? 3 : 5}회 연속 만점을 달성한 학생이 없어요.`;
+  }
   if (key === "improvement" && reason === "no_positive") {
     return `${unit}은 이전 기간보다 학습 수행률이 오른 학생이 아직 없어요.`;
   }
@@ -540,6 +603,8 @@ export function growthAwardEmptyText(key: GrowthAwardKey, reason: GrowthAwardRes
     punctuality: "출결 기록",
     homeworkStreak: "숙제 기록",
     improvement: "이전 기간과 비교할 기록",
+    vocabStreak3: "단어시험 기록",
+    vocabStreak5: "단어시험 기록",
   };
   return reason === "no_positive"
     ? `${unit}은 ${subject[key]}은 있지만 아직 왕을 정할 만한 성과가 없어요.`
@@ -605,6 +670,18 @@ export function growthAwardGuideItem(key: GrowthAwardKey, mode: GrowthViewMode):
         primary: "이전 기간보다 학습 습관이 가장 많이 좋아진 학생이에요.",
         secondary: `${previous}보다 ${unit}의 숙제 · 온라인 복습 수행률이 얼마나 올랐는지 비교해요. 실제로 수행률이 오른 학생이 있을 때만 선정돼요.`,
       };
+    case "vocabStreak3":
+    case "vocabStreak5": {
+      const n = key === "vocabStreak3" ? 3 : 5;
+      return {
+        ...base,
+        primary: `한 달 동안 단어시험에서 ${n}회 연속 만점을 가장 많이 달성한 학생이에요.`,
+        secondary:
+          n === 3
+            ? "수업 기록을 완료한 단어시험만 순서대로 세요. 만점이 아닌 시험이 나오면 처음부터 다시 세고, 문법 · 독해 · 월말평가 · 재시험 점수는 끊지도 이어지지도 않아요. 달이 바뀌어도 이어지고, 달성한 날의 달에 1번으로 세요."
+            : "5회 연속 만점을 달성하면 그 번에 1번으로 세고 연속 횟수를 0부터 다시 세요 (5회 안에 3연속 만점도 1번 함께 들어가요). 월간 보기에서만 선정하고, 근거에는 전체 누적 횟수도 보여줘요.",
+      };
+    }
   }
 }
 
@@ -612,7 +689,7 @@ export function growthAwardGuideItems(mode: GrowthViewMode): GrowthAwardGuideIte
   return growthAwardKeys.map((key) => growthAwardGuideItem(key, mode));
 }
 
-// 왕중왕 = 9개 성장왕 + 6개 왕 합산 최다 (동점 전원, 전원 0개면 없음) — lib/growth-note의 isKingOfKings와 동일 의미.
+// 왕중왕 = 성장왕 + 왕 합산 최다 (동점 전원, 전원 0개면 없음) — lib/growth-note의 isKingOfKings와 동일 의미.
 // 9+6에 포함되지 않는 별도 종합 타이틀.
 export function growthAwardGuideKingText(mode: GrowthViewMode): string {
   const { unit } = growthPeriodWords(mode);

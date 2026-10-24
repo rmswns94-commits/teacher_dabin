@@ -106,8 +106,10 @@ import { sortByKoreanName } from "@/lib/korean-sort";
 import { nextClassDateAfter } from "@/lib/schedule";
 import { vocabWordKey } from "@/lib/vocab";
 import { digitsOnly, isComposingEvent } from "@/lib/numeric-input";
+import { previewVocabularyStreak, type VocabularyStreakPreview } from "@/lib/vocabulary-streak";
 import {
   ASSESSMENT_CATEGORIES,
+  ASSESSMENT_RANKS,
   assessmentMeta,
   assessmentOrdinals,
   assessmentPercentRaw,
@@ -487,6 +489,8 @@ function AssessmentScoreInput({
   label,
   value,
   onChange,
+  streak = null,
+  finalized = false,
 }: {
   studentName: string;
   assessment: AssessmentDraft;
@@ -494,7 +498,12 @@ function AssessmentScoreInput({
   label?: string; // 시험 1 · 20문제
   value: ScoreInput;
   onChange: (next: ScoreInput) => void;
+  // 단어시험 연속 만점 미리보기 (이 수업 이전 streak + 지금 입력) — 단어시험에만
+  streak?: VocabularyStreakPreview | null;
+  // 이미 완료된 일지 수정 중 (저장 전 안내 문구만 다르다)
+  finalized?: boolean;
 }) {
+  const meta = assessmentMeta(assessment.category);
   const total = assessment.total.trim();
   const exceeds = scoreExceedsTotal(value.correct, assessment.total);
   const percent = value.correct && total && !exceeds ? assessmentPercentRaw(Number(value.correct), Number(total)) : null;
@@ -524,24 +533,74 @@ function AssessmentScoreInput({
           / {total || "?"}
           {percent !== null ? ` · ${percent}%` : ""}
         </span>
-        <button
-          type="button"
-          aria-pressed={value.retest}
-          aria-label={`${studentName} ${name} 재시험 필요`}
-          onClick={() => onChange({ ...value, retest: !value.retest })}
-          className={cn(
-            "min-h-[38px] rounded-xl border px-2.5 py-1.5 text-sm font-medium transition",
-            value.retest
-              ? "border-[#d8cdf0] bg-[#f3eefc] text-[#5d4ba5]"
-              : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
-          )}
-        >
-          재시험 필요
-        </button>
+        {meta.supportsRetest ? (
+          <button
+            type="button"
+            aria-pressed={value.retest}
+            aria-label={`${studentName} ${name} 재시험 필요`}
+            onClick={() => onChange({ ...value, retest: !value.retest })}
+            className={cn(
+              "min-h-[38px] rounded-xl border px-2.5 py-1.5 text-sm font-medium transition",
+              value.retest
+                ? "border-[#d8cdf0] bg-[#f3eefc] text-[#5d4ba5]"
+                : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
+            )}
+          >
+            재시험 필요
+          </button>
+        ) : null}
       </div>
       {exceeds ? (
         <p role="alert" className="mt-1 text-xs text-[#b4554b]">
           맞은 개수는 총 문항 수({total})를 넘을 수 없어요.
+        </p>
+      ) : null}
+      {/* 월말평가 등수 — 1·2·3등 / 해당 없음 (공동 등수 허용) */}
+      {meta.supportsRank ? (
+        <div role="group" aria-label={`${studentName} ${name} 등수`} className="mt-1.5 flex flex-wrap items-center gap-1.5" data-assessment-rank>
+          <span className="text-xs font-medium text-[#8a7b77]">등수</span>
+          {[...ASSESSMENT_RANKS, null].map((rank) => {
+            const selected = (value.rank ?? null) === rank;
+            return (
+              <button
+                key={rank ?? "none"}
+                type="button"
+                aria-pressed={selected}
+                data-rank={rank ?? "none"}
+                onClick={() => onChange({ ...value, rank })}
+                className={cn(
+                  "min-h-[38px] rounded-xl border px-2.5 py-1.5 text-sm font-medium transition",
+                  selected
+                    ? rank
+                      ? "border-[#e5cf9a] bg-[#fdf6e0] font-semibold text-[#8a6a25]"
+                      : "border-[#d9cec9] bg-[#f6f1ee] text-[#655a56]"
+                    : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
+                )}
+              >
+                {rank ? `${rank}등` : "해당 없음"}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      {/* 단어시험 연속 만점 — 3·5회 달성은 눈에 띄게, 1·2·4회는 작게. 5회째에는 5연속만 (3연속 재표시 없음) */}
+      {streak && streak.milestone ? (
+        <div
+          role="status"
+          data-vocab-streak={streak.milestone}
+          className={cn(
+            "mt-1.5 rounded-xl px-2.5 py-1.5 text-sm font-semibold",
+            streak.milestone === 5 ? "bg-[#fdf3dc] text-[#8a6a25]" : "bg-[#f3eefc] text-[#5d4ba5]",
+          )}
+        >
+          {streak.milestone === 5 ? "🏆 5연속 만점 달성!" : "✨ 3연속 만점 달성!"}
+          <span className="ml-1.5 text-xs font-normal opacity-80">
+            {finalized ? "성장노트에 반영돼요" : "수업 기록을 완료하면 기록돼요"}
+          </span>
+        </div>
+      ) : streak && streak.streak > 0 ? (
+        <p className="mt-1 text-xs text-[#8a7b77]" data-vocab-streak-count={streak.streak}>
+          연속 만점 {streak.streak}회
         </p>
       ) : null}
     </div>
@@ -753,7 +812,13 @@ export function DailyLogForm({
   schools = [],
   examTargetSchools = null,
   previousEvaluations = null,
+  vocabStreakBefore = {},
+  finalized = false,
 }: {
+  // 학생별 이 수업 직전까지의 단어시험 연속 만점 횟수 (완료된 일지 기준 — 서버 계산). 카드 미리보기용
+  vocabStreakBefore?: Record<string, number>;
+  // 이미 완료(Final Save)된 일지를 수정 중인지
+  finalized?: boolean;
   dailyLogId?: string;
   classDate: string;
   group: { id: string; name: string; grade?: string };
@@ -1486,7 +1551,7 @@ export function DailyLogForm({
   const updateScore = (studentId: string, assessmentId: string, next: ScoreInput) => {
     setEntries((prev) => {
       const scores = { ...prev[studentId].assessmentScores };
-      if (!next.correct && !next.retest) {
+      if (!next.correct && !next.retest && !next.rank) {
         delete scores[assessmentId];
       } else {
         scores[assessmentId] = next;
@@ -3824,6 +3889,10 @@ export function DailyLogForm({
           // 본문은 unmount하지 않고 display:none으로만 숨겨 입력값/편집기 상태를 보존한다.
           const isCollapsed = collapsedStudentIds.has(student.studentId);
           const cardBodyId = `student-card-body-${student.studentId}`;
+          // 단어시험 연속 만점 미리보기 — 이 수업 직전 streak(서버) + 지금 입력 (form state에서 파생, DB 호출 없음)
+          const streakPreview = isAbsent
+            ? {}
+            : previewVocabularyStreak(vocabStreakBefore[student.studentId] ?? 0, assessments, entry.assessmentScores);
           // 결석 시 "놓친 진도" 기본 후보 — mixed에서는 학생 몫의 진도만
           // (시험 대상 학생 → 자기 학교 진도, 일반 학생 → 일반 교재 mirror. 교차 스냅샷 금지).
           // regular/legacy_exam은 기존 전체 mirror 정책 그대로.
@@ -4139,7 +4208,7 @@ export function DailyLogForm({
                       <div role="group" aria-label={`${student.name} 시험 결과`} data-student-assessments>
                         <div className="form-label mb-1.5 font-semibold text-[#7c6d69]">시험 결과</div>
                         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                          {ASSESSMENT_CATEGORIES.map((meta) => {
+                          {ASSESSMENT_CATEGORIES.filter((meta) => meta.cardColumn).map((meta) => {
                             const items = assessments.filter((item) => item.category === meta.key);
                             return (
                               <div
@@ -4161,6 +4230,8 @@ export function DailyLogForm({
                                         label={`시험 ${index + 1} · ${item.total.trim() || "?"}문제`}
                                         value={entry.assessmentScores[item.id] ?? { correct: "", retest: false }}
                                         onChange={(next) => updateScore(student.studentId, item.id, next)}
+                                        streak={streakPreview[item.id] ?? null}
+                                        finalized={finalized}
                                       />
                                     ))}
                                   </div>
@@ -4169,6 +4240,32 @@ export function DailyLogForm({
                             );
                           })}
                         </div>
+                        {/* 고정 3칸 밖의 시험(월말평가) — 그 종류 시험이 있을 때만 별도 섹션 */}
+                        {ASSESSMENT_CATEGORIES.filter((meta) => !meta.cardColumn).map((meta) => {
+                          const items = assessments.filter((item) => item.category === meta.key);
+                          return items.length === 0 ? null : (
+                            <div
+                              key={meta.key}
+                              data-assessment-section-card={meta.key}
+                              className="mt-2 min-w-0 rounded-xl border border-[#efdcb0] bg-[#fffdf6] p-2.5"
+                            >
+                              <div className="mb-1.5 text-sm font-semibold text-[#4d3a3a]">{meta.label}</div>
+                              <div className="space-y-2.5">
+                                {items.map((item, index) => (
+                                  <AssessmentScoreInput
+                                    key={item.id}
+                                    studentName={student.name}
+                                    assessment={item}
+                                    name={assessmentNameOf(item).name}
+                                    label={items.length > 1 ? `시험 ${index + 1} · ${item.total.trim() || "?"}문제` : `${item.total.trim() || "?"}문제`}
+                                    value={entry.assessmentScores[item.id] ?? { correct: "", retest: false }}
+                                    onChange={(next) => updateScore(student.studentId, item.id, next)}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
 
                       {/* 틀린 단어 — draft autosave에는 payload로만 담기고 final 저장 시 rows 반영 */}

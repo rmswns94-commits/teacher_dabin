@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { validateAssessmentInput } from "@/lib/assessments";
+import { assessmentMeta, validateAssessmentInput } from "@/lib/assessments";
 
 const dateString = z
   .string()
@@ -37,7 +37,12 @@ export const studentLessonEntrySchema = z.object({
   assessmentScores: z
     .record(
       z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
-      z.object({ correct: numberString.optional().or(z.literal("")), retest: z.boolean().optional() }),
+      z.object({
+        correct: numberString.optional().or(z.literal("")),
+        retest: z.boolean().optional(),
+        // 월말평가 등수 (1·2·3, null = 해당 없음). 공동 등수 허용 — 같은 등수 여러 명 가능
+        rank: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional(),
+      }),
     )
     .optional(),
   // 단어시험 틀린 단어: 빈 문자열/같은 시험 내 중복(정규화 기준)은 서버에서 걸러 저장된다.
@@ -126,7 +131,7 @@ export const dailyLogSchema = z
       .array(
         z.object({
           id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
-          category: z.enum(["vocabulary", "grammar", "reading"]),
+          category: z.enum(["vocabulary", "grammar", "reading", "month_end"]),
           total: numberString,
         }),
       )
@@ -200,6 +205,26 @@ export const dailyLogSchema = z
               ? ["assessments", assessmentIndex, "total"]
               : ["students", issue.field.studentIndex, "assessmentScores", assessment.id, "correct"],
         });
+      }
+      // 등수는 등수를 받는 시험(월말평가)에서만, 맞은 개수를 입력한 학생만 (등수만 있는 결과는 저장하지 않는다)
+      for (const [studentIndex, student] of value.students.entries()) {
+        const score = student.assessmentScores?.[assessment.id];
+        if (!score?.rank) {
+          continue;
+        }
+        if (!assessmentMeta(assessment.category).supportsRank) {
+          ctx.addIssue({
+            code: "custom",
+            message: "등수는 월말평가에서만 입력할 수 있어요.",
+            path: ["students", studentIndex, "assessmentScores", assessment.id, "rank"],
+          });
+        } else if (!score.correct) {
+          ctx.addIssue({
+            code: "custom",
+            message: "등수를 고르려면 맞은 개수도 입력해주세요.",
+            path: ["students", studentIndex, "assessmentScores", assessment.id, "correct"],
+          });
+        }
       }
     }
   });

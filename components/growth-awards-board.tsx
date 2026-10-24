@@ -38,6 +38,8 @@ const awardThemes: Record<GrowthAwardKey, { card: string; title: string; chip: s
   punctuality: { card: "border-[#d8e8c6] bg-gradient-to-br from-[#f7fbf0] to-[#eaf4dc]", title: "text-[#58762e]", chip: "bg-white/70" },
   homeworkStreak: { card: "border-[#ecdfc8] bg-gradient-to-br from-[#fdf9ef] to-[#f6ecd6]", title: "text-[#6f5a30]", chip: "bg-white/70" },
   improvement: { card: "border-[#cfe7e2] bg-gradient-to-br from-[#f2fafc] to-[#e2f2ee]", title: "text-[#2e7d72]", chip: "bg-white/70" },
+  vocabStreak3: { card: "border-[#e6dcf6] bg-gradient-to-br from-[#fbf9ff] to-[#f1eafc]", title: "text-[#5d4ba5]", chip: "bg-white/70" },
+  vocabStreak5: { card: "border-[#efdcb0] bg-gradient-to-br from-[#fffbef] to-[#fbeed0]", title: "text-[#8a6a25]", chip: "bg-white/70" },
 };
 
 function EvidenceRow({ label, value, note }: { label: string; value: string; note?: string }) {
@@ -129,6 +131,16 @@ function EvidenceBody({ evidence }: { evidence: GrowthAwardEvidence }) {
           <EvidenceRow label="향상" value={evidence.deltaPoints === null ? "–" : formatPointDelta(evidence.deltaPoints)} />
           <EvidenceRow label="이번 기간 숙제" value={`${evidence.currentHomework.completed} / ${evidence.currentHomework.applicable}`} />
           <EvidenceRow label="이번 기간 복습" value={`${evidence.currentReview.completed} / ${evidence.currentReview.evaluated}`} />
+        </>
+      );
+    case "vocabStreak":
+      return (
+        <>
+          <EvidenceRow label={`이번 달 ${evidence.milestone}연속 만점`} value={`${evidence.periodCount}회`} />
+          <EvidenceRow label="전체 누적" value={`${evidence.lifetimeCount}회`} />
+          {evidence.dates.length > 0 ? (
+            <EvidenceRow label="달성일" value={evidence.dates.map((date) => formatShortMonthDay(date)).join(" · ")} />
+          ) : null}
         </>
       );
   }

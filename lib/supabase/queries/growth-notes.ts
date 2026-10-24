@@ -264,3 +264,85 @@ export async function getGrowthMakeupRows(
 
   return (data ?? []) as GrowthMakeupRow[];
 }
+
+// 완료(Final Save)된 수업일지의 시험 결과 — 단어 연속 만점(누적)·단어왕 통과율·월말평가 등수용.
+// - 학생 id 묶음으로 한 번에 (학생별 쿼리 없음). 반을 옮긴 학생도 student_id 기준이라 이전 반 기록이 이어진다.
+// - 임시저장(draft) 일지는 제외 — 확정된 결과만. 학원 격리는 student_lesson_logs RLS가 강제한다.
+// - 누적 집계라 endDate 이전 전체를 읽는다: 필요한 컬럼만, 1000행 단위 page로 끝까지 (PostgREST 기본 상한 대비).
+export type AssessmentHistoryRow = {
+  student_id: string;
+  daily_log_id: string;
+  attendance: AttendanceStatus;
+  class_date: string;
+  log_created_at: string | null;
+  vocab_correct: number | null;
+  vocab_retest: boolean;
+  vocab_total: number | null;
+  assessment_results: unknown;
+  assessment_totals: unknown;
+};
+
+const HISTORY_PAGE_SIZE = 1000;
+
+export async function getCompletedAssessmentHistory(studentIds: readonly string[], endDate: string, startDate?: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user || studentIds.length === 0) {
+    return [] as AssessmentHistoryRow[];
+  }
+
+  const rows: AssessmentHistoryRow[] = [];
+  for (let from = 0; ; from += HISTORY_PAGE_SIZE) {
+    let query = supabase
+      .from("student_lesson_logs")
+      .select(
+        "id, student_id, daily_log_id, attendance, vocab_correct, vocab_retest, assessment_results, daily_logs!inner(class_date, status, created_at, vocab_total, assessment_totals)",
+      )
+      .eq("user_id", user.id)
+      .in("student_id", [...studentIds])
+      .eq("daily_logs.status", "completed")
+      .lte("daily_logs.class_date", endDate)
+      .order("id", { ascending: true })
+      .range(from, from + HISTORY_PAGE_SIZE - 1);
+    if (startDate) {
+      query = query.gte("daily_logs.class_date", startDate);
+    }
+    const { data, error } = await query;
+    if (error) {
+      console.error("getCompletedAssessmentHistory error", { code: error.code, message: error.message });
+      return rows;
+    }
+    type Raw = {
+      student_id: string;
+      daily_log_id: string;
+      attendance: AttendanceStatus;
+      vocab_correct: number | null;
+      vocab_retest: boolean | null;
+      assessment_results?: unknown;
+      daily_logs: unknown;
+    };
+    for (const row of (data ?? []) as unknown as Raw[]) {
+      const log = pickOne<{ class_date: string; created_at: string | null; vocab_total: number | null; assessment_totals?: unknown }>(row.daily_logs);
+      if (!log) {
+        continue;
+      }
+      rows.push({
+        student_id: row.student_id,
+        daily_log_id: row.daily_log_id,
+        attendance: row.attendance,
+        class_date: log.class_date,
+        log_created_at: log.created_at ?? null,
+        vocab_correct: row.vocab_correct ?? null,
+        vocab_retest: Boolean(row.vocab_retest),
+        vocab_total: log.vocab_total ?? null,
+        assessment_results: row.assessment_results ?? null,
+        assessment_totals: log.assessment_totals ?? null,
+      });
+    }
+    if ((data ?? []).length < HISTORY_PAGE_SIZE) {
+      break;
+    }
+  }
+  return rows;
+}

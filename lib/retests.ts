@@ -54,7 +54,7 @@ export function retestSourcesOf(input: {
     }
     for (const assessment of input.assessments) {
       const score = student.scores[assessment.id];
-      if (score?.retest) {
+      if (score?.retest && assessmentMeta(assessment.category).supportsRetest) {
         out.push({
           lessonLogId: student.lessonLogId,
           studentId: student.studentId,
@@ -178,7 +178,7 @@ export type RetestCountable = { studentId: string; category: AssessmentCategory;
 
 export function summarizeRetests(items: readonly RetestCountable[]) {
   const active = items.filter((item) => isActiveRetest(item.status));
-  const byCategory: Record<AssessmentCategory, number> = { vocabulary: 0, grammar: 0, reading: 0 };
+  const byCategory: Record<AssessmentCategory, number> = { vocabulary: 0, grammar: 0, reading: 0, month_end: 0 };
   for (const item of active) {
     byCategory[item.category] += 1;
   }
