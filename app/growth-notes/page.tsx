@@ -14,10 +14,6 @@ import { assessmentMeta, assessmentPercentsByCategory, assessmentRankBadgesOf, l
 import { computeVocabularyStreak, vocabularyPassStats, vocabularyTestsOf } from "@/lib/vocabulary-streak";
 import {
   computeWeeklyGrowth,
-  growthAchievementValues,
-  growthEmojis,
-  growthGuideDescriptions,
-  growthLabels,
   scopeMakeupsToWeek,
   VOCAB_WINDOW_DAYS,
 } from "@/lib/growth";
@@ -58,100 +54,13 @@ import {
   growthAwardMinimumLabel,
 } from "@/lib/growth-awards";
 import { getCurrentUserMemberships } from "@/lib/supabase/queries/students";
-import type { GrowthAchievementType } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
 // 기간(주/월) 계산은 lib/growth-note의 growthPeriodRange 단일 소스를 사용한다
 // (주간: 한국 기준 월요일 시작 — 기존과 동일 결과, 월간: 1일~말일, 전부 KST date-only).
 
-
-// 성장왕 카드 테마 — 왕의 성격에 맞는 파스텔 그라데이션 + 반짝 포인트색.
-// 장식은 정적(sparkle 아이콘 + 빛번짐)이라 iPad 성능 부담이 없다.
-const growthKingThemes: Record<
-  GrowthAchievementType,
-  { card: string; title: string; desc: string; sparkle: string }
-> = {
-  // 꾸준함왕 — 성실함: 연베이지+크림, 골드 포인트
-  consistency_master: {
-    card: "border-[#ecdfc8] bg-gradient-to-br from-[#fdf9ef] via-[#f9f1e0] to-[#f4e9d3]",
-    title: "text-[#6f5a30]",
-    desc: "text-[#8b7550]",
-    sparkle: "text-[#cfae67]",
-  },
-  // 단어왕 — 똑똑함: 라벤더+연보라, 보랏빛 sparkle
-  vocabulary_master: {
-    card: "border-[#ded2f0] bg-gradient-to-br from-[#faf7ff] via-[#f2ecfc] to-[#e9e0f8]",
-    title: "text-[#5c4a9c]",
-    desc: "text-[#7c6fa8]",
-    sparkle: "text-[#a88fd8]",
-  },
-  // 문법왕 — 차근차근 구조: 연보라+크림, 라벤더 포인트
-  grammar_master: {
-    card: "border-[#e2d8f0] bg-gradient-to-br from-[#fbf9ff] via-[#f4effb] to-[#f7f1e8]",
-    title: "text-[#5a4a8c]",
-    desc: "text-[#7d7096]",
-    sparkle: "text-[#b09ad6]",
-  },
-  // 독해왕 — 깊이 읽기: 하늘+민트
-  reading_master: {
-    card: "border-[#d2e4ee] bg-gradient-to-br from-[#f5fafd] via-[#ebf4f9] to-[#e6f3ee]",
-    title: "text-[#3a6a80]",
-    desc: "text-[#628497]",
-    sparkle: "text-[#86bcd2]",
-  },
-  // 집중왕 — 차분한 몰입: 민트+세이지, 청록 포인트
-  focus_master: {
-    card: "border-[#cfe6d8] bg-gradient-to-br from-[#f4fbf7] via-[#e8f5ec] to-[#dcefe4]",
-    title: "text-[#2f6d54]",
-    desc: "text-[#5c8272]",
-    sparkle: "text-[#7fbfa4]",
-  },
-  // 발표왕 — 밝은 자신감: 피치+코랄, 별빛 포인트
-  presentation_master: {
-    card: "border-[#f4d5c4] bg-gradient-to-br from-[#fff6f0] via-[#ffe9dd] to-[#ffdfcf]",
-    title: "text-[#b05f3e]",
-    desc: "text-[#b3785f]",
-    sparkle: "text-[#f0a583]",
-  },
-  // 배려왕 — 따뜻함: 블러시 핑크+연살구
-  kindness_master: {
-    card: "border-[#f3cfdb] bg-gradient-to-br from-[#fff6f8] via-[#ffe9ef] to-[#fcdde7]",
-    title: "text-[#a94f6e]",
-    desc: "text-[#b1798d]",
-    sparkle: "text-[#ef9db8]",
-  },
-  // 질문왕 — 호기심: 하늘색+연노랑, 반짝 별 포인트
-  question_master: {
-    card: "border-[#d4e6f4] bg-gradient-to-br from-[#f3faff] via-[#e9f4fe] to-[#fdf6dd]",
-    title: "text-[#3d6d99]",
-    desc: "text-[#6d88a0]",
-    sparkle: "text-[#7fb1dc]",
-  },
-  // 노력왕 — 성장 응원: 연하늘+민트 오로라
-  effort_master: {
-    card: "border-[#cfe7e2] bg-gradient-to-br from-[#f2fafc] via-[#e7f5f4] to-[#e2f2e9]",
-    title: "text-[#2e7d72]",
-    desc: "text-[#5f8d85]",
-    sparkle: "text-[#7cc4b8]",
-  },
-  // 개근왕 — 건강한 성실: 연초록+크림
-  attendance_master: {
-    card: "border-[#d8e8c6] bg-gradient-to-br from-[#f7fbf0] via-[#eef7e2] to-[#e4f1d6]",
-    title: "text-[#58762e]",
-    desc: "text-[#7c9159]",
-    sparkle: "text-[#a8c878]",
-  },
-  // 틈새왕 — 빈틈없는 완수: 레몬크림+피치베이지
-  makeup_master: {
-    card: "border-[#eeddb9] bg-gradient-to-br from-[#fffbee] via-[#fdf3d9] to-[#f9e9d2]",
-    title: "text-[#8a6a25]",
-    desc: "text-[#99804f]",
-    sparkle: "text-[#dcb85f]",
-  },
-};
-
-
-// 성장노트 landing: 성장왕 소개 + 반 선택.
+// 성장노트 landing: 오늘의 명언 + 반 선택만 (간결한 반 선택 화면).
+// 성장왕/왕/왕중왕 결과와 선정 기준 안내는 반 상세에서 본다 — 성장왕 metadata/계산은 그대로 (소개 카드만 없앰).
 // 학생 목록/Achievement 계산은 반을 선택한 다음에만 (lazy — 첫 화면은 가볍게).
 export default async function GrowthNotesPage({
   searchParams,
@@ -192,57 +101,8 @@ export default async function GrowthNotesPage({
           {/* 오늘의 명언 — 날짜(KST) 기준 365개 문구 중 하루 하나 */}
           <DailyQuoteCard quote={dailyQuoteOf(todayDateString())} />
 
-          {/* 성장왕 소개 — 순수 소개 화면 (달성 여부/랭킹/카운트 표시 금지). 개수는 registry 길이 */}
-          <section>
-            <h2 className="card-title text-[#3a2f2c]">{growthAchievementValues.length}개의 성장왕</h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {growthAchievementValues.map((type) => {
-                const theme = growthKingThemes[type];
-
-                return (
-                  <div
-                    key={type}
-                    className={cn(
-                      "relative overflow-hidden rounded-3xl border p-4 shadow-sm transition",
-                      "hover:-translate-y-0.5 hover:shadow-[0_8px_22px_rgba(120,100,90,0.12)]",
-                      theme.card,
-                    )}
-                  >
-                    {/* 은은한 빛번짐 + 정적 sparkle 1~2개 (애니메이션/깜빡임 없음) */}
-                    <span
-                      aria-hidden
-                      className="pointer-events-none absolute -right-7 -top-9 h-24 w-24 rounded-full bg-white/50 blur-2xl"
-                    />
-                    <Sparkles
-                      aria-hidden
-                      className={cn("pointer-events-none absolute right-3 top-3 h-4 w-4", theme.sparkle)}
-                    />
-                    <Sparkles
-                      aria-hidden
-                      className={cn(
-                        "pointer-events-none absolute right-8 top-7 h-2.5 w-2.5 opacity-60",
-                        theme.sparkle,
-                      )}
-                    />
-                    <div className="flex items-center gap-2">
-                      <span aria-hidden className="text-2xl drop-shadow-sm">
-                        {growthEmojis[type]}
-                      </span>
-                      <span className={cn("card-title", theme.title)}>
-                        {growthLabels[type]}
-                      </span>
-                    </div>
-                    <p className={cn("mt-2 text-sm leading-5", theme.desc)}>
-                      {growthGuideDescriptions[type]}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          {/* 반 선택 — [전체] 버튼/검색/드롭다운 없음 */}
-          <section className="mt-8 pb-8">
+          {/* 반 선택 — 한 줄에 반 하나 (모든 폭에서 1열, 본문 폭 전체), 카드 전체가 링크. [전체] 버튼/검색/드롭다운 없음 */}
+          <section className="mt-6 pb-8">
             <h2 className="card-title text-[#3a2f2c]">내 성장노트 확인하기</h2>
             <p className="mt-1 text-sm text-[#8a7b77]">반을 선택해주세요.</p>
 
@@ -251,7 +111,7 @@ export default async function GrowthNotesPage({
                 아직 등록된 수업 반이 없어요.
               </div>
             ) : (
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="mt-3 flex flex-col gap-3" data-growth-group-list>
                 {groups.map((group) => {
                   const count = studentCountByGroup.get(group.id)?.size ?? 0;
 
