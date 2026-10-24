@@ -6,6 +6,7 @@ import { BookOpen, Sparkles, Target } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { assessmentPercentsByCategory } from "@/lib/assessments";
 import { vocabularyPassStats, vocabularyTestsOf } from "@/lib/vocabulary-streak";
+import { wordKingMonthFor } from "@/lib/growth-note";
 import { PageHeader } from "@/components/page-header";
 import { AttendanceBadge, MakeupStatusBadge } from "@/components/status-badge";
 import { StudentDeleteButton } from "@/components/student-delete-button";
@@ -404,7 +405,11 @@ export default async function StudentDetailPage({
     // 단어왕/문법왕/독해왕 — 전체 최근 기록 (오래된 → 최신), 시험마다 자기 category로 1회씩
     recentVocabPercents: percentsByCategory.vocabulary,
     recentAssessmentPercents: { grammar: percentsByCategory.grammar, reading: percentsByCategory.reading },
-    periodVocabulary: vocabularyPassStats(completedVocabularyTests, weekStart, weekEnd),
+    // 단어왕(월말 결산) — 이 주가 월말 주일 때만, 그 달 전체 결과 (이미 불러온 180일 기록에서)
+    periodVocabulary: (() => {
+      const month = wordKingMonthFor("week", { start: weekStart, end: weekEnd });
+      return month ? vocabularyPassStats(completedVocabularyTests, month.start, month.end) : undefined;
+    })(),
     // 틈새왕: 이미 불러온 보충 기록에서 선택 주에 귀속되는 것만
     weekMakeups: scopeMakeupsToWeek(makeups, weekStart, weekEnd),
   });

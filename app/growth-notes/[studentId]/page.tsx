@@ -8,7 +8,7 @@ import { formatKoreanDate, toDateString, todayDateString } from "@/lib/dates";
 import { assessmentPercentsByCategory } from "@/lib/assessments";
 import { vocabularyPassStats, vocabularyTestsOf } from "@/lib/vocabulary-streak";
 import { scopeMakeupsToWeek, VOCAB_WINDOW_DAYS } from "@/lib/growth";
-import { buildGrowthNoteViewModel } from "@/lib/growth-note";
+import { buildGrowthNoteViewModel, wordKingMonthFor } from "@/lib/growth-note";
 import {
   getCompletedAssessmentHistory,
   getGrowthLessonRows,
@@ -46,14 +46,16 @@ export default async function GrowthNoteDetailPage({
   const weekEnd = addDaysStr(weekStart, 6);
   const windowStart = addDaysStr(weekStart, -VOCAB_WINDOW_DAYS);
 
-  const [student, studentGroups, lessonRows, praiseRows, makeupRows, weekHistory] = await Promise.all([
+  // 단어왕(월말 결산) — 이 주가 월말 주일 때만, 그 달 전체 완료 기록으로
+  const wordKingMonth = wordKingMonthFor("week", { start: weekStart, end: weekEnd });
+  const [student, studentGroups, lessonRows, praiseRows, makeupRows, monthHistory] = await Promise.all([
     getStudentByIdForCurrentUser(studentId),
     getStudentGroupsForCurrentUser(studentId),
     getGrowthLessonRows(windowStart, weekEnd, [studentId]),
     getGrowthPraiseRows(weekStart, [studentId]),
     getGrowthMakeupRows(weekStart, weekEnd, [studentId]),
     // 단어왕 — 이번 주 완료된 일지의 단어시험만
-    getCompletedAssessmentHistory([studentId], weekEnd, weekStart),
+    wordKingMonth ? getCompletedAssessmentHistory([studentId], wordKingMonth.end, wordKingMonth.start) : Promise.resolve([]),
   ]);
 
   if (!student) {
@@ -93,7 +95,9 @@ export default async function GrowthNoteDetailPage({
     // 시험마다 자기 category로 1회씩 (한 수업에 같은 종류 시험이 여러 개면 각각)
     recentVocabPercents: percentsByCategory.vocabulary,
     recentAssessmentPercents: { grammar: percentsByCategory.grammar, reading: percentsByCategory.reading },
-    periodVocabulary: vocabularyPassStats(vocabularyTestsOf(weekHistory).get(studentId) ?? [], weekStart, weekEnd),
+    periodVocabulary: wordKingMonth
+      ? vocabularyPassStats(vocabularyTestsOf(monthHistory).get(studentId) ?? [], wordKingMonth.start, wordKingMonth.end)
+      : undefined,
     weekPraiseComments,
     weekMakeups: scopeMakeupsToWeek(makeupRows, weekStart, weekEnd),
   });

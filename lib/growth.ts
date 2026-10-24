@@ -102,9 +102,10 @@ export const GROWTH_CONFIG = {
   homework: { minSamples: 2, positiveRatio: 1.0 },
   // 문법왕/독해왕: 최근 유효 시험 3회 모두 100%
   vocabPerfectStreak: 3,
-  // 단어왕: 기간(주/월) 안 확정된 단어시험 통과율 80% 이상. 최소 3회는 이전 단어왕의 "최근 3회" 표본 기준을 유지한 것.
-  // 통과 = [재시험 필요]를 표시하지 않은 시험 (재시험 관리와 같은 판단)
-  vocabularyPass: { minSamples: 3, positiveRatio: 0.8 },
+  // 단어왕(월말 결산): 한 달 동안 확정된 단어시험 통과율 80% 이상 — 기준을 넘긴 학생 모두.
+  // 통과 = [재시험 필요]를 표시하지 않은 시험 (재시험 관리와 같은 판단). 최소 1회 (0/0은 100%가 아니다).
+  // (이전 최소 3회는 옛 단어왕 "최근 3회 연속 100점"의 연속 조건이었지 통과율 표본 정책이 아니라 1회로 맞췄다)
+  vocabularyPass: { minSamples: 1, positiveRatio: 0.8 },
   // 틈새왕: 주간 평가 대상 보충이 1개 이상 + 완료율 100% (0개면 미획득 — 0/0 ≠ 100%)
   makeup: { minSamples: 1, completionRatio: 1.0 },
 } as const;
@@ -191,7 +192,8 @@ export type WeeklyGrowthInput = {
   recentVocabPercents: number[];
   // 최근 유효 문법/독해 시험 % (오래된 → 최신) — 없으면 그 왕은 없음
   recentAssessmentPercents?: Partial<Record<Exclude<AssessmentCategory, "vocabulary" | "month_end">, number[]>>;
-  // 단어왕: 이번 기간 확정된 단어시험 수 / 그중 통과 수 (lib/vocabulary-streak vocabularyPassStats)
+  // 단어왕: 그 달 확정된 단어시험 수 / 그중 통과 수 (lib/vocabulary-streak vocabularyPassStats).
+  // 월말 결산형이라 주간 보기의 월초/월중 주에는 넘기지 않는다(undefined → 단어왕 없음) — lib/growth-note wordKingMonthFor
   periodVocabulary?: { evaluated: number; passed: number };
   // 이번 주 평가 대상 보충수업 (scopeMakeupsToWeek로 미리 주간 범위에 귀속시켜 전달)
   weekMakeups?: MakeupLike[];
@@ -229,7 +231,7 @@ export function computeWeeklyGrowth(input: WeeklyGrowthInput): WeeklyGrowthResul
   stats.consistency_master = homework;
   if (meets(homework, GROWTH_CONFIG.homework)) achieved.push("consistency_master");
 
-  // 단어왕: 이번 기간 단어시험 통과율 ≥ 80% (확정된 시험 3회 이상). 통과 = 재시험 필요 표시 없음.
+  // 단어왕: 그 달 단어시험 통과율 ≥ 80% (확정된 시험 1회 이상). 통과 = 재시험 필요 표시 없음.
   const vocabulary = input.periodVocabulary ?? { evaluated: 0, passed: 0 };
   const vocabularyStat: GrowthStat = {
     evaluated: vocabulary.evaluated,
@@ -355,9 +357,9 @@ export function growthBadgeGuideItem(
     case "vocabulary_master":
       return {
         ...base,
-        primary: `${unit} 단어시험 통과율이 ${percentLabel(GROWTH_CONFIG.vocabularyPass.positiveRatio)} 이상인 학생이에요.`,
-        secondary: `${unit} 수업 기록을 완료한 단어시험 중 [재시험 필요]가 아닌 시험을 통과로 세요. 점수를 입력하지 않은 시험과 재시험 점수는 계산에 넣지 않아요.`,
-        minimum: `단어시험 ${GROWTH_CONFIG.vocabularyPass.minSamples}회 이상 · 통과 ${percentLabel(GROWTH_CONFIG.vocabularyPass.positiveRatio)} 이상`,
+        primary: `한 달 동안 본 단어시험의 통과율이 ${percentLabel(GROWTH_CONFIG.vocabularyPass.positiveRatio)} 이상인 학생이에요. 월말에 선정돼요.`,
+        secondary: `수업 기록을 완료한 단어시험 중 [재시험 필요]가 아닌 시험을 통과로 세요. 점수를 입력하지 않은 시험과 재시험 점수는 넣지 않아요. ${mode === "month" ? "선택한 달 결과를 보여줘요." : "주간 보기에서는 그 달 마지막 날이 들어 있는 주(월말 주)에만, 그 주가 아니라 한 달 전체 결과로 보여줘요."}`,
+        minimum: `한 달 단어시험 ${GROWTH_CONFIG.vocabularyPass.minSamples}회 이상 · 통과 ${percentLabel(GROWTH_CONFIG.vocabularyPass.positiveRatio)} 이상`,
       };
     case "grammar_master":
     case "reading_master": {

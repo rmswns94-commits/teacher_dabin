@@ -122,6 +122,22 @@ export function shiftGrowthAnchor(
   return direction === 1 ? addDaysStr(end, 1) : growthPeriodRange(addDaysStr(start, -1), "month").start;
 }
 
+// ---- 단어왕 = 월말 결산형 성장왕 ----
+// 계산 기간(CALCULATION WINDOW)은 항상 한 달 전체(KST 1일~말일, growthPeriodRange "month").
+// 표시 기간(DISPLAY WINDOW): 월간 보기 = 선택한 달 / 주간 보기 = 그 달 마지막 날이 들어 있는 주(월말 주)에만.
+// 월말 주가 다음 달에 걸쳐도(10/26~11/1) 그 주에 말일이 있는 달(10월)의 결과다 — 다음 달은 그 달 월말 주까지 없음.
+// 완료된 일지만 세므로 아직 하지 않은 시험은 들어가지 않고, 월말까지 결과가 추가되면 다시 계산된다 (저장 없음).
+export function wordKingMonthFor(
+  mode: GrowthViewMode,
+  period: { start: string; end: string },
+): { start: string; end: string; label: string } | null {
+  const month = growthPeriodRange(period.start, "month");
+  if (mode === "week" && month.end > period.end) {
+    return null; // 이 주에는 어떤 달의 말일도 없다 — 월초/월중 주
+  }
+  return { ...month, label: `${Number(month.start.slice(5, 7))}월` };
+}
+
 // 월간 표시 라벨: "2026년 9월"
 export function growthMonthLabel(anchorDate: string): string {
   return `${Number(anchorDate.slice(0, 4))}년 ${Number(anchorDate.slice(5, 7))}월`;

@@ -23,6 +23,7 @@ import {
 } from "@/lib/growth";
 import {
   growthMonthLabel,
+  wordKingMonthFor,
   growthPeriodRange,
   isKingOfKings,
   kingOfKingsMaxCount,
@@ -333,6 +334,8 @@ async function GroupStudentList({
     getCompletedAssessmentHistory(studentIds, periodEnd),
   ]);
   const vocabularyTests = vocabularyTestsOf(historyRows);
+  // 단어왕(월말 결산) — 계산은 그 달 전체, 주간 보기에서는 월말 주에만 (월초/월중 주는 null → 단어왕 없음)
+  const wordKingMonth = wordKingMonthFor(mode, { start: periodStart, end: periodEnd });
   const vocabularyStreaks = new Map(
     studentIds.map((id) => [id, computeVocabularyStreak(vocabularyTests.get(id) ?? [])] as const),
   );
@@ -393,7 +396,9 @@ async function GroupStudentList({
         recentVocabPercents: percentsByCategory.vocabulary,
         recentAssessmentPercents: { grammar: percentsByCategory.grammar, reading: percentsByCategory.reading },
         // 단어왕 — 이번 기간 확정된 단어시험 통과율
-        periodVocabulary: vocabularyPassStats(vocabularyTests.get(student.id) ?? [], periodStart, periodEnd),
+        periodVocabulary: wordKingMonth
+          ? vocabularyPassStats(vocabularyTests.get(student.id) ?? [], wordKingMonth.start, wordKingMonth.end)
+          : undefined,
         weekMakeups: scopeMakeupsToWeek(
           makeupsByStudent.get(student.id) ?? [],
           periodStart,
@@ -409,7 +414,7 @@ async function GroupStudentList({
           const badge = toGrowthBadge(type);
           const stat = growth.stats.vocabulary_master;
           return type === "vocabulary_master" && stat
-            ? { ...badge, detail: `${stat.positive}/${stat.evaluated} 통과 · ${Math.round(stat.ratio * 100)}%` }
+            ? { ...badge, detail: `${wordKingMonth?.label ?? ""} · ${stat.positive}/${stat.evaluated} 통과 · ${Math.round(stat.ratio * 100)}%` }
             : badge;
         }),
         rankBadges: (rankBadges.get(student.id) ?? []).map((badge) => ({
