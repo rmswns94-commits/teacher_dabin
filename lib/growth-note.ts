@@ -43,6 +43,8 @@ export type GrowthBadge = {
   emoji: string;
   label: string;
   sentence: string;
+  // 선정 근거 한 줄 (예: 단어왕 "8/10 통과 · 80%") — 카드에만 붙인다 (왕중왕 근거 목록은 이름만)
+  detail?: string;
 };
 
 export type StudentGrowthCardSummary = {

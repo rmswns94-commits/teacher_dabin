@@ -393,7 +393,14 @@ async function GroupStudentList({
       return {
         studentId: student.id,
         studentName: student.name,
-        achievements: growth.achieved.map(toGrowthBadge),
+        // 단어왕은 기준(통과율 80%)을 넘긴 학생 모두가 받는 성장왕 — 카드에 통과 근거를 함께 보여준다
+        achievements: growth.achieved.map((type) => {
+          const badge = toGrowthBadge(type);
+          const stat = growth.stats.vocabulary_master;
+          return type === "vocabulary_master" && stat
+            ? { ...badge, detail: `${stat.positive}/${stat.evaluated} 통과 · ${Math.round(stat.ratio * 100)}%` }
+            : badge;
+        }),
         rankBadges: (rankBadges.get(student.id) ?? []).map((badge) => ({
           key: badge.assessmentId,
           emoji: badge.emoji,
@@ -643,9 +650,11 @@ async function GroupStudentList({
                           summary.achievements.map((badge) => (
                             <span
                               key={badge.type}
+                              data-growth-badge={badge.type}
                               className="rounded-full bg-[#f0f7f2] px-2.5 py-1 text-xs font-semibold text-[#3d7f64]"
                             >
                               {badge.emoji} {badge.label}
+                              {badge.detail ? <span className="font-normal text-[#5f8d7a]"> · {badge.detail}</span> : null}
                             </span>
                           ))
                         )}
