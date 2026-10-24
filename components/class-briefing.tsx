@@ -25,6 +25,7 @@ import { buildQuickCheckModel, type QuickCheckLessonRow, type QuickCheckModel } 
 import { formatTimeRange } from "@/lib/schedule";
 import { weaknessCategoryLabels } from "@/lib/validation/weakness";
 import { aggregateVocabMistakes } from "@/lib/vocab";
+import { vocabularyBriefingStates } from "@/lib/vocabulary-streak";
 
 // 반복 오답 집계 창 (최근 30일)
 const MISTAKE_WINDOW_DAYS = 30;
@@ -259,12 +260,22 @@ function BriefingBody({
   // 🙋 학생 체크 (PHASE 5) — 오늘 수업 전에 한 번 더 확인할 예외 학생만 (전원 나열 금지).
   // source 전부 이미 가진 데이터: members/직전 rows(class-end lock 승계)/개인 밀린 숙제 batch/
   // Dashboard가 조회해 내려준 오늘 보충. 0명이면 section 자체를 렌더하지 않는다.
+  // 단어 연속 만점 — 지난 기록(previousBefore 이전) streak 2/4 → 달성 예정, 직전 완료 일지(lastLog)에서 생긴 달성 → 축하.
+  // 오늘 점수를 입력/완료해도 cutoff 이전 기록만 보므로 이 수업 브리핑의 "달성 예정"은 바뀌지 않는다.
+  const vocabularyStreaks = vocabularyBriefingStates({
+    studentIds: data.members.map((member) => member.id),
+    testsByStudent: data.vocabularyTests,
+    cutoff: data.previousBefore,
+    previousLogId: lastLog?.id ?? null,
+    todayLogId: null,
+  });
   const studentCheckRows = buildStudentCheckSignals({
     members: data.members,
     overdueStudentHomework: data.overdueStudentHomework,
     previousRows: lastLog?.rows ?? [],
     todayMakeups,
     briefingGroupId: groupId,
+    vocabularyStreaks,
   });
 
   // 준비할 일 · 오늘 진도 · 지난 숙제는 항상 자리를 지킨다 (내용이 없으면 안내 문구).
@@ -338,14 +349,34 @@ function BriefingBody({
                   >
                     {row.name}
                   </Link>
-                  <div className="secondary-text flex flex-wrap gap-x-1.5 text-[#7f6f68]">
-                    {row.signals.map((signal, index) => (
-                      <span key={signal.type} className="min-w-0 break-words">
-                        {index > 0 ? <span aria-hidden>· </span> : null}
-                        {signal.label}
-                      </span>
-                    ))}
-                  </div>
+                  {/* 연속 만점 축하/응원 — 문구 자체에 "N연속 만점"이 있어 색만으로 전달하지 않는다 */}
+                  {row.signals.some((signal) => signal.tone === "celebrate") ? (
+                    <div className="mt-0.5 space-y-0.5" data-streak-signals>
+                      {row.signals
+                        .filter((signal) => signal.tone === "celebrate")
+                        .map((signal) => (
+                          <div
+                            key={signal.type}
+                            data-streak-signal={signal.type}
+                            className="secondary-text min-w-0 break-words font-semibold text-[#5d4ba5]"
+                          >
+                            {signal.label}
+                          </div>
+                        ))}
+                    </div>
+                  ) : null}
+                  {row.signals.some((signal) => signal.tone !== "celebrate") ? (
+                    <div className="secondary-text flex flex-wrap gap-x-1.5 text-[#7f6f68]">
+                      {row.signals
+                        .filter((signal) => signal.tone !== "celebrate")
+                        .map((signal, index) => (
+                          <span key={signal.type} className="min-w-0 break-words">
+                            {index > 0 ? <span aria-hidden>· </span> : null}
+                            {signal.label}
+                          </span>
+                        ))}
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -428,7 +459,10 @@ function WrapUpBody({
   logsUnavailable,
   quickModel,
   initialNow,
+  data,
 }: {
+  // 오늘 달성 표시용 (브리핑과 같은 batch — 추가 쿼리 없음)
+  data: GroupBriefingData;
   occ: BriefingOccurrence;
   today: string;
   hasAutosaveDraft: boolean;
@@ -454,6 +488,19 @@ function WrapUpBody({
   }
 
   if (occ.log?.status === "completed") {
+    // 오늘 완료된 일지에서 실제로 생긴 단어 연속 만점 달성 (다음 실제 수업 브리핑에서도 한 번 더 축하)
+    const nameById = new Map(data.members.map((member) => [member.id, member.name]));
+    const todayStreaks = [
+      ...vocabularyBriefingStates({
+        studentIds: data.members.map((member) => member.id),
+        testsByStudent: data.vocabularyTests,
+        cutoff: data.previousBefore,
+        previousLogId: null,
+        todayLogId: occ.log.id,
+      }).entries(),
+    ].flatMap(([studentId, state]) =>
+      [...new Set(state.achievedToday)].sort().map((milestone) => ({ studentId, milestone })),
+    );
     return (
       <div data-wrapup-state="complete" className="space-y-3">
         <div className="rounded-2xl bg-[#edf9f3] p-4">
@@ -462,6 +509,18 @@ function WrapUpBody({
           </div>
           <p className="secondary-text mt-1 text-[#5f7d70]">출결 · 진도 · 숙제 등 오늘 수업 기록이 저장되었어요.</p>
         </div>
+        {todayStreaks.length > 0 ? (
+          <div className="rounded-2xl bg-[#f6f1fd] p-3" data-wrapup-streaks>
+            <div className="section-title text-[#5d4ba5]">오늘 단어 연속 만점</div>
+            <ul className="mt-1 space-y-0.5">
+              {todayStreaks.map((item) => (
+                <li key={`${item.studentId}-${item.milestone}`} className="body-text break-words text-[#453b3b]" data-wrapup-streak={item.milestone}>
+                  {item.milestone === 5 ? "🏆" : "✨"} {nameById.get(item.studentId) ?? "학생"} · {item.milestone}연속 만점 달성
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <Button variant="secondary" size="sm" asChild>
           <Link href={`/daily-logs/${occ.log.id}`}>일지 보기</Link>
         </Button>
@@ -576,6 +635,7 @@ export async function ClassBriefing({
         today={today}
         hasAutosaveDraft={autosaveGroupIds.has(occ.groupId)}
         logsUnavailable={logsUnavailable}
+        data={dataByGroup.get(occ.groupId) ?? EMPTY_GROUP_BRIEFING}
         quickModel={buildOccurrenceQuickCheckModel(
           occ,
           dataByGroup.get(occ.groupId) ?? EMPTY_GROUP_BRIEFING,

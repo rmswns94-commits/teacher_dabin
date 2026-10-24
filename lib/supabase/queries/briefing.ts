@@ -1,4 +1,6 @@
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
+import { getCompletedAssessmentHistory } from "@/lib/supabase/queries/growth-notes";
+import { vocabularyTestsOf, type VocabularyTest } from "@/lib/vocabulary-streak";
 import type { TextbookSection } from "@/lib/textbooks";
 import type {
   AttendanceStatus,
@@ -62,6 +64,11 @@ export type GroupBriefingData = {
   // 학생 체크 signal용 — 이 그룹 멤버에게 배정된(assigned_student_id) 미완료 + due<=오늘 숙제.
   // 공통 숙제(assigned null)는 애초에 조회하지 않는다 (학생별 완료 상태가 아니므로).
   overdueStudentHomework: { assigned_student_id: string }[];
+  // 단어 연속 만점 브리핑용 — 멤버별 완료된 일지의 단어시험 (시간순, 오늘까지). 학생 체크/마무리가
+  // lib/vocabulary-streak의 같은 helper로 "달성 예정 / 지난 수업 달성 / 오늘 달성"을 판정한다.
+  vocabularyTests: Map<string, VocabularyTest[]>;
+  // 이 batch의 직전 수업 cutoff (lastLog와 같은 기준) — 이 날짜 이전 수업만 "지난 기록"
+  previousBefore: string;
 };
 
 // 멤버가 없거나 조회에 실패한 그룹의 브리핑 — 섹션이 전부 "없음"으로 렌더된다
@@ -71,6 +78,8 @@ export const EMPTY_GROUP_BRIEFING: GroupBriefingData = {
   dueWeaknesses: [],
   recentMistakes: [],
   overdueStudentHomework: [],
+  vocabularyTests: new Map(),
+  previousBefore: "",
 };
 
 function pickOne<T>(value: unknown): T | null {
@@ -157,7 +166,8 @@ export async function getGroupsBriefingData(
   // 5) 학생 체크 — 멤버에게 배정된 개인 숙제 중 미완료 + due<=오늘 (undated는 DB상 불가).
   //    학생별 반복 쿼리 금지: 멤버 id 집합으로 batch 1쿼리. 공통 숙제(assigned null)는 제외 —
   //    완료 상태가 assignment 단위라 학생별 미완료로 배분할 수 없다.
-  const [logResults, weaknessResult, mistakeResult, overdueHwResult] = await Promise.all([
+  // 6) 단어 연속 만점 — 멤버 전체의 완료된 일지 시험 결과 (batch, 오늘까지). 학생별 쿼리 없음.
+  const [logResults, weaknessResult, mistakeResult, overdueHwResult, vocabularyHistory] = await Promise.all([
     Promise.all(
       groupsWithMembers.map((groupId) =>
         supabase
@@ -200,7 +210,9 @@ export async function getGroupsBriefingData(
       .lte("due_date", today)
       .not("assigned_student_id", "is", null)
       .in("assigned_student_id", allMemberIds),
+    getCompletedAssessmentHistory(allMemberIds, today),
   ]);
+  const vocabularyTestsByStudent = vocabularyTestsOf(vocabularyHistory);
 
   // 약점/오답은 migration 미적용 등 실패해도 브리핑 자체는 떠야 한다 — 해당 섹션만 숨김
   if (weaknessResult.error) {
@@ -271,6 +283,8 @@ export async function getGroupsBriefingData(
         })
         .map(({ student_id, word, created_at }) => ({ student_id, word, created_at })),
       overdueStudentHomework: overdueHomework.filter((row) => memberIdSet.has(row.assigned_student_id)),
+      vocabularyTests: new Map(members.map((member) => [member.id, vocabularyTestsByStudent.get(member.id) ?? []])),
+      previousBefore,
     });
   });
 

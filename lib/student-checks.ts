@@ -14,6 +14,9 @@
 // - 오늘 보충은 exact group relation(groupId)이 이 브리핑 그룹과 일치할 때만 —
 //   student.groups[0] 같은 추측 금지. relation 없는 manual 보충은 어느 그룹에도 안 붙는다.
 //   (source 쿼리가 scheduled만 주므로 completed/cancelled는 이미 제외.)
+// - 단어 연속 만점(lib/vocabulary-streak vocabularyBriefingStates): "지난 수업에서 3/5연속 만점 달성"(직전 완료 일지에서
+//   생긴 달성만 — 다음 실제 수업 한 번)과 "이번 수업 만점이면 3/5연속 달성 예정"(지난 기록 streak 2/4).
+//   칭찬/응원 문구라 tone "celebrate"로 다른 signal보다 먼저, 눈에 띄게 표시한다. 기존 signal은 그대로 함께 표시.
 
 export type StudentCheckSignal = {
   type:
@@ -22,8 +25,14 @@ export type StudentCheckSignal = {
     | "previous_late"
     | "previous_early_leave"
     | "online_review_missing"
-    | "makeup_today";
+    | "makeup_today"
+    | "vocab_streak_achieved_3"
+    | "vocab_streak_achieved_5"
+    | "vocab_streak_challenge_3"
+    | "vocab_streak_challenge_5";
   label: string;
+  // celebrate = 연속 만점 응원/축하 (강조 표시). 없으면 일반 확인 signal
+  tone?: "celebrate";
 };
 
 export type StudentCheckRow = {
@@ -57,6 +66,8 @@ export function buildStudentCheckSignals(input: {
     startTime: string | null;
   }[];
   briefingGroupId: string;
+  // 학생별 단어 연속 만점 브리핑 상태 (없으면 표시 안 함)
+  vocabularyStreaks?: ReadonlyMap<string, { challenge: 3 | 5 | null; achievedLast: readonly (3 | 5)[] }>;
 }): StudentCheckRow[] {
   const overdueIds = new Set(
     input.overdueStudentHomework
@@ -76,6 +87,23 @@ export function buildStudentCheckSignals(input: {
   const rows: StudentCheckRow[] = [];
   for (const member of input.members) {
     const signals: StudentCheckSignal[] = [];
+
+    // 0) 단어 연속 만점 — 지난 수업 달성(축하) → 이번 수업 달성 예정(응원)
+    const streak = input.vocabularyStreaks?.get(member.id);
+    for (const milestone of [...new Set(streak?.achievedLast ?? [])].sort()) {
+      signals.push({
+        type: milestone === 5 ? "vocab_streak_achieved_5" : "vocab_streak_achieved_3",
+        label: `${milestone === 5 ? "🏆" : "✨"} 지난 수업에서 ${milestone}연속 만점을 달성했어요!`,
+        tone: "celebrate",
+      });
+    }
+    if (streak?.challenge) {
+      signals.push({
+        type: streak.challenge === 5 ? "vocab_streak_challenge_5" : "vocab_streak_challenge_3",
+        label: `${streak.challenge === 5 ? "🏆" : "✨"} 이번 수업 만점이면 ${streak.challenge}연속 만점 달성 예정`,
+        tone: "celebrate",
+      });
+    }
 
     // 1) 개인 숙제 미완료 (오늘 마감 + 밀린 것)
     if (overdueIds.has(member.id)) {
