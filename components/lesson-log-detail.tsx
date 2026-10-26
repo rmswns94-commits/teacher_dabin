@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { assessmentMeta, assessmentOrdinals, assessmentPercentRaw, assessmentRanksOfLog, lessonAssessmentsOf, studentScoreFor } from "@/lib/assessments";
 import { BookOpen, CheckCheck, CircleArrowRight, NotebookTabs, PencilLine } from "lucide-react";
+import { parseNoteItems } from "@/lib/constants/lesson-comments";
 
 import { DailyLogDeleteButton } from "@/components/daily-log-delete-button";
 import { MixedContextList, SavedLessonSections } from "@/components/mixed-context-display";
@@ -450,7 +451,7 @@ export function LessonLogDetail({
                       <div className="text-[#3d6d58]">잘한 점 · {lessonLog.strengths}</div>
                     ) : null}
                     {lessonLog.improvements ? (
-                      <div className="text-[#8a5d52]">보완 · {lessonLog.improvements}</div>
+                      <div className="text-[#8a5d52]">보완 · {parseNoteItems(lessonLog.improvements).join(" · ")}</div>
                     ) : null}
                     {lessonLog.memo ? (
                       <div className="text-[#8a7b77]">메모 · {lessonLog.memo}</div>

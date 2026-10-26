@@ -239,3 +239,30 @@ export async function deleteStudentWeakness(weaknessId: string) {
 
   return true;
 }
+
+// 수업일지 수정 화면용: 이 일지에서 등록한 약점(복습) 노트 — 학생 카드 보완 영역에 읽기 전용으로 함께 보여준다.
+// 일지 id 하나로 batch 1쿼리 (학생별 쿼리 없음). 실패/미적용이면 빈 목록 (일지 수정은 항상 열린다).
+export async function getWeaknessesForDailyLog(dailyLogId: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return [] as Pick<StudentWeaknessRecord, "student_id" | "title" | "status">[];
+  }
+
+  const { data, error } = await supabase
+    .from("student_weaknesses")
+    .select("student_id, title, status")
+    .eq("user_id", user.id)
+    .eq("source_daily_log_id", dailyLogId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    if (!missingTableMessage(error)) {
+      console.error("getWeaknessesForDailyLog error", { code: error.code, message: error.message });
+    }
+    return [] as Pick<StudentWeaknessRecord, "student_id" | "title" | "status">[];
+  }
+
+  return (data ?? []) as Pick<StudentWeaknessRecord, "student_id" | "title" | "status">[];
+}

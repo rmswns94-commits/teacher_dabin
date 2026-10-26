@@ -5,6 +5,7 @@ import { BookOpen, Sparkles, Target } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { assessmentPercentsByCategory } from "@/lib/assessments";
+import { parseNoteItems } from "@/lib/constants/lesson-comments";
 import { vocabularyPassStats, vocabularyTestsOf } from "@/lib/vocabulary-streak";
 import { wordKingMonthFor } from "@/lib/growth-note";
 import { PageHeader } from "@/components/page-header";
@@ -662,7 +663,7 @@ export default async function StudentDetailPage({
                           <div className="mt-1 text-sm text-[#3d6d58]">잘한 점 · {lesson.strengths}</div>
                         ) : null}
                         {lesson.improvements ? (
-                          <div className="mt-1 text-sm text-[#8a5d52]">보완 · {lesson.improvements}</div>
+                          <div className="mt-1 text-sm text-[#8a5d52]">보완 · {parseNoteItems(lesson.improvements).join(" · ")}</div>
                         ) : null}
                         {lesson.memo ? (
                           <div className="mt-1 text-sm text-[#7c6d69]">메모 · {lesson.memo}</div>
@@ -709,7 +710,7 @@ export default async function StudentDetailPage({
                         .map((item) => (
                           <div key={`i-${item.id}`} className="rounded-2xl bg-[#fff3ef] p-3 text-sm text-[#8a5d52]">
                             <span className="font-medium">{formatKoreanDate(item.dailyLog?.class_date)}</span> ·{" "}
-                            {item.improvements}
+                            {parseNoteItems(item.improvements).join(" · ")}
                           </div>
                         ))
                     )}

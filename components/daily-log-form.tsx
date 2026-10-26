@@ -76,7 +76,14 @@ import {
 } from "@/app/daily-logs/actions";
 import { createStudentWeaknessAction } from "@/app/students/weakness-actions";
 import { WeaknessFormDialog, type WeaknessFormValues } from "@/components/weakness-form-dialog";
-import { improvementPresets, strengthPresets } from "@/lib/constants/lesson-comments";
+import {
+  IMPROVEMENT_PRESETS,
+  PRAISE_PRESETS,
+  addNoteItem,
+  joinNoteItems,
+  parseNoteItems,
+  toggleNoteItem,
+} from "@/lib/constants/lesson-comments";
 import { DragGrip, dialogDragHandleClass, useDraggableDialog } from "@/components/ui/draggable-dialog";
 import {
   applyBulkEvaluation,
@@ -169,6 +176,8 @@ export type DailyLogFormStudent = {
   };
   vocabMistakes?: string[];
   praiseComments?: string[];
+  // 이 일지에서 등록한 약점(복습) 노트 제목 — 보완 영역에 읽기 전용 표시 (student_weaknesses, 수정 화면만)
+  weaknessNotes?: string[];
   makeup?: {
     status: "required" | "scheduled" | "completed" | "cancelled";
     scheduledDate: string;
@@ -587,6 +596,147 @@ function AssessmentScoreInput({
           연속 만점 {streak.streak}회
         </p>
       ) : null}
+    </div>
+  );
+}
+
+// 칭찬/보완 기록 한 항목 — 색만이 아니라 앞의 💜/📌 제목과 "이전 기록"/"복습 노트" 글자로 구분한다.
+// onRemove가 없으면 읽기 전용 (예: 즉시 저장되는 복습 노트는 학생 상세에서 관리).
+function EvaluationTagChip({
+  tone,
+  label,
+  note,
+  removeLabel,
+  onRemove,
+}: {
+  tone: "praise" | "improvement";
+  label: string;
+  note?: string;
+  removeLabel?: string;
+  onRemove?: () => void;
+}) {
+  return (
+    <span
+      data-tag-item={label}
+      className={cn(
+        "inline-flex max-w-full items-start gap-1 rounded-xl px-2.5 py-1 text-sm leading-5",
+        tone === "praise" ? "bg-[#f6effa] text-[#7a5a92]" : "bg-[#fdf6e8] text-[#7d5f24]",
+      )}
+    >
+      <span className="min-w-0 whitespace-pre-line break-words">
+        {note ? <><span className="text-xs opacity-75">[{note}]</span>{" "}</> : null}
+        {label}
+      </span>
+      {onRemove ? (
+        <button
+          type="button"
+          aria-label={removeLabel}
+          onClick={onRemove}
+          className="shrink-0 rounded px-0.5 opacity-70 transition hover:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#c9b9e8]"
+        >
+          ✕
+        </button>
+      ) : null}
+    </span>
+  );
+}
+
+// [칭찬 한 표 +] / [약점 기록 +] 펼침 패널 — 빠른 문구(여러 개, 다시 누르면 해제) + 직접 입력.
+// 직접 입력은 한글 조합 중 Enter를 추가로 보지 않는다 (IME-safe). 패널은 학생 카드 안에서만 펼쳐진다 (remount 없음).
+function EvaluationTagPanel({
+  kind,
+  studentName,
+  presets,
+  selected,
+  draft,
+  onDraftChange,
+  onToggle,
+  onAdd,
+  onClose,
+  extra,
+}: {
+  kind: "praise" | "improvement";
+  studentName: string;
+  presets: readonly string[];
+  selected: readonly string[];
+  draft: string;
+  onDraftChange: (value: string) => void;
+  onToggle: (text: string) => void;
+  onAdd: () => void;
+  onClose: () => void;
+  extra?: ReactNode;
+}) {
+  const praise = kind === "praise";
+  const title = praise ? "칭찬 한 표 · 잘한 부분" : "약점 기록 · 보완할 부분";
+  return (
+    <div
+      role="group"
+      aria-label={`${studentName} ${praise ? "칭찬" : "보완"} 빠른 기록`}
+      data-tag-panel={kind}
+      className={cn(
+        "space-y-2.5 rounded-xl border bg-white p-3",
+        praise ? "border-[#e5d9f0]" : "border-[#f0e2c4]",
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className={cn("form-label font-semibold", praise ? "text-[#6d5aa8]" : "text-[#8a6828]")}>{title}</span>
+        <button type="button" onClick={onClose} className="text-sm font-medium text-[#7c6d69] hover:underline">
+          닫기
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {presets.map((preset) => {
+          const on = selected.includes(preset);
+          return (
+            <button
+              key={preset}
+              type="button"
+              aria-pressed={on}
+              data-tag-preset={preset}
+              onClick={() => onToggle(preset)}
+              className={cn(
+                "min-h-[38px] rounded-full border px-3 py-1 text-left text-sm transition",
+                on
+                  ? praise
+                    ? "border-[#c9b9e8] bg-[#f3eefc] font-semibold text-[#5d4ba5]"
+                    : "border-[#e6c98f] bg-[#fdf3e4] font-semibold text-[#8a6828]"
+                  : "border-[#ece0db] bg-white text-[#655a56] hover:bg-[#faf6f3]",
+              )}
+            >
+              {on ? "✓ " : "+ "}
+              {preset}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input
+          value={draft}
+          onChange={(event) => onDraftChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              onAdd();
+            }
+          }}
+          maxLength={120}
+          className="min-h-[40px] w-full min-w-0 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8]"
+          placeholder={praise ? "직접 입력 (예: 오늘 문장 해석을 꼼꼼하게 했어요)" : "직접 입력 (예: 서술형 답안 연습이 필요해요)"}
+          aria-label={`${studentName} ${praise ? "칭찬" : "보완"} 직접 입력`}
+        />
+        <button
+          type="button"
+          disabled={!draft.trim()}
+          onClick={onAdd}
+          className={cn(
+            "min-h-[40px] shrink-0 rounded-xl px-4 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40",
+            praise ? "bg-[#6d5aa8] hover:bg-[#5d4ba5]" : "bg-[#a2782f] hover:bg-[#8a6828]",
+          )}
+        >
+          추가
+        </button>
+      </div>
+      {extra}
     </div>
   );
 }
@@ -1078,7 +1228,7 @@ export function DailyLogForm({
     Object.fromEntries(
       students.map((student) => [
         student.studentId,
-        Boolean(student.entry?.strengths || student.entry?.improvements || student.entry?.memo),
+        Boolean(student.entry?.memo),
       ]),
     ),
   );
@@ -1486,11 +1636,31 @@ export function DailyLogForm({
     });
   }, [classDate, title, defaultProgress, memo, homework, homeworkDueDate, assignments, nextLessonPlan, nextPlanDate, textbooks, textbookProgressMap, textbookPlanMap, schoolProgressMap, schoolPlanMap, tasks, assessments, reflectionGood, reflectionHard, reflectionNext, entries, progressMode, manualTextbookProgress, manualTextbookPlans]);
 
-  // 칭찬 한표 인라인 에디터: 열려 있는 학생 id + 작성 중인 draft
-  // editIndex가 null이면 새 칭찬 추가, 숫자면 해당 index 칭찬 수정
-  const [praiseOpenFor, setPraiseOpenFor] = useState<string | null>(null);
-  const [praiseDraft, setPraiseDraft] = useState("");
-  const [praiseEditIndex, setPraiseEditIndex] = useState<number | null>(null);
+  // 칭찬 / 보완 빠른 기록 패널 — [칭찬 한 표 +] = 잘한 부분, [약점 기록 +] = 보완할 부분 (예전 두 입력칸을 합침).
+  // 한 번에 하나만 열리고, 직접 입력 중인 문구는 tagDraft (폼 state가 아니라 열린 패널의 임시 입력).
+  const [tagPanel, setTagPanel] = useState<{ studentId: string; kind: "praise" | "improvement" } | null>(null);
+  const [tagDraft, setTagDraft] = useState("");
+  // 이 화면에서 새로 등록한 약점(복습) 노트 — 저장 즉시 확정되는 별도 기록이라 보완 영역에 읽기 전용으로 더해 보여준다
+  const [addedWeaknessNotes, setAddedWeaknessNotes] = useState<Record<string, string[]>>({});
+
+  // 칭찬은 student_praises(칭찬 1개 = 1행), 보완은 improvements(한 줄 = 한 항목) — 학생 id 기준 함수형 갱신.
+  // 같은 학생·같은 수업 안 같은 문구는 한 번만 (trim + 완전 일치). 다른 데이터(숙제/재시험/성장왕 등)는 건드리지 않는다.
+  const applyTag = (studentId: string, kind: "praise" | "improvement", mode: "toggle" | "add", text: string) => {
+    setEntries((prev) => {
+      const entry = prev[studentId];
+      if (!entry) {
+        return prev;
+      }
+      const change = mode === "toggle" ? toggleNoteItem : addNoteItem;
+      return {
+        ...prev,
+        [studentId]:
+          kind === "praise"
+            ? { ...entry, praiseComments: change(entry.praiseComments, text) }
+            : { ...entry, improvements: joinNoteItems(change(parseNoteItems(entry.improvements), text)) },
+      };
+    });
+  };
 
   // 약점 기록: 공용 WeaknessFormDialog를 학생별로 연다. 일지 폼 내용과 달리
   // 저장 즉시 확정되는 독립 기록 — 일지 재저장/삭제와 무관하게 학생 상세에 남는다.
@@ -1520,6 +1690,7 @@ export function DailyLogForm({
 
       setWeaknessOpenFor(null);
       setWeaknessSavedFor(studentId);
+      setAddedWeaknessNotes((prev) => ({ ...prev, [studentId]: [...(prev[studentId] ?? []), values.title.trim()] }));
       setTimeout(
         () => setWeaknessSavedFor((prev) => (prev === studentId ? null : prev)),
         2500,
@@ -2737,17 +2908,6 @@ export function DailyLogForm({
     );
   };
 
-  const appendPreset = (studentId: string, field: "strengths" | "improvements", preset: string) => {
-    const current = entries[studentId][field];
-
-    // 같은 quick comment를 두 번 눌러도 문장이 반복되지 않게 한다.
-    if (current.includes(preset)) {
-      return;
-    }
-
-    updateEntry(studentId, { [field]: current ? `${current.trimEnd()} ${preset}` : preset });
-  };
-
   const save = (status: "draft" | "completed") => {
     setError("");
     setDraftSavedNotice("");
@@ -2756,21 +2916,21 @@ export function DailyLogForm({
     // 편집기 로컬 텍스트가 payload에 없어 reload 후 사라지던 문제의 수정.
     // autosave는 건드리지 않는다 — 아직 입력 중일 수 있는 텍스트를 임의 확정하지 않음.
     let entriesForSave = entries;
-    const pendingPraise = praiseDraft.trim();
-    if (praiseOpenFor && pendingPraise && entries[praiseOpenFor]) {
-      const target = entries[praiseOpenFor];
-      const nextComments =
-        praiseEditIndex === null
-          ? [...target.praiseComments, pendingPraise]
-          : target.praiseComments.map((comment, index) =>
-              index === praiseEditIndex ? pendingPraise : comment,
-            );
-      entriesForSave = { ...entries, [praiseOpenFor]: { ...target, praiseComments: nextComments } };
+    // 칭찬/보완 패널에 [추가]하지 않은 직접 입력이 남아 있으면 명시적 저장 시점에 자동 확정한다
+    // (autosave는 건드리지 않는다 — 아직 입력 중일 수 있는 텍스트를 임의 확정하지 않음).
+    const pendingTag = tagDraft.trim();
+    if (tagPanel && pendingTag && entries[tagPanel.studentId]) {
+      const target = entries[tagPanel.studentId];
+      entriesForSave = {
+        ...entries,
+        [tagPanel.studentId]:
+          tagPanel.kind === "praise"
+            ? { ...target, praiseComments: addNoteItem(target.praiseComments, pendingTag) }
+            : { ...target, improvements: joinNoteItems(addNoteItem(parseNoteItems(target.improvements), pendingTag)) },
+      };
       setEntries(entriesForSave);
-      setPraiseOpenFor(null);
-      setPraiseEditIndex(null);
-      setPraiseDraft("");
-      // 클릭 시점 저장 스냅샷/payload가 방금 확정한 칭찬을 포함하도록 ref도 함께 갱신
+      setTagDraft("");
+      // 클릭 시점 저장 스냅샷/payload가 방금 확정한 항목을 포함하도록 ref도 함께 갱신
       formStateRef.current = { ...formStateRef.current, entries: entriesForSave };
     }
     // 검증 실패는 요약 모달을 닫고 화면의 오류 배너로 보여준다
@@ -4342,154 +4502,135 @@ export function DailyLogForm({
                         />
                       </div>
 
-                      {entry.praiseComments.length > 0 ? (
-                        <div className="space-y-1.5">
-                          {entry.praiseComments.map((comment, praiseIndex) => (
-                            <div
-                              key={`${praiseIndex}-${comment}`}
-                              className="flex items-start gap-2 rounded-xl bg-[#f6effa] px-3 py-1.5 text-sm text-[#7a5a92]"
-                            >
-                              <span aria-hidden className="shrink-0">💜</span>
-                              <span className="min-w-0 flex-1 break-words leading-5">{comment}</span>
+                      {/* 칭찬 / 보완 — [칭찬 한 표 +] = 잘한 부분, [약점 기록 +] = 보완할 부분 (예전 두 입력칸 대신).
+                          기록한 항목은 항상 보이고, 빠른 문구/직접 입력은 버튼을 눌렀을 때만 펼친다. */}
+                      {(() => {
+                        const praises = entry.praiseComments;
+                        const legacyStrength = entry.strengths.trim();
+                        const improvements = parseNoteItems(entry.improvements);
+                        const weaknessNotes = [...(student.weaknessNotes ?? []), ...(addedWeaknessNotes[student.studentId] ?? [])];
+                        const openKind = tagPanel?.studentId === student.studentId ? tagPanel.kind : null;
+                        const togglePanel = (kind: "praise" | "improvement") => {
+                          setTagDraft("");
+                          setTagPanel(openKind === kind ? null : { studentId: student.studentId, kind });
+                        };
+                        return (
+                          <div className="space-y-2" data-evaluation-tags>
+                            {praises.length > 0 || legacyStrength ? (
+                              <div className="flex flex-wrap items-center gap-1.5" data-tag-list="praise">
+                                <span className="text-xs font-semibold text-[#7a5a92]">💜 칭찬</span>
+                                {legacyStrength ? (
+                                  <EvaluationTagChip
+                                    tone="praise"
+                                    label={legacyStrength}
+                                    note="이전 기록"
+                                    removeLabel={`${student.name} 이전 잘한 부분 기록 삭제`}
+                                    onRemove={() => updateEntry(student.studentId, { strengths: "" })}
+                                  />
+                                ) : null}
+                                {praises.map((comment, praiseIndex) => (
+                                  <EvaluationTagChip
+                                    key={`${praiseIndex}-${comment}`}
+                                    tone="praise"
+                                    label={comment}
+                                    removeLabel={`${student.name} 칭찬 '${comment}' 삭제`}
+                                    onRemove={() => applyTag(student.studentId, "praise", "toggle", comment)}
+                                  />
+                                ))}
+                              </div>
+                            ) : null}
+                            {improvements.length > 0 || weaknessNotes.length > 0 ? (
+                              <div className="flex flex-wrap items-center gap-1.5" data-tag-list="improvement">
+                                <span className="text-xs font-semibold text-[#8a6828]">📌 보완</span>
+                                {improvements.map((item) => (
+                                  <EvaluationTagChip
+                                    key={item}
+                                    tone="improvement"
+                                    label={item}
+                                    removeLabel={`${student.name} 보완 '${item}' 삭제`}
+                                    onRemove={() => applyTag(student.studentId, "improvement", "toggle", item)}
+                                  />
+                                ))}
+                                {weaknessNotes.map((title, noteIndex) => (
+                                  <EvaluationTagChip key={`note-${noteIndex}-${title}`} tone="improvement" label={title} note="복습 노트" />
+                                ))}
+                              </div>
+                            ) : null}
+
+                            <div className="flex flex-wrap items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setPraiseDraft(comment);
-                                  setPraiseEditIndex(praiseIndex);
-                                  setPraiseOpenFor(student.studentId);
-                                }}
-                                className="shrink-0 font-medium text-[#5c4ca8] hover:underline"
+                                aria-expanded={openKind === "praise"}
+                                onClick={() => togglePanel("praise")}
+                                className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#ddd0ec] bg-[#f9f5fd] px-3 py-1.5 text-sm font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
                               >
-                                수정
+                                💜 칭찬 한 표 +
                               </button>
                               <button
                                 type="button"
-                                aria-label={`${student.name} 칭찬 삭제`}
+                                aria-expanded={openKind === "improvement"}
+                                onClick={() => togglePanel("improvement")}
+                                className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#ecd9b4] bg-[#fdf8ec] px-3 py-1.5 text-sm font-medium text-[#8a6828] transition hover:bg-[#fdf3e4]"
+                              >
+                                📌 약점 기록 +
+                              </button>
+                              {weaknessSavedFor === student.studentId ? (
+                                <span className="text-sm text-[#3d7f64]">복습 노트를 등록했어요 ✓</span>
+                              ) : null}
+
+                              <button
+                                type="button"
+                                aria-pressed={entry.parentNoteNeeded}
                                 onClick={() =>
-                                  updateEntry(student.studentId, {
-                                    praiseComments: entry.praiseComments.filter(
-                                      (_, index) => index !== praiseIndex,
-                                    ),
-                                  })
+                                  updateEntry(student.studentId, { parentNoteNeeded: !entry.parentNoteNeeded })
                                 }
-                                className="shrink-0 text-[#a68cbf] hover:text-[#7a5a92]"
+                                className={cn(
+                                  "ml-auto min-h-[38px] rounded-xl border px-3 py-1.5 text-sm font-medium transition",
+                                  entry.parentNoteNeeded
+                                    ? "border-[#f0ccc7] bg-[#fff0ef] text-[#96534c]"
+                                    : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
+                                )}
                               >
-                                ✕
+                                학부모 전달 필요
                               </button>
                             </div>
-                          ))}
-                        </div>
-                      ) : null}
 
-                      <div className="flex flex-wrap items-center gap-2">
-                        {/* 칭찬이 몇 개 있어도 추가 버튼은 항상 표시 */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (praiseOpenFor === student.studentId && praiseEditIndex === null) {
-                              setPraiseOpenFor(null);
-                            } else {
-                              setPraiseDraft("");
-                              setPraiseEditIndex(null);
-                              setPraiseOpenFor(student.studentId);
-                            }
-                          }}
-                          aria-expanded={praiseOpenFor === student.studentId}
-                          className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#ddd0ec] bg-[#f9f5fd] px-3 py-1.5 text-sm font-medium text-[#6d5aa8] transition hover:bg-[#f3ecfa]"
-                        >
-                          💜 칭찬 한표 +
-                        </button>
-
-                        {/* 약점 노트 — 공용 폼으로 즉시 저장 (학생 상세의 약점 노트에 모임) */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setWeaknessError("");
-                            setWeaknessOpenFor(student.studentId);
-                          }}
-                          className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-[#ecd9b4] bg-[#fdf8ec] px-3 py-1.5 text-sm font-medium text-[#8a6828] transition hover:bg-[#fdf3e4]"
-                        >
-                          📌 약점 기록 +
-                        </button>
-                        {weaknessSavedFor === student.studentId ? (
-                          <span className="text-sm text-[#3d7f64]">약점을 기록했어요 ✓</span>
-                        ) : null}
-
-                        <button
-                          type="button"
-                          aria-pressed={entry.parentNoteNeeded}
-                          onClick={() =>
-                            updateEntry(student.studentId, { parentNoteNeeded: !entry.parentNoteNeeded })
-                          }
-                          className={cn(
-                            "ml-auto min-h-[38px] rounded-xl border px-3 py-1.5 text-sm font-medium transition",
-                            entry.parentNoteNeeded
-                              ? "border-[#f0ccc7] bg-[#fff0ef] text-[#96534c]"
-                              : "border-[#ece0db] bg-white text-[#7c6d69] hover:bg-[#faf6f3]",
-                          )}
-                        >
-                          학부모 전달 필요
-                        </button>
-                      </div>
-
-                      {praiseOpenFor === student.studentId ? (
-                        <div className="space-y-2 rounded-xl border border-[#e5d9f0] bg-white p-3">
-                          <div className="form-label font-semibold text-[#6d5aa8]">
-                            {praiseEditIndex === null ? "칭찬 한표 💜" : "칭찬 수정 💜"}
-                          </div>
-                          <div className="secondary-text text-[#8a7b77]">
-                            성장노트에 보여줄 짧은 칭찬이에요. 오늘 잘한 모습을 짧게 적어주세요.
-                          </div>
-                          <textarea
-                            value={praiseDraft}
-                            // IME-safe: 조합 중 값 재작성 금지 — 길이 제한은 native maxLength가 담당
-                            onChange={(event) => setPraiseDraft(event.target.value)}
-                            rows={2}
-                            maxLength={120}
-                            autoFocus
-                            className="w-full resize-none rounded-xl border border-[#e5d9f0] bg-white px-3 py-2 text-base outline-none focus:border-[#c9b9e8] sm:text-base"
-                            placeholder="어려운 문제도 끝까지 다시 풀어보는 모습이 좋았어요."
-                            aria-label={`${student.name} 칭찬 코멘트`}
-                          />
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm tabular-nums text-[#a79996]">
-                              {praiseDraft.length} / 120
-                            </span>
-                            <div className="flex gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPraiseOpenFor(null);
-                                  setPraiseEditIndex(null);
+                            {openKind ? (
+                              <EvaluationTagPanel
+                                kind={openKind}
+                                studentName={student.name}
+                                presets={openKind === "praise" ? PRAISE_PRESETS : IMPROVEMENT_PRESETS}
+                                selected={openKind === "praise" ? praises : improvements}
+                                draft={tagDraft}
+                                onDraftChange={setTagDraft}
+                                onToggle={(text) => applyTag(student.studentId, openKind, "toggle", text)}
+                                onAdd={() => {
+                                  applyTag(student.studentId, openKind, "add", tagDraft);
+                                  setTagDraft("");
                                 }}
-                                className="rounded-xl border border-[#ece0db] bg-white px-3 py-1.5 text-sm font-medium text-[#7c6d69] transition hover:bg-[#faf6f3]"
-                              >
-                                취소
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!praiseDraft.trim()}
-                                onClick={() => {
-                                  const trimmed = praiseDraft.trim();
-                                  updateEntry(student.studentId, {
-                                    praiseComments:
-                                      praiseEditIndex === null
-                                        ? [...entry.praiseComments, trimmed]
-                                        : entry.praiseComments.map((comment, index) =>
-                                            index === praiseEditIndex ? trimmed : comment,
-                                          ),
-                                  });
-                                  setPraiseOpenFor(null);
-                                  setPraiseEditIndex(null);
+                                onClose={() => {
+                                  setTagPanel(null);
+                                  setTagDraft("");
                                 }}
-                                className="rounded-xl bg-[#6d5aa8] px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-[#5d4ba5] disabled:cursor-not-allowed disabled:opacity-40"
-                              >
-                                {praiseEditIndex === null ? "칭찬 추가" : "칭찬 저장"}
-                              </button>
-                            </div>
+                                extra={
+                                  openKind === "improvement" ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setWeaknessError("");
+                                        setWeaknessOpenFor(student.studentId);
+                                      }}
+                                      className="text-sm font-medium text-[#8a6828] underline-offset-2 hover:underline"
+                                    >
+                                      다음 수업에 다시 확인할 복습 노트로 등록 →
+                                    </button>
+                                  ) : null
+                                }
+                              />
+                            ) : null}
                           </div>
-                        </div>
-                      ) : null}
+                        );
+                      })()}
 
                       {weaknessOpenFor === student.studentId ? (
                         <WeaknessFormDialog
@@ -4541,58 +4682,13 @@ export function DailyLogForm({
                       className="flex items-center justify-center gap-1 rounded-xl border border-[#ece0db] bg-white px-3 py-2 text-sm font-medium text-[#564d4d] transition hover:bg-[#faf6f3]"
                     >
                       {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                      코멘트 {isExpanded ? "접기" : "입력"}
+                      메모 {isExpanded ? "접기" : "입력"}
                     </button>
                   </div>
 
                   {isExpanded ? (
                     <div className="grid gap-3 md:grid-cols-2">
-                      <div className="rounded-2xl bg-[#edf8f2] p-3">
-                        <div className="form-label mb-2 font-semibold text-[#2f5d4b]">잘한 부분</div>
-                        <textarea
-                          value={entry.strengths}
-                          onChange={(event) => updateEntry(student.studentId, { strengths: event.target.value })}
-                          rows={2}
-                          className="w-full resize-none rounded-xl border border-[#dfeee6] bg-white px-3 py-2 text-base outline-none focus:border-[#bcdccb]"
-                          aria-label={`${student.name} 잘한 부분`}
-                        />
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {strengthPresets.map((preset) => (
-                            <button
-                              key={preset}
-                              type="button"
-                              onClick={() => appendPreset(student.studentId, "strengths", preset)}
-                              className="rounded-full border border-[#d8ebe0] bg-white px-2 py-0.5 text-xs text-[#3d6d58] transition hover:bg-[#f0faf5]"
-                            >
-                              + {preset}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl bg-[#fff3ef] p-3">
-                        <div className="form-label mb-2 font-semibold text-[#8a5d52]">보완할 부분</div>
-                        <textarea
-                          value={entry.improvements}
-                          onChange={(event) => updateEntry(student.studentId, { improvements: event.target.value })}
-                          rows={2}
-                          className="w-full resize-none rounded-xl border border-[#f5e3df] bg-white px-3 py-2 text-base outline-none focus:border-[#eccec7]"
-                          aria-label={`${student.name} 보완할 부분`}
-                        />
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {improvementPresets.map((preset) => (
-                            <button
-                              key={preset}
-                              type="button"
-                              onClick={() => appendPreset(student.studentId, "improvements", preset)}
-                              className="rounded-full border border-[#f2ded8] bg-white px-2 py-0.5 text-xs text-[#8a5d52] transition hover:bg-[#fdf4f1]"
-                            >
-                              + {preset}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
+                      {/* 잘한 부분/보완할 부분 입력칸은 위 [칭찬 한 표 +] / [약점 기록 +]로 합쳐졌다 */}
                       <label className="block md:col-span-2">
                         <span className="form-label mb-1.5 block font-semibold text-[#7c6d69]">추가 메모</span>
                         <input

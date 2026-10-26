@@ -32,6 +32,7 @@ import { getScheduleExceptionsInRange } from "@/lib/supabase/queries/schedule-ex
 import { getCurrentUserSchedulesWithGroup, getGroupSchedules } from "@/lib/supabase/queries/schedules";
 import { getDailyLogExamPreviewEntries } from "@/lib/supabase/queries/school-exams";
 import { getVocabMistakesForDailyLog } from "@/lib/supabase/queries/vocab-mistakes";
+import { getWeaknessesForDailyLog } from "@/lib/supabase/queries/weaknesses";
 import { getAdjacentScheduledClasses } from "@/lib/adjacent-classes";
 import { dayOfWeekOf } from "@/lib/schedule";
 
@@ -44,13 +45,15 @@ export default async function EditDailyLogPage({
 }) {
   const { id } = await params;
   const query = (await searchParams) ?? {};
-  const [log, praiseRows, mistakeRows, draftRow] = await Promise.all([
+  const [log, praiseRows, mistakeRows, draftRow, weaknessRows] = await Promise.all([
     getDailyLogDetailForCurrentUser(id),
     getPraisesForDailyLog(id),
     // 이 시험의 틀린 단어 (입력 순서 유지 — final 저장 시 폼 상태로 전체 교체)
     getVocabMistakesForDailyLog(id),
     // 이 일지의 수정 draft (있으면 폼에서 복구 배너 — 원본은 final 저장 전까지 불변)
     getDailyLogDraft({ dailyLogId: id }),
+    // 이 일지에서 등록한 약점(복습) 노트 — 보완 영역에 읽기 전용으로 함께 표시
+    getWeaknessesForDailyLog(id),
   ]);
 
   if (!log) {
@@ -125,6 +128,7 @@ export default async function EditDailyLogPage({
         },
         vocabMistakes: vocabMistakesByStudent.get(lessonLog.student!.id) ?? [],
         praiseComments: praiseCommentsByStudent.get(lessonLog.student!.id) ?? [],
+        weaknessNotes: weaknessRows.filter((row) => row.student_id === lessonLog.student!.id).map((row) => row.title),
         makeup: makeup
           ? {
               status: makeup.status,
