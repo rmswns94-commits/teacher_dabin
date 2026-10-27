@@ -38,7 +38,8 @@ export const studentLessonEntrySchema = z.object({
     .record(
       z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
       z.object({
-        correct: numberString.optional().or(z.literal("")),
+        // 결과 입력 글자 그대로 — 형식(정수/소수 첫째 자리)은 시험 종류·방식을 아는 superRefine에서 검증
+        correct: z.string().regex(/^\d*(\.\d*)?$/, "숫자만 입력해주세요.").max(8, "숫자를 확인해주세요.").optional().or(z.literal("")),
         retest: z.boolean().optional(),
         // 등수는 입력받지 않는다 — 월말평가 석차는 맞은 개수에서 자동 계산되는 파생 값
       }),
@@ -132,6 +133,8 @@ export const dailyLogSchema = z
           id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
           category: z.enum(["vocabulary", "grammar", "reading", "month_end"]),
           total: numberString,
+          // 입력 방식 — 월말평가만 의미 있음 (없으면 개수)
+          scoring: z.enum(["count", "score"]).optional(),
         }),
       )
       .max(30, "시험은 한 수업에 30개까지 기록할 수 있어요.")
@@ -188,11 +191,10 @@ export const dailyLogSchema = z
       }
     }
 
-    // 시험마다 같은 검증 함수(validateAssessmentInput) — 단어/문법/독해 공통
+    // 시험마다 같은 검증 함수(validateAssessmentInput) — 모든 종류 공통 (월말평가 소수/점수 방식 포함)
     for (const [assessmentIndex, assessment] of (value.assessments ?? []).entries()) {
       const issues = validateAssessmentInput(
-        assessment.category,
-        assessment.total,
+        assessment,
         value.students.map((student) => student.assessmentScores?.[assessment.id]?.correct),
       );
       for (const issue of issues) {

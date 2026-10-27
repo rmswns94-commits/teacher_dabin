@@ -24,7 +24,7 @@ import { resolveProgressMode, scopedMissedProgressCandidate } from "@/lib/progre
 import { buildTextbookSectionsText, stripDerivedPrefix } from "@/lib/textbooks";
 import { sortByKoreanName } from "@/lib/korean-sort";
 import { dedupeVocabWords } from "@/lib/vocab";
-import { assessmentsForSave, firstVocabularyAssessment, scoresForSave } from "@/lib/assessments";
+import { assessmentTotalsForSave, assessmentsForSave, firstVocabularyAssessment, scoresForSave } from "@/lib/assessments";
 import { retestSourcesOf } from "@/lib/retests";
 import { deleteUnprocessedRetests, syncDailyLogRetests } from "@/lib/supabase/queries/retests";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
@@ -1099,6 +1099,10 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     entry.attendance === "absent" ? {} : scoresForSave(entry.assessmentScores, assessments);
   // 기존 단어시험 컬럼은 첫 단어시험을 미러링 (브리핑/학생 상세 등 기존 소비처 호환 — 목록이 정본)
   const vocabMirror = firstVocabularyAssessment(assessments);
+  const vocabScoreOf = (entry: (typeof input.students)[number]) => {
+    const score = vocabMirror ? scoresOf(entry)[vocabMirror.id] : undefined;
+    return score && "correct" in score ? score : null;
+  };
   const vocabTotal = vocabMirror?.total ?? null;
   const onlyMirrorable =
     assessments.length === 0 || (assessments.length === 1 && assessments[0].category === "vocabulary");
@@ -1175,7 +1179,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     school_progress: (input.schoolProgress ?? []).length > 0 ? input.schoolProgress : null,
     school_plans: (input.schoolPlans ?? []).length > 0 ? input.schoolPlans : null,
     vocab_total: vocabTotal,
-    ...(sendAssessments ? { assessment_totals: assessments.length > 0 ? assessments : null } : {}),
+    ...(sendAssessments ? { assessment_totals: assessments.length > 0 ? assessmentTotalsForSave(assessments) : null } : {}),
     reflection_good: input.reflectionGood?.trim() || null,
     reflection_hard: input.reflectionHard?.trim() || null,
     reflection_next: input.reflectionNext?.trim() || null,
@@ -1343,8 +1347,8 @@ export async function saveDailyLog(input: DailyLogFormInput) {
       online_review_completed: entry.onlineReviewCompleted ?? null,
       // 초등 quick check: 결석 학생은 그날 수업 기반 평가를 남기지 않는다.
       homework_status: isAbsent ? null : entry.homeworkStatus || null,
-      vocab_correct: vocabMirror ? scoresOf(entry)[vocabMirror.id]?.correct ?? null : null,
-      vocab_retest: vocabMirror ? Boolean(scoresOf(entry)[vocabMirror.id]?.retest) : false,
+      vocab_correct: vocabScoreOf(entry)?.correct ?? null,
+      vocab_retest: Boolean(vocabScoreOf(entry)?.retest),
       ...(sendAssessments
         ? { assessment_results: Object.keys(scoresOf(entry)).length > 0 ? scoresOf(entry) : null }
         : {}),

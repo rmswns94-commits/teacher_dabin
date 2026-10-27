@@ -69,9 +69,9 @@ export function vocabularyTestsOf(rows: readonly VocabularyHistoryRow[]): Map<st
         logId: row.daily_log_id,
         assessmentId: assessment.id,
         index,
-        correct: score.correct,
+        correct: score.value,
         total: assessment.total,
-        perfect: isPerfectScore(score.correct, assessment.total),
+        perfect: isPerfectScore(score.value, assessment.total),
         passed: !score.retest,
       });
       out.set(row.student_id, list);

@@ -1,13 +1,19 @@
-// 빠른 체크 시험(단어/문법/독해)의 단일 소스 — category metadata + 수업 시험 목록 모델 + 점수 계산.
+// 빠른 체크 시험(단어/문법/독해/월말평가)의 단일 소스 — category metadata + 수업 시험 목록 모델 + 점수 계산.
 //
 // 수업 하나에 시험을 여러 개(같은 종류 여러 개 포함) 둘 수 있다. 시험 identity는 category가 아니라
 // stable assessment id이고, 학생 결과는 (student_id, assessment_id)로 연결된다.
 //
 // 저장 구조 (schema 변경 없음 — 20261010 migration의 jsonb 컬럼 재사용):
-//   daily_logs.assessment_totals          시험 목록 배열 [{ id, category, total }] (추가한 순서 = 배열 순서)
-//   student_lesson_logs.assessment_results 학생 결과 { [assessmentId]: { correct, retest } }
+//   daily_logs.assessment_totals          시험 목록 배열 [{ id, category, total, scoring? }] (추가한 순서 = 배열 순서)
+//   student_lesson_logs.assessment_results 학생 결과 { [assessmentId]: { correct, retest } | { score } }
 //   단어 전용 컬럼(vocab_total / vocab_correct / vocab_retest)은 목록의 "첫 단어시험"을 그대로 미러링한다
 //   — 브리핑/학생 상세 등 기존 단어시험 소비처가 계속 동작하도록. 목록이 있으면 목록이 정본이다.
+//
+// 월말평가만 입력 방식(scoring)이 있다 — 시험 전체가 하나의 방식 (학생별 아님):
+//   "count" 개수 입력: total = 총 문항 수, 결과 key = correct (맞은 개수)  ← scoring 없는 이전 월말평가도 이것
+//   "score" 점수 입력: total = 총점(만점),   결과 key = score  (점수)
+//   결과 key를 방식마다 나눠 두므로 방식이 바뀌어도 개수가 점수로(또는 반대로) 다시 읽히지 않는다.
+//   월말평가 결과는 소수 첫째 자리까지 (jsonb number 그대로 — 14.5, 92.5). 단어/문법/독해는 정수 그대로.
 //
 // 이전 형식 호환 (기존 데이터 무변경):
 //   assessment_totals가 배열이 아니면(이전 저장) → vocab 컬럼 = 시험 id "vocabulary",
@@ -26,17 +32,21 @@ export type AssessmentCategoryMeta = {
   awardType: GrowthAchievementType | null;
   // 학생 카드에서 고정 3칸(단어/문법/독해) 중 하나인지 — 아니면 시험이 있을 때만 별도 섹션
   cardColumn: boolean;
-  // 맞은 개수로 반 안 석차를 자동 계산해 보여주는 종류 (월말평가). 사용자가 등수를 입력하지 않는다
+  // 결과 값으로 반 안 석차를 자동 계산해 보여주는 종류 (월말평가). 사용자가 등수를 입력하지 않는다
   rankedByScore: boolean;
   // [재시험 필요] 표시 → 재시험 관리 등록 대상인지
   supportsRetest: boolean;
+  // 시험마다 입력 방식(개수/점수)을 고르는 종류 (월말평가) — 아니면 항상 개수
+  scoringModes: boolean;
+  // 결과를 소수 첫째 자리까지 받는 종류 (월말평가) — 아니면 정수
+  decimalResults: boolean;
 };
 
 export const ASSESSMENT_CATEGORIES: readonly AssessmentCategoryMeta[] = [
-  { key: "vocabulary", label: "단어", testLabel: "단어시험", awardType: "vocabulary_master", cardColumn: true, rankedByScore: false, supportsRetest: true },
-  { key: "grammar", label: "문법", testLabel: "문법시험", awardType: "grammar_master", cardColumn: true, rankedByScore: false, supportsRetest: true },
-  { key: "reading", label: "독해", testLabel: "독해시험", awardType: "reading_master", cardColumn: true, rankedByScore: false, supportsRetest: true },
-  { key: "month_end", label: "월말평가", testLabel: "월말평가", awardType: null, cardColumn: false, rankedByScore: true, supportsRetest: false },
+  { key: "vocabulary", label: "단어", testLabel: "단어시험", awardType: "vocabulary_master", cardColumn: true, rankedByScore: false, supportsRetest: true, scoringModes: false, decimalResults: false },
+  { key: "grammar", label: "문법", testLabel: "문법시험", awardType: "grammar_master", cardColumn: true, rankedByScore: false, supportsRetest: true, scoringModes: false, decimalResults: false },
+  { key: "reading", label: "독해", testLabel: "독해시험", awardType: "reading_master", cardColumn: true, rankedByScore: false, supportsRetest: true, scoringModes: false, decimalResults: false },
+  { key: "month_end", label: "월말평가", testLabel: "월말평가", awardType: null, cardColumn: false, rankedByScore: true, supportsRetest: false, scoringModes: true, decimalResults: true },
 ];
 
 export function assessmentMeta(category: AssessmentCategory): AssessmentCategoryMeta {
@@ -47,16 +57,87 @@ export function isAssessmentCategory(value: unknown): value is AssessmentCategor
   return value === "vocabulary" || value === "grammar" || value === "reading" || value === "month_end";
 }
 
+// ── 입력 방식 (월말평가) ──
+export type AssessmentScoringMode = "count" | "score";
+
+export const SCORING_MODES: readonly { key: AssessmentScoringMode; label: string; short: string }[] = [
+  { key: "count", label: "개수 입력", short: "개수" },
+  { key: "score", label: "점수 입력", short: "점수" },
+];
+
+// 점수 입력으로 새 월말평가를 추가할 때 제안하는 총점 (고정 아님 — 바꿀 수 있다)
+export const DEFAULT_MAX_SCORE = "100";
+
+// 방식을 고르는 종류에서 "score"로 저장된 것만 점수, 나머지(scoring 없는 이전 월말평가 포함)는 개수
+export function scoringModeOf(category: AssessmentCategory, value: unknown): AssessmentScoringMode {
+  return assessmentMeta(category).scoringModes && value === "score" ? "score" : "count";
+}
+
+// 시험 하나의 표시 문구 — 개수: 맞은 개수 · "21.5 / 24" · 총 24문제 / 점수: 점수 · "92.5 / 100점" · 100점 만점
+export function assessmentScale(assessment: { total: number | string; scoring: AssessmentScoringMode }) {
+  const total = String(assessment.total).trim() || "?";
+  return assessment.scoring === "score"
+    ? { valueLabel: "점수", totalLabel: "총점", totalUnit: "점", scaleText: `${total}점 만점`, fraction: (value: string) => `${value} / ${total}점` }
+    : { valueLabel: "맞은 개수", totalLabel: "총 문항", totalUnit: "문제", scaleText: `총 ${total}문제`, fraction: (value: string) => `${value} / ${total}` };
+}
+
+// ── 소수 결과 (월말평가) ──
+// 결과 값 표시: 14 → "14", 14.5 → "14.5" (14.0처럼 0을 붙이지 않는다)
+export function formatAssessmentValue(value: number) {
+  return String(Math.round(value * 10) / 10);
+}
+
+// 입력칸 정리 (타이핑 중) — 숫자와 첫 "." 만 남긴다. "92." "0." 처럼 쓰는 중인 값은 그대로 둔다 (강제 변환 없음).
+// 소수 둘째 자리는 지우지 않고 남겨서 검증 문구로 알린다 (자동 반올림/잘라내기 없음).
+export function decimalInputText(value: string) {
+  const [whole, ...rest] = value.replace(/[^\d.]/g, "").split(".");
+  return rest.length > 0 ? `${whole.slice(0, 3)}.${rest.join("").slice(0, 3)}` : whole.slice(0, 3);
+}
+
+export const scoreOverTotalMessage = (total: number) => `맞은 개수는 총 문항 수(${total})를 넘을 수 없어요.`;
+const scoreOverMaxMessage = (total: number) => `점수는 총점(${total}점)을 넘을 수 없어요.`;
+
+// 결과 입력 1개 검증 — 저장/화면/석차가 같은 기준을 쓴다. 빈 값 = 미입력(null), "0" = 0점(유효).
+// 정수 종류: 0 이상 정수 / 소수 종류: 0 이상, 소수 첫째 자리까지 ("14." 은 14). 둘 다 총 문항(총점) 이하.
+// 값은 소수 첫째 자리로 정규화한 number (14.5 → 14.5, parseInt 없음).
+const ONE_DECIMAL = /^\d+(\.\d?)?$/;
+export function parseAssessmentResult(
+  input: string | undefined,
+  assessment: { category: AssessmentCategory; total: number | string; scoring: AssessmentScoringMode },
+): { ok: true; value: number | null } | { ok: false; message: string } {
+  const text = input?.trim() ?? "";
+  if (!text) {
+    return { ok: true, value: null };
+  }
+  const { decimalResults } = assessmentMeta(assessment.category);
+  if (decimalResults ? !ONE_DECIMAL.test(text) : !/^\d+$/.test(text)) {
+    return {
+      ok: false,
+      message: decimalResults && /^\d*\.\d{2,}$/.test(text) ? "소수점 첫째 자리까지만 입력할 수 있어요." : "숫자를 확인해주세요.",
+    };
+  }
+  const value = Math.round(Number(text) * 10) / 10;
+  const total = Number(assessment.total);
+  if (Number.isFinite(total) && total > 0 && value > total) {
+    return { ok: false, message: assessment.scoring === "score" ? scoreOverMaxMessage(total) : scoreOverTotalMessage(total) };
+  }
+  return { ok: true, value };
+}
+
 // ── 월말평가 자동 석차 ──
-// 등수는 저장하지 않는 파생 값이다 — 맞은 개수(correct_count)만 source of truth.
+// 등수는 저장하지 않는 파생 값이다 — 결과 값(개수 방식 = 맞은 개수, 점수 방식 = 점수)만 source of truth.
+// 시험 하나의 방식은 하나라 같은 시험 안의 값은 항상 같은 의미다 — 이 함수는 방식을 따지지 않고 값만 비교한다.
+// 비교는 소수 첫째 자리 정수(×10)로 한다 — 92.5 vs 92.5 동점, 92.5 vs 92.4 다른 등수 (소수점을 버리지 않는다).
 // 범위: 시험 1개(stable assessment id) 안의 응시자 — 그 시험은 한 수업일지(= 한 학원·한 반)에만 속하므로
 // 다른 반/다른 월말평가와 섞이지 않는다. 미입력(null)은 제외, 0점은 포함.
 // 방식: standard competition ranking — 같은 점수는 같은 등수, 다음 등수는 그만큼 건너뛴다 (48,48,45 → 1,1,3).
-export function calculateAssessmentRanks(scores: readonly { studentId: string; correct: number | null }[]): Map<string, number> {
-  const valid = scores.filter((item): item is { studentId: string; correct: number } => item.correct !== null && Number.isFinite(item.correct));
+export function calculateAssessmentRanks(scores: readonly { studentId: string; value: number | null }[]): Map<string, number> {
+  const valid = scores
+    .filter((item): item is { studentId: string; value: number } => item.value !== null && Number.isFinite(item.value))
+    .map((item) => ({ studentId: item.studentId, tenths: Math.round(item.value * 10) }));
   const out = new Map<string, number>();
   for (const item of valid) {
-    out.set(item.studentId, 1 + valid.filter((other) => other.correct > item.correct).length);
+    out.set(item.studentId, 1 + valid.filter((other) => other.tenths > item.tenths).length);
   }
   return out;
 }
@@ -70,8 +151,11 @@ export function assessmentPercentRaw(correct: number, total: number) {
 }
 
 // ---- 저장된 모델 ----
-export type LessonAssessment = { id: string; category: AssessmentCategory; total: number };
-export type AssessmentScore = { correct: number; retest: boolean };
+export type LessonAssessment = { id: string; category: AssessmentCategory; total: number; scoring: AssessmentScoringMode };
+// 한 학생의 한 시험 결과 — value = 맞은 개수(개수 방식) 또는 점수(점수 방식)
+export type AssessmentScore = { value: number; retest: boolean };
+// 저장 형식 (jsonb) — 방식마다 key가 다르다
+export type StoredAssessmentScore = { correct: number; retest: boolean } | { score: number };
 
 export type LessonAssessmentSource = { vocab_total: number | null; assessment_totals?: unknown };
 export type StudentAssessmentSource = {
@@ -90,10 +174,10 @@ export function lessonAssessmentsOf(log: LessonAssessmentSource): LessonAssessme
     const seen = new Set<string>();
     const out: LessonAssessment[] = [];
     for (const item of raw) {
-      const { id, category, total } = (item ?? {}) as { id?: unknown; category?: unknown; total?: unknown };
+      const { id, category, total, scoring } = (item ?? {}) as { id?: unknown; category?: unknown; total?: unknown; scoring?: unknown };
       if (typeof id === "string" && ID_PATTERN.test(id) && !seen.has(id) && isAssessmentCategory(category) && positiveInt(total)) {
         seen.add(id);
-        out.push({ id, category, total: total as number });
+        out.push({ id, category, total: total as number, scoring: scoringModeOf(category, scoring) });
       }
     }
     return out;
@@ -101,42 +185,47 @@ export function lessonAssessmentsOf(log: LessonAssessmentSource): LessonAssessme
   // 이전 형식 — 단어 컬럼 + {grammar, reading} 객체
   const out: LessonAssessment[] = [];
   if (positiveInt(log.vocab_total)) {
-    out.push({ id: "vocabulary", category: "vocabulary", total: log.vocab_total! });
+    out.push({ id: "vocabulary", category: "vocabulary", total: log.vocab_total!, scoring: "count" });
   }
   if (raw && typeof raw === "object") {
     for (const category of ["grammar", "reading"] as const) {
       const total = (raw as Record<string, unknown>)[category];
       if (positiveInt(total)) {
-        out.push({ id: category, category, total: total as number });
+        out.push({ id: category, category, total: total as number, scoring: "count" });
       }
     }
   }
   return out;
 }
 
-function parseScore(value: unknown): AssessmentScore | null {
+// 저장된 결과 1개 — 시험의 방식에 맞는 key만 읽는다 (개수 = correct, 점수 = score). 다른 key는 없는 것으로 본다.
+function parseScore(value: unknown, assessment: LessonAssessment): AssessmentScore | null {
   if (!value || typeof value !== "object") {
     return null;
   }
-  const correct = (value as { correct?: unknown }).correct;
-  if (typeof correct !== "number" || !Number.isInteger(correct) || correct < 0) {
+  const raw = assessment.scoring === "score" ? (value as { score?: unknown }).score : (value as { correct?: unknown }).correct;
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0) {
     return null;
   }
-  return { correct, retest: Boolean((value as { retest?: unknown }).retest) };
+  const decimal = assessmentMeta(assessment.category).decimalResults;
+  if (decimal ? Math.abs(raw * 10 - Math.round(raw * 10)) > 1e-6 : !Number.isInteger(raw)) {
+    return null;
+  }
+  return { value: decimal ? Math.round(raw * 10) / 10 : raw, retest: Boolean((value as { retest?: unknown }).retest) };
 }
 
 // 한 학생의 한 시험 결과 — null = 미입력 (0점은 유효한 결과)
 export function studentScoreFor(row: StudentAssessmentSource, assessment: LessonAssessment): AssessmentScore | null {
   const results = row.assessment_results;
   if (results && typeof results === "object" && !Array.isArray(results)) {
-    const score = parseScore((results as Record<string, unknown>)[assessment.id]);
+    const score = parseScore((results as Record<string, unknown>)[assessment.id], assessment);
     if (score) {
       return score;
     }
   }
   // 이전 형식의 단어시험 — 결과는 단어 컬럼에 있다
   if (assessment.id === "vocabulary" && row.vocab_correct !== null && row.vocab_correct >= 0) {
-    return { correct: row.vocab_correct, retest: Boolean(row.vocab_retest) };
+    return { value: row.vocab_correct, retest: Boolean(row.vocab_retest) };
   }
   return null;
 }
@@ -150,7 +239,7 @@ export function assessmentPercentsByCategory(
   for (const row of rows) {
     for (const assessment of lessonAssessmentsOf(row)) {
       const score = studentScoreFor(row, assessment);
-      const percent = score ? assessmentPercentRaw(score.correct, assessment.total) : null;
+      const percent = score ? assessmentPercentRaw(score.value, assessment.total) : null;
       if (percent !== null) {
         out[assessment.category].push(percent);
       }
@@ -160,7 +249,8 @@ export function assessmentPercentsByCategory(
 }
 
 // ---- 폼 state (문자열 입력) ----
-export type AssessmentDraft = { id: string; category: AssessmentCategory; total: string };
+export type AssessmentDraft = { id: string; category: AssessmentCategory; total: string; scoring: AssessmentScoringMode };
+// correct = 결과 입력칸의 글자 그대로 (개수 방식 = 맞은 개수, 점수 방식 = 점수 — draft key는 이전 그대로)
 export type ScoreInput = { correct: string; retest: boolean };
 export type ScoreInputs = Record<string, ScoreInput>; // key = assessment id
 
@@ -169,7 +259,7 @@ export function newAssessmentId() {
 }
 
 export function assessmentsToDrafts(list: readonly LessonAssessment[]): AssessmentDraft[] {
-  return list.map((item) => ({ id: item.id, category: item.category, total: String(item.total) }));
+  return list.map((item) => ({ id: item.id, category: item.category, total: String(item.total), scoring: item.scoring }));
 }
 
 export function scoresToInputs(row: StudentAssessmentSource, list: readonly LessonAssessment[]): ScoreInputs {
@@ -177,7 +267,7 @@ export function scoresToInputs(row: StudentAssessmentSource, list: readonly Less
   for (const assessment of list) {
     const score = studentScoreFor(row, assessment);
     if (score) {
-      out[assessment.id] = { correct: String(score.correct), retest: score.retest };
+      out[assessment.id] = { correct: formatAssessmentValue(score.value), retest: score.retest };
     }
   }
   return out;
@@ -192,12 +282,12 @@ export function restoreAssessmentDrafts(payload: {
   if (Array.isArray(payload.assessments)) {
     const seen = new Set<string>();
     return payload.assessments.flatMap((item) => {
-      const { id, category, total } = (item ?? {}) as { id?: unknown; category?: unknown; total?: unknown };
+      const { id, category, total, scoring } = (item ?? {}) as { id?: unknown; category?: unknown; total?: unknown; scoring?: unknown };
       if (typeof id !== "string" || !ID_PATTERN.test(id) || seen.has(id) || !isAssessmentCategory(category)) {
         return [];
       }
       seen.add(id);
-      return [{ id, category, total: typeof total === "string" ? total : "" }];
+      return [{ id, category, total: typeof total === "string" ? total : "", scoring: scoringModeOf(category, scoring) }];
     });
   }
   if (typeof payload.vocabTotal !== "string" && !payload.assessmentTotals) {
@@ -205,13 +295,13 @@ export function restoreAssessmentDrafts(payload: {
   }
   const out: AssessmentDraft[] = [];
   if (typeof payload.vocabTotal === "string" && payload.vocabTotal.trim()) {
-    out.push({ id: "vocabulary", category: "vocabulary", total: payload.vocabTotal });
+    out.push({ id: "vocabulary", category: "vocabulary", total: payload.vocabTotal, scoring: "count" });
   }
   const totals = payload.assessmentTotals as Record<string, unknown> | undefined;
   for (const category of ["grammar", "reading"] as const) {
     const total = totals?.[category];
     if (typeof total === "string" && total.trim()) {
-      out.push({ id: category, category, total });
+      out.push({ id: category, category, total, scoring: "count" });
     }
   }
   return out;
@@ -251,17 +341,15 @@ export function restoreScoreInputs(entry: {
   return out;
 }
 
-// ---- 검증 (단어/문법/독해 공통 — 함수 하나) ----
+// ---- 검증 (모든 종류 공통 — 함수 하나) ----
 export type AssessmentValidationIssue = { message: string; field: "total" | { studentIndex: number } };
 
 // 맞은 개수/총 문항 규칙의 단일 소스 — 수업 시험 입력과 재시험 시도 점수가 같은 규칙·같은 문구를 쓴다.
-// 총 문항: 정수 ≥ 1 / 맞은 개수: 정수 ≥ 0 (0점 유효), 총 문항 이하.
+// 총 문항(총점): 정수 ≥ 1 / 맞은 개수: 정수 ≥ 0 (0점 유효), 총 문항 이하.
 export function parseTotalQuestions(totalInput: string | undefined) {
   const total = totalInput?.trim() ? Number(totalInput) : null;
   return total !== null && Number.isInteger(total) && total > 0 ? total : null;
 }
-
-export const scoreOverTotalMessage = (total: number) => `맞은 개수는 총 문항 수(${total})를 넘을 수 없어요.`;
 
 // 점수 한 쌍(맞은 개수 + 총 문항, 둘 다 필수) — 재시험 시도처럼 빈 값을 허용하지 않는 입력용
 export function validateScorePair(correctInput: string, totalInput: string):
@@ -282,58 +370,72 @@ export function validateScorePair(correctInput: string, totalInput: string):
 }
 
 export function validateAssessmentInput(
-  category: AssessmentCategory,
-  totalInput: string | undefined,
+  assessment: { category: AssessmentCategory; total: string | undefined; scoring?: unknown },
   corrects: readonly (string | undefined)[],
 ): AssessmentValidationIssue[] {
-  const { testLabel } = assessmentMeta(category);
-  const total = parseTotalQuestions(totalInput);
+  const { testLabel } = assessmentMeta(assessment.category);
+  const scoring = scoringModeOf(assessment.category, assessment.scoring);
+  const total = parseTotalQuestions(assessment.total);
   if (total === null) {
-    return [{ message: `${testLabel} 총 문항 수는 1 이상이어야 해요.`, field: "total" }];
+    return [{ message: `${testLabel} ${scoring === "score" ? "총점" : "총 문항 수"}은 1 이상이어야 해요.`, field: "total" }];
   }
   const issues: AssessmentValidationIssue[] = [];
   corrects.forEach((correctInput, studentIndex) => {
-    if (correctInput && Number(correctInput) > total) {
-      issues.push({ message: scoreOverTotalMessage(total), field: { studentIndex } });
+    const parsed = parseAssessmentResult(correctInput, { category: assessment.category, total, scoring });
+    if (!parsed.ok) {
+      issues.push({ message: parsed.message, field: { studentIndex } });
     }
   });
   return issues;
 }
 
-// 입력 하나가 총 문항을 넘는지 (화면 즉시 표시용 — 저장 검증과 같은 기준, 값을 바꾸지 않는다)
-export function scoreExceedsTotal(correct: string, total: string) {
-  return Boolean(correct) && Boolean(total.trim()) && Number(correct) > Number(total);
+// 입력 하나의 문제 (화면 즉시 표시용 — 저장 검증과 같은 기준, 값을 바꾸지 않는다). 문제 없으면 null.
+// 총 문항이 비어 있으면 결과 문제는 보이지 않는다 (총 문항 칸이 먼저 안내).
+export function assessmentResultIssue(correct: string, assessment: AssessmentDraft) {
+  if (!correct || !assessment.total.trim()) {
+    return null;
+  }
+  const parsed = parseAssessmentResult(correct, assessment);
+  return parsed.ok ? null : parsed.message;
 }
 
 // ---- 저장 payload ----
-export function assessmentsForSave(input: readonly { id: string; category: string; total: string }[] | undefined): LessonAssessment[] {
+export function assessmentsForSave(
+  input: readonly { id: string; category: string; total: string; scoring?: string }[] | undefined,
+): LessonAssessment[] {
   const seen = new Set<string>();
   const out: LessonAssessment[] = [];
   for (const item of input ?? []) {
     const total = Number(item.total);
     if (ID_PATTERN.test(item.id) && !seen.has(item.id) && isAssessmentCategory(item.category) && Number.isInteger(total) && total > 0) {
       seen.add(item.id);
-      out.push({ id: item.id, category: item.category, total });
+      out.push({ id: item.id, category: item.category, total, scoring: scoringModeOf(item.category, item.scoring) });
     }
   }
   return out;
 }
 
-// 학생 결과 — 존재하는 시험 + 맞은 개수 입력된 것만 (빈 값은 저장 안 함 = null, 0은 저장)
-// 재시험 표시는 재시험을 받는 종류만 저장한다 (capability metadata 기준). 등수는 저장하지 않는다 (파생 값).
+// assessment_totals 저장 형식 — 방식을 고르는 종류(월말평가)만 scoring을 함께 저장한다 (단어/문법/독해는 이전과 같은 모양)
+export function assessmentTotalsForSave(list: readonly LessonAssessment[]) {
+  return list.map(({ scoring, ...item }) => (assessmentMeta(item.category).scoringModes ? { ...item, scoring } : item));
+}
+
+// 학생 결과 — 존재하는 시험 + 유효한 값만 (빈 값은 저장 안 함 = null, 0은 저장). 방식에 맞는 key로 저장한다:
+// 개수 = { correct, retest }, 점수 = { score }. 재시험 표시는 재시험을 받는 종류만. 등수는 저장하지 않는다 (파생 값).
 export function scoresForSave(
   input: Record<string, { correct?: string; retest?: boolean }> | undefined,
   list: readonly LessonAssessment[],
-): Record<string, AssessmentScore> {
-  const out: Record<string, AssessmentScore> = {};
+): Record<string, StoredAssessmentScore> {
+  const out: Record<string, StoredAssessmentScore> = {};
   for (const assessment of list) {
     const value = input?.[assessment.id];
-    if (value?.correct !== undefined && value.correct !== "" && Number.isInteger(Number(value.correct))) {
+    const parsed = parseAssessmentResult(value?.correct, assessment);
+    if (value && parsed.ok && parsed.value !== null) {
       const meta = assessmentMeta(assessment.category);
-      out[assessment.id] = {
-        correct: Number(value.correct),
-        retest: meta.supportsRetest ? Boolean(value.retest) : false,
-      };
+      out[assessment.id] =
+        assessment.scoring === "score"
+          ? { score: parsed.value }
+          : { correct: parsed.value, retest: meta.supportsRetest ? Boolean(value.retest) : false };
     }
   }
   return out;
@@ -367,13 +469,14 @@ export function assessmentOrdinals(list: readonly { id: string; category: Assess
 // 완료된 일지의 결과만. 석차는 그 일지(그 수업)의 "당시 응시자 전체" 결과로 계산한다 — 현재 반 명단으로
 // 다시 계산하지 않으므로, 이후 반 이동/퇴원이 있어도 과거 석차는 바뀌지 않는다 (rows에 그 일지의 모든 학생 기록을 넘길 것).
 // 배지는 상위 3등만, 시험마다 1개 (같은 달 월말평가가 둘이면 배지도 둘). 왕중왕 개수에는 넣지 않는다.
+// 개수/점수 방식 모두 같은 석차 함수 — 시험의 방식에 맞는 결과 값으로 계산한다.
 export type AssessmentRankBadge = { assessmentId: string; date: string; rank: number; label: string; emoji: string };
 
 type RankRow = LessonAssessmentSource & StudentAssessmentSource & { student_id: string; class_date: string; daily_log_id: string };
 
 export function assessmentRanksOfLog(rows: readonly RankRow[], assessment: LessonAssessment) {
   return calculateAssessmentRanks(
-    rows.map((row) => ({ studentId: row.student_id, correct: studentScoreFor(row, assessment)?.correct ?? null })),
+    rows.map((row) => ({ studentId: row.student_id, value: studentScoreFor(row, assessment)?.value ?? null })),
   );
 }
 

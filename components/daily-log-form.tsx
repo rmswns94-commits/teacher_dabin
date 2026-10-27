@@ -116,17 +116,23 @@ import { digitsOnly, isComposingEvent } from "@/lib/numeric-input";
 import { previewVocabularyStreak, type VocabularyStreakPreview } from "@/lib/vocabulary-streak";
 import {
   ASSESSMENT_CATEGORIES,
+  DEFAULT_MAX_SCORE,
+  SCORING_MODES,
   TOP_RANK_EMOJI,
   assessmentMeta,
+  assessmentResultIssue,
+  assessmentScale,
   calculateAssessmentRanks,
   assessmentOrdinals,
   assessmentPercentRaw,
+  decimalInputText,
   newAssessmentId,
+  parseAssessmentResult,
   restoreAssessmentDrafts,
   restoreScoreInputs,
-  scoreExceedsTotal,
   type AssessmentCategory,
   type AssessmentDraft,
+  type AssessmentScoringMode,
   type ScoreInput,
   type ScoreInputs,
 } from "@/lib/assessments";
@@ -492,6 +498,8 @@ function restoredSections(value: unknown): Record<string, string> | null {
 
 // 시험 1개의 학생 점수 입력 — 맞은 개수 / 총 문항 · %, 재시험 필요. 학생 카드와 빠른 체크 [일괄 입력]이 같은 컴포넌트·같은 state.
 // 빈 값 = 미입력(null), 0 = 0점. 총 문항을 넘으면 값을 바꾸지 않고(조용한 보정 없음) 오류만 보여준다.
+// 월말평가는 시험의 입력 방식(개수/점수)에 맞는 문구로 보이고, 소수 첫째 자리까지 받는다 (decimal 키보드).
+// 입력 중인 "92." 는 그대로 두고, 형식/범위는 저장과 같은 parseAssessmentResult 기준으로 안내만 한다.
 function AssessmentScoreInput({
   studentName,
   assessment,
@@ -518,29 +526,36 @@ function AssessmentScoreInput({
 }) {
   const meta = assessmentMeta(assessment.category);
   const total = assessment.total.trim();
-  const exceeds = scoreExceedsTotal(value.correct, assessment.total);
-  const percent = value.correct && total && !exceeds ? assessmentPercentRaw(Number(value.correct), Number(total)) : null;
+  const scale = assessmentScale(assessment);
+  const issue = assessmentResultIssue(value.correct, assessment);
+  const parsed = parseAssessmentResult(value.correct, assessment);
+  const resultValue = parsed.ok ? parsed.value : null;
+  const percent =
+    resultValue !== null && total && assessment.scoring === "count" ? assessmentPercentRaw(resultValue, Number(total)) : null;
+  const clean = meta.decimalResults ? decimalInputText : digitsOnly;
   return (
     <div role="group" aria-label={`${studentName} ${name}`} data-assessment-input={assessment.id} className="min-w-0">
       {label ? <div className="mb-1 text-xs font-medium text-[#8a7b77]">{label}</div> : null}
       <div className="flex flex-wrap items-center gap-2">
+        {meta.scoringModes ? <span className="text-sm text-[#564d4d]">{scale.valueLabel}</span> : null}
         <input
-          inputMode="numeric"
+          inputMode={meta.decimalResults ? "decimal" : "numeric"}
           value={value.correct}
           onChange={(event) =>
             onChange({
               ...value,
-              correct: isComposingEvent(event) ? event.target.value : digitsOnly(event.target.value),
+              correct: isComposingEvent(event) ? event.target.value : clean(event.target.value),
             })
           }
-          onCompositionEnd={(event) => onChange({ ...value, correct: digitsOnly(event.currentTarget.value) })}
+          onCompositionEnd={(event) => onChange({ ...value, correct: clean(event.currentTarget.value) })}
           className={cn(
-            "w-14 rounded-xl border bg-white px-2 py-1.5 text-center text-base tabular-nums outline-none",
-            exceeds ? "border-[#e8b4ad] focus:border-[#d98c82]" : "border-[#ece0db] focus:border-[#c9b9e8]",
+            "rounded-xl border bg-white px-2 py-1.5 text-center text-base tabular-nums outline-none",
+            meta.decimalResults ? "w-16" : "w-14",
+            issue ? "border-[#e8b4ad] focus:border-[#d98c82]" : "border-[#ece0db] focus:border-[#c9b9e8]",
           )}
           placeholder="-"
-          aria-label={`${studentName} ${name} 맞은 개수`}
-          aria-invalid={exceeds || undefined}
+          aria-label={`${studentName} ${name} ${scale.valueLabel}`}
+          aria-invalid={Boolean(issue) || undefined}
         />
         <span className="text-sm tabular-nums text-[#8a7b77]">
           / {total || "?"}
@@ -563,12 +578,12 @@ function AssessmentScoreInput({
           </button>
         ) : null}
       </div>
-      {exceeds ? (
+      {issue ? (
         <p role="alert" className="mt-1 text-xs text-[#b4554b]">
-          맞은 개수는 총 문항 수({total})를 넘을 수 없어요.
+          {issue}
         </p>
       ) : null}
-      {/* 월말평가 석차 — 반 안 같은 시험 응시자의 맞은 개수로 자동 계산 (읽기 전용, 저장 전에는 "현재") */}
+      {/* 월말평가 석차 — 반 안 같은 시험 응시자의 결과 값(맞은 개수/점수)으로 자동 계산 (읽기 전용, 저장 전에는 "현재") */}
       {meta.rankedByScore && rank ? (
         <p className="mt-1 text-sm font-semibold text-[#8a6a25]" data-assessment-rank={rank}>
           {TOP_RANK_EMOJI[rank] ? `${TOP_RANK_EMOJI[rank]} ` : ""}
@@ -1203,7 +1218,13 @@ export function DailyLogForm({
     () => (restored ? restoreAssessmentDrafts(restored) : null) ?? initial?.assessments ?? [],
   );
   // 빠른 체크 시험 목록 UI 상태 (저장/draft에 넣지 않는다)
-  const [assessmentAdder, setAssessmentAdder] = useState<{ category: AssessmentCategory; total: string } | null>(null);
+  const [assessmentAdder, setAssessmentAdder] = useState<{
+    category: AssessmentCategory;
+    total: string;
+    scoring: AssessmentScoringMode;
+  } | null>(null);
+  // 결과가 있는 월말평가의 입력 방식 변경 확인 (시험 id + 바꿀 방식) — 확인 전에는 아무것도 바뀌지 않는다
+  const [scoringChange, setScoringChange] = useState<{ assessmentId: string; scoring: AssessmentScoringMode } | null>(null);
   const [assessmentBulkId, setAssessmentBulkId] = useState<string | null>(null);
   const [assessmentDeleteId, setAssessmentDeleteId] = useState<string | null>(null);
   // 요약 모달 — 대시보드 [수업 일지 완료] 진입이면 처음부터 열린 상태 (draft 안내가 있으면 제외)
@@ -1715,8 +1736,9 @@ export function DailyLogForm({
     });
   };
   const assessmentNameOf = assessmentOrdinals(assessments);
-  // 월말평가 자동 석차 — 지금 폼에 입력된 맞은 개수로 시험마다 따로 계산 (DB 조회 없음, 입력할 때마다 전원 재계산).
-  // 대상: 이 일지의 학생 중 결석이 아니고 맞은 개수가 유효한 학생 (미입력 제외, 0점 포함).
+  // 월말평가 자동 석차 — 지금 폼에 입력된 결과 값으로 시험마다 따로 계산 (DB 조회 없음, 입력할 때마다 전원 재계산).
+  // 시험의 방식(개수/점수)은 시험 하나에 하나라 학생마다 따지지 않는다 — 같은 parseAssessmentResult 값만 비교.
+  // 대상: 이 일지의 학생 중 결석이 아니고 결과가 유효한 학생 (미입력/형식 오류/초과 제외, 0점 포함).
   // 학생 카드와 [일괄 입력]이 이 같은 값을 쓴다.
   const rankByAssessment = useMemo(() => {
     const out = new Map<string, Map<string, number>>();
@@ -1724,16 +1746,14 @@ export function DailyLogForm({
       if (!assessmentMeta(assessment.category).rankedByScore) {
         continue;
       }
-      const total = Number(assessment.total);
       out.set(
         assessment.id,
         calculateAssessmentRanks(
           students.map((student) => {
             const entry = entries[student.studentId];
-            const input = entry?.assessmentScores[assessment.id]?.correct ?? "";
-            const correct = Number(input);
-            const valid = entry && entry.attendance !== "absent" && input !== "" && Number.isInteger(correct) && !(total > 0 && correct > total);
-            return { studentId: student.studentId, correct: valid ? correct : null };
+            const parsed = parseAssessmentResult(entry?.assessmentScores[assessment.id]?.correct, assessment);
+            const valid = entry && entry.attendance !== "absent" && parsed.ok;
+            return { studentId: student.studentId, value: valid ? parsed.value : null };
           }),
         ),
       );
@@ -1750,11 +1770,34 @@ export function DailyLogForm({
     if (!assessmentAdder || !(Number(assessmentAdder.total) > 0)) {
       return;
     }
+    const scoring = assessmentMeta(assessmentAdder.category).scoringModes ? assessmentAdder.scoring : "count";
     setAssessments((prev) => [
       ...prev,
-      { id: newAssessmentId(), category: assessmentAdder.category, total: String(Number(assessmentAdder.total)) },
+      { id: newAssessmentId(), category: assessmentAdder.category, total: String(Number(assessmentAdder.total)), scoring },
     ]);
     setAssessmentAdder(null);
+  };
+  // 월말평가 입력 방식 변경 — 개수와 점수는 다른 의미라 기존 값을 옮기지 않는다 (조용한 재해석 없음).
+  // 총 문항/총점도 의미가 달라 새 방식 기준으로 다시 정한다 (점수 = 100 제안, 개수 = 비움).
+  // 이 시험의 학생 결과만 지우고 다른 시험은 그대로. 결과가 있으면 확인(scoringChange)을 거친 뒤에만 호출된다.
+  const changeScoring = (assessmentId: string, scoring: AssessmentScoringMode) => {
+    setAssessments((prev) =>
+      prev.map((item) =>
+        item.id === assessmentId ? { ...item, scoring, total: scoring === "score" ? DEFAULT_MAX_SCORE : "" } : item,
+      ),
+    );
+    setEntries((prev) => {
+      const next = { ...prev };
+      for (const studentId of Object.keys(next)) {
+        if (assessmentId in next[studentId].assessmentScores) {
+          const scores = { ...next[studentId].assessmentScores };
+          delete scores[assessmentId];
+          next[studentId] = { ...next[studentId], assessmentScores: scores };
+        }
+      }
+      return next;
+    });
+    setScoringChange(null);
   };
   // 시험 삭제 — 그 시험의 학생 점수도 함께 지운다 (다른 시험 점수는 그대로)
   const removeAssessment = (assessmentId: string) => {
@@ -3033,7 +3076,7 @@ export function DailyLogForm({
             content,
             dueDate,
           })),
-        assessments: assessments.map(({ id, category, total }) => ({ id, category, total })),
+        assessments: assessments.map(({ id, category, total, scoring }) => ({ id, category, total, scoring })),
         reflectionGood,
         reflectionHard,
         reflectionNext,
@@ -3817,7 +3860,7 @@ export function DailyLogForm({
                   variant="outline"
                   size="sm"
                   className="min-h-[40px] gap-1"
-                  onClick={() => setAssessmentAdder({ category: "vocabulary", total: "" })}
+                  onClick={() => setAssessmentAdder({ category: "vocabulary", total: "", scoring: "count" })}
                 >
                   <Plus className="h-4 w-4" aria-hidden /> 시험 추가
                 </Button>
@@ -3833,8 +3876,9 @@ export function DailyLogForm({
                   const { name } = assessmentNameOf(assessment);
                   const scored = scoredCountOf(assessment.id);
                   const totalMissing = !(Number(assessment.total) > 0);
+                  const scale = assessmentScale(assessment);
                   const overCount = students.filter((student) =>
-                    scoreExceedsTotal(entries[student.studentId]?.assessmentScores[assessment.id]?.correct ?? "", assessment.total),
+                    assessmentResultIssue(entries[student.studentId]?.assessmentScores[assessment.id]?.correct ?? "", assessment),
                   ).length;
                   const bulkPanelId = `assessment-bulk-${assessment.id}`;
                   return (
@@ -3848,7 +3892,39 @@ export function DailyLogForm({
                         <span className="rounded-full bg-[#f3eefc] px-2.5 py-0.5 text-sm font-semibold text-[#5d4ba5]">
                           {name === meta.testLabel ? meta.label : name.replace("시험", "")}
                         </span>
+                        {/* 월말평가 입력 방식 — 시험 전체에 하나. 결과가 있으면 확인 후에만 바뀐다 */}
+                        {meta.scoringModes ? (
+                          <div role="group" aria-label={`${name} 입력 방식`} className="flex gap-1" data-scoring-mode={assessment.scoring}>
+                            {SCORING_MODES.map((mode) => (
+                              <button
+                                key={mode.key}
+                                type="button"
+                                aria-pressed={assessment.scoring === mode.key}
+                                data-scoring-option={mode.key}
+                                onClick={() => {
+                                  if (assessment.scoring === mode.key) {
+                                    return;
+                                  }
+                                  if (scored > 0) {
+                                    setScoringChange({ assessmentId: assessment.id, scoring: mode.key });
+                                  } else {
+                                    changeScoring(assessment.id, mode.key);
+                                  }
+                                }}
+                                className={cn(
+                                  "min-h-[36px] rounded-lg border px-2.5 py-1 text-sm transition",
+                                  assessment.scoring === mode.key
+                                    ? "border-[#c9b9e8] bg-[#f3eefc] font-semibold text-[#5d4ba5]"
+                                    : "border-[#ece0db] bg-white font-medium text-[#7c6d69] hover:bg-[#faf6f3]",
+                                )}
+                              >
+                                {mode.short}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                         <label className="flex items-center gap-1.5 text-sm text-[#564d4d]">
+                          {meta.scoringModes && assessment.scoring === "score" ? "총점" : null}
                           <input
                             inputMode="numeric"
                             value={assessment.total}
@@ -3864,10 +3940,10 @@ export function DailyLogForm({
                               "w-16 rounded-xl border bg-white px-2 py-1.5 text-center text-base tabular-nums outline-none",
                               totalMissing || overCount > 0 ? "border-[#e8b4ad]" : "border-[#ece0db] focus:border-[#c9b9e8]",
                             )}
-                            aria-label={`${name} 총 문항 수`}
+                            aria-label={`${name} ${assessment.scoring === "score" ? "총점" : "총 문항 수"}`}
                             aria-invalid={totalMissing || overCount > 0 || undefined}
                           />
-                          문제
+                          {assessment.scoring === "score" ? "점 만점" : "문제"}
                         </label>
                         <span className="text-xs text-[#8a7b77]">입력 {scored}/{students.length}명</span>
                         <div className="ml-auto flex gap-1.5">
@@ -3894,11 +3970,41 @@ export function DailyLogForm({
                         </div>
                       </div>
                       {totalMissing ? (
-                        <p role="alert" className="mt-1.5 text-xs text-[#b4554b]">총 문항 수를 1 이상으로 입력해주세요.</p>
+                        <p role="alert" className="mt-1.5 text-xs text-[#b4554b]">
+                          {assessment.scoring === "score" ? "총점을 1 이상으로 입력해주세요." : "총 문항 수를 1 이상으로 입력해주세요."}
+                        </p>
                       ) : overCount > 0 ? (
                         <p role="alert" className="mt-1.5 text-xs text-[#b4554b]">
-                          맞은 개수가 총 문항 수보다 큰 학생이 {overCount}명 있어요. 점수나 총 문항 수를 확인해주세요.
+                          {meta.decimalResults
+                            ? `${scale.valueLabel}를 확인해야 하는 학생이 ${overCount}명 있어요. (${scale.totalLabel} 초과 또는 소수점 둘째 자리)`
+                            : `맞은 개수가 총 문항 수보다 큰 학생이 ${overCount}명 있어요. 점수나 총 문항 수를 확인해주세요.`}
                         </p>
+                      ) : null}
+                      {scoringChange?.assessmentId === assessment.id ? (
+                        <div
+                          role="alertdialog"
+                          aria-label={`${name} 입력 방식 변경 확인`}
+                          data-scoring-confirm
+                          className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-[#fff6f4] px-3 py-2 text-sm text-[#8a4a42]"
+                        >
+                          <span className="min-w-0">
+                            입력 방식을 {SCORING_MODES.find((mode) => mode.key === scoringChange.scoring)?.label}으로 바꾸면 이 월말평가에 입력한 학생 성적 {scored}개가 지워져요.
+                            {finalized ? " 완료된 기록이라, 저장하면 이 시험의 등수도 새 성적으로 다시 계산돼요." : ""}
+                          </span>
+                          <div className="ml-auto flex gap-1.5">
+                            <Button type="button" variant="outline" size="sm" onClick={() => setScoringChange(null)}>
+                              취소
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="bg-[#b4554b] hover:bg-[#9c463d]"
+                              onClick={() => changeScoring(assessment.id, scoringChange.scoring)}
+                            >
+                              변경
+                            </Button>
+                          </div>
+                        </div>
                       ) : null}
                       {assessmentDeleteId === assessment.id ? (
                         <div role="alertdialog" aria-label={`${name} 삭제 확인`} className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-[#fff6f4] px-3 py-2 text-sm text-[#8a4a42]">
@@ -3952,7 +4058,16 @@ export function DailyLogForm({
                       type="button"
                       aria-pressed={assessmentAdder.category === meta.key}
                       data-adder-category={meta.key}
-                      onClick={() => setAssessmentAdder((prev) => (prev ? { ...prev, category: meta.key } : prev))}
+                      onClick={() =>
+                        setAssessmentAdder((prev) =>
+                          // 점수 방식의 총점은 다른 종류의 총 문항으로 옮기지 않는다 (비움)
+                          prev
+                            ? meta.scoringModes || prev.scoring === "count"
+                              ? { ...prev, category: meta.key }
+                              : { ...prev, category: meta.key, scoring: "count", total: "" }
+                            : prev,
+                        )
+                      }
                       className={cn(
                         "min-h-[40px] rounded-xl border px-3 py-1.5 text-sm transition",
                         assessmentAdder.category === meta.key
@@ -3964,8 +4079,37 @@ export function DailyLogForm({
                     </button>
                   ))}
                 </div>
+                {/* 월말평가만 — 입력 방식 선택 (개수 = 총 문항, 점수 = 총점 100 제안, 바꿀 수 있음) */}
+                {assessmentMeta(assessmentAdder.category).scoringModes ? (
+                  <div role="group" aria-label="월말평가 입력 방식" className="flex flex-wrap items-center gap-1.5" data-adder-scoring>
+                    <span className="text-sm text-[#564d4d]">입력 방식</span>
+                    {SCORING_MODES.map((mode) => (
+                      <button
+                        key={mode.key}
+                        type="button"
+                        aria-pressed={assessmentAdder.scoring === mode.key}
+                        data-adder-scoring-option={mode.key}
+                        onClick={() =>
+                          setAssessmentAdder((prev) =>
+                            prev && prev.scoring !== mode.key
+                              ? { ...prev, scoring: mode.key, total: mode.key === "score" ? DEFAULT_MAX_SCORE : "" }
+                              : prev,
+                          )
+                        }
+                        className={cn(
+                          "min-h-[40px] rounded-xl border px-3 py-1.5 text-sm transition",
+                          assessmentAdder.scoring === mode.key
+                            ? "border-[#c9b9e8] bg-[#f3eefc] font-semibold text-[#5d4ba5]"
+                            : "border-[#ece0db] bg-white font-medium text-[#7c6d69] hover:bg-[#faf6f3]",
+                        )}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 <label className="flex items-center gap-1.5 text-sm text-[#564d4d]">
-                  총
+                  {assessmentMeta(assessmentAdder.category).scoringModes && assessmentAdder.scoring === "score" ? "총점" : "총"}
                   <input
                     inputMode="numeric"
                     value={assessmentAdder.total}
@@ -3984,10 +4128,10 @@ export function DailyLogForm({
                       }
                     }}
                     className="w-16 rounded-xl border border-[#ece0db] bg-white px-2 py-1.5 text-center text-base tabular-nums outline-none focus:border-[#c9b9e8]"
-                    placeholder="20"
-                    aria-label="추가할 시험 총 문항 수"
+                    placeholder={assessmentAdder.scoring === "score" ? DEFAULT_MAX_SCORE : "20"}
+                    aria-label={assessmentAdder.scoring === "score" ? "추가할 시험 총점" : "추가할 시험 총 문항 수"}
                   />
-                  문제
+                  {assessmentAdder.scoring === "score" ? "점" : "문제"}
                 </label>
                 <div className="ml-auto flex gap-1.5">
                   <Button type="button" variant="outline" size="sm" onClick={() => setAssessmentAdder(null)}>
@@ -4431,7 +4575,7 @@ export function DailyLogForm({
                                     rank={rankOf(item.id, student.studentId)}
                                     finalized={finalized}
                                     name={assessmentNameOf(item).name}
-                                    label={items.length > 1 ? `시험 ${index + 1} · ${item.total.trim() || "?"}문제` : `${item.total.trim() || "?"}문제`}
+                                    label={items.length > 1 ? `시험 ${index + 1} · ${assessmentScale(item).scaleText}` : assessmentScale(item).scaleText}
                                     value={entry.assessmentScores[item.id] ?? { correct: "", retest: false }}
                                     onChange={(next) => updateScore(student.studentId, item.id, next)}
                                   />

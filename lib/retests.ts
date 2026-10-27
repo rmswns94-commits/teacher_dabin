@@ -4,7 +4,7 @@
 // - 진행중 = pending(대기) + failed(미통과). passed(통과)는 통과 기록에만, cancelled는 어디에도 보이지 않는다.
 // - 통과/미통과는 강사가 직접 고른다. 점수로 자동 판정하지 않고, 원래 시험 점수도 바꾸지 않는다.
 // - 성장왕(단어왕/문법왕/독해왕)은 원래 시험 점수만 본다 — 재시험 상태는 판정에 쓰지 않는다.
-import { assessmentMeta, type AssessmentCategory, type LessonAssessment } from "@/lib/assessments";
+import { assessmentMeta, type AssessmentCategory, type LessonAssessment, type StoredAssessmentScore } from "@/lib/assessments";
 
 export type RetestStatus = "pending" | "failed" | "passed" | "cancelled";
 
@@ -43,7 +43,7 @@ export function retestSourcesOf(input: {
     studentId: string;
     lessonLogId: string | undefined;
     absent: boolean;
-    scores: Record<string, { correct: number; retest: boolean }>;
+    scores: Record<string, StoredAssessmentScore>;
     progress: string | null;
   }[];
 }): RetestSource[] {
@@ -54,7 +54,8 @@ export function retestSourcesOf(input: {
     }
     for (const assessment of input.assessments) {
       const score = student.scores[assessment.id];
-      if (score?.retest && assessmentMeta(assessment.category).supportsRetest) {
+      // 재시험은 개수 형식 결과({ correct, retest })에만 있다 — 점수 형식(월말평가 점수 입력)은 대상 아님
+      if (score && "correct" in score && score.retest && assessmentMeta(assessment.category).supportsRetest) {
         out.push({
           lessonLogId: student.lessonLogId,
           studentId: student.studentId,

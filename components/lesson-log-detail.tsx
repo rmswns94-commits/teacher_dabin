@@ -1,5 +1,15 @@
 import Link from "next/link";
-import { assessmentMeta, assessmentOrdinals, assessmentPercentRaw, assessmentRanksOfLog, lessonAssessmentsOf, studentScoreFor } from "@/lib/assessments";
+import {
+  assessmentMeta,
+  assessmentOrdinals,
+  assessmentPercentRaw,
+  assessmentRanksOfLog,
+  assessmentScale,
+  formatAssessmentValue,
+  lessonAssessmentsOf,
+  studentScoreFor,
+  type LessonAssessment,
+} from "@/lib/assessments";
 import { BookOpen, CheckCheck, CircleArrowRight, NotebookTabs, PencilLine } from "lucide-react";
 import { parseNoteItems } from "@/lib/constants/lesson-comments";
 
@@ -107,11 +117,16 @@ export function LessonLogDetail({
       ]),
   );
   const rankOf = (assessmentId: string, studentId: string) => ranksByAssessment.get(assessmentId)?.get(studentId) ?? null;
+  // 칩 표시 (이전 형식 그대로) — 개수: "21.5/24 (90%)", 점수(월말평가 점수 입력): "92.5/100점" (%는 개수 방식만)
+  const resultTextOf = (assessment: LessonAssessment, value: number) =>
+    assessment.scoring === "count"
+      ? `${formatAssessmentValue(value)}/${assessment.total} (${assessmentPercentRaw(value, assessment.total)}%)`
+      : `${formatAssessmentValue(value)}/${assessment.total}점`;
   const scoreChipsOf = (lessonLog: unknown) =>
     lessonAssessments.flatMap((assessment) => {
       const result = studentScoreFor(lessonLog as ScoreSource, assessment);
       return result
-        ? [`${assessmentNameOf(assessment).name.replace("시험", "")} ${result.correct}/${assessment.total} (${assessmentPercentRaw(result.correct, assessment.total)}%)${rankOf(assessment.id, (lessonLog as { student_id: string }).student_id) ? ` · ${rankOf(assessment.id, (lessonLog as { student_id: string }).student_id)}등` : ""}${result.retest ? " · 재시험 필요" : ""}`]
+        ? [`${assessmentNameOf(assessment).name.replace("시험", "")} ${resultTextOf(assessment, result.value)}${rankOf(assessment.id, (lessonLog as { student_id: string }).student_id) ? ` · ${rankOf(assessment.id, (lessonLog as { student_id: string }).student_id)}등` : ""}${result.retest ? " · 재시험 필요" : ""}`]
         : [];
     });
   const parentNoteRows = detail.lessonLogs.filter((log) => log.parent_note);
@@ -471,7 +486,7 @@ export function LessonLogDetail({
             data-assessment-category={section.assessment.category}
           >
             <SectionHeading>
-              {section.name} · 총 {section.assessment.total}문제
+              {section.name} · {assessmentScale(section.assessment).scaleText}
             </SectionHeading>
             <div className="mt-2 space-y-1">
               {section.rows.map(({ lessonLog, result }) => (
@@ -481,9 +496,11 @@ export function LessonLogDetail({
                 >
                   <span className="w-16 truncate font-medium text-[#2d2928]">{lessonLog.student?.name ?? "학생"}</span>
                   <span className="text-[#564d4d]">
-                    {result!.correct} / {section.assessment.total}
+                    {assessmentScale(section.assessment).fraction(formatAssessmentValue(result!.value))}
                   </span>
-                  <span className="text-[#54479c]">{assessmentPercentRaw(result!.correct, section.assessment.total)}%</span>
+                  {section.assessment.scoring === "count" ? (
+                    <span className="text-[#54479c]">{assessmentPercentRaw(result!.value, section.assessment.total)}%</span>
+                  ) : null}
                   {rankOf(section.assessment.id, lessonLog.student_id) ? (
                     <span className="rounded-full bg-[#fdf6e0] px-1.5 py-0.5 text-xs font-semibold text-[#8a6a25]" data-assessment-rank-chip>
                       {rankOf(section.assessment.id, lessonLog.student_id)}등
