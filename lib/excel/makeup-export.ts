@@ -17,6 +17,7 @@ import ExcelJS from "exceljs";
 
 import { makeupTemplateBase64 } from "./makeup-template-data";
 import { fitToPageWidth, mergesWithin, setBlockPageBreaks, setPrintArea } from "./print-layout";
+import { estimateWrappedLines } from "./text-fit";
 
 export const MAKEUP_TEMPLATE = {
   sheetName: "보충수업",
@@ -45,11 +46,9 @@ export type MakeupExportRow = {
 // options.minBands: 전체 완료 기록 export는 원본처럼 2밴드(2페이지) 유지(기본값),
 //   월간 export는 1 — 필요한 밴드만 남겨 빈 양식 페이지를 인쇄하지 않는다.
 // options.sheetName: 월간 시트 이름 ("11월 보충수업")
-// options.fitToWidth: 월간 — 가로 1페이지 맞춤(세로 자동). 원본 양식은 A4 세로 인쇄 폭보다 조금 넓어
-//   Excel에서 가로로 두 장으로 잘리므로 축소해 한 장 폭에 맞춘다 (수동 페이지 나누기는 유지됨).
 export async function fillMakeupTemplate(
   rows: MakeupExportRow[],
-  options: { minBands?: number; sheetName?: string; fitToWidth?: boolean } = {},
+  options: { minBands?: number; sheetName?: string } = {},
 ) {
   if (rows.length === 0) {
     throw new Error("내보낼 완료된 보충 수업이 없어요.");
@@ -131,15 +130,23 @@ export async function fillMakeupTemplate(
     sheet.getCell(rowNumber, columns.content).value = row.content;
     sheet.getCell(rowNumber, columns.absence).value = row.absenceDate;
 
-    // 놓친 진도 multiline: 줄바꿈 그대로 + wrap — 여러 줄인 행만 높이를 늘린다
-    // (한 줄 데이터/빈 행은 원본 행높이 30 유지)
-    const lines = row.content.split("\n").length;
+    // 놓친 진도 multiline: 줄바꿈 그대로 + wrap — 여러 줄로 보이는 행만 높이를 늘린다
+    // (한 줄 데이터/빈 행은 원본 행높이 30 유지). 줄 수 = 명시적 줄바꿈 + 칸 폭(D:E 206pt,
+    // 맑은 고딕 9pt)을 넘어 감기는 줄 — 긴 한 줄도 인쇄에서 잘리지 않게.
+    const lines = estimateWrappedLines(row.content, 206, 9);
     if (lines > 1) {
       const cell = sheet.getCell(rowNumber, columns.content);
       cell.style = { ...cell.style, alignment: { ...cell.style.alignment, wrapText: true } };
       sheet.getRow(rowNumber).height = Math.max(30, lines * 16 + 6);
     }
   });
+
+  // 밴드 끝의 빈 구분행은 숨긴다 — 밴드마다 따로 페이지를 쓰므로 인쇄에 필요 없고,
+  // 양식(25행 × 30pt + 여백)이 A4 높이에 거의 꽉 차서 행을 조금이라도 크게 그리는 앱(맥·아이패드)에서는
+  // 이 빈 행 하나만 다음 쪽으로 밀려 거의 빈 페이지가 생기기 때문.
+  for (let band = 1; band <= bandsNeeded; band += 1) {
+    sheet.getRow(band * bandSize).hidden = true;
+  }
 
   // 밴드 = 인쇄 1페이지 — 밴드 경계마다 수동 페이지 나누기(마지막 뒤에는 없음), 인쇄 영역 = 밴드 범위
   setBlockPageBreaks(sheet, bandSize, bandsNeeded);
@@ -148,10 +155,12 @@ export async function fillMakeupTemplate(
     sheet.name = options.sheetName;
   }
 
-  // 인쇄 설정을 원본과 동일하게 유지 — 원본 XML은
+  // 인쇄 설정은 원본(A4 세로, 여백, 가로 가운데) 그대로 — 원본 XML은
   // <pageSetup paperSize="9" orientation="portrait"/> 뿐인데 exceljs가 load 시
-  // 기본값(scale/fitToWidth 등)을 merge해 저장 때 원본에 없던 attribute를 함께 쓴다.
-  // 일부 뷰어가 fitTo* 존재를 "페이지 맞춤"으로 해석하므로 원본에 없는 key는 제거한다.
+  // 기본값(scale/fitToWidth/copies/dpi 등)을 merge해 저장 때 원본에 없던 attribute를 함께 쓴다.
+  // 그 기본값은 지우고, 가로 1페이지 맞춤(세로 자동)만 명시적으로 더한다 —
+  // 원본 양식은 A4 세로 인쇄 폭보다 조금 넓어 Excel에서 가로로 두 장으로 잘리기 때문
+  // (Excel 확인: 맞춤 후 가로 분할 없음, 밴드 경계 수동 페이지 나누기 유지).
   const pageSetup = sheet.pageSetup as unknown as Record<string, unknown>;
   for (const key of [
     "scale",
@@ -166,9 +175,7 @@ export async function fillMakeupTemplate(
   ]) {
     delete pageSetup[key];
   }
-  if (options.fitToWidth) {
-    fitToPageWidth(sheet);
-  }
+  fitToPageWidth(sheet);
 
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);

@@ -1,11 +1,12 @@
 // 양식 template 기반 Excel의 인쇄 레이아웃 공용 helper (서버 전용).
 //
-// 월간 내보내기는 원본 양식의 한 "인쇄 블록"(= A4 한 장)을 아래로 이어 붙여 만든다.
-// - cloneRowBlock: 블록의 값(라벨)/스타일/행높이/병합을 그대로 복제 — 새로 그리지 않는다
-// - setBlockPageBreaks: 블록 경계마다 수동 페이지 나누기 (마지막 블록 뒤에는 넣지 않음 → 빈 페이지 없음)
+// - addWorksheetCopy: 양식 시트를 같은 workbook 안에 통째로 복제 (값/스타일/행높이/열너비/병합/인쇄 설정)
+// - fitToSinglePage: 시트 = 한 장 맞춤 (교사일지 — 어느 앱에서든 날짜 하나가 한 장)
+// - setBlockPageBreaks: 블록(밴드) 경계마다 수동 페이지 나누기 (마지막 블록 뒤에는 넣지 않음 → 빈 페이지 없음)
 // - setPrintArea: 인쇄 영역 = 실제 블록 범위 (빈 행/열로 인한 빈 페이지 방지)
+// - fitToPageWidth: 가로 1페이지 맞춤(세로 자동) — 보충 수업 밴드 페이지 나누기와 함께
 // exceljs 타입만 사용한다 — 런타임 import는 각 export 모듈이 담당.
-import type { Worksheet } from "exceljs";
+import type { Workbook, Worksheet, WorksheetModel } from "exceljs";
 
 export type CellRange = { top: number; left: number; bottom: number; right: number };
 
@@ -46,15 +47,6 @@ export function parseRange(range: string): CellRange {
   };
 }
 
-// "C13" + 73 → "C86" (블록 offset만큼 아래로 옮긴 같은 양식 칸)
-export function offsetAddress(address: string, rowOffset: number) {
-  const match = /^([A-Z]+)(\d+)$/i.exec(address);
-  if (!match) {
-    throw new Error(`잘못된 셀 주소예요: ${address}`);
-  }
-  return `${match[1]}${Number(match[2]) + rowOffset}`;
-}
-
 // 블록 [fromRow, fromRow + rowCount) 안에 완전히 들어 있는 병합 범위
 export function mergesWithin(sheet: Worksheet, fromRow: number, rowCount: number): CellRange[] {
   const lastRow = fromRow + rowCount - 1;
@@ -63,33 +55,37 @@ export function mergesWithin(sheet: Worksheet, fromRow: number, rowCount: number
     .filter((range) => range.top >= fromRow && range.bottom <= lastRow);
 }
 
-// 블록 복제 — 행높이/스타일/라벨 값/병합을 원본 그대로 toRow부터 다시 만든다.
-// 병합은 mergeCellsWithoutStyle: 병합된 칸들의 개별 테두리를 master 스타일로 덮어쓰지 않는다.
-export function cloneRowBlock(
-  sheet: Worksheet,
-  block: { fromRow: number; rowCount: number; columnCount: number; merges: CellRange[] },
-  toRow: number,
-) {
-  for (let offset = 0; offset < block.rowCount; offset += 1) {
-    const source = sheet.getRow(block.fromRow + offset);
-    const target = sheet.getRow(toRow + offset);
-    target.height = source.height;
-    for (let column = 1; column <= block.columnCount; column += 1) {
-      const sourceCell = source.getCell(column);
-      const targetCell = target.getCell(column);
-      targetCell.style = sourceCell.style;
-      // 병합의 master 칸에만 값이 있다 (나머지 칸은 병합 후 master를 가리킨다)
-      const isMergeSlave = sourceCell.isMerged && sourceCell.master.address !== sourceCell.address;
-      if (!isMergeSlave && sourceCell.value !== null && sourceCell.value !== undefined) {
-        targetCell.value = sourceCell.value;
-      }
-    }
-  }
+// 양식 시트를 같은 workbook에 복제 — exceljs의 model 왕복으로 행/셀 값·스타일/열너비/병합을 옮긴다.
+// (model setter는 병합을 mergeCellsWithoutStyle로 다시 건다 — master 스타일로 덮어쓰지 않음.)
+// 인쇄 설정/보기/속성 객체는 model이 원본과 같은 참조를 넘기므로 복사해서 시트마다 독립시킨다.
+// 복제본은 탭 선택을 끈다 — 여러 시트가 선택(그룹)된 채 열리면 편집이 전 시트에 적용되기 때문.
+export function addWorksheetCopy(workbook: Workbook, source: Worksheet, name: string) {
+  const model = source.model as WorksheetModel & { merges: string[] };
+  const copy = workbook.addWorksheet(name);
+  copy.model = {
+    ...model,
+    id: copy.id,
+    name,
+    mergeCells: model.merges,
+    pageSetup: structuredClone(model.pageSetup),
+    properties: structuredClone(model.properties),
+    views: (model.views ?? []).map((view) => ({ ...view, tabSelected: false })),
+  } as WorksheetModel;
+  // exceljs의 행 model setter는 병합 칸(첫 칸 외)을 건너뛰어 그 칸들의 스타일이 빠진다 —
+  // 병합 영역 오른쪽/아래 테두리가 사라지지 않게 모든 칸의 스타일을 원본에서 다시 입힌다.
+  source.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+    row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
+      copy.getCell(rowNumber, columnNumber).style = cell.style;
+    });
+  });
+  return copy;
+}
 
-  const shift = toRow - block.fromRow;
-  for (const range of block.merges) {
-    sheet.mergeCellsWithoutStyle(range.top + shift, range.left, range.bottom + shift, range.right);
-  }
+// 시트 전체(인쇄 영역)를 한 장에 맞춤 — 축소만 하고 확대는 하지 않는다 (Excel 규칙).
+export function fitToSinglePage(sheet: Worksheet) {
+  sheet.pageSetup.fitToPage = true;
+  sheet.pageSetup.fitToWidth = 1;
+  sheet.pageSetup.fitToHeight = 1;
 }
 
 // blockCount개 블록(각 blockSize행, 1행부터 연속) 사이에 수동 페이지 나누기.

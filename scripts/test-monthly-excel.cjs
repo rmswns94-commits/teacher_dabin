@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Standalone CommonJS harness; no new application dependencies (jszip ships with exceljs). */
 // 월간 Excel 내보내기 검증 — route를 mock DB로 실행해 실제 xlsx를 만들고 다시 읽어 확인한다.
 // 인쇄 설정(페이지 나누기/인쇄 영역/용지)은 exceljs가 다시 읽지 못하는 항목이 있어 XML로 직접 확인.
-// 기존 일 단위 export는 HEAD 코드가 만든 파일과 sheet XML을 비교해 회귀가 없음을 확인한다.
+// 기존 일 단위 export는 월간 기능 이전 코드(BASELINE)가 만든 파일과 sheet XML을 비교해 회귀가 없음을 확인한다.
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
@@ -52,9 +52,10 @@ function load(file) {
   compile(fs.readFileSync(file, "utf8"), file, {}, loaded);
   return loaded.exports;
 }
-// HEAD(변경 전) 버전 모듈 — 기존 일 단위 출력 회귀 비교용
+// 월간 Excel 기능 이전 커밋 — 기존 일 단위/전체 기록 출력의 회귀 비교 기준
+const BASELINE = "809ead5";
 function loadHead(relative, overrides) {
-  const source = execSync(`git show HEAD:${relative}`, { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const source = execSync(`git show ${BASELINE}:${relative}`, { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   return compile(source, path.resolve(root, relative), overrides);
 }
 
@@ -90,15 +91,18 @@ async function readXlsx(buffer) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
   const zip = await JSZip.loadAsync(buffer);
-  // exceljs는 worksheet id로 파일명을 정한다 (template마다 sheet1/sheet2…) — 시트는 항상 1개
-  const sheetFiles = zip.file(/^xl\/worksheets\/sheet\d+\.xml$/);
-  assert.equal(sheetFiles.length, 1);
-  const sheetXml = await sheetFiles[0].async("string");
+  // exceljs는 worksheet id로 파일명을 정한다 (template마다 sheet1/sheet2…) — 번호순 = 시트 순서
+  const sheetFiles = zip
+    .file(/^xl\/worksheets\/sheet\d+\.xml$/)
+    .sort((a, b) => Number(/(\d+)\.xml$/.exec(a.name)[1]) - Number(/(\d+)\.xml$/.exec(b.name)[1]));
+  const sheetXmls = await Promise.all(sheetFiles.map((file) => file.async("string")));
+  const sheetXml = sheetXmls[0];
   const workbookXml = await zip.file("xl/workbook.xml").async("string");
   const stylesXml = await zip.file("xl/styles.xml").async("string");
   const breaks = [...sheetXml.matchAll(/<brk id="(\d+)"/g)].map((m) => Number(m[1]));
-  const printArea = /_xlnm\.Print_Area[^>]*>([^<]+)</.exec(workbookXml)?.[1]?.replaceAll("&apos;", "'") ?? null;
-  return { workbook, sheet: workbook.worksheets[0], sheetXml, workbookXml, stylesXml, breaks, printArea };
+  const printAreas = [...workbookXml.matchAll(/_xlnm\.Print_Area[^>]*>([^<]+)</g)].map((m) => m[1].replaceAll("&apos;", "'"));
+  const printArea = printAreas[0] ?? null;
+  return { workbook, sheet: workbook.worksheets[0], sheetXml, sheetXmls, workbookXml, stylesXml, breaks, printArea, printAreas };
 }
 async function responseBuffer(response) {
   return Buffer.from(await response.arrayBuffer());
@@ -180,8 +184,8 @@ async function main() {
   const { GET: makeupRoute } = load("app/makeups/export/route");
   const teacherLog = load("lib/excel/teacher-log-export");
   const makeupExport = load("lib/excel/makeup-export");
-  const { TEACHER_LOG_TEMPLATE } = teacherLog;
-  const { blockRows } = TEACHER_LOG_TEMPLATE;
+  const BLOCK_ROWS = 73; // 양식 A1:AU73
+  const sheetName = (ymd) => `${ymd.slice(5, 7)}-${ymd.slice(8, 10)}(${dateLabel(ymd).slice(-3, -2)})`;
 
   // ── 교사일지 월간 ──
   db = mockDb(); rangeCalls.length = 0;
@@ -189,20 +193,20 @@ async function main() {
   assert.equal(response.status, 200, await response.clone().text());
   const monthly = await readXlsx(saveArtifact("teacher-log-2026-11.xlsx", await responseBuffer(response)));
   const expectedDates = ["2026-11-01", "2026-11-03", "2026-11-05", "2026-11-11", "2026-11-28", "2026-11-30"];
-  const blockDate = (index) => monthly.sheet.getCell(`A${5 + index * blockRows}`).value;
+  const sheets = monthly.workbook.worksheets;
+  const sheetOf = (ymd) => sheets[expectedDates.indexOf(ymd)];
 
-  check("monthly teacher log: one sheet, KST month only (10/31·12/01 excluded), date ASC", () => {
-    assert.equal(monthly.workbook.worksheets.length, 1);
-    assert.equal(monthly.sheet.name, "11월 교사일지");
-    assert.deepEqual(expectedDates.map((_, i) => blockDate(i)), expectedDates.map(dateLabel));
-    assert.equal(monthly.sheet.getCell(`A${5 + expectedDates.length * blockRows}`).value, null);
+  check("monthly teacher log: one form sheet per date, KST month only (10/31·12/01 excluded), date ASC", () => {
+    assert.deepEqual(sheets.map((sheet) => sheet.name), expectedDates.map(sheetName));
+    assert.equal(sheets[0].name, "11-01(일)");
+    assert.deepEqual(sheets.map((sheet) => sheet.getCell("A5").value), expectedDates.map(dateLabel));
     assert.equal(decodeFilename(response), "강사일지_2026-11.xlsx");
   });
   check("monthly teacher log: other account's log never appears (user_id filter)", () => {
     const logQuery = db.calls.find((call) => call.table === "daily_logs");
     assert.ok(logQuery.filters.includes(`eq:user_id=${OWNER}`));
     const values = [];
-    monthly.sheet.eachRow((row) => row.eachCell((cell) => values.push(String(cell.value))));
+    for (const sheet of sheets) sheet.eachRow((row) => row.eachCell((cell) => values.push(String(cell.value))));
     assert.ok(!values.some((value) => value.includes("다른 계정 기록")));
   });
   check("monthly query pattern: batch (1 log query + 1 schedule query + 1 range call each)", () => {
@@ -213,51 +217,66 @@ async function main() {
     ]);
   });
   check("monthly teacher log: same-day periods by start time, draft rule same as daily", () => {
-    const offset = 2 * blockRows; // 11/05
-    assert.equal(monthly.sheet.getCell(`L${13 + offset}`).value, "11/05 C 진도"); // 14:00 → 1교시
-    assert.equal(monthly.sheet.getCell(`L${21 + offset}`).value, "11/05 B 진도"); // 17:30 → 2교시
-    assert.equal(monthly.sheet.getCell(`E${21 + offset}`).value, "백발백중");
-    assert.equal(monthly.sheet.getCell(`C${13 + offset}`).value, "2:00\n~\n3:00");
-    const nov11 = 3 * blockRows;
-    assert.equal(monthly.sheet.getCell(`L${13 + nov11}`).value, "11/11 C 임시저장 진도"); // 내용 있는 draft 포함
-    assert.equal(monthly.sheet.getCell(`L${21 + nov11}`).value, "11/11 A 진도");
-    assert.equal(monthly.sheet.getCell(`L${29 + nov11}`).value, null); // 빈 draft 제외
+    const nov5 = sheetOf("2026-11-05");
+    assert.equal(nov5.getCell("L13").value, "11/05 C 진도"); // 14:00 → 1교시
+    assert.equal(nov5.getCell("L21").value, "11/05 B 진도"); // 17:30 → 2교시
+    assert.equal(nov5.getCell("E21").value, "백발백중");
+    assert.equal(nov5.getCell("C13").value, "2:00\n~\n3:00");
+    const nov11 = sheetOf("2026-11-11");
+    assert.equal(nov11.getCell("L13").value, "11/11 C 임시저장 진도"); // 내용 있는 draft 포함
+    assert.equal(nov11.getCell("L21").value, "11/11 A 진도");
+    assert.equal(nov11.getCell("L29").value, null); // 빈 draft 제외
   });
-  check("monthly teacher log: long progress kept whole (no truncation), wrap kept", () => {
-    const cell = monthly.sheet.getCell(`L${13 + 4 * blockRows}`);
+  check("monthly teacher log: long progress kept whole, its period band grows to fit (others untouched)", () => {
+    const nov28 = sheetOf("2026-11-28"); // 40줄 진도
+    const cell = nov28.getCell("L13");
     assert.equal(cell.value, LONG);
     assert.equal(cell.alignment.wrapText, true);
+    // 40줄 × 10pt + 여백이 Windows Excel 높이(XML × 0.67) 안에 들어가도록 1교시 8행이 늘어난다
+    const bandXml = Array.from({ length: 8 }, (_, i) => nov28.getRow(13 + i).height).reduce((a, b) => a + b, 0);
+    assert.ok(bandXml * 0.67 >= 40 * 10 + 3, `band ${bandXml}`);
+    for (let row = 21; row <= BLOCK_ROWS; row += 1) {
+      assert.equal(nov28.getRow(row).height, sheets[0].getRow(row).height, `row ${row}`);
+    }
   });
-  check("monthly teacher log: page break after every block except the last, print area = blocks", () => {
-    assert.deepEqual(monthly.breaks, [1, 2, 3, 4, 5].map((i) => i * blockRows));
-    assert.equal(monthly.printArea, `'11월 교사일지'!$A1:$AU${expectedDates.length * blockRows}`);
-    assert.ok(!monthly.breaks.includes(0));
+  check("monthly teacher log: every date sheet = one page (fit 1×1), original A4 portrait/margins/centering, print area A1:AU73", () => {
+    assert.equal(monthly.sheetXmls.length, expectedDates.length);
+    monthly.sheetXmls.forEach((xml) => {
+      const pageSetup = /<pageSetup[^>]*>/.exec(xml)[0];
+      assert.match(pageSetup, /paperSize="9"/);
+      assert.match(pageSetup, /orientation="portrait"/);
+      assert.match(pageSetup, /fitToWidth="1"/);
+      assert.match(pageSetup, /fitToHeight="1"/);
+      assert.match(xml, /<pageSetUpPr fitToPage="1"\/>/);
+      assert.match(xml, /<pageMargins left="0" right="0" top="0" bottom="0" header="0" footer="0"\/>/);
+      assert.match(xml, /<printOptions horizontalCentered="1" verticalCentered="1"\/>/);
+      assert.ok(!/<rowBreaks/.test(xml));
+    });
+    assert.deepEqual(monthly.printAreas, expectedDates.map((ymd) => `'${sheetName(ymd)}'!$A1:$AU73`));
+    // 복제 시트는 선택되지 않음 — 시트 여러 개가 그룹 선택된 채 열리지 않게 (활성 시트 = 첫 날짜)
+    assert.ok(monthly.sheetXmls.slice(1).every((xml) => !/tabSelected="1"/.test(xml)));
+    assert.ok(!/activeTab="[1-9]/.test(monthly.workbookXml));
   });
-  check("monthly teacher log: original print setup kept (A4 portrait, margins 0, centered) + fit 1 page wide, tall auto", () => {
-    const pageSetup = /<pageSetup[^>]*>/.exec(monthly.sheetXml)[0];
-    assert.match(pageSetup, /paperSize="9"/);
-    assert.match(pageSetup, /orientation="portrait"/);
-    assert.match(pageSetup, /fitToWidth="1"/);
-    assert.match(pageSetup, /fitToHeight="0"/);
-    assert.match(monthly.sheetXml, /<pageSetUpPr fitToPage="1"\/>/);
-    assert.match(monthly.sheetXml, /<pageMargins left="0" right="0" top="0" bottom="0" header="0" footer="0"\/>/);
-    assert.match(monthly.sheetXml, /<printOptions horizontalCentered="1" verticalCentered="1"\/>/);
-  });
-  check("monthly teacher log: every block is an exact copy of the form (styles/heights/merges/labels)", () => {
-    assert.equal(monthly.sheet.model.merges.length, 50 * expectedDates.length);
-    for (let block = 1; block < expectedDates.length; block += 1) {
-      const offset = block * blockRows;
-      for (let row = 1; row <= blockRows; row += 1) {
-        assert.equal(monthly.sheet.getRow(row + offset).height, monthly.sheet.getRow(row).height, `row ${row} block ${block}`);
-        for (const col of [1, 3, 5, 12, 20, 39, 40, 47]) {
-          assert.deepEqual(monthly.sheet.getCell(row + offset, col).style.border, monthly.sheet.getCell(row, col).style.border, `border r${row}c${col}`);
-          assert.deepEqual(monthly.sheet.getCell(row + offset, col).style.font, monthly.sheet.getCell(row, col).style.font);
+  check("monthly teacher log: every date sheet is an exact copy of the form (styles/heights/widths/merges/labels)", () => {
+    const first = sheets[0];
+    // 셀마다 XML 스타일 인덱스(s)가 같으면 테두리/글꼴/정렬/표시형식이 완전히 같다
+    const styleMap = (xml) => [...xml.matchAll(/<c r="([A-Z]+\d+)"(?: s="(\d+)")?/g)].map((m) => `${m[1]}:${m[2] ?? 0}`).join(",");
+    const firstStyles = styleMap(monthly.sheetXmls[0]);
+    monthly.sheetXmls.slice(1).forEach((xml, i) => assert.equal(styleMap(xml), firstStyles, `styles of sheet ${i + 2}`));
+    for (const sheet of sheets.slice(1)) {
+      assert.equal(sheet.model.merges.length, 50);
+      assert.deepEqual([...sheet.model.merges].sort(), [...first.model.merges].sort());
+      for (let col = 1; col <= 47; col += 1) assert.equal(sheet.getColumn(col).width, first.getColumn(col).width);
+      for (let row = 1; row <= BLOCK_ROWS; row += 1) {
+        const grownBand = sheet.name === sheetName("2026-11-28") && row >= 13 && row <= 20; // 위에서 따로 확인
+        if (!grownBand) {
+          assert.equal(sheet.getRow(row).height, first.getRow(row).height, `${sheet.name} row ${row}`);
         }
       }
-      assert.equal(monthly.sheet.getCell(`A${11 + offset}`).value, "교시");
-      assert.equal(monthly.sheet.getCell(`A${71 + offset}`).value, "출근시간");
-      assert.equal(monthly.sheet.getCell(`H${7 + offset}`).value, "김다빈");
-      assert.deepEqual(monthly.sheet.getCell(`I${71 + offset}`).value, monthly.sheet.getCell("I71").value);
+      assert.equal(sheet.getCell("A11").value, "교시");
+      assert.equal(sheet.getCell("A71").value, "출근시간");
+      assert.equal(sheet.getCell("H7").value, "김다빈");
+      assert.deepEqual(sheet.getCell("I71").value, first.getCell("I71").value);
     }
   });
 
@@ -267,8 +286,10 @@ async function main() {
   assert.equal(response.status, 200);
   const dailyBuffer = saveArtifact("teacher-log-2026-11-05.xlsx", await responseBuffer(response));
   const daily = await readXlsx(dailyBuffer);
-  check("daily export unchanged: filename, sheet, cells, no page breaks, original print area, no fit", () => {
-    assert.ok(!/fitToPage="1"/.test(daily.sheetXml));
+  check("daily export: same filename/sheet/cells, no page breaks, original print area, fit to one page", () => {
+    // 하루 = 한 장 — 맥·아이패드처럼 행을 크게 그리는 앱에서도 넘치지 않게 (Windows는 축소 없음)
+    assert.match(daily.sheetXml, /<pageSetUpPr fitToPage="1"\/>/);
+    assert.match(/<pageSetup[^>]*>/.exec(daily.sheetXml)[0], /fitToWidth="1" fitToHeight="1"/);
     assert.equal(decodeFilename(response), "20261105목.xlsx");
     assert.equal(daily.sheet.name, "교사일지");
     assert.equal(daily.sheet.getCell("A5").value, dateLabel("2026-11-05"));
@@ -282,18 +303,44 @@ async function main() {
   const headTeacherLog = loadHead("lib/excel/teacher-log-export.ts", {
     "./teacher-log-template-data": load("lib/excel/teacher-log-template-data"),
   });
+  // 칸 안에 들어가는 내용(5줄까지)은 기존과 완전히 같아야 한다
+  const FIVE_LINES = ["[시험 대비]", "가산중학교 · 중2 - 5과: 목관대 개념 설명", "한울중학교 · 중2 - 7과", "[일반 수업]", "Grammar Inside 2 - Unit 6 p.42~47"].join("\n");
   const sample = { dateLabel: dateLabel("2026-11-05"), rows: [
     { startTime: "14:00:00", endTime: "15:00:00", textbook: "Voca C", progress: "11/05 C 진도" },
-    { startTime: "17:30:00", endTime: "18:50:00", textbook: "백발백중", progress: LONG },
+    { startTime: "17:30:00", endTime: "18:50:00", textbook: "백발백중\nGrammar Inside 2", progress: FIVE_LINES },
   ] };
   const [headDaily, newDaily] = await Promise.all([
     headTeacherLog.fillTeacherLogTemplate(sample).then(readXlsx),
     teacherLog.fillTeacherLogTemplate(sample).then(readXlsx),
   ]);
-  check("daily teacher log workbook is byte-identical to HEAD (sheet/workbook/styles XML)", () => {
-    assert.equal(newDaily.sheetXml, headDaily.sheetXml);
+  check("daily teacher log workbook = baseline + only the one-page fit flag when content fits (sheet/workbook/styles XML)", () => {
+    const withoutFit = (xml) => xml.replace(/<sheetPr><pageSetUpPr fitToPage="1"\/><\/sheetPr>/, "");
+    assert.notEqual(newDaily.sheetXml, withoutFit(newDaily.sheetXml));
+    assert.equal(withoutFit(newDaily.sheetXml), headDaily.sheetXml);
     assert.equal(newDaily.workbookXml, headDaily.workbookXml);
     assert.equal(newDaily.stylesXml, headDaily.stylesXml);
+  });
+  const longSample = { ...sample, rows: [sample.rows[0], { ...sample.rows[1], progress: LONG }] };
+  const longBuffer = saveArtifact("teacher-log-long-day.xlsx", await teacherLog.fillTeacherLogTemplate(longSample));
+  const [headLong, newLong] = await Promise.all([
+    headTeacherLog.fillTeacherLogTemplate(longSample).then(readXlsx),
+    readXlsx(longBuffer),
+  ]);
+  check("daily teacher log with overflowing progress: only that period's rows grow, values unchanged", () => {
+    for (let row = 1; row <= BLOCK_ROWS; row += 1) {
+      const inBand = row >= 21 && row <= 28;
+      const before = headLong.sheet.getRow(row).height;
+      const after = newLong.sheet.getRow(row).height;
+      if (inBand) {
+        assert.ok(after > before, `row ${row} should grow`);
+      } else {
+        assert.equal(after, before, `row ${row}`);
+      }
+      for (let col = 1; col <= 47; col += 1) {
+        assert.deepEqual(newLong.sheet.getCell(row, col).value, headLong.sheet.getCell(row, col).value);
+      }
+    }
+    assert.deepEqual(newLong.sheet.model.merges, headLong.sheet.model.merges);
   });
 
   // ── 시간 확정 실패 / 빈 달 / 잘못된 달 ──
@@ -340,6 +387,8 @@ async function main() {
       }
     }
     assert.deepEqual(makeupMonthly.breaks, []);
+    assert.equal(makeupMonthly.sheet.getRow(25).hidden, true); // 밴드 끝 빈 구분행은 인쇄에서 숨김
+    assert.equal(makeupMonthly.sheet.getRow(24).hidden, false);
     assert.equal(makeupMonthly.printArea, "'11월 보충수업'!$A1:$F25");
     assert.equal(makeupMonthly.sheet.model.merges.length, 25);
     assert.equal(makeupMonthly.sheet.getCell("A1").value, "보  충  수  업");
@@ -353,12 +402,13 @@ async function main() {
     assert.match(makeupMonthly.sheetXml, /<pageMargins left="0.79" right="0.39" top="0.59" bottom="0.59" header="0" footer="0"\/>/);
   });
   const manyRows = (count) => Array.from({ length: count }, (_, i) => ({ date: `2026-11-${String(1 + (i % 28)).padStart(2, "0")}`, timeLabel: "", name: `학생${i}`, content: `진도 ${i}`, absenceDate: "" }));
-  const thirty = await readXlsx(await makeupExport.fillMakeupTemplate(manyRows(30), { minBands: 1, sheetName: "11월 보충수업", fitToWidth: true }));
-  const fifty = await readXlsx(saveArtifact("makeups-50-rows.xlsx", await makeupExport.fillMakeupTemplate(manyRows(50), { minBands: 1, sheetName: "11월 보충수업", fitToWidth: true })));
+  const thirty = await readXlsx(await makeupExport.fillMakeupTemplate(manyRows(30), { minBands: 1, sheetName: "11월 보충수업" }));
+  const fifty = await readXlsx(saveArtifact("makeups-50-rows.xlsx", await makeupExport.fillMakeupTemplate(manyRows(50), { minBands: 1, sheetName: "11월 보충수업" })));
   check("monthly makeup: band page breaks for 30 and 50 records (each band starts a page)", () => {
     assert.deepEqual(thirty.breaks, [25]);
     assert.equal(thirty.printArea, "'11월 보충수업'!$A1:$F50");
     assert.deepEqual(fifty.breaks, [25, 50]);
+    assert.deepEqual([25, 50, 75].map((row) => fifty.sheet.getRow(row).hidden), [true, true, true]);
     assert.equal(fifty.printArea, "'11월 보충수업'!$A1:$F75");
     assert.equal(fifty.sheet.getCell(51, 1).value, "보  충  수  업");
     assert.equal(fifty.sheet.getCell(52 + 6, 3).value, "학생49");
@@ -381,12 +431,23 @@ async function main() {
     assert.equal(names(makeupAll.sheet, 9).filter(Boolean).length, 8);
     assert.equal(makeupAll.sheet.getCell(26, 1).value, "보  충  수  업");
     assert.deepEqual(makeupAll.breaks, [25]);
+    assert.deepEqual([25, 50].map((row) => makeupAll.sheet.getRow(row).hidden), [true, true]);
     assert.equal(makeupAll.printArea, "'보충수업'!$A1:$F50");
+    // 원본 양식은 A4 세로 폭보다 넓어 가로 1페이지 맞춤(세로 자동)을 적용한다
+    assert.match(makeupAll.sheetXml, /<pageSetUpPr fitToPage="1"\/>/);
+    assert.match(/<pageSetup[^>]*>/.exec(makeupAll.sheetXml)[0], /fitToWidth="1" fitToHeight="0"/);
   });
   const headMakeup = loadHead("lib/excel/makeup-export.ts", {
     "./makeup-template-data": load("lib/excel/makeup-template-data"),
   });
-  const stripPrint = (xml) => xml.replace(/<rowBreaks[\s\S]*?<\/rowBreaks>/, "").replace(/<definedNames>[\s\S]*?<\/definedNames>/, "");
+  // 의도한 인쇄 설정 추가분(페이지 나누기/인쇄 영역/가로 맞춤)만 걷어내면 기준과 같아야 한다
+  const stripPrint = (xml) =>
+    xml
+      .replace(/<rowBreaks[\s\S]*?<\/rowBreaks>/, "")
+      .replace(/<definedNames>[\s\S]*?<\/definedNames>/, "")
+      .replace(/<sheetPr><pageSetUpPr fitToPage="1"\/><\/sheetPr>/, "")
+      .replace(/ fitToWidth="1" fitToHeight="0"/, "")
+      .replace(/ hidden="1"/g, "");
   for (const count of [8, 30, 60]) {
     const rows = manyRows(count);
     rows[3].content = "여러\n줄\n내용";
@@ -394,12 +455,22 @@ async function main() {
       headMakeup.fillMakeupTemplate(rows).then(readXlsx),
       makeupExport.fillMakeupTemplate(rows).then(readXlsx),
     ]);
-    check(`existing makeup workbook identical to HEAD except added page breaks/print area (${count} rows)`, () => {
+    check(`existing makeup workbook identical to baseline except added print setup (${count} rows)`, () => {
       assert.equal(stripPrint(newBook.sheetXml), stripPrint(headBook.sheetXml));
       assert.equal(stripPrint(newBook.workbookXml), stripPrint(headBook.workbookXml));
       assert.equal(newBook.stylesXml, headBook.stylesXml);
     });
   }
+  // 줄바꿈 없는 긴 보충 내용도 칸 폭을 넘어 감기는 줄만큼 행이 높아진다 (인쇄에서 잘리지 않게)
+  const longLine = manyRows(3);
+  longLine[1].content = "가나다라마바사아자차".repeat(6); // 60자 → 206pt 칸에서 3줄
+  const longLineBook = await readXlsx(saveArtifact("makeups-long-line.xlsx", await makeupExport.fillMakeupTemplate(longLine)));
+  check("makeup long single-line content: row grows by wrapped lines, short rows keep 30", () => {
+    assert.equal(longLineBook.sheet.getRow(4).height, 3 * 16 + 6);
+    assert.equal(longLineBook.sheet.getRow(3).height, 30);
+    assert.equal(longLineBook.sheet.getRow(5).height, 30);
+    assert.equal(longLineBook.sheet.getCell("D4").value, longLine[1].content);
+  });
 
   console.log(`${checks} monthly Excel checks passed`);
 }

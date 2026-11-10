@@ -58,9 +58,7 @@ export async function GET(request: Request) {
   try {
     buffer = await fillMakeupTemplate(
       rows,
-      month
-        ? { minBands: 1, sheetName: monthlySheetName(month, "보충수업"), fitToWidth: true }
-        : {},
+      month ? { minBands: 1, sheetName: monthlySheetName(month, "보충수업") } : {},
     );
   } catch (error) {
     if (error instanceof Error && error.message) {

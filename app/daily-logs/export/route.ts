@@ -26,7 +26,7 @@ import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server
 
 // 앱에서 실제 작성된 Daily Log들을 기존 교사일지 Excel 양식으로 내보낸다.
 // - ?date=YYYY-MM-DD : 그 날짜 하루 (기존 일 단위 — 양식 1장)
-// - ?month=YYYY-MM   : 그 달(KST 달력 월) 전체 — 기록이 있는 날짜마다 양식 1장씩, 한 시트에 이어서
+// - ?month=YYYY-MM   : 그 달(KST 달력 월) 전체 — 기록이 있는 날짜마다 양식 시트 1개(= 1장), 날짜순
 // 두 경우 모두 같은 builder(lib/excel/teacher-log-data)와 같은 template 블록을 쓴다.
 // 파일은 서버에 저장하지 않고 즉시 다운로드로만 반환
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -161,7 +161,7 @@ export async function GET(request: Request) {
   return xlsxDownloadResponse(buffer, filename, "teacher-log.xlsx");
 }
 
-// 월간 — 그 달의 export 대상 기록을 batch로 모아, 기록이 있는 날짜마다 양식 1장 (날짜 오름차순).
+// 월간 — 그 달의 export 대상 기록을 batch로 모아, 기록이 있는 날짜마다 양식 시트 1개 (날짜 오름차순).
 // 한 날짜라도 시간을 확정할 수 없으면 추측하지 않고 그 날짜를 알려주며 실패한다 (기록 누락 금지).
 async function exportMonth(supabase: ServerSupabase, userId: string, month: string) {
   if (!MONTH_PARAM_PATTERN.test(month)) {
@@ -190,12 +190,12 @@ async function exportMonth(supabase: ServerSupabase, userId: string, month: stri
     if (!day.ok) {
       return errorResponse(`${formatShortDateWithWeekday(date)} — ${day.error}`);
     }
-    days.push(day.data);
+    days.push({ ...day.data, date });
   }
 
   let buffer: Buffer;
   try {
-    buffer = await fillMonthlyTeacherLogTemplate({ month, days });
+    buffer = await fillMonthlyTeacherLogTemplate(days);
   } catch (error) {
     console.error("teacher log monthly export template error", error);
     return errorResponse("교사일지 엑셀을 만들지 못했어요. 다시 시도해주세요.", 500);
