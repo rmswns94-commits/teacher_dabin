@@ -2289,9 +2289,21 @@ export function DailyLogForm({
       </select>
     );
   };
+  // 학교명만 말줄임하고 학년은 항상 보이게 분리 렌더 (긴 학교명이 학년을 가리지 않게)
+  const scopeLabelParts = (token: string) => {
+    const scope = parseScopeToken(token);
+    return (
+      <>
+        <span className="min-w-0 truncate">{scope.school}</span>
+        {scope.grade ? (
+          <span className="shrink-0">· {gradeDisplay[scope.grade as StudentGrade]}</span>
+        ) : null}
+      </>
+    );
+  };
   const scopeFieldLabel = (token: string) => (
     <>
-      <span className="min-w-0 truncate">{formatScopeToken(token)}</span>
+      {scopeLabelParts(token)}
       {parseScopeToken(token).grade === null && memberScopeTokens.length > 0 ? (
         <span className="caption-text shrink-0 font-normal text-[#a79996]">· 학년 미지정</span>
       ) : null}
@@ -2463,8 +2475,14 @@ export function DailyLogForm({
     return (
       <div className="form-label flex items-center gap-2 text-[#7c6d69]">
         <span className="shrink-0">대상</span>
-        <span className="flex min-h-[36px] w-full min-w-0 items-center truncate rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-2.5 text-sm font-medium text-[#a2643c]">
-          {label ? formatScopeToken(label) : "등록된 학교가 없어요 — 학생 정보에 학교를 등록해주세요."}
+        <span className="flex min-h-[36px] w-full min-w-0 items-center gap-1 rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-2.5 text-sm font-medium text-[#a2643c]">
+          {label ? (
+            scopeLabelParts(label)
+          ) : (
+            <span className="min-w-0 truncate">
+              등록된 학교가 없어요 — 학생 정보에 학교를 등록해주세요.
+            </span>
+          )}
         </span>
       </div>
     );

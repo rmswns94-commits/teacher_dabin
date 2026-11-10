@@ -6,7 +6,7 @@ import { ChevronDown, ChevronUp, ExternalLink, GraduationCap } from "lucide-reac
 
 import { ExamPlanner } from "@/components/exam-planner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { gradeDisplay } from "@/lib/grades";
+import { formatGrade, gradeDisplay } from "@/lib/grades";
 import { examDdayInfo, formatExamPeriod } from "@/lib/school-exam-display";
 import { formatExamTarget, scopeToken } from "@/lib/school-scope";
 import type { ExamPrepPlanRecord, SchoolExamType, StudentGrade } from "@/lib/supabase/types";
@@ -94,8 +94,12 @@ export function DailyLogExamPreview({
           <label className="flex max-w-[420px] items-center gap-2 text-sm font-medium text-[#7c6d69]">
             <span className="shrink-0">대상</span>
             {options.length === 1 ? (
-              <span className="flex min-h-[40px] w-full min-w-0 items-center truncate rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-3 text-sm font-medium text-[#a2643c]">
-                {options[0].label}
+              // 학교명만 말줄임, 학년은 항상 표시 (긴 학교명이 학년을 가리지 않게)
+              <span className="flex min-h-[40px] w-full min-w-0 items-center gap-1 rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-3 text-sm font-medium text-[#a2643c]">
+                <span className="min-w-0 truncate">{options[0].entry.school}</span>
+                {options[0].entry.grade ? (
+                  <span className="shrink-0">· {formatGrade(options[0].entry.grade)}</span>
+                ) : null}
               </span>
             ) : (
               <select
