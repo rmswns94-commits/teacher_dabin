@@ -14,6 +14,8 @@ export type ShareableHomeworkItem = {
   content: string;
   textbook?: string | null;
   school?: string | null;
+  // 학교 context 학년 scope — 라벨이 "학교 · 중1"로 구분된다
+  grade?: string | null;
   // 대상 학생의 "표시 이름" — 비어 있으면 공통 (id 해석은 호출부 책임: roster → 저장 스냅샷 순)
   assignedStudentName?: string | null;
   // 폼의 effective 마감일("YYYY-MM-DD") — 기본값(다음 수업일)은 addAssignment가 이미

@@ -55,19 +55,34 @@ import {
   type ImportPlanCandidate,
   type LessonImportCandidates,
 } from "@/lib/lesson-import";
-import { buildTextbookSectionsText, formatTextbookLinked, joinDerivedText } from "@/lib/textbooks";
+import {
+  buildTextbookSectionsText,
+  formatTextbookLinked,
+  joinDerivedText,
+  sectionDisplayName,
+  type ContextSection,
+} from "@/lib/textbooks";
+import {
+  examTargetToken,
+  formatScopeToken,
+  parseScopeToken,
+  scopeToken,
+  uniqueSchoolGradeScopes,
+  type ExamTarget,
+} from "@/lib/school-scope";
 import { buildHomeworkShareText, shareableHomework } from "@/lib/homework-share";
 import { hasShareableContextSection } from "@/lib/lesson-share";
 import { LessonShareDialog } from "@/components/lesson-share-dialog";
 import { DAILY_LOG_NAV_SECTIONS, DailyLogSectionNav } from "@/components/daily-log-section-nav";
 import { completionReminders } from "@/lib/daily-log-completeness";
 import {
-  activeTargetSchools,
+  activeTargetScopes,
   classifyStudentsByExamTarget,
   mixedItemSection,
   resolveProgressMode,
   scopedMissedProgressCandidate,
-  studentsOfSchool,
+  sectionForStudent,
+  studentsOfScope,
 } from "@/lib/progress-mode";
 import {
   autosaveDailyLogDraftAction,
@@ -151,7 +166,7 @@ import {
   questionLevelLabels,
   questionLevelValues,
 } from "@/lib/elementary";
-import { gradeDisplay } from "@/lib/grades";
+import { gradeDisplay, gradeValues } from "@/lib/grades";
 import type { AttendanceStatus, StudentGrade } from "@/lib/supabase/types";
 import { normalizeAttendanceReason } from "@/lib/attendance";
 import { cn } from "@/lib/utils";
@@ -356,6 +371,8 @@ type DraftPayload = {
     dueDate: string;
     textbook: string;
     school: string;
+    // 학교 context의 학년 scope — "" = legacy 학교 전체
+    grade: string;
     // 숙제 대상 학생 id — "" = 공통 (draft에도 그대로 실려 복원된다)
     assignedStudentId: string;
   }[];
@@ -367,12 +384,12 @@ type DraftPayload = {
   manualTextbookProgress?: ManualProgressItem[];
   textbookPlans: { name: string; text: string }[];
   manualTextbookPlans?: ManualProgressItem[];
-  // 학교 context 진도/다음 수업 계획 (시험 기간 ON — name=학교명)
-  schoolProgress: { name: string; text: string }[];
-  schoolPlans: { name: string; text: string }[];
+  // 학교 context 진도/다음 수업 계획 (시험 기간 ON — name=학교명, grade=학년 scope)
+  schoolProgress: ContextSection[];
+  schoolPlans: ContextSection[];
   // 해야 할 일 다중 항목 (공용 Todo 연결) — draft 단계에서는 payload에만 유지 (Todo 생성 없음).
   // 이전 draft의 단일 taskContent/taskDate/taskTextbook은 복원 시 항목 1개로 변환된다.
-  tasks: { id: string; textbook: string; school: string; content: string; dueDate: string }[];
+  tasks: { id: string; textbook: string; school: string; grade: string; content: string; dueDate: string }[];
   // 오늘 시험 목록 (추가한 순서, stable id). 이전 draft의 vocabTotal/assessmentTotals는 복원 시 목록으로 변환된다.
   assessments: AssessmentDraft[];
   reflectionGood: string;
@@ -391,12 +408,19 @@ type AssignmentItem = {
   dueDate: string;
   textbook: string;
   school: string;
+  // 학교 context의 학년 scope — "" = legacy 학교 전체 (school과 한 쌍)
+  grade: string;
   // 숙제 대상: "" = 공통, 그 외 = 학생 id (이름이 아니라 id가 identity)
   assignedStudentId: string;
   // mixed 모드 구획 표시(시험/일반) — 클라이언트/draft 전용, DB row에는 저장하지 않는다.
   // 저장된 항목은 school/textbook 저장 필드로 구획을 파생한다 (mixedItemSection).
   section?: "exam" | "regular";
 };
+
+// 저장/draft에 남은 grade 값 정규화 — 알 수 없는 값은 legacy(빈 값)로만 읽는다 (추측 금지)
+function restoredGrade(value: unknown): string {
+  return typeof value === "string" && (gradeValues as readonly string[]).includes(value) ? value : "";
+}
 
 function restoredAssignments(value: unknown): AssignmentItem[] | null {
   if (!Array.isArray(value)) {
@@ -425,6 +449,7 @@ function restoredAssignments(value: unknown): AssignmentItem[] | null {
       dueDate: item.dueDate,
       textbook: typeof item.textbook === "string" ? item.textbook : "",
       school: typeof item.school === "string" ? item.school : "",
+      grade: restoredGrade((item as { grade?: unknown }).grade),
       assignedStudentId: typeof item.assignedStudentId === "string" ? item.assignedStudentId : "",
       // 구형 draft에는 없는 필드 — 없으면 저장 필드로 파생 (자동 변환 없음)
       ...(() => {
@@ -440,6 +465,8 @@ type TaskFormItem = {
   id: string;
   textbook: string;
   school: string;
+  // 학교 context의 학년 scope — "" = legacy 학교 전체
+  grade: string;
   content: string;
   dueDate: string;
   // mixed 모드 구획 표시 — 숙제와 동일한 클라이언트/draft 전용 필드 (Todo/일지 저장에는 미포함)
@@ -462,6 +489,7 @@ function restoredTasks(value: unknown): TaskFormItem[] | null {
       id: item.id,
       textbook: typeof item.textbook === "string" ? item.textbook : "",
       school: typeof item.school === "string" ? item.school : "",
+      grade: restoredGrade((item as { grade?: unknown }).grade),
       content: item.content,
       dueDate: typeof item.dueDate === "string" ? item.dueDate : "",
       ...(() => {
@@ -474,8 +502,42 @@ function restoredTasks(value: unknown): TaskFormItem[] | null {
 // legacy 단일 해야 할 일 → 항목 1개 (id "legacy" — 기존 Todo id를 계승해 duplicate 방지)
 function legacyTaskItem(content: string, dueDate: string, textbook: string): TaskFormItem[] {
   return content.trim()
-    ? [{ key: globalThis.crypto.randomUUID(), id: "legacy", textbook, school: "", content, dueDate }]
+    ? [{ key: globalThis.crypto.randomUUID(), id: "legacy", textbook, school: "", grade: "", content, dueDate }]
     : [];
+}
+
+// 학교 context 섹션([{name, grade?, text}]) 복원 → scope token → text map.
+// grade 없는 항목(legacy 기록/구형 draft)은 학교 이름 token으로 — "학교 전체" 의미 그대로
+// 보존하고, 학년으로의 전환은 사용자가 섹션의 [학년 지정]으로 직접 한다 (추측 변환 금지).
+function restoredSchoolSections(value: unknown): Record<string, string> | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const map: Record<string, string> = {};
+  for (const item of value) {
+    if (
+      item &&
+      typeof (item as { name?: unknown }).name === "string" &&
+      typeof (item as { text?: unknown }).text === "string"
+    ) {
+      const token = scopeToken(
+        (item as { name: string }).name,
+        restoredGrade((item as { grade?: unknown }).grade) || null,
+      );
+      map[token] = (item as { text: string }).text;
+    }
+  }
+  return map;
+}
+
+// scope token → text map을 저장용 섹션 배열로 (내용 있는 것만, school/grade 분리 저장)
+function schoolSectionsFromMap(map: Record<string, string>, trim = false): ContextSection[] {
+  return Object.keys(map)
+    .filter((token) => (map[token] ?? "").trim())
+    .map((token) => {
+      const { school, grade } = parseScopeToken(token);
+      return { name: school, ...(grade ? { grade } : {}), text: trim ? map[token].trim() : map[token] };
+    });
 }
 
 // 교재별 섹션([{name,text}]) 복원 → name→text map (알 수 없는 형태는 null)
@@ -959,7 +1021,7 @@ export function DailyLogForm({
   textbooks = [],
   examPeriod = false,
   schools = [],
-  examTargetSchools = null,
+  examTargets = null,
   previousEvaluations = null,
   vocabStreakBefore = {},
   finalized = false,
@@ -985,10 +1047,11 @@ export function DailyLogForm({
   // (null/빈 값 제외, 중복 제거, 가나다순 — 페이지가 uniqueSchoolList로 만들어 전달).
   // 비어 있으면 "등록된 학교가 없어요" 안내만 — 작성/저장은 그대로 가능(가짜 값 생성 없음).
   schools?: string[];
-  // PHASE 1에 저장된 그룹의 시험 대상 학교 (class_groups.exam_target_schools).
-  // null = legacy 미설정 — 시험 기간 ON이어도 기존 전체 학교별 방식을 유지한다(자동 mixed 전환 금지).
-  // 배열 = 혼합 모드: 대상 학교만 학교별 진도, 나머지 학생은 일반 교재별 진도.
-  examTargetSchools?: string[] | null;
+  // 그룹의 시험 대상 scope(학교+학년) — normalizeExamTargets 결과 (exam_targets 우선,
+  // legacy exam_target_schools는 grade null = 학교 전체 scope로 읽힘).
+  // null = legacy 미설정 — 시험 기간 ON이어도 기존 학교별 방식을 유지한다(자동 mixed 전환 금지).
+  // 배열 = 혼합 모드: 대상 scope만 학교·학년별 진도, 나머지 학생은 일반 교재별 진도.
+  examTargets?: ExamTarget[] | null;
   // 서버에서 발견한 자동 임시저장 draft (있으면 복구 배너 표시 — 자동 덮어쓰기 없음)
   draft?: { id: string; updatedAt: string; payload: unknown } | null;
   // [수업 일지 작성하기] resume 진입: 10분 창과 무관하게 draft를 즉시 전체 복원
@@ -1015,13 +1078,13 @@ export function DailyLogForm({
     taskDate?: string;
     taskTextbook?: string;
     // 해야 할 일 다중 항목 (수정 화면 복원용 — 없으면 legacy 단일 필드를 항목 1개로 변환)
-    tasks?: { id: string; textbook?: string | null; school?: string | null; content: string; dueDate?: string | null }[];
+    tasks?: { id: string; textbook?: string | null; school?: string | null; grade?: string | null; content: string; dueDate?: string | null }[];
     // 교재별 진도/다음 수업 계획 스냅샷 (수정 화면 복원용)
     textbookProgress?: { name: string; text: string }[];
     textbookPlans?: { name: string; text: string }[];
-    // 학교 context 진도/다음 수업 계획 (시험 기간 ON 당시 기록 복원용)
-    schoolProgress?: { name: string; text: string }[];
-    schoolPlans?: { name: string; text: string }[];
+    // 학교 context 진도/다음 수업 계획 (시험 기간 ON 당시 기록 복원용 — grade 없으면 legacy 전체)
+    schoolProgress?: { name: string; grade?: string | null; text: string }[];
+    schoolPlans?: { name: string; grade?: string | null; text: string }[];
     // 오늘 시험 목록 (저장된 순서 + stable id — lessonAssessmentsOf로 이전 형식도 목록으로 읽음)
     assessments?: AssessmentDraft[];
     reflectionGood?: string;
@@ -1035,6 +1098,7 @@ export function DailyLogForm({
     dueDate: string;
     textbook?: string | null;
     school?: string | null;
+    grade?: string | null;
     // 저장된 숙제 대상 학생 id (없으면 공통) — Edit 화면 hydrate용
     assignedStudentId?: string | null;
     assignedStudentName?: string | null;
@@ -1096,7 +1160,7 @@ export function DailyLogForm({
     () => restoreManualProgress(restored?.manualTextbookProgress,
       Object.entries(textbookProgressMap).map(([name, text]) => ({ name, text }))),
   );
-  const progressMode = resolveProgressMode(examPeriod, examTargetSchools);
+  const progressMode = resolveProgressMode(examPeriod, examTargets);
   const [textbookPlanMap, setTextbookPlanMap] = useState<Record<string, string>>(
     () =>
       restoredSections(restored?.textbookPlans) ??
@@ -1106,16 +1170,20 @@ export function DailyLogForm({
     () => restoreManualProgress(restored?.manualTextbookPlans,
       Object.entries(textbookPlanMap).map(([name, text]) => ({ name, text }))),
   );
-  // 학교 context 진도/다음 수업 계획 (시험 기간 ON) — name=학교명 키 (교재 map과 대칭 구조)
+  // 학교 context 진도/다음 수업 계획 (시험 기간 ON) — key = scope token(학교+학년).
+  // 같은 학교라도 학년이 다르면 서로 다른 key라 입력칸/저장 entry가 섞이지 않는다.
+  // grade 없는 legacy 기록은 학교 이름 token으로 그대로 보존된다.
   const [schoolProgressMap, setSchoolProgressMap] = useState<Record<string, string>>(
     () =>
-      restoredSections((restored as { schoolProgress?: unknown } | null)?.schoolProgress) ??
-      Object.fromEntries((initial?.schoolProgress ?? []).map((s) => [s.name, s.text])),
+      restoredSchoolSections((restored as { schoolProgress?: unknown } | null)?.schoolProgress) ??
+      restoredSchoolSections(initial?.schoolProgress ?? []) ??
+      {},
   );
   const [schoolPlanMap, setSchoolPlanMap] = useState<Record<string, string>>(
     () =>
-      restoredSections((restored as { schoolPlans?: unknown } | null)?.schoolPlans) ??
-      Object.fromEntries((initial?.schoolPlans ?? []).map((s) => [s.name, s.text])),
+      restoredSchoolSections((restored as { schoolPlans?: unknown } | null)?.schoolPlans) ??
+      restoredSchoolSections(initial?.schoolPlans ?? []) ??
+      {},
   );
   // 오늘 숙제(구조화): draft 복원 → 저장된 row 순
   const [assignments, setAssignments] = useState<AssignmentItem[]>(
@@ -1128,6 +1196,7 @@ export function DailyLogForm({
         dueDate: item.dueDate,
         textbook: item.textbook ?? "",
         school: item.school ?? "",
+        grade: restoredGrade(item.grade),
         assignedStudentId: item.assignedStudentId ?? "",
       })),
   );
@@ -1206,6 +1275,7 @@ export function DailyLogForm({
         id: task.id,
         textbook: task.textbook ?? "",
         school: task.school ?? "",
+        grade: restoredGrade(task.grade),
         content: task.content,
         dueDate: task.dueDate ?? "",
       }));
@@ -1287,12 +1357,13 @@ export function DailyLogForm({
       // key(렌더용)는 제외 — draft payload/스냅샷에는 저장 데이터만.
       // section은 mixed 구획 복원용으로 draft에만 싣는다 (서버 저장 payload에는 미포함)
       homeworkAssignments: assignments.map(
-        ({ id, content, dueDate, textbook, school: hwSchool, assignedStudentId, section }) => ({
+        ({ id, content, dueDate, textbook, school: hwSchool, grade: hwGrade, assignedStudentId, section }) => ({
           id,
           content,
           dueDate,
           textbook,
           school: hwSchool,
+          grade: hwGrade,
           assignedStudentId,
           ...(section ? { section } : {}),
         }),
@@ -1308,17 +1379,14 @@ export function DailyLogForm({
       textbookPlans: progressMode === "mixed" ? manualProgressSections(manualTextbookPlans) : [...new Set([...textbooks, ...Object.keys(textbookPlanMap)])]
         .filter((name) => (textbookPlanMap[name] ?? "").trim())
         .map((name) => ({ name, text: textbookPlanMap[name] })),
-      schoolProgress: Object.keys(schoolProgressMap)
-        .filter((name) => (schoolProgressMap[name] ?? "").trim())
-        .map((name) => ({ name, text: schoolProgressMap[name] })),
-      schoolPlans: Object.keys(schoolPlanMap)
-        .filter((name) => (schoolPlanMap[name] ?? "").trim())
-        .map((name) => ({ name, text: schoolPlanMap[name] })),
+      schoolProgress: schoolSectionsFromMap(schoolProgressMap),
+      schoolPlans: schoolSectionsFromMap(schoolPlanMap),
       // 해야 할 일 다중 항목 (key 제외 — stable id만; section은 draft 복원 전용)
-      tasks: tasks.map(({ id, textbook, school: taskSchool, content, dueDate, section }) => ({
+      tasks: tasks.map(({ id, textbook, school: taskSchool, grade: taskGrade, content, dueDate, section }) => ({
         id,
         textbook,
         school: taskSchool,
+        grade: taskGrade,
         content,
         dueDate,
         ...(section ? { section } : {}),
@@ -1560,9 +1628,9 @@ export function DailyLogForm({
         setManualTextbookPlans(restoreManualProgress(manualPlans,
           Object.entries(restoredPlans ?? {}).map(([name, text]) => ({ name, text }))));
       }
-      const restoredSchoolProgress = restoredSections((data as { schoolProgress?: unknown }).schoolProgress);
+      const restoredSchoolProgress = restoredSchoolSections((data as { schoolProgress?: unknown }).schoolProgress);
       if (restoredSchoolProgress) setSchoolProgressMap(restoredSchoolProgress);
-      const restoredSchoolPlans = restoredSections((data as { schoolPlans?: unknown }).schoolPlans);
+      const restoredSchoolPlans = restoredSchoolSections((data as { schoolPlans?: unknown }).schoolPlans);
       if (restoredSchoolPlans) setSchoolPlanMap(restoredSchoolPlans);
     }
     {
@@ -1867,13 +1935,10 @@ export function DailyLogForm({
   const planSections = progressMode === "mixed" ? manualProgressSections(manualTextbookPlans, true) : [...new Set([...textbooks, ...Object.keys(textbookPlanMap)])]
     .filter((name) => (textbookPlanMap[name] ?? "").trim())
     .map((name) => ({ name, text: textbookPlanMap[name].trim() }));
-  // 학교 context 진도/계획 섹션 — map에 있는 모든 키(과거 draft의 다른 학교명 포함) 중 내용 있는 것
-  const schoolProgressSections = Object.keys(schoolProgressMap)
-    .filter((name) => (schoolProgressMap[name] ?? "").trim())
-    .map((name) => ({ name, text: schoolProgressMap[name].trim() }));
-  const schoolPlanSections = Object.keys(schoolPlanMap)
-    .filter((name) => (schoolPlanMap[name] ?? "").trim())
-    .map((name) => ({ name, text: schoolPlanMap[name].trim() }));
+  // 학교 context 진도/계획 섹션 — map에 있는 모든 scope(과거 draft의 다른 학교/legacy 포함) 중
+  // 내용 있는 것. 저장은 name(학교)/grade(학년)를 분리한 구조로 (표시 문자열 파싱 없음)
+  const schoolProgressSections = schoolSectionsFromMap(schoolProgressMap, true);
+  const schoolPlanSections = schoolSectionsFromMap(schoolPlanMap, true);
   // mirror 순서 고정: 교재 진도 → 학교 진도 → 기타 메모 (strip 왕복이 결정적이어야 함)
   const derivedDefaultProgress = joinDerivedText(
     joinDerivedText(
@@ -1899,26 +1964,32 @@ export function DailyLogForm({
 
   // PHASE 2 — 진도 모드 판정 (조건 순서 규약: OFF → 대상 설정됨(mixed) → legacy).
   // OFF이면 저장된 target이 남아 있어도 무시하고 기존 교재별 진도 그대로.
-  const progressTargetSchools = examTargetSchools ?? [];
-  // 시험 진도 입력 대상 = 저장된 target ∩ 현재 학생 학교 (가나다 유지, 학생 0명 stale target 제외
+  const progressTargets = examTargets ?? [];
+  // 현재 소속 학생들의 (학교, 학년) scope token — legacy_exam 입력칸/학교 select 기본 목록.
+  // 같은 학교의 여러 학년은 각각 독립 항목이다 (학교만으로 dedupe 금지).
+  const memberScopeTokens = uniqueSchoolGradeScopes(currentHomeworkStudents).map(examTargetToken);
+  // 시험 진도 입력 대상 = 저장된 target 중 현재 매칭 학생이 있는 scope (학생 0명 stale 제외
   // — 설정 자체는 삭제하지 않는다, 관리는 그룹 상세에서)
-  const examInputSchools = activeTargetSchools(progressTargetSchools, schools);
-  // 학생 분류 — PHASE 2 canonical helper 재사용 (시험 = target trim 정확 일치, 미등록 = 일반).
+  const examInputTokens = activeTargetScopes(progressTargets, currentHomeworkStudents).map(
+    examTargetToken,
+  );
+  // 학생 분류 — canonical helper 재사용 (시험 = target 학교+학년 정확 일치, 미등록 = 일반).
   // 진도/숙제/다음 계획/할 일이 전부 같은 분류를 공유한다 (중복 분류 로직 금지).
   const { regularStudents: regularModeStudents } =
-    classifyStudentsByExamTarget(currentHomeworkStudents, progressTargetSchools);
+    classifyStudentsByExamTarget(currentHomeworkStudents, progressTargets);
   const regularStudentIdSet = new Set(regularModeStudents.map((student) => student.studentId));
   const hasRegularHomeworkStudents = progressMode === "mixed" && regularModeStudents.length > 0;
-  const hasRegularStudents = progressMode === "mixed" &&
-    classifyStudentsByExamTarget(currentHomeworkStudents, progressTargetSchools).regularStudents.length > 0;
-  // 학교별 현재 학생 수 (시험 진도 입력의 "N명" 캡션용 — 이미 로드된 students로만 계산, 추가 쿼리 0)
-  const studentCountBySchool = new Map<string, number>();
-  for (const student of students) {
-    const key = student.school?.trim();
-    if (key) {
-      studentCountBySchool.set(key, (studentCountBySchool.get(key) ?? 0) + 1);
-    }
-  }
+  const hasRegularStudents = hasRegularHomeworkStudents;
+  // scope별 현재 학생 수 (시험 진도 입력의 "N명" 캡션용 — 이미 로드된 students로만 계산, 추가 쿼리 0).
+  // 같은 학교 다른 학년 학생은 합산하지 않는다.
+  const studentCountOfScope = (token: string) =>
+    studentsOfScope(students, parseScopeToken(token)).length;
+  // legacy(학년 미지정) 섹션을 옮길 수 있는 같은 학교의 학년 scope들 — 현재 학생 기준
+  const gradeScopesForSchool = (school: string) =>
+    memberScopeTokens.filter((token) => {
+      const scope = parseScopeToken(token);
+      return scope.grade !== null && scope.school === school.trim();
+    });
 
   // 다음 수업 계획 편집기 구성 — PHASE 3: 진도와 동일한 모드별 정책.
   //   regular(OFF)   : 교재 편집기 전체 + 내용 있는 학교 계획(과거 ON draft) 보존 표시
@@ -1929,9 +2000,10 @@ export function DailyLogForm({
     progressMode === "regular"
       ? [...new Set([...textbooks, ...Object.keys(textbookPlanMap).filter((name) => (textbookPlanMap[name] ?? "").trim())])]
       : Object.keys(textbookPlanMap).filter((name) => (textbookPlanMap[name] ?? "").trim());
+  // key = scope token(학교+학년). 같은 학교 다른 학년은 별도 편집기.
   const planSchoolNames = (() => {
     if (progressMode === "mixed") {
-      const names = [...examInputSchools];
+      const names = [...examInputTokens];
       for (const name of Object.keys(schoolPlanMap)) {
         if ((schoolPlanMap[name] ?? "").trim() && !names.includes(name)) {
           names.push(name);
@@ -1941,7 +2013,7 @@ export function DailyLogForm({
     }
     const names = Object.keys(schoolPlanMap).filter((name) => (schoolPlanMap[name] ?? "").trim());
     if (progressMode === "legacy_exam") {
-      for (const name of schools) {
+      for (const name of memberScopeTokens) {
         if (!names.includes(name)) {
           names.push(name);
         }
@@ -1991,8 +2063,8 @@ export function DailyLogForm({
     classifyPlanImports({
       mode: progressMode,
       plans,
-      activeTargetSchools: examInputSchools,
-      memberSchools: schools,
+      activeTargetTokens: examInputTokens,
+      memberScopeTokens,
       regularTextbooks: textbooks,
       canAddRegular: hasRegularStudents,
       currentSchoolText: schoolProgressMap,
@@ -2005,10 +2077,10 @@ export function DailyLogForm({
     ? classifyHomeworkImports({
         mode: progressMode,
         entries: importData.homework,
-        activeTargetSchools: examInputSchools,
-        memberSchools: schools,
+        activeTargetTokens: examInputTokens,
+        memberScopeTokens,
         regularTextbooks: textbooks,
-        targetSchools: progressTargetSchools,
+        targets: progressTargets,
         students: currentHomeworkStudents,
         existing: assignments,
       })
@@ -2017,8 +2089,8 @@ export function DailyLogForm({
     ? classifyTaskImports({
         mode: progressMode,
         entries: importData.tasks,
-        activeTargetSchools: examInputSchools,
-        memberSchools: schools,
+        activeTargetTokens: examInputTokens,
+        memberScopeTokens,
         regularTextbooks: textbooks,
         existing: tasks,
       })
@@ -2030,14 +2102,16 @@ export function DailyLogForm({
   const applyClassifiedPlans = (plans: readonly ClassifiedPlan[]) => {
     const grouped = new Map<string, { kind: ClassifiedPlan["kind"]; name: string; texts: string[] }>();
     for (const plan of plans) {
-      const key = `${plan.kind}:${plan.name}`;
-      const entry = grouped.get(key) ?? { kind: plan.kind, name: plan.name, texts: [] };
+      // 학교 계획은 scope token(학교+학년)이 identity — 같은 학교 다른 학년이 합쳐지지 않는다
+      const name = plan.kind === "school" ? scopeToken(plan.name, plan.grade ?? null) : plan.name;
+      const key = `${plan.kind}:${name}`;
+      const entry = grouped.get(key) ?? { kind: plan.kind, name, texts: [] };
       entry.texts.push(plan.text);
       grouped.set(key, entry);
     }
     for (const { kind, name, texts } of grouped.values()) {
       if (kind === "school") {
-        // name 키 갱신 — 기존 textarea key가 그대로라 remount/IME 영향 없음
+        // scope token 키 갱신 — 기존 textarea key가 그대로라 remount/IME 영향 없음
         setSchoolProgressMap((prev) => ({ ...prev, [name]: mergeImportedPlanText(prev[name] ?? "", texts) }));
       } else if (kind === "textbook") {
         if (progressMode === "mixed") {
@@ -2099,6 +2173,7 @@ export function DailyLogForm({
           dueDate: nextClassDateAfter(scheduleDays, classDate) ?? "",
           textbook: item.textbook,
           school: item.school,
+          grade: item.grade ?? "",
           assignedStudentId: item.assignedStudentId ?? "",
           ...(progressMode === "mixed"
             ? { section: (item.school ? "exam" : "regular") as "exam" | "regular" }
@@ -2118,6 +2193,7 @@ export function DailyLogForm({
           id: globalThis.crypto.randomUUID(),
           textbook: item.textbook,
           school: item.school,
+          grade: item.grade ?? "",
           content: item.content,
           // 지난 날짜 미복사 — 날짜 없으면 기존 정책(수업 다음날)이 Final Save에서 적용
           dueDate: "",
@@ -2167,19 +2243,76 @@ export function DailyLogForm({
       />
     </label>
   );
+  // legacy(학년 미지정) 학교 섹션을 사용자가 고른 학년 scope로 옮긴다 — 자동 변환은 없다.
+  // 대상 학년에 이미 내용이 있으면 덮어쓰지 않고 이어 붙인다 (mergeImportedPlanText).
+  const moveSchoolSection = (
+    setMap: (update: (prev: Record<string, string>) => Record<string, string>) => void,
+    fromToken: string,
+    toToken: string,
+  ) =>
+    setMap((prev) => {
+      if (!toToken || fromToken === toToken) {
+        return prev;
+      }
+      const next = { ...prev };
+      next[toToken] = mergeImportedPlanText(prev[toToken] ?? "", [prev[fromToken] ?? ""]);
+      delete next[fromToken];
+      return next;
+    });
+  // 학년 미지정 섹션 헤더의 [학년 지정] select — 같은 학교의 현재 학년 scope만 후보
+  const legacyGradeAssign = (
+    token: string,
+    kindLabel: string,
+    setMap: (update: (prev: Record<string, string>) => Record<string, string>) => void,
+  ) => {
+    const scope = parseScopeToken(token);
+    if (scope.grade !== null) {
+      return null;
+    }
+    const options = gradeScopesForSchool(scope.school);
+    if (options.length === 0) {
+      return null;
+    }
+    return (
+      <select
+        value=""
+        onChange={(event) => moveSchoolSection(setMap, token, event.target.value)}
+        aria-label={`${scope.school} 학년 미지정 ${kindLabel}을 옮길 학년 선택`}
+        className="ml-auto min-h-[32px] shrink-0 rounded-lg border border-[#e8c9b0] bg-[#fdf1e6] px-2 text-sm font-medium text-[#a2643c] outline-none"
+      >
+        <option value="">학년 지정</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {formatScopeToken(option)}(으)로 옮기기
+          </option>
+        ))}
+      </select>
+    );
+  };
+  const scopeFieldLabel = (token: string) => (
+    <>
+      <span className="min-w-0 truncate">{formatScopeToken(token)}</span>
+      {parseScopeToken(token).grade === null && memberScopeTokens.length > 0 ? (
+        <span className="caption-text shrink-0 font-normal text-[#a79996]">· 학년 미지정</span>
+      ) : null}
+    </>
+  );
+
+  // key = scope token (같은 학교라도 학년별로 다른 편집기)
   const schoolPlanField = (name: string) => {
     // mixed에서 비대상(설정 변경 전 draft 등) 학교 계획은 보존 캡션과 함께 표시
-    const preservedOnly = progressMode === "mixed" && !examInputSchools.includes(name);
+    const preservedOnly = progressMode === "mixed" && !examInputTokens.includes(name);
     return (
-      <label key={`sc-${name}`} className="block min-w-0">
-        <span className="form-label mb-1 flex items-center gap-1.5 font-semibold text-[#a2643c]">
+      <div key={`sc-${name}`} className="block min-w-0">
+        <span className="form-label mb-1 flex flex-wrap items-center gap-1.5 font-semibold text-[#a2643c]">
           <span aria-hidden>🏫</span>
-          <span className="min-w-0 truncate">{name}</span>
+          {scopeFieldLabel(name)}
           {preservedOnly ? (
             <span className="caption-text shrink-0 font-normal text-[#a79996]">
               · 기존 작성 계획 — 저장 시 그대로 보존돼요
             </span>
           ) : null}
+          {legacyGradeAssign(name, "계획", setSchoolPlanMap)}
         </span>
         <textarea
           value={schoolPlanMap[name] ?? ""}
@@ -2188,11 +2321,11 @@ export function DailyLogForm({
             setSchoolPlanMap((prev) => ({ ...prev, [name]: value }));
           }}
           rows={2}
-          aria-label={`${name} 다음 수업 계획`}
+          aria-label={`${formatScopeToken(name)} 다음 수업 계획`}
           className="w-full rounded-2xl border border-[#e8c9b0] bg-[#fffdfb] px-3 py-2.5 text-base outline-none focus:border-[#e0b28c] placeholder:text-[#a79996]"
           placeholder={"중간고사 서술형 대비\n(시험 기간 계획)"}
         />
-      </label>
+      </div>
     );
   };
 
@@ -2206,9 +2339,9 @@ export function DailyLogForm({
       : textbooks.filter((name) => (textbookProgressMap[name] ?? "").trim());
   const progressSchoolNames = (() => {
     if (progressMode === "mixed") {
-      // 활성 target 먼저(가나다), 이어서 내용이 남아 있는 다른 학교 키
-      // (설정 변경 전 draft/기록 보존 — filter로 지우지 않는다)
-      const names = [...examInputSchools];
+      // 활성 target scope 먼저(학교 가나다 → 학년), 이어서 내용이 남아 있는 다른 scope 키
+      // (설정 변경 전 draft/legacy 기록 보존 — filter로 지우지 않는다)
+      const names = [...examInputTokens];
       for (const name of Object.keys(schoolProgressMap)) {
         if ((schoolProgressMap[name] ?? "").trim() && !names.includes(name)) {
           names.push(name);
@@ -2220,7 +2353,8 @@ export function DailyLogForm({
       (schoolProgressMap[name] ?? "").trim(),
     );
     if (progressMode === "legacy_exam") {
-      for (const name of schools) {
+      // 대상 미설정 그룹도 입력은 학교+학년 scope 단위 (같은 학교 다른 학년 섞임 방지)
+      for (const name of memberScopeTokens) {
         if (!names.includes(name)) {
           names.push(name);
         }
@@ -2255,14 +2389,15 @@ export function DailyLogForm({
   );
   const schoolProgressField = (name: string) => {
     // mixed에서만 캡션: 활성 target은 현재 학생 수, 비대상(설정 변경 전 draft 등)은 보존 안내
-    const isActiveTarget = progressMode === "mixed" && examInputSchools.includes(name);
+    const isActiveTarget = progressMode === "mixed" && examInputTokens.includes(name);
     const preservedOnly = progressMode === "mixed" && !isActiveTarget;
-    const count = studentCountBySchool.get(name.trim()) ?? 0;
+    // 같은 학교 다른 학년 학생은 합산하지 않는다 (scope 단위 인원)
+    const count = studentCountOfScope(name);
     return (
-      <label key={`sc-${name}`} className="block min-w-0">
-        <span className="form-label mb-1 flex items-center gap-1.5 font-semibold text-[#a2643c]">
+      <div key={`sc-${name}`} className="block min-w-0">
+        <span className="form-label mb-1 flex flex-wrap items-center gap-1.5 font-semibold text-[#a2643c]">
           <span aria-hidden>🏫</span>
-          <span className="min-w-0 truncate">{name}</span>
+          {scopeFieldLabel(name)}
           {isActiveTarget && count > 0 ? (
             <span className="caption-text shrink-0 font-normal text-[#a79996]">· {count}명</span>
           ) : null}
@@ -2271,6 +2406,7 @@ export function DailyLogForm({
               · 기존 작성 진도 — 저장 시 그대로 보존돼요
             </span>
           ) : null}
+          {legacyGradeAssign(name, "진도", setSchoolProgressMap)}
         </span>
         <textarea
           value={schoolProgressMap[name] ?? ""}
@@ -2279,64 +2415,68 @@ export function DailyLogForm({
             setSchoolProgressMap((prev) => ({ ...prev, [name]: value }));
           }}
           rows={3}
-          aria-label={`${name} 진도`}
+          aria-label={`${formatScopeToken(name)} 진도`}
           className="min-h-[76px] w-full rounded-2xl border border-[#e8c9b0] bg-white px-3 py-2.5 text-base leading-6 outline-none focus:border-[#e0b28c] placeholder:text-[#a79996]"
           placeholder={"중간고사 문법 범위 1~3과\n(여러 줄로 쓸 수 있어요)"}
         />
-      </label>
+      </div>
     );
   };
 
-  // 학교 context 컨트롤: 학생 학교가 여러 개면 Select(ON에서만), 1개면 자동 chip,
-  // 0개면 안내 chip (작성/저장은 가능 — 가짜 값 저장 없음). 과거 스냅샷 school은
-  // 목록에 없어도 값을 보존해 표시한다 (학생 학교가 나중에 바뀌어도 기록 불변).
+  // 학교 context 컨트롤 — value/options/onChange 모두 scope token(학교+학년).
+  // scope가 여러 개면 Select(ON에서만), 1개면 자동 chip, 0개면 안내 chip
+  // (작성/저장은 가능 — 가짜 값 저장 없음). 과거 스냅샷(legacy 학년 미지정 포함)은
+  // 목록에 없어도 값을 보존해 표시하고, 사용자가 학년 scope를 고르면 그때 옮겨진다.
   const schoolContextControl = (
     value: string,
     onChange: (next: string) => void,
     ariaLabel: string,
-    // 선택 가능한 학교 목록 — 기본은 학생 학교 전체(legacy), mixed 시험 구획은 활성 target만.
-    // 저장된 값이 목록에 없으면(과거 스냅샷) 앞에 보존 표시한다 — 기록 불변.
-    schoolOptions: string[] = schools,
+    // 선택 가능한 scope 목록 — 기본은 현재 학생 (학교,학년) 전체, mixed 시험 구획은 활성 target만.
+    scopeOptions: string[] = memberScopeTokens,
   ) => {
-    if (examPeriod && (schoolOptions.length > 1 || (schoolOptions.length === 1 && value !== schoolOptions[0]))) {
+    if (examPeriod && (scopeOptions.length > 1 || (scopeOptions.length === 1 && value !== scopeOptions[0]))) {
       const options =
-        value && !schoolOptions.includes(value) ? [value, ...schoolOptions] : schoolOptions;
+        value && !scopeOptions.includes(value) ? [value, ...scopeOptions] : scopeOptions;
       return (
         <label className="form-label flex items-center gap-2 text-[#7c6d69]">
-          <span className="shrink-0">학교</span>
+          <span className="shrink-0">대상</span>
           <select
             value={value}
             onChange={(event) => onChange(event.target.value)}
             aria-label={ariaLabel}
             className="min-h-[36px] w-full min-w-0 rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-2.5 py-1.5 text-base font-medium text-[#a2643c] outline-none"
           >
-            <option value="">학교 선택</option>
-            {options.map((name) => (
-              <option key={name} value={name}>
-                {name}
+            <option value="">학교 · 학년 선택</option>
+            {options.map((token) => (
+              <option key={token} value={token}>
+                {formatScopeToken(token)}
+                {parseScopeToken(token).grade === null && memberScopeTokens.length > 0
+                  ? " (학년 미지정)"
+                  : ""}
               </option>
             ))}
           </select>
         </label>
       );
     }
-    const label = value || schoolOptions[0] || "";
+    const label = value || scopeOptions[0] || "";
     return (
       <div className="form-label flex items-center gap-2 text-[#7c6d69]">
-        <span className="shrink-0">학교</span>
+        <span className="shrink-0">대상</span>
         <span className="flex min-h-[36px] w-full min-w-0 items-center truncate rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-2.5 text-sm font-medium text-[#a2643c]">
-          {label || "등록된 학교가 없어요 — 학생 정보에 학교를 등록해주세요."}
+          {label ? formatScopeToken(label) : "등록된 학교가 없어요 — 학생 정보에 학교를 등록해주세요."}
         </span>
       </div>
     );
   };
 
   // 숙제 대상 후보 — 현재 선택된 그룹 학생만 (전체 학생 목록 사용 금지).
-  // 시험 기간 ON + 학교 context가 정해진 숙제는 그 학교 학생만 (다른 학교 학생이 섞이지 않게).
+  // 시험 기간 ON + 학교 context(scope token)가 정해진 숙제는 그 학교·학년 학생만
+  // (같은 학교 다른 학년 학생도 섞이지 않게 — legacy 학년 미지정은 그 학교 전체).
   // 이미 조회돼 prop으로 들어온 students를 그대로 쓰므로 숙제 개수와 무관하게 추가 쿼리 0.
-  const homeworkAudienceOptions = (schoolContext: string, section?: "exam" | "regular") => {
-    // mixed: 구획이 학생 후보를 결정한다 — 시험 숙제는 그 학교 학생만, 일반 숙제는 일반 학생만
-    // (시험 학생이 일반 후보에, 다른 학교 학생이 시험 후보에 절대 섞이지 않는다).
+  const homeworkAudienceOptions = (scopeContext: string, section?: "exam" | "regular") => {
+    // mixed: 구획이 학생 후보를 결정한다 — 시험 숙제는 그 scope 학생만, 일반 숙제는 일반 학생만
+    // (시험 학생이 일반 후보에, 다른 학교·학년 학생이 시험 후보에 절대 섞이지 않는다).
     if (progressMode === "mixed" && section) {
       if (section === "regular") {
         return sortByKoreanName(
@@ -2345,21 +2485,19 @@ export function DailyLogForm({
           (student) => student.studentId,
         );
       }
-      // 시험 구획 — 학교 칸이 비어 있어도 단일 활성 target이면 그 학교가 표시되므로 후보도 맞춘다
-      const school = (
-        schoolContext.trim() || (examInputSchools.length === 1 ? examInputSchools[0] : "")
-      ).trim();
+      // 시험 구획 — 칸이 비어 있어도 단일 활성 target이면 그 scope가 표시되므로 후보도 맞춘다
+      const token = scopeContext.trim() || (examInputTokens.length === 1 ? examInputTokens[0] : "");
       return sortByKoreanName(
-        school ? studentsOfSchool(currentHomeworkStudents, school) : [],
+        token ? studentsOfScope(currentHomeworkStudents, parseScopeToken(token)) : [],
         (student) => student.name,
         (student) => student.studentId,
       );
     }
-    // regular/legacy — 기존 규칙 그대로: ON+학교면 그 학교 학생만, 아니면 그룹 전체
-    const school = (schoolContext.trim() || (examPeriod ? schools[0] ?? "" : "")).trim();
+    // regular/legacy — ON+scope면 그 scope 학생만, 아니면 그룹 전체
+    const token = scopeContext.trim() || (examPeriod ? memberScopeTokens[0] ?? "" : "");
     const pool =
-      examPeriod && school
-        ? currentHomeworkStudents.filter((student) => (student.school?.trim() ?? "") === school)
+      examPeriod && token
+        ? studentsOfScope(currentHomeworkStudents, parseScopeToken(token))
         : currentHomeworkStudents;
     return sortByKoreanName(
       pool,
@@ -2410,13 +2548,13 @@ export function DailyLogForm({
     );
   };
 
-  // 학교 context가 바뀌면 그 학교 학생이 아닌 대상은 공통으로 되돌린다 —
-  // 다른 학교 숙제에 남의 학교 학생 id가 몰래 남지 않게 (작성 중 입력에만 적용).
-  const audienceForSchool = (studentId: string, nextSchool: string, section?: "exam" | "regular") => {
+  // 학교·학년 context가 바뀌면 그 scope 학생이 아닌 대상은 공통으로 되돌린다 —
+  // 다른 학교·학년 숙제에 남의 학생 id가 몰래 남지 않게 (작성 중 입력에만 적용).
+  const audienceForSchool = (studentId: string, nextScope: string, section?: "exam" | "regular") => {
     if (!studentId) {
       return "";
     }
-    return homeworkAudienceOptions(nextSchool, section).some(
+    return homeworkAudienceOptions(nextScope, section).some(
       (student) => student.studentId === studentId,
     )
       ? studentId
@@ -2438,28 +2576,32 @@ export function DailyLogForm({
         {/* 내용 칸 아래에 완료일 카드가 오는 세로 배치 (화면 폭과 무관) */}
         <div className="flex min-w-0 flex-col gap-2">
           {useSchoolControl ? (
-            // 학교 context — mixed 시험 구획은 활성 target만, legacy는 학생 학교 전체
+            // 학교 context — mixed 시험 구획은 활성 target scope만, legacy는 학생 (학교,학년) 전체.
+            // 저장 필드는 school/grade 분리 — token은 컨트롤 안에서만 쓴다.
             schoolContextControl(
-              item.school,
+              item.school ? scopeToken(item.school, item.grade || null) : "",
               (next) =>
                 setAssignments((prev) =>
-                  prev.map((it) =>
-                    it.key === item.key
-                      ? {
-                          ...it,
-                          school: next,
-                          // 새 학교 학생이 아니면 대상은 공통으로 안전하게 reset
-                          assignedStudentId: audienceForSchool(
-                            it.assignedStudentId,
-                            next,
-                            section ?? undefined,
-                          ),
-                        }
-                      : it,
-                  ),
+                  prev.map((it) => {
+                    if (it.key !== item.key) {
+                      return it;
+                    }
+                    const scope = next ? parseScopeToken(next) : null;
+                    return {
+                      ...it,
+                      school: scope?.school ?? "",
+                      grade: scope?.grade ?? "",
+                      // 새 scope 학생이 아니면 대상은 공통으로 안전하게 reset
+                      assignedStudentId: audienceForSchool(
+                        it.assignedStudentId,
+                        next,
+                        section ?? undefined,
+                      ),
+                    };
+                  }),
                 ),
-              `숙제 ${index + 1} 학교 선택`,
-              section === "exam" ? examInputSchools : schools,
+              `숙제 ${index + 1} 학교·학년 선택`,
+              section === "exam" ? examInputTokens : memberScopeTokens,
             )
           ) : textbooks.length > 0 || item.textbook ? (
             // 숙제별 교재 연결(선택) — 같은 교재로 여러 숙제 가능, 자동 생성 없음
@@ -2486,10 +2628,10 @@ export function DailyLogForm({
             </label>
           ) : null}
           {/* 대상 학생 — 교재/학교 바로 아래. 기본값 공통, 교재 변경과는 독립.
-              mixed: 시험 구획 = 그 학교 학생만, 일반 구획 = 일반 학생만 */}
+              mixed: 시험 구획 = 그 학교·학년 학생만, 일반 구획 = 일반 학생만 */}
           {audienceControl(
             item.assignedStudentId,
-            item.school,
+            item.school ? scopeToken(item.school, item.grade || null) : "",
             (next) =>
               setAssignments((prev) =>
                 prev.map((it) => (it.key === item.key ? { ...it, assignedStudentId: next } : it)),
@@ -2554,7 +2696,25 @@ export function DailyLogForm({
   const [multiContent, setMultiContent] = useState("");
   const [multiDueDate, setMultiDueDate] = useState("");
   const [multiTextbook, setMultiTextbook] = useState("");
+  // 여러 학생 숙제의 학교 context — scope token(학교+학년)
   const [multiSchool, setMultiSchool] = useState("");
+
+  // 새 숙제/할 일의 기본 학교 context scope token — 후보가 정확히 1개일 때만 자동 선택
+  // (mixed 시험 구획 = 활성 target, legacy = 현재 학생 (학교,학년) 조합, 일반 구획 = 없음)
+  const defaultScopeToken = (section?: "exam" | "regular") =>
+    section === "exam"
+      ? examInputTokens.length === 1
+        ? examInputTokens[0]
+        : ""
+      : section === "regular"
+        ? ""
+        : examPeriod && memberScopeTokens.length === 1
+          ? memberScopeTokens[0]
+          : "";
+  const scopeFields = (token: string) => {
+    const scope = token ? parseScopeToken(token) : null;
+    return { school: scope?.school ?? "", grade: scope?.grade ?? "" };
+  };
 
   // 열 때마다 빈 선택으로 초기화 — context/기본 마감일은 addAssignment와 동일 규칙 재사용
   const openMultiAssign = (section?: "exam" | "regular") => {
@@ -2571,17 +2731,7 @@ export function DailyLogForm({
             : ""
           : "",
     );
-    setMultiSchool(
-      section === "exam"
-        ? examInputSchools.length === 1
-          ? examInputSchools[0]
-          : ""
-        : section === "regular"
-          ? ""
-          : examPeriod && schools.length === 1
-            ? schools[0]
-            : "",
-    );
+    setMultiSchool(defaultScopeToken(section));
     setMultiAssignOpen(true);
   };
 
@@ -2593,6 +2743,7 @@ export function DailyLogForm({
     if (orderedIds.length === 0) {
       return;
     }
+    const multiScope = scopeFields(multiSchool);
     setAssignments((prev) => [
       ...prev,
       ...buildStudentHomeworkItems({
@@ -2600,7 +2751,8 @@ export function DailyLogForm({
         content: multiContent,
         dueDate: multiDueDate,
         textbook: multiTextbook,
-        school: multiSchool,
+        school: multiScope.school,
+        grade: multiScope.grade,
         section: multiAssignSection,
       }),
     ]);
@@ -2626,16 +2778,7 @@ export function DailyLogForm({
                 ? textbooks[0]
                 : ""
               : "",
-        school:
-          section === "exam"
-            ? examInputSchools.length === 1
-              ? examInputSchools[0]
-              : ""
-            : section === "regular"
-              ? ""
-              : examPeriod && schools.length === 1
-                ? schools[0]
-                : "",
+        ...scopeFields(defaultScopeToken(section)),
         assignedStudentId: "",
         ...(section ? { section } : {}),
       },
@@ -2652,13 +2795,13 @@ export function DailyLogForm({
         <div className="flex min-w-0 flex-col gap-2">
           {useSchoolControl ? (
             schoolContextControl(
-              task.school,
+              task.school ? scopeToken(task.school, task.grade || null) : "",
               (next) =>
                 setTasks((prev) =>
-                  prev.map((it) => (it.key === task.key ? { ...it, school: next } : it)),
+                  prev.map((it) => (it.key === task.key ? { ...it, ...scopeFields(next) } : it)),
                 ),
-              `할 일 ${index + 1} 학교 선택`,
-              section === "exam" ? examInputSchools : schools,
+              `할 일 ${index + 1} 학교·학년 선택`,
+              section === "exam" ? examInputTokens : memberScopeTokens,
             )
           ) : textbooks.length > 0 || task.textbook ? (
             <label className="form-label flex items-center gap-2 text-[#7c6d69]">
@@ -2737,16 +2880,7 @@ export function DailyLogForm({
         // stable id를 추가 시점에 발급 — Todo 소유 identity (삭제/재정렬에도 안정)
         id: globalThis.crypto.randomUUID(),
         textbook: "",
-        school:
-          section === "exam"
-            ? examInputSchools.length === 1
-              ? examInputSchools[0]
-              : ""
-            : section === "regular"
-              ? ""
-              : examPeriod && schools.length === 1
-                ? schools[0]
-                : "",
+        ...scopeFields(defaultScopeToken(section)),
         content: "",
         dueDate: "",
         ...(section ? { section } : {}),
@@ -2886,9 +3020,10 @@ export function DailyLogForm({
       setEntries((prev) =>
         Object.fromEntries(
           Object.entries(prev).map(([studentId, entry]) => {
+            const student = studentById.get(studentId);
             const applied = scopedMissedProgressCandidate({
-              studentSchool: studentById.get(studentId)?.school,
-              targetSchools: progressTargetSchools,
+              student: { school: student?.school, grade: student?.grade },
+              targets: progressTargets,
               schoolSections: schoolProgressSections,
               textbookSections: progressSections,
               extraMemo: defaultProgress,
@@ -2909,20 +3044,24 @@ export function DailyLogForm({
     }
 
     if (examPeriod && schoolProgressSections.length > 0) {
-      const textBySchool = new Map(schoolProgressSections.map((s) => [s.name, s.text]));
-      const schoolByStudent = new Map(
-        students.map((student) => [student.studentId, student.school?.trim() ?? ""]),
-      );
+      // 학생마다 자기 (학교, 학년) 진도만 — 없으면 같은 학교의 legacy(학년 미지정) 진도.
+      // 같은 학교 다른 학년의 진도는 절대 적용하지 않는다 (sectionForStudent).
+      const studentById = new Map(students.map((student) => [student.studentId, student]));
 
       setEntries((prev) =>
         Object.fromEntries(
           Object.entries(prev).map(([studentId, entry]) => {
-            const school = schoolByStudent.get(studentId) ?? "";
-            const text = school ? textBySchool.get(school) : undefined;
-            if (!text) {
-              return [studentId, entry]; // 학교 미등록/그 학교 진도 없음 → 임의 적용 없음
+            const student = studentById.get(studentId);
+            const section = student
+              ? sectionForStudent(schoolProgressSections, { school: student.school, grade: student.grade })
+              : null;
+            if (!section?.text) {
+              return [studentId, entry]; // 학교 미등록/그 학교·학년 진도 없음 → 임의 적용 없음
             }
-            const applied = joinDerivedText(formatTextbookLinked(school, text), defaultProgress).trim();
+            const applied = joinDerivedText(
+              formatTextbookLinked(sectionDisplayName(section), section.text),
+              defaultProgress,
+            ).trim();
             return [
               studentId,
               entry.attendance === "absent"
@@ -3050,12 +3189,14 @@ export function DailyLogForm({
         homework,
         homeworkDueDate: homework.trim() ? homeworkDueDate : "",
         homeworkAssignments: cleanedAssignments.map(
-          ({ id, content, dueDate, textbook, school: hwSchool, assignedStudentId }) => ({
+          ({ id, content, dueDate, textbook, school: hwSchool, grade: hwGrade, assignedStudentId }) => ({
             id,
             content,
             dueDate,
             textbook,
             school: hwSchool,
+            // 학교 context가 있을 때만 학년 scope 유지 (교재 숙제에 grade가 남지 않게)
+            grade: hwSchool ? (hwGrade as (typeof gradeValues)[number] | "") : "",
             // "" = 공통 → 서버에서 null로 저장 (소유 검증도 서버에서)
             assignedStudentId: assignedStudentId || null,
           }),
@@ -3064,15 +3205,25 @@ export function DailyLogForm({
         nextPlanDate: derivedNextLessonPlan.trim() ? nextPlanDate : "",
         textbookProgress: progressSections,
         textbookPlans: planSections,
-        schoolProgress: schoolProgressSections,
-        schoolPlans: schoolPlanSections,
+        // 학교 context 섹션 — name(학교)/grade(학년) 분리 저장 ("" = legacy 학교 전체)
+        schoolProgress: schoolProgressSections.map((section) => ({
+          name: section.name,
+          text: section.text,
+          grade: (section.grade ?? "") as (typeof gradeValues)[number] | "",
+        })),
+        schoolPlans: schoolPlanSections.map((section) => ({
+          name: section.name,
+          text: section.text,
+          grade: (section.grade ?? "") as (typeof gradeValues)[number] | "",
+        })),
         // 해야 할 일 다중 항목 — 내용 없는 항목은 조용히 제외 (Todo 등록 조건: 내용 존재)
         tasks: tasks
           .filter((task) => task.content.trim())
-          .map(({ id, textbook, school: taskSchool, content, dueDate }) => ({
+          .map(({ id, textbook, school: taskSchool, grade: taskGrade, content, dueDate }) => ({
             id,
             textbook,
             school: taskSchool,
+            grade: taskSchool ? (taskGrade as (typeof gradeValues)[number] | "") : "",
             content,
             dueDate,
           })),
@@ -3527,7 +3678,7 @@ export function DailyLogForm({
                   // 학교가 있을 때만, 일반 구획은 일반 학생이 있을 때만 추가 버튼을 제공하고,
                   // 저장된 항목은 구획 조건과 무관하게 항상 표시된다 (숨김/삭제 없음).
                   <>
-                    {examAssignmentRows.length > 0 || examInputSchools.length > 0 ? (
+                    {examAssignmentRows.length > 0 || examInputTokens.length > 0 ? (
                       <div>
                         <div className="form-label mb-1.5 font-semibold text-[#a2643c]">
                           시험 대비 숙제
@@ -3536,7 +3687,7 @@ export function DailyLogForm({
                           {examAssignmentRows.map(({ item, index }) =>
                             renderAssignmentItem(item, index),
                           )}
-                          {examInputSchools.length > 0 ? (
+                          {examInputTokens.length > 0 ? (
                             <>
                               <button
                                 type="button"
@@ -3744,14 +3895,14 @@ export function DailyLogForm({
                   {progressMode === "mixed" ? (
                     // PHASE 3 mixed — 할 일도 구획별 entry point (숙제와 동일 정책)
                     <>
-                      {examTaskRows.length > 0 || examInputSchools.length > 0 ? (
+                      {examTaskRows.length > 0 || examInputTokens.length > 0 ? (
                         <div>
                           <div className="form-label mb-1.5 font-semibold text-[#a2643c]">
                             시험 대비 할 일
                           </div>
                           <div className="space-y-2">
                             {examTaskRows.map(({ item, index }) => renderTaskItem(item, index))}
-                            {examInputSchools.length > 0 ? (
+                            {examInputTokens.length > 0 ? (
                               <button
                                 type="button"
                                 onClick={() => addTask("exam")}
@@ -4215,8 +4366,8 @@ export function DailyLogForm({
           const missedCandidate =
             progressMode === "mixed"
               ? scopedMissedProgressCandidate({
-                  studentSchool: student.school,
-                  targetSchools: progressTargetSchools,
+                  student: { school: student.school, grade: student.grade },
+                  targets: progressTargets,
                   schoolSections: schoolProgressSections,
                   textbookSections: progressSections,
                   extraMemo: defaultProgress,
@@ -5004,7 +5155,7 @@ export function DailyLogForm({
             ).length;
             const useSchoolControl =
               multiAssignSection === "exam" || (multiAssignSection !== "regular" && examPeriod);
-            const schoolOptions = multiAssignSection === "exam" ? examInputSchools : schools;
+            const schoolOptions = multiAssignSection === "exam" ? examInputTokens : memberScopeTokens;
             return (
               <div
                 className="fixed inset-0 z-[80] flex items-center justify-center bg-[#2b2323]/40 px-4"
@@ -5027,7 +5178,7 @@ export function DailyLogForm({
 
                   {useSchoolControl ? (
                     <label className="form-label mt-3 flex items-center gap-2 text-[#7c6d69]">
-                      <span className="shrink-0">학교</span>
+                      <span className="shrink-0">대상</span>
                       <select
                         value={multiSchool}
                         onChange={(event) => {
@@ -5042,13 +5193,13 @@ export function DailyLogForm({
                             ),
                           );
                         }}
-                        aria-label="여러 학생 숙제 학교 선택"
+                        aria-label="여러 학생 숙제 학교·학년 선택"
                         className="min-h-[40px] w-full min-w-0 rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-2.5 py-1.5 text-base font-medium text-[#a2643c] outline-none"
                       >
-                        <option value="">학교 선택</option>
-                        {schoolOptions.map((name) => (
-                          <option key={name} value={name}>
-                            {name}
+                        <option value="">학교 · 학년 선택</option>
+                        {schoolOptions.map((token) => (
+                          <option key={token} value={token}>
+                            {formatScopeToken(token)}
                           </option>
                         ))}
                       </select>
@@ -5106,7 +5257,7 @@ export function DailyLogForm({
                     {candidates.length === 0 ? (
                       <p className="mt-2 rounded-xl bg-[#faf4ef] px-3 py-2.5 text-sm text-[#8a7b77]">
                         {useSchoolControl && !multiSchool.trim()
-                          ? "학교를 먼저 선택해주세요."
+                          ? "학교·학년을 먼저 선택해주세요."
                           : "선택할 수 있는 학생이 없어요."}
                       </p>
                     ) : (

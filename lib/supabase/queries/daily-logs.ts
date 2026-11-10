@@ -27,6 +27,7 @@ import { dedupeVocabWords } from "@/lib/vocab";
 import { assessmentTotalsForSave, assessmentsForSave, firstVocabularyAssessment, scoresForSave } from "@/lib/assessments";
 import { retestSourcesOf } from "@/lib/retests";
 import { deleteUnprocessedRetests, syncDailyLogRetests } from "@/lib/supabase/queries/retests";
+import { getGroupExamTargets } from "@/lib/supabase/queries/groups";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import type {
   PreparationItem,
@@ -138,7 +139,7 @@ export type DailyLogDetail = DailyLogRecord & {
   homeworkAssignments: HomeworkAssignmentWithAudience[];
   // 이 일지의 "해야 할 일" linked Todo들 (공용 preparation 항목 — 복제 아님, 같은 row 상태).
   // 삭제(dismissed)된 항목은 제외. 조회 실패 시 [] (화면은 항상 뜬다)
-  linkedTasks: { id: string; text: string; textbook: string | null; school: string | null; dueDate: string | null; completed: boolean }[];
+  linkedTasks: { id: string; text: string; textbook: string | null; school: string | null; grade?: string | null; dueDate: string | null; completed: boolean }[];
 };
 
 // options.withMakeups=false: 보충 정보가 필요 없는 소비처(이전 기록 패널의 학생 기록 lazy 조회)가
@@ -203,9 +204,8 @@ export async function getDailyLogDetailForCurrentUser(
   let homeworkAssignments: HomeworkAssignmentWithAudience[] = [];
   const { data: hwRows, error: hwError } = await supabase
     .from("daily_log_homework_assignments")
-    .select(
-      "id, user_id, daily_log_id, content, due_date, textbook, school, assigned_student_id, completed, completed_at, sort_order, created_at, updated_at, assigned_student:students(id, name)",
-    )
+    // "*": grade(20261110 migration)가 있으면 함께 받고, 미적용이어도 조회가 깨지지 않는다
+    .select("*, assigned_student:students(id, name)")
     .eq("user_id", user.id)
     .eq("daily_log_id", dailyLogId)
     .order("due_date", { ascending: true })
@@ -250,6 +250,7 @@ export async function getDailyLogDetailForCurrentUser(
         text: item.text,
         textbook: item.textbook ?? null,
         school: item.school ?? null,
+        grade: item.grade ?? null,
         dueDate: item.dueDate ?? null,
         completed: item.completed,
       }));
@@ -376,7 +377,7 @@ async function syncDailyLogTaskTodos(
   groupId: string,
   dailyLogId: string,
   lessonDate: string,
-  tasks: { id: string; textbook?: string | null; school?: string | null; content: string; dueDate?: string | null }[],
+  tasks: { id: string; textbook?: string | null; school?: string | null; grade?: string | null; content: string; dueDate?: string | null }[],
 ) {
   const { data: groupRow, error: readError } = await supabase
     .from("class_groups")
@@ -391,13 +392,18 @@ async function syncDailyLogTaskTodos(
   }
 
   const items = (groupRow.preparation_items ?? []) as PreparationItem[];
-  const expected = meaningfulDailyLogTasks(tasks).map((task) => ({
-    todoId: dailyLogTaskTodoId(dailyLogId, task.id),
-    text: task.content.trim(),
-    dueDate: resolveDailyLogTaskDueDate(task.dueDate || null, lessonDate),
-    textbook: task.textbook?.trim() || null,
-    school: task.school?.trim() || null,
-  }));
+  const expected = meaningfulDailyLogTasks(tasks).map((task) => {
+    const school = task.school?.trim() || null;
+    return {
+      todoId: dailyLogTaskTodoId(dailyLogId, task.id),
+      text: task.content.trim(),
+      dueDate: resolveDailyLogTaskDueDate(task.dueDate || null, lessonDate),
+      textbook: task.textbook?.trim() || null,
+      school,
+      // 학교 context의 학년 scope — Todo 표시가 "학교 · 학년"으로 구분된다
+      grade: school ? task.grade || null : null,
+    };
+  });
   const expectedById = new Map(expected.map((task) => [task.todoId, task]));
 
   let changed = false;
@@ -418,7 +424,8 @@ async function syncDailyLogTaskTodos(
       item.text === target.text &&
       (item.dueDate ?? null) === target.dueDate &&
       (item.textbook ?? null) === target.textbook &&
-      (item.school ?? null) === target.school;
+      (item.school ?? null) === target.school &&
+      (item.grade ?? null) === target.grade;
     if (unchanged) {
       next.push(item); // dismissed tombstone도 내용이 그대로면 부활시키지 않는다
       continue;
@@ -435,6 +442,7 @@ async function syncDailyLogTaskTodos(
       sourceDailyLogId: dailyLogId,
       ...(target.textbook ? { textbook: target.textbook } : {}),
       ...(target.school ? { school: target.school } : {}),
+      ...(target.grade ? { grade: target.grade } : {}),
     });
   }
 
@@ -450,6 +458,7 @@ async function syncDailyLogTaskTodos(
       sourceDailyLogId: dailyLogId,
       ...(target.textbook ? { textbook: target.textbook } : {}),
       ...(target.school ? { school: target.school } : {}),
+      ...(target.grade ? { grade: target.grade } : {}),
     });
   }
 
@@ -623,10 +632,25 @@ async function syncHomeworkAssignments(
     dueDate: string;
     textbook?: string | null;
     school?: string | null;
+    // 학교 context의 학년 scope ("" / null = legacy 학교 전체)
+    grade?: string | null;
     // 이미 소유 검증을 통과한 값만 들어온다 (null = 공통)
     assignedStudentId?: string | null;
   }[],
 ) {
+  // grade 컬럼(20261110 migration) 존재 확인 — 없으면 학년 없이 저장해 기존 숙제 저장이
+  // 깨지지 않게 한다. 학년이 실제로 지정된 숙제가 있는데 컬럼이 없으면 조용히 버리지 않고
+  // migration 안내로 실패시킨다 (학년 정보를 잃은 채 학교 전체로 저장되지 않게).
+  const { error: gradeProbeError } = await supabase
+    .from("daily_log_homework_assignments")
+    .select("grade")
+    .limit(1);
+  const hasGradeColumn = !gradeProbeError;
+  if (!hasGradeColumn && items.some((item) => item.school?.trim() && item.grade)) {
+    throw new Error(
+      "학년별 시험 대비 숙제를 저장하려면 데이터베이스 변경(migration)이 필요해요. Supabase SQL Editor에서 20261110_add_exam_grade_scope.sql을 실행한 뒤 다시 저장해주세요.",
+    );
+  }
   // 완료 상태까지 함께 읽어 그대로 다시 써 넣는다 — 일지를 다시 저장한다고
   // 이미 체크해 둔 숙제가 미완료로 돌아가면 안 된다 (폼은 완료 여부를 다루지 않는다).
   const { data: existingRows, error: readError } = await supabase
@@ -686,6 +710,7 @@ async function syncHomeworkAssignments(
       due_date: item.dueDate,
       textbook: item.textbook?.trim() || null,
       school: item.school?.trim() || null,
+      ...(hasGradeColumn ? { grade: item.school?.trim() ? item.grade || null : null } : {}),
       assigned_student_id: item.assignedStudentId ?? null,
       completed: completion.completed,
       completed_at: completion.completedAt,
@@ -917,8 +942,9 @@ export async function getLessonImportCandidates(
       .order("created_at", { ascending: true }),
     supabase
       .from("daily_log_homework_assignments")
+      // "*": 학교 context 학년(grade)까지 — migration 미적용이어도 조회 유지
       .select(
-        "id, content, textbook, school, assigned_student_id, sort_order, due_date, daily_log:daily_logs!inner(id, class_date, group_id, status), assigned_student:students(id, name)",
+        "*, daily_log:daily_logs!inner(id, class_date, group_id, status), assigned_student:students(id, name)",
       )
       .eq("user_id", user.id)
       .eq("due_date", lessonDate)
@@ -996,10 +1022,10 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     throw new Error("로그인이 필요합니다.");
   }
 
-  // is_exam_period/exam_target_schools: 결석 보충 스냅샷 fallback의 scope 판정용 (mixed 모드)
+  // is_exam_period: 결석 보충 스냅샷 fallback의 scope 판정용 (mixed 모드)
   const { data: group } = await supabase
     .from("class_groups")
-    .select("id, is_exam_period, exam_target_schools")
+    .select("id, is_exam_period")
     .eq("id", input.groupId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -1007,11 +1033,9 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   if (!group) {
     throw new Error("수업 그룹을 찾을 수 없어요.");
   }
-  const groupRow = group as {
-    id: string;
-    is_exam_period: boolean;
-    exam_target_schools: string[] | null;
-  };
+  const groupRow = group as { id: string; is_exam_period: boolean };
+  // 시험 대상 scope(학교+학년) — exam_targets 우선, legacy는 학교 전체 (migration 미적용 내성)
+  const examTargets = groupRow.is_exam_period ? await getGroupExamTargets(input.groupId) : null;
 
   // 중복 방지: 같은 user + 그룹 + 날짜의 일지는 draft/completed 무관 1개만.
   // 수정 저장은 자기 자신(dailyLogId)을 제외하고 검사한다 (날짜 변경 케이스 포함).
@@ -1048,7 +1072,7 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   const lookupStudentIds = [...new Set([...studentIds, ...homeworkStudentIds])];
   const { data: ownedStudents, error: ownedError } = await supabase
     .from("students")
-    .select("id, name, school")
+    .select("id, name, school, grade")
     .eq("user_id", user.id)
     .in("id", lookupStudentIds);
 
@@ -1056,25 +1080,36 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     id: string;
     name: string;
     school: string | null;
+    grade: string | null;
   }[];
   const ownedStudentIds = new Set(ownedStudentRows.map((row) => row.id));
   if (ownedError || !studentIds.every((id) => ownedStudentIds.has(id))) {
     throw new Error("학생 정보를 확인하지 못했어요. 다시 시도해주세요.");
   }
   const studentNameById = new Map(ownedStudentRows.map((row) => [row.id, row.name]));
-  const studentSchoolById = new Map(ownedStudentRows.map((row) => [row.id, row.school]));
+  const studentScopeById = new Map(
+    ownedStudentRows.map((row) => [row.id, { school: row.school, grade: row.grade }]),
+  );
 
   // 결석 보충 스냅샷의 공통 진도 fallback — mixed 모드에서는 학생 몫의 진도만 서버에서 다시
-  // 계산한다 (시험 학생 → 자기 학교 진도, 일반 학생 → 일반 교재 mirror. client 값을 그대로
-  // 믿지 않고 학교는 DB의 students.school 기준). regular/legacy_exam은 기존 전체 mirror 정책.
+  // 계산한다 (시험 학생 → 자기 학교·학년 진도, 일반 학생 → 일반 교재 mirror. client 값을 그대로
+  // 믿지 않고 학교/학년은 DB의 students.school/grade 기준). regular/legacy_exam은 기존 전체 mirror 정책.
   // 기타 메모는 mirror 합성이 결정적이므로 default_progress에서 prefix를 떼어 복원한다.
-  const progressMode = resolveProgressMode(
-    groupRow.is_exam_period,
-    groupRow.exam_target_schools,
-  );
+  const progressMode = resolveProgressMode(groupRow.is_exam_period, examTargets);
+  // 학교 context 섹션 정규화 — 빈 grade("")는 legacy 학교 전체로 키를 생략해 저장한다
+  const normalizeSchoolSections = (
+    sections: { name: string; grade?: string | null; text: string }[] | undefined,
+  ) =>
+    (sections ?? []).map((section) => ({
+      name: section.name,
+      ...(section.grade ? { grade: section.grade } : {}),
+      text: section.text,
+    }));
+  const schoolProgressSections = normalizeSchoolSections(input.schoolProgress);
+  const schoolPlanSections = normalizeSchoolSections(input.schoolPlans);
   const savedProgressMirror = [
     buildTextbookSectionsText(input.textbookProgress ?? []),
-    buildTextbookSectionsText(input.schoolProgress ?? []),
+    buildTextbookSectionsText(schoolProgressSections),
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -1085,9 +1120,9 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   const missedProgressFallback = (studentId: string) =>
     progressMode === "mixed"
       ? scopedMissedProgressCandidate({
-          studentSchool: studentSchoolById.get(studentId),
-          targetSchools: groupRow.exam_target_schools ?? [],
-          schoolSections: input.schoolProgress ?? [],
+          student: studentScopeById.get(studentId) ?? { school: null, grade: null },
+          targets: examTargets ?? [],
+          schoolSections: schoolProgressSections,
           textbookSections: input.textbookProgress ?? [],
           extraMemo: progressExtraMemo,
         })
@@ -1129,13 +1164,19 @@ export async function saveDailyLog(input: DailyLogFormInput) {
   const legacyHomework = input.homework?.trim() || "";
 
   // 해야 할 일 다중 항목 정규화 — 내용 없는 항목(교재/날짜만)은 저장/Todo 대상이 아니다
-  const taskItems = meaningfulDailyLogTasks(input.tasks ?? []).map((task) => ({
-    id: task.id,
-    textbook: task.textbook?.trim() || null,
-    school: task.school?.trim() || null,
-    content: task.content.trim(),
-    dueDate: task.dueDate || null,
-  }));
+  const taskItems = meaningfulDailyLogTasks(input.tasks ?? []).map((task) => {
+    const school = task.school?.trim() || null;
+    const grade = school ? task.grade || null : null;
+    return {
+      id: task.id,
+      textbook: task.textbook?.trim() || null,
+      school,
+      // 학교 context의 학년 scope — 없으면 키 생략 (legacy 항목과 같은 shape)
+      ...(grade ? { grade } : {}),
+      content: task.content.trim(),
+      dueDate: task.dueDate || null,
+    };
+  });
   const homeworkText =
     legacyHomework || (homeworkAssignments.length > 0 ? buildHomeworkMirror(homeworkAssignments) : "");
   const homeworkDueDate = legacyHomework ? input.homeworkDueDate || null : null;
@@ -1176,8 +1217,8 @@ export async function saveDailyLog(input: DailyLogFormInput) {
     // "교재명 - 내용" mirror(+기타 메모)가 담겨 legacy 소비처와 호환된다
     textbook_progress: (input.textbookProgress ?? []).length > 0 ? input.textbookProgress : null,
     textbook_plans: (input.textbookPlans ?? []).length > 0 ? input.textbookPlans : null,
-    school_progress: (input.schoolProgress ?? []).length > 0 ? input.schoolProgress : null,
-    school_plans: (input.schoolPlans ?? []).length > 0 ? input.schoolPlans : null,
+    school_progress: schoolProgressSections.length > 0 ? schoolProgressSections : null,
+    school_plans: schoolPlanSections.length > 0 ? schoolPlanSections : null,
     vocab_total: vocabTotal,
     ...(sendAssessments ? { assessment_totals: assessments.length > 0 ? assessmentTotalsForSave(assessments) : null } : {}),
     reflection_good: input.reflectionGood?.trim() || null,

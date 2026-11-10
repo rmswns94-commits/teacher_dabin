@@ -16,6 +16,8 @@ import { sortByKoreanName } from "@/lib/korean-sort";
 import { vocabularyStreakBefore, vocabularyTestsOf } from "@/lib/vocabulary-streak";
 import { getCompletedAssessmentHistory } from "@/lib/supabase/queries/growth-notes";
 import { uniqueSchoolList } from "@/lib/textbooks";
+import { normalizeExamTargets } from "@/lib/school-scope";
+import { activeTargetScopes } from "@/lib/progress-mode";
 import {
   getActiveDraftResumeTarget,
   getDailyLogDraft,
@@ -128,22 +130,22 @@ export default async function NewDailyLogPage({
   // PHASE 2: 시험 대상 학교가 설정된 그룹은 대상 학교만 미리보기에 표시한다
   // (시험을 안 보는 학교는 제외 — 데이터/저장은 불변, 표시 필터만).
   // legacy(exam_target_schools null)는 기존대로 학생 학교 전체.
-  const memberSchoolList = uniqueSchoolList(
-    groupStudentsRaw.filter((student) => !student.archived).map((student) => student.school),
-  );
-  const examTargetSet = new Set(
-    (selectedGroup?.exam_target_schools ?? []).map((name) => name.trim()),
-  );
-  const examPreviewSchools = selectedGroup?.is_exam_period
-    ? selectedGroup.exam_target_schools === null
-      ? memberSchoolList
-      : memberSchoolList.filter((school) => examTargetSet.has(school.trim()))
+  const activeGroupMembers = groupStudentsRaw.filter((student) => !student.archived);
+  const memberSchoolList = uniqueSchoolList(activeGroupMembers.map((student) => student.school));
+  // 시험 대상 scope(학교+학년) — exam_targets 우선, legacy exam_target_schools는 전체 scope
+  const examTargets = selectedGroup ? normalizeExamTargets(selectedGroup) : null;
+  const examPreviewScopes = selectedGroup?.is_exam_period
+    ? examTargets === null
+      ? // legacy 미설정: 기존대로 학생 학교 전체 (학교 단위 — 자동 학년 부여 없음)
+        memberSchoolList.map((school) => ({ school, grade: null }))
+      : // mixed: 현재 매칭 학생이 있는 대상 scope만 (같은 학교 여러 학년 = 여러 항목)
+        activeTargetScopes(examTargets, activeGroupMembers)
     : [];
   // 시험 선택/D-day 기준은 오늘(KST) — "지금 곧 있을 시험"을 참고하는 기능이라
   // 과거 날짜 일지를 작성 중이어도 현재 기준 upcoming 시험을 보여준다
   const examPreviewEntries =
-    examPreviewSchools.length > 0
-      ? await getDailyLogExamPreviewEntries(examPreviewSchools, selectedGroup?.grade, todayDateString())
+    examPreviewScopes.length > 0
+      ? await getDailyLogExamPreviewEntries(examPreviewScopes, selectedGroup?.grade, todayDateString())
       : [];
   // 학생 평가 목록은 항상 이름 가나다순 (membership 생성순이 아니라)
   // — 폼 로드 전에 정렬해 두므로 작성 중 재정렬/remount가 없다.
@@ -284,8 +286,8 @@ export default async function NewDailyLogPage({
               // 학교 목록 source = 이 그룹 소속 학생들의 students.school (추가 쿼리 0)
               examPeriod={selectedGroup.is_exam_period}
               schools={memberSchoolList}
-              // PHASE 2 혼합 진도 — 그룹의 시험 대상 학교 설정 (null = legacy, 기존 방식 유지)
-              examTargetSchools={selectedGroup.exam_target_schools}
+              // 혼합 진도 — 그룹의 시험 대상 scope(학교+학년) 설정 (null = legacy, 기존 방식 유지)
+              examTargets={examTargets}
               // [지난 수업에서 가져오기] 후보는 폼이 다이얼로그를 열 때 (group, lesson_date) 기준으로 조회한다
               // 학생 평가 카드 "지난 수업 참고" (read-only — 오늘 평가로 복사하지 않음)
               previousEvaluations={prevEvaluations}

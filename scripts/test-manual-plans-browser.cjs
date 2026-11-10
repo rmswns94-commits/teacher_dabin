@@ -44,7 +44,7 @@ const students=[
  {studentId:'33333333-3333-4333-8333-333333333333',name:'미등록학생',school:null,grade:'middle_2'},
 ];
 const defaults={classDate:'2026-09-14',group:{id:'44444444-4444-4444-8444-444444444444',name:'A'},
- students, scheduleDays:[1,3,5], textbooks:['Grammar','Reading','Bricks'], examPeriod:true,examTargetSchools:['한울중'],schools:['한울중','가산중']};
+ students, scheduleDays:[1,3,5], textbooks:['Grammar','Reading','Bricks'], examPeriod:true,examTargets:[{school:'한울중',grade:null}],schools:['한울중','가산중']};
 window.defaults=defaults;
 const app=createRoot(document.getElementById('app'));let generation=0;
 window.mount=(overrides={})=>{window.saves=[];window.saveError=null;window.lastRoute=null;flushSync(()=>app.render(<DailyLogForm key={++generation} {...defaults} {...overrides}/>));};
@@ -88,10 +88,10 @@ async function main() {
     assert.equal(await add().count(), 0);
     for (const book of ["Grammar", "Reading", "Bricks"]) assert.equal(await field(`${book} 다음 수업 계획`).count(), 1);
     pass("OFF retains all automatic textbook plan inputs");
-    await mount({ examTargetSchools: null });
+    await mount({ examTargets: null });
     assert.equal(await add().count(), 0); assert.equal(await field("가산중 다음 수업 계획").count(), 1);
     pass("legacy exam keeps school-only inputs");
-    await mount({ examTargetSchools: ["한울중", "없는학교"] });
+    await mount({ examTargets: [{ school: "한울중", grade: null }, { school: "없는학교", grade: null }] });
     assert.equal(await selects().count(), 0); assert.equal(await add().count(), 1);
     assert.equal(await field("한울중 다음 수업 계획").count(), 1);
     assert.equal(await field("가산중 다음 수업 계획").count(), 0);
@@ -137,7 +137,7 @@ async function main() {
     assert.equal(final.data.tasks.length, 0); assert.equal(final.data.homeworkAssignments.length, 0);
     pass("delete affects one plan; Final Save keeps structured plans and legacy mirror without tasks/homework");
     const legacy = { textbookPlans: [{ name: "Removed Book", text: "과거 계획" }, { name: "Grammar", text: "기존 문법" }], schoolPlans: [{ name: "옛학교", text: "과거 시험" }] };
-    await mount({ draft: { ...draft, payload: legacy }, forceRestoreDraft: true, currentHomeworkStudents: [], examTargetSchools: [] });
+    await mount({ draft: { ...draft, payload: legacy }, forceRestoreDraft: true, currentHomeworkStudents: [], examTargets: [] });
     assert.equal(await selects().count(), 2); assert.equal(await add().count(), 0);
     assert.equal(await field("Removed Book 계획").inputValue(), "과거 계획");
     assert.equal(await field("옛학교 다음 수업 계획").inputValue(), "과거 시험");

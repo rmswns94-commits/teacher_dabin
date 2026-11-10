@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { formatShortMonthDay } from "@/lib/dates";
+import { linkedContextLabel, sectionDisplayName } from "@/lib/textbooks";
 import type {
   ClassifiedHomework,
   ClassifiedPlan,
@@ -141,7 +142,8 @@ export function PreviousLessonImportDialog({
       {list.map((plan) => (
         <CandidateRow
           key={plan.id}
-          title={plan.name}
+          // 학교 계획은 "학교 · 학년" (legacy 학년 미지정은 학교명만)
+          title={plan.kind === "school" ? sectionDisplayName(plan) : plan.name}
           text={plan.text}
           caption={sourceCaption(plan.sourceLessonDate)}
           status={plan.status}
@@ -212,7 +214,7 @@ export function PreviousLessonImportDialog({
                         <CandidateRow
                           key={item.sourceId}
                           title={`${item.assignedStudentId ? item.assignedStudentName ?? "대상 학생" : "공통"}${
-                            item.school || item.textbook ? ` · ${item.school || item.textbook}` : ""
+                            linkedContextLabel(item) ? ` · ${linkedContextLabel(item)}` : ""
                           }`}
                           text={item.content}
                           caption={`${sourceCaption(item.sourceLessonDate)} · ${formatShortMonthDay(item.dueDate)} 마감`}
@@ -233,7 +235,7 @@ export function PreviousLessonImportDialog({
                       {tasks.map((task) => (
                         <CandidateRow
                           key={task.id}
-                          title={task.school || task.textbook || "할 일"}
+                          title={linkedContextLabel(task) || "할 일"}
                           text={task.content}
                           caption={`${sourceCaption(task.sourceLessonDate)} · ${formatShortMonthDay(task.dueDate)}`}
                           status={task.status}

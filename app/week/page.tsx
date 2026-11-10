@@ -262,7 +262,7 @@ export default async function WeekPage({
                               >
                                 {formatHomeworkDisplay({
                                   audienceLabel: homeworkAudienceLabel(hw.assignedStudentName),
-                                  contextLabel: hw.textbook || hw.school,
+                                  contextLabel: linkedContextLabel(hw),
                                   content: hw.content,
                                 })}
                               </div>

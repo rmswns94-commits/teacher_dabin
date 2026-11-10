@@ -44,7 +44,7 @@ const students=[
  {studentId:'33333333-3333-4333-8333-333333333333',name:'미등록학생',school:null,grade:'middle_2'},
 ];
 const defaults={classDate:'2026-09-14',group:{id:'44444444-4444-4444-8444-444444444444',name:'A'},
- students, textbooks:['Grammar','Reading','Bricks'], examPeriod:true,examTargetSchools:['한울중'],schools:['한울중','가산중']};
+ students, textbooks:['Grammar','Reading','Bricks'], examPeriod:true,examTargets:[{school:'한울중',grade:null}],schools:['한울중','가산중']};
 window.defaults=defaults;
 const app=createRoot(document.getElementById('app'));let generation=0;
 window.mount=(overrides={})=>{window.saves=[];window.saveError=null;window.lastRoute=null;flushSync(()=>app.render(<DailyLogForm key={++generation} {...defaults} {...overrides}/>));};
@@ -87,7 +87,7 @@ async function main() {
     assert.equal(await add().count(), 0);
     for (const book of ["Grammar", "Reading", "Bricks"]) assert.equal(await page.getByRole("textbox", { name: `${book} 진도`, exact: true }).count(), 1);
     pass("OFF retains all automatic textbook fields and no add button");
-    await mount({ examTargetSchools: null });
+    await mount({ examTargets: null });
     assert.equal(await add().count(), 0);
     assert.equal(await page.getByRole("textbox", { name: "가산중 진도", exact: true }).count(), 1);
     pass("legacy exam retains school-only editor");

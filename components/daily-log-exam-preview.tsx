@@ -8,6 +8,7 @@ import { ExamPlanner } from "@/components/exam-planner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { gradeDisplay } from "@/lib/grades";
 import { examDdayInfo, formatExamPeriod } from "@/lib/school-exam-display";
+import { formatExamTarget, scopeToken } from "@/lib/school-scope";
 import type { ExamPrepPlanRecord, SchoolExamType, StudentGrade } from "@/lib/supabase/types";
 import { examTypeLabels, semesterLabels } from "@/lib/validation/school-exam";
 
@@ -19,6 +20,8 @@ import { examTypeLabels, semesterLabels } from "@/lib/validation/school-exam";
 //   무엇을 바꿔도 폼(진도/숙제/계획/할일/평가)이 remount/변경되지 않는다.
 export type DailyLogExamPreviewEntry = {
   school: string;
+  // 시험 대상 scope의 학년 (null = legacy "학교 전체" scope — 학교 기준 기존 동작)
+  grade: string | null;
   exam: {
     id: string;
     grade: StudentGrade;
@@ -39,17 +42,25 @@ export function DailyLogExamPreview({
   entries: DailyLogExamPreviewEntry[];
   today: string;
 }) {
-  const schools = entries.map((entry) => entry.school);
-  // 학교가 정확히 1개면 자동 선택, 여러 개면 명시적으로 고르게 한다
-  // (어느 학교 캘린더를 보고 있는지 항상 명확하게)
-  const [selectedSchool, setSelectedSchool] = useState(schools.length === 1 ? schools[0] : "");
+  // scope(학교+학년)가 identity — 같은 학교의 다른 학년은 서로 다른 선택지다
+  const options = entries.map((entry) => ({
+    token: scopeToken(entry.school, entry.grade),
+    label: formatExamTarget({ school: entry.school, grade: entry.grade }),
+    entry,
+  }));
+  // scope가 정확히 1개면 자동 선택, 여러 개면 명시적으로 고르게 한다
+  // (어느 학교·학년 캘린더를 보고 있는지 항상 명확하게)
+  const [selectedToken, setSelectedToken] = useState(
+    options.length === 1 ? options[0].token : "",
+  );
   const [collapsed, setCollapsed] = useState(false);
 
   if (entries.length === 0) {
     return null;
   }
 
-  const selected = entries.find((entry) => entry.school === selectedSchool) ?? null;
+  const selected = options.find((option) => option.token === selectedToken)?.entry ?? null;
+  const selectedLabel = options.find((option) => option.token === selectedToken)?.label ?? "";
   const exam = selected?.exam ?? null;
   const dday = exam ? examDdayInfo(today, exam.startDate, exam.endDate) : null;
 
@@ -81,22 +92,22 @@ export function DailyLogExamPreview({
       {!collapsed ? (
         <CardContent className="space-y-3">
           <label className="flex max-w-[420px] items-center gap-2 text-sm font-medium text-[#7c6d69]">
-            <span className="shrink-0">학교</span>
-            {schools.length === 1 ? (
+            <span className="shrink-0">대상</span>
+            {options.length === 1 ? (
               <span className="flex min-h-[40px] w-full min-w-0 items-center truncate rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-3 text-sm font-medium text-[#a2643c]">
-                {schools[0]}
+                {options[0].label}
               </span>
             ) : (
               <select
-                value={selectedSchool}
-                onChange={(event) => setSelectedSchool(event.target.value)}
-                aria-label="시험 대비 학교 선택"
+                value={selectedToken}
+                onChange={(event) => setSelectedToken(event.target.value)}
+                aria-label="시험 대비 대상(학교·학년) 선택"
                 className="min-h-[40px] w-full min-w-0 rounded-xl border border-[#e8c9b0] bg-[#fdf1e6] px-3 text-base font-medium text-[#a2643c] outline-none"
               >
-                <option value="">학교 선택</option>
-                {schools.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
+                <option value="">학교 · 학년 선택</option>
+                {options.map((option) => (
+                  <option key={option.token} value={option.token}>
+                    {option.label}
                   </option>
                 ))}
               </select>
@@ -105,12 +116,12 @@ export function DailyLogExamPreview({
 
           {!selected ? (
             <p className="rounded-2xl bg-[#fdf1e6] px-4 py-3 text-sm text-[#8a6a4f]">
-              학교를 선택하면 그 학교의 시험 대비 일정을 볼 수 있어요.
+              학교·학년을 선택하면 그 대상의 시험 대비 일정을 볼 수 있어요.
             </p>
           ) : exam ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2 text-sm text-[#564d4d]">
-                <span className="font-semibold text-[#2b2323]">{selected.school}</span>
+                <span className="font-semibold text-[#2b2323]">{selectedLabel}</span>
                 <span>
                   {gradeDisplay[exam.grade]} · {exam.examYear}년 {semesterLabels[exam.semester]}{" "}
                   {examTypeLabels[exam.examType]}
@@ -151,7 +162,7 @@ export function DailyLogExamPreview({
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#fdf1e6] px-4 py-3 text-sm text-[#8a6a4f]">
               <span>
-                {selected.school}에 등록된 시험 대비 일정이 없어요. (수업일지 작성은 그대로 가능해요)
+                {selectedLabel}에 등록된 시험 대비 일정이 없어요. (수업일지 작성은 그대로 가능해요)
               </span>
               <Link href="/exams" className="shrink-0 text-sm text-[#5c4ca8] hover:underline">
                 시험 대비에서 등록하기 →

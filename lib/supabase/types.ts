@@ -44,6 +44,8 @@ export type PreparationItem = {
   textbook?: string | null;
   // 시험 기간 ON 당시 학교 context (textbook과 배타적) — 표시는 "학교명 - 내용"
   school?: string | null;
+  // 학교 context의 학년 scope (school과 한 쌍 — 없으면 legacy 학교 전체 기록)
+  grade?: string | null;
   // linked 항목을 Teacher가 삭제하면 tombstone(dismissed)으로 남긴다 — 화면에는 안 보이지만
   // 일지 단순 재저장으로 부활하지 않게 억제하고, 계획 내용/날짜가 실제 바뀌면 되살린다.
   dismissed?: boolean;
@@ -66,10 +68,14 @@ export type ClassGroupRecord = {
   // 시험 대비용 교재 (일반 textbook과 별개 — OFF로 돌려도 지우지 않는다).
   // 시험 기간 ON이면 수업일지 Excel의 교재 셀이 이 목록을 쓴다 (0개면 "시험대비" fallback).
   exam_textbooks: ExamTextbook[] | null;
-  // 시험 대상 학교 이름 배열 (trim된 Student.school 스냅샷).
+  // 시험 대상 학교 이름 배열 (trim된 Student.school 스냅샷) — LEGACY.
   // null = 아직 명시적으로 설정 안 함(legacy 포함) — 자동 backfill 금지.
-  // OFF로 꺼도 유지한다 (다음 시험 대비 시작 때 prefill 참고용).
+  // exam_targets(신규)가 canonical이고, 이 컬럼은 읽기 fallback + 호환 mirror로만 유지한다.
   exam_target_schools: string[] | null;
+  // 시험 대상 scope [{school, grade}] — canonical (20261110 migration).
+  // grade null = 사용자가 유지한 legacy "학교 전체" scope. null = 미설정(legacy 컬럼 fallback).
+  // migration 미적용 환경의 select("*")에 없을 수 있어 optional.
+  exam_targets?: { school: string; grade: string | null }[] | null;
   highlight_memo: string | null;
   preparation_items: PreparationItem[];
   archived: boolean;
@@ -160,14 +166,16 @@ export type DailyLogRecord = {
   task_textbook: string | null; // 해야 할 일에 연결한 교재 이름 스냅샷 (표시: "교재명 - 내용")
   // 해야 할 일 다중 항목 — stable id 기반. null이면 legacy 단일 task_* 컬럼이 source.
   // school: 시험 기간 ON 당시 작성한 항목의 학교 context (textbook과 배타적 — 저장 필드가 identity)
-  tasks: { id: string; textbook?: string | null; school?: string | null; content: string; dueDate?: string | null }[] | null;
+  // grade: 학교 context의 학년 scope (없으면 legacy 학교 전체 기록)
+  tasks: { id: string; textbook?: string | null; school?: string | null; grade?: string | null; content: string; dueDate?: string | null }[] | null;
   // 교재별 진도/다음 수업 계획 — [{ name, text }] 스냅샷. default_progress/next_lesson_plan은
   // 이 구조에서 파생된 "교재명 - 내용" mirror(+기타 메모)로 기록된다 (legacy 소비처 호환).
   textbook_progress: { name: string; text: string }[] | null;
   textbook_plans: { name: string; text: string }[] | null;
-  // 학교 context 진도/다음 수업 계획 (시험 기간 ON 당시 작성 — name=학교명 스냅샷)
-  school_progress: { name: string; text: string }[] | null;
-  school_plans: { name: string; text: string }[] | null;
+  // 학교 context 진도/다음 수업 계획 (시험 기간 ON 당시 작성 — name=학교명 스냅샷,
+  // grade=학년 scope. grade 없는 항목은 legacy 학교 전체 기록 — 추측 변환 금지)
+  school_progress: { name: string; grade?: string | null; text: string }[] | null;
+  school_plans: { name: string; grade?: string | null; text: string }[] | null;
   reflection_good: string | null; // 수업 회고: 잘된 점 (강사 전용 — 학생/성장노트 노출 금지)
   reflection_hard: string | null; // 수업 회고: 아쉬웠던 점
   reflection_next: string | null; // 수업 회고: 다음에 다르게 해볼 것 (다음 일지 작성 화면에 리마인드)
@@ -187,6 +195,9 @@ export type DailyLogHomeworkAssignmentRecord = {
   due_date: string; // "YYYY-MM-DD" (KST date-only)
   textbook: string | null; // 연결 교재 이름 스냅샷 (없으면 null — content만 표시)
   school: string | null; // 시험 기간 ON 당시 학교 context 이름 스냅샷 (textbook과 배타적)
+  // 학교 context의 학년 scope (20261110 migration — null이면 legacy 학교 전체 기록).
+  // migration 미적용 환경의 select("*")에 없을 수 있어 optional.
+  grade?: string | null;
   // 숙제 대상: null = 반 공통, uuid = 그 학생 한 명 ("공통"용 가짜 학생 row는 만들지 않는다).
   // 학생이 삭제되면 on delete set null로 공통이 아니라 "연결 끊김"이 되지만, 기록 자체는 남는다.
   assigned_student_id: string | null;

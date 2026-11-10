@@ -56,6 +56,7 @@ export function buildHomeworkMirror(
     dueDate: string;
     textbook?: string | null;
     school?: string | null;
+    grade?: string | null;
     // 대상 학생 이름 — 비어 있으면 공통 (id가 아니라 표시용 이름을 받는다)
     assignedStudentName?: string | null;
   }[],

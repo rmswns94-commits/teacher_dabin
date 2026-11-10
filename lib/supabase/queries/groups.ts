@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
+import { normalizeExamTargets } from "@/lib/school-scope";
 import type {
   ClassGroupRecord,
   ExamTextbook,
@@ -277,13 +278,16 @@ export async function updateGroup(groupId: string, input: {
 }
 
 // 시험 기간 ON/OFF — Teacher가 직접 해제할 때까지 유지 (자동 종료 없음).
-// 시험 대상 학교 저장. activate=true면 is_exam_period도 같은 UPDATE 한 번으로 켠다 —
-// "대상 저장은 됐는데 토글은 실패" 같은 반쪽 상태가 생기지 않게 컬럼 두 개를 한 문장으로 쓴다.
-// 배열은 액션에서 이미 정규화(trim/빈값 제거/중복 제거)된 값만 들어온다.
+// 시험 대상 scope(학교+학년) 저장. activate=true면 is_exam_period도 같은 UPDATE 한 번으로
+// 켠다 — "대상 저장은 됐는데 토글은 실패" 같은 반쪽 상태가 생기지 않게 한 문장으로 쓴다.
+// canonical은 exam_targets jsonb [{school, grade}]이고, legacy 컬럼 exam_target_schools에는
+// 학교 이름 목록 mirror를 같이 써서 아직 legacy 컬럼만 읽는 소비처와의 호환을 유지한다
+// (fallback 읽기는 exam_targets가 null일 때만 동작하므로 mirror가 의미를 바꾸지 않는다).
+// 배열은 액션에서 이미 정규화(trim/빈값 제거/scope 중복 제거)된 값만 들어온다.
 // user_id 조건으로 남의 그룹은 절대 못 바꾼다 (RLS와 별개로 한 번 더).
 export async function updateGroupExamTargets(
   groupId: string,
-  schools: string[],
+  targets: { school: string; grade: string | null }[],
   options: { activate?: boolean } = {},
 ) {
   const supabase = await createServerSupabaseClient();
@@ -293,10 +297,13 @@ export async function updateGroupExamTargets(
     throw new Error("로그인이 필요합니다.");
   }
 
+  const legacyMirror = [...new Set(targets.map((target) => target.school.trim()))];
+
   const { error } = await supabase
     .from("class_groups")
     .update({
-      exam_target_schools: schools,
+      exam_targets: targets,
+      exam_target_schools: legacyMirror,
       ...(options.activate ? { is_exam_period: true } : {}),
     })
     .eq("id", groupId)
@@ -304,10 +311,56 @@ export async function updateGroupExamTargets(
 
   if (error) {
     console.error("updateGroupExamTargets error", { code: error.code, message: error.message });
-    throw new Error("시험 대상 학교를 저장하지 못했어요. 다시 시도해주세요.");
+    throw new Error(
+      error.code === "PGRST204" || error.code === "42703"
+        ? "데이터베이스에 최신 변경(migration)이 아직 적용되지 않았어요. Supabase SQL Editor에서 대기 중인 migration을 실행해주세요."
+        : "시험 대상 학교를 저장하지 못했어요. 다시 시도해주세요.",
+    );
   }
 
   return true;
+}
+
+// 그룹의 시험 대상 scope 정규화 조회 — exam_targets(신규) 우선, legacy exam_target_schools
+// fallback. migration 미적용(컬럼 없음)이어도 legacy 컬럼으로 동작한다 (조회가 깨지지 않게).
+export async function getGroupExamTargets(groupId: string) {
+  const supabase = await createServerSupabaseClient();
+  const user = await getServerUser();
+
+  if (!supabase || !user) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("class_groups")
+    .select("exam_targets, exam_target_schools")
+    .eq("id", groupId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "42703" || error.code === "PGRST204") {
+      // migration 미적용 — legacy 컬럼만으로 fallback
+      const { data: legacy } = await supabase
+        .from("class_groups")
+        .select("exam_target_schools")
+        .eq("id", groupId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      return legacy ? normalizeExamTargets(legacy as { exam_target_schools: string[] | null }) : null;
+    }
+    console.error("getGroupExamTargets error", { code: error.code, message: error.message });
+    return null;
+  }
+
+  return data
+    ? normalizeExamTargets(
+        data as {
+          exam_targets?: { school: string; grade: string | null }[] | null;
+          exam_target_schools: string[] | null;
+        },
+      )
+    : null;
 }
 
 // 상태 변경만 하며 Todo/플래너/일정 등 side effect는 일절 만들지 않는다.

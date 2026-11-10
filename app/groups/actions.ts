@@ -26,7 +26,8 @@ import {
   replaceGroupSchedules,
 } from "@/lib/supabase/queries/schedules";
 import { formatScheduleSlot, slotsOverlap } from "@/lib/schedule";
-import { uniqueSchoolList } from "@/lib/textbooks";
+import { compareExamTargets, scopeToken, type ExamTarget } from "@/lib/school-scope";
+import { gradeValues } from "@/lib/grades";
 import { preparationItemSchema } from "@/lib/validation/daily-log";
 import type { PreparationItem } from "@/lib/supabase/types";
 import { groupIconPresets } from "@/lib/group-icons";
@@ -138,29 +139,55 @@ export async function setExamPeriodAction(groupId: string, isExamPeriod: boolean
   return { success: true as const };
 }
 
-// 시험 대상 학교 입력 정규화 + 검증 — trim/빈값 제거/정확한 값 기준 중복 제거(가나다 정렬).
-// fuzzy 병합 없음: "한울중"과 "한울중학교"는 다른 값으로 존중한다.
-function parseExamTargetSchools(schools: unknown): string[] | { error: string } {
-  if (!Array.isArray(schools) || schools.some((name) => typeof name !== "string")) {
+// 시험 대상 scope(학교+학년) 입력 정규화 + 검증 — trim/빈값 제거/(school,grade) 기준
+// 중복 제거/정렬. grade는 students.grade enum 값만 허용하고, null은 사용자가 유지한
+// legacy "학교 전체" scope다. fuzzy 병합 없음: "한울중"과 "한울중학교"는 다른 값으로 존중한다.
+function parseExamTargets(targets: unknown): ExamTarget[] | { error: string } {
+  if (!Array.isArray(targets)) {
     return { error: "시험 대상 학교를 확인해주세요." };
   }
-  const normalized = uniqueSchoolList(schools as string[]);
+  const seen = new Set<string>();
+  const normalized: ExamTarget[] = [];
+  for (const item of targets) {
+    const school =
+      item && typeof (item as { school?: unknown }).school === "string"
+        ? ((item as { school: string }).school ?? "").trim()
+        : "";
+    if (!school) {
+      return { error: "시험 대상 학교를 확인해주세요." };
+    }
+    if (school.length > 100) {
+      return { error: "학교 이름이 너무 길어요." };
+    }
+    const rawGrade = (item as { grade?: unknown }).grade;
+    const grade =
+      typeof rawGrade === "string" && (gradeValues as readonly string[]).includes(rawGrade)
+        ? rawGrade
+        : rawGrade === null || rawGrade === undefined || rawGrade === ""
+          ? null
+          : undefined;
+    if (grade === undefined) {
+      return { error: "시험 대상 학년을 확인해주세요." };
+    }
+    const key = scopeToken(school, grade);
+    if (!seen.has(key)) {
+      seen.add(key);
+      normalized.push({ school, grade });
+    }
+  }
   if (normalized.length === 0) {
     return { error: "시험 대상 학교를 하나 이상 선택해주세요." };
   }
-  if (normalized.some((name) => name.length > 100)) {
-    return { error: "학교 이름이 너무 길어요." };
-  }
-  return normalized;
+  return normalized.sort(compareExamTargets);
 }
 
-// 시험 대비 시작 — 대상 학교 저장과 is_exam_period=true를 UPDATE 한 문장으로 함께 처리
-// (반쪽 상태 방지). 어떤 학교가 시험을 보는지는 Teacher의 명시적 선택만 사용한다.
-export async function startExamPeriodAction(groupId: string, schools: string[]) {
+// 시험 대비 시작 — 대상 scope 저장과 is_exam_period=true를 UPDATE 한 문장으로 함께 처리
+// (반쪽 상태 방지). 어떤 학교·학년이 시험을 보는지는 Teacher의 명시적 선택만 사용한다.
+export async function startExamPeriodAction(groupId: string, targets: ExamTarget[]) {
   if (typeof groupId !== "string" || !groupId) {
     return { error: "시험 대비를 시작하지 못했어요. 다시 시도해주세요." };
   }
-  const parsed = parseExamTargetSchools(schools);
+  const parsed = parseExamTargets(targets);
   if (!Array.isArray(parsed)) {
     return parsed;
   }
@@ -184,13 +211,13 @@ export async function startExamPeriodAction(groupId: string, schools: string[]) 
   return { success: true as const };
 }
 
-// ON 상태에서 대상 학교만 수정 — is_exam_period는 건드리지 않는다.
+// ON 상태에서 대상 scope만 수정 — is_exam_period는 건드리지 않는다.
 // 0개 저장은 허용하지 않는다 (전부 해제하려면 시험 대비 OFF를 쓰는 것이 의미상 맞다).
-export async function updateExamTargetSchoolsAction(groupId: string, schools: string[]) {
+export async function updateExamTargetSchoolsAction(groupId: string, targets: ExamTarget[]) {
   if (typeof groupId !== "string" || !groupId) {
     return { error: "시험 대상 학교를 저장하지 못했어요. 다시 시도해주세요." };
   }
-  const parsed = parseExamTargetSchools(schools);
+  const parsed = parseExamTargets(targets);
   if (!Array.isArray(parsed)) {
     return parsed;
   }

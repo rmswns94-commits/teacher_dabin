@@ -35,7 +35,13 @@ import { DailyLogStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatKoreanDate, todayDateString } from "@/lib/dates";
-import { formatTextbookLinked, linkedContextLabel, uniqueSchoolList } from "@/lib/textbooks";
+import { formatTextbookLinked, linkedContextLabel } from "@/lib/textbooks";
+import {
+  examTargetToken,
+  normalizeExamTargets,
+  uniqueSchoolGradeScopes,
+} from "@/lib/school-scope";
+import { studentsOfScope } from "@/lib/progress-mode";
 import {
   getAvailableStudentsForGroup,
   getGroupByIdForCurrentUser,
@@ -129,9 +135,20 @@ export default async function GroupDetailPage({
       : null;
 
   const members = allMembers.filter((student) => !student.archived);
-  // 시험 대상 학교 선택지 = 현재 소속 학생들의 Student.school (trim/중복 제거/가나다).
-  // 이미 조회한 멤버 목록에서 유도하므로 학교/학생별 추가 쿼리 0.
-  const memberSchools = uniqueSchoolList(members.map((student) => student.school));
+  // 시험 대상 선택지 = 현재 소속 학생들의 (학교, 학년) 조합 — 같은 학교의 여러 학년은
+  // 각각 독립 scope다 (학교만으로 dedupe 금지). 멤버 목록에서 유도 — 추가 쿼리 0.
+  const memberScopes = uniqueSchoolGradeScopes(members).map((scope) => ({
+    ...scope,
+    studentCount: studentsOfScope(members, scope).length,
+  }));
+  // 저장된 target 정규화 (exam_targets 우선, 없으면 legacy exam_target_schools = 학교 전체)
+  const examTargets = normalizeExamTargets(group);
+  // 저장돼 있지만 현재 roster 조합에 없는 target — legacy 전체 scope와 전학/학년변경 잔여.
+  // 자동 삭제하지 않고 표시하며, 사용자가 다이얼로그에서 학년 scope로 직접 전환할 수 있다.
+  const memberScopeTokens = new Set(memberScopes.map(examTargetToken));
+  const staleScopes = (examTargets ?? [])
+    .filter((target) => !memberScopeTokens.has(examTargetToken(target)))
+    .map((target) => ({ ...target, studentCount: studentsOfScope(members, target).length }));
   const memberSet = new Set(allMembers.map((student) => student.id));
   const availableToAdd = availableStudents.filter((student) => !memberSet.has(student.id));
   const isEditMode = edit === "1";
@@ -169,8 +186,9 @@ export default async function GroupDetailPage({
             <ExamPeriodToggle
               groupId={group.id}
               isOn={group.is_exam_period}
-              schools={memberSchools}
-              targetSchools={group.exam_target_schools ?? null}
+              scopes={memberScopes}
+              staleScopes={staleScopes}
+              targets={examTargets}
             />
           }
         />
@@ -416,8 +434,9 @@ export default async function GroupDetailPage({
                     <div className="mt-4 border-t border-dashed border-[#f0e2d8] pt-3">
                       <ExamTargetSchoolsSection
                         groupId={group.id}
-                        schools={memberSchools}
-                        targetSchools={group.exam_target_schools ?? null}
+                        scopes={memberScopes}
+                        staleScopes={staleScopes}
+                        targets={examTargets}
                       />
                     </div>
                     <div className="mt-4 border-t border-dashed border-[#f0e2d8] pt-3">

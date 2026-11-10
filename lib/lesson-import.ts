@@ -17,18 +17,21 @@ import { resolveDailyLogTaskDueDate } from "@/lib/daily-log-tasks";
 import type { ManualProgressItem } from "@/lib/manual-progress";
 import type { ProgressMode } from "@/lib/progress-mode";
 import { isExamTargetStudent } from "@/lib/progress-mode";
+import { parseScopeToken, scopeToken, targetMatchesStudent, type ExamTarget } from "@/lib/school-scope";
 
 export type ImportStatus = "importable" | "conflict" | "duplicate" | "incompatible";
 
 // ── 후보 — stable source identity를 가진다 (array index key 금지, 문자열 동일성으로 서로 다른 항목을 지우지 않는다) ──
 
 export type ImportPlanCandidate = {
-  id: string; // `${sourceLogId}:${kind}:${name}` — 표시/선택 key
+  id: string; // `${sourceLogId}:${kind}:${scope token|name}` — 표시/선택 key
   sourceLogId: string;
   sourceLessonDate: string; // source 일지의 lesson_date (KST date-only)
   targetDate: string | null; // 저장된 daily_logs.next_plan_date (legacy fallback은 null)
   kind: "school" | "textbook" | "memo";
   name: string;
+  // 학교 계획의 학년 scope (null = legacy 학년 미지정 — 학교 전체 기록)
+  grade?: string | null;
   text: string;
 };
 
@@ -40,6 +43,7 @@ export type ImportHomeworkCandidate = {
   content: string;
   textbook: string;
   school: string;
+  grade: string; // 학교 context의 학년 scope ("" = legacy 학교 전체)
   assignedStudentId: string | null;
   assignedStudentName: string | null;
 };
@@ -53,7 +57,23 @@ export type ImportTaskCandidate = {
   content: string;
   textbook: string;
   school: string;
+  grade: string; // 학교 context의 학년 scope ("" = legacy 학교 전체)
 };
+
+// 학교 context가 현재 폼에서 유효한지 — scope token 기준.
+//   학년 지정 기록 = 정확히 같은 (학교,학년) scope가 대상 목록에 있어야 한다
+//   legacy(학년 미지정) 기록 = 같은 학교 scope가 하나라도 있으면 유효
+//     (가져오면 학년 미지정 섹션으로 들어가고, 사용자가 [학년 지정]으로 직접 옮긴다)
+function scopeAvailable(school: string, grade: string | null, tokens: readonly string[]): boolean {
+  const token = scopeToken(school, grade);
+  if (tokens.includes(token)) {
+    return true;
+  }
+  if (grade !== null) {
+    return false;
+  }
+  return tokens.some((candidate) => parseScopeToken(candidate).school === school.trim());
+}
 
 export type LessonImportCandidates = {
   lessonDate: string;
@@ -76,7 +96,7 @@ export type PlanSourceRow = {
   class_date: string;
   next_plan_date: string | null;
   next_lesson_plan: string | null;
-  school_plans: { name: string; text: string }[] | null;
+  school_plans: { name: string; grade?: string | null; text: string }[] | null;
   textbook_plans: { name: string; text: string }[] | null;
 };
 
@@ -92,7 +112,14 @@ export function planCandidatesFromRow(row: PlanSourceRow): ImportPlanCandidate[]
   };
   const school = (row.school_plans ?? [])
     .filter((plan) => plan.text?.trim())
-    .map((plan) => ({ ...base, id: `${row.id}:school:${plan.name}`, kind: "school" as const, name: plan.name, text: plan.text }));
+    .map((plan) => ({
+      ...base,
+      id: `${row.id}:school:${scopeToken(plan.name, plan.grade ?? null)}`,
+      kind: "school" as const,
+      name: plan.name,
+      grade: plan.grade ?? null,
+      text: plan.text,
+    }));
   const textbook = (row.textbook_plans ?? [])
     .filter((plan) => plan.text?.trim())
     .map((plan) => ({ ...base, id: `${row.id}:textbook:${plan.name}`, kind: "textbook" as const, name: plan.name, text: plan.text }));
@@ -108,7 +135,7 @@ export type ProgressSourceRow = {
   default_progress: string | null;
   lesson_content: string | null;
   textbook_progress: { name: string; text: string }[] | null;
-  school_progress: { name: string; text: string }[] | null;
+  school_progress: { name: string; grade?: string | null; text: string }[] | null;
 };
 
 const LEGACY_PROGRESS_NAME = "지난 수업 진도 (자유 입력)";
@@ -124,7 +151,14 @@ export function progressCandidatesFromRow(row: ProgressSourceRow): ImportPlanCan
   const mirror = [buildTextbookSectionsText(textbooks), buildTextbookSectionsText(schools)].filter(Boolean).join("\n\n");
   const extra = stripDerivedPrefix(mergeLegacyLessonContent(row.default_progress, row.lesson_content), mirror).trim();
   return [
-    ...schools.map((item) => ({ ...base, id: `${row.id}:progress:school:${item.name}`, kind: "school" as const, name: item.name, text: item.text })),
+    ...schools.map((item) => ({
+      ...base,
+      id: `${row.id}:progress:school:${scopeToken(item.name, item.grade ?? null)}`,
+      kind: "school" as const,
+      name: item.name,
+      grade: item.grade ?? null,
+      text: item.text,
+    })),
     ...textbooks.map((item) => ({ ...base, id: `${row.id}:progress:textbook:${item.name}`, kind: "textbook" as const, name: item.name, text: item.text })),
     ...(extra ? [{ ...base, id: `${row.id}:progress:memo`, kind: "memo" as const, name: LEGACY_PROGRESS_NAME, text: extra }] : []),
   ];
@@ -162,6 +196,8 @@ export type HomeworkSourceRow = {
   content: string;
   textbook: string | null;
   school: string | null;
+  // 학교 context 학년 scope (migration 미적용 select("*")에는 없을 수 있음)
+  grade?: string | null;
   assigned_student_id: string | null;
   sort_order: number | null;
   due_date: string;
@@ -197,6 +233,7 @@ export function homeworkCandidatesFromRows(
           content: row.content,
           textbook: row.textbook ?? "",
           school: row.school ?? "",
+          grade: row.school ? row.grade ?? "" : "",
           assignedStudentId: row.assigned_student_id,
           assignedStudentName: linked?.name ?? null,
         },
@@ -210,7 +247,7 @@ export function homeworkCandidatesFromRows(
 export type TaskSourceRow = {
   id: string;
   class_date: string;
-  tasks: { id?: string; textbook?: string | null; school?: string | null; content?: string; dueDate?: string | null }[] | null;
+  tasks: { id?: string; textbook?: string | null; school?: string | null; grade?: string | null; content?: string; dueDate?: string | null }[] | null;
   task_content: string | null;
   task_due_date: string | null;
   task_textbook: string | null;
@@ -230,7 +267,7 @@ export function taskCandidatesFromRows(rows: readonly TaskSourceRow[], lessonDat
       row.tasks && row.tasks.length > 0
         ? row.tasks
         : row.task_content?.trim()
-          ? [{ id: "legacy", textbook: row.task_textbook, school: null, content: row.task_content, dueDate: row.task_due_date }]
+          ? [{ id: "legacy", textbook: row.task_textbook, school: null, grade: null, content: row.task_content, dueDate: row.task_due_date }]
           : [];
     items.forEach((item, index) => {
       const content = (item.content ?? "").trim();
@@ -252,6 +289,7 @@ export function taskCandidatesFromRows(rows: readonly TaskSourceRow[], lessonDat
           content: item.content ?? "",
           textbook: item.textbook ?? "",
           school: item.school ?? "",
+          grade: item.school ? item.grade ?? "" : "",
         },
         order: index,
       });
@@ -303,11 +341,12 @@ function contentStatus(current: string, text: string): { status: ImportStatus; r
 export function classifyPlanImports(input: {
   mode: ProgressMode;
   plans: readonly ImportPlanCandidate[];
-  activeTargetSchools: readonly string[];
-  memberSchools: readonly string[]; // legacy_exam 모드의 학교 입력 대상 (현재 학생 학교)
+  // 현재 폼의 시험 진도 입력 scope token(학교+학년) — mixed는 활성 target, legacy_exam은 현재 학생 조합
+  activeTargetTokens: readonly string[];
+  memberScopeTokens: readonly string[];
   regularTextbooks: readonly string[]; // 현재 그룹 일반 교재 (시험 대비용 교재 아님)
   canAddRegular: boolean; // mixed에서 일반 수업 학생 존재 여부
-  currentSchoolText: Readonly<Record<string, string>>;
+  currentSchoolText: Readonly<Record<string, string>>; // key = scope token
   currentTextbookText: Readonly<Record<string, string>>; // OFF는 map, mixed는 manual item 파생
   currentMemo: string; // 기타 진도 메모 (legacy raw의 canonical destination)
 }): ClassifiedPlan[] {
@@ -315,16 +354,20 @@ export function classifyPlanImports(input: {
     .filter((plan) => plan.text.trim())
     .map((plan) => {
       if (plan.kind === "school") {
+        const grade = plan.grade ?? null;
         if (input.mode === "regular") {
           return { ...plan, status: "incompatible" as const, reason: REASONS.examOff };
         }
-        if (input.mode === "mixed" && !input.activeTargetSchools.includes(plan.name)) {
+        if (input.mode === "mixed" && !scopeAvailable(plan.name, grade, input.activeTargetTokens)) {
           return { ...plan, status: "incompatible" as const, reason: REASONS.notTarget };
         }
-        if (input.mode === "legacy_exam" && !input.memberSchools.includes(plan.name)) {
+        if (input.mode === "legacy_exam" && !scopeAvailable(plan.name, grade, input.memberScopeTokens)) {
           return { ...plan, status: "incompatible" as const, reason: REASONS.notMemberSchool };
         }
-        return { ...plan, ...contentStatus(input.currentSchoolText[plan.name] ?? "", plan.text) };
+        return {
+          ...plan,
+          ...contentStatus(input.currentSchoolText[scopeToken(plan.name, grade)] ?? "", plan.text),
+        };
       }
       if (plan.kind === "textbook") {
         if (input.mode === "legacy_exam") {
@@ -371,14 +414,15 @@ export type ClassifiedHomework = ImportHomeworkCandidate & {
 export function classifyHomeworkImports(input: {
   mode: ProgressMode;
   entries: readonly ImportHomeworkCandidate[];
-  activeTargetSchools: readonly string[];
-  memberSchools: readonly string[];
+  activeTargetTokens: readonly string[];
+  memberScopeTokens: readonly string[];
   regularTextbooks: readonly string[];
-  targetSchools: readonly string[]; // 저장된 시험 대상 (학생 분류용)
-  students: readonly { studentId: string; name: string; school?: string | null }[];
+  targets: readonly ExamTarget[]; // 저장된 시험 대상 scope (학생 분류용)
+  students: readonly { studentId: string; name: string; school?: string | null; grade?: string | null }[];
   existing: readonly {
     content: string;
     school: string;
+    grade: string;
     textbook: string;
     assignedStudentId: string;
   }[];
@@ -387,32 +431,33 @@ export function classifyHomeworkImports(input: {
     .filter((entry) => entry.content.trim())
     .map((entry) => {
       const school = entry.school.trim();
+      const grade = school ? entry.grade || null : null;
       const textbook = entry.textbook.trim();
 
-      // context 유효성 (school↔textbook 변환/공통 강등 금지)
+      // context 유효성 (school↔textbook 변환/공통 강등 금지, 같은 학교 다른 학년 강제 매칭 금지)
       if (school) {
         if (input.mode === "regular") {
           return { ...entry, status: "incompatible" as const, reason: REASONS.examOff };
         }
-        if (input.mode === "mixed" && !input.activeTargetSchools.includes(school)) {
+        if (input.mode === "mixed" && !scopeAvailable(school, grade, input.activeTargetTokens)) {
           return { ...entry, status: "incompatible" as const, reason: REASONS.notTarget };
         }
-        if (input.mode === "legacy_exam" && !input.memberSchools.includes(school)) {
+        if (input.mode === "legacy_exam" && !scopeAvailable(school, grade, input.memberScopeTokens)) {
           return { ...entry, status: "incompatible" as const, reason: REASONS.notMemberSchool };
         }
       } else if (textbook && !input.regularTextbooks.includes(textbook)) {
         return { ...entry, status: "incompatible" as const, reason: REASONS.notRegularTextbook };
       }
 
-      // 대상 학생 — 이탈/학교 불일치면 자동 공통 변환 없이 제외 (다른 학생에게 leak 금지)
+      // 대상 학생 — 이탈/학교·학년 불일치면 자동 공통 변환 없이 제외 (다른 학생에게 leak 금지)
       if (entry.assignedStudentId) {
         const student = input.students.find((item) => item.studentId === entry.assignedStudentId);
         const validStudent =
           student &&
           (school
-            ? (student.school?.trim() ?? "") === school
+            ? targetMatchesStudent({ school, grade }, student)
             : input.mode === "mixed"
-              ? !isExamTargetStudent(student.school, input.targetSchools)
+              ? !isExamTargetStudent(student, input.targets)
               : true);
         if (!validStudent) {
           return { ...entry, status: "incompatible" as const, reason: REASONS.hwStudent };
@@ -423,6 +468,7 @@ export function classifyHomeworkImports(input: {
         (item) =>
           item.content.trim() === entry.content.trim() &&
           item.school.trim() === school &&
+          (item.school.trim() ? item.grade || "" : "") === (grade ?? "") &&
           item.textbook.trim() === textbook &&
           (item.assignedStudentId || "") === (entry.assignedStudentId ?? ""),
       );
@@ -442,24 +488,25 @@ export type ClassifiedTask = ImportTaskCandidate & {
 export function classifyTaskImports(input: {
   mode: ProgressMode;
   entries: readonly ImportTaskCandidate[];
-  activeTargetSchools: readonly string[];
-  memberSchools: readonly string[];
+  activeTargetTokens: readonly string[];
+  memberScopeTokens: readonly string[];
   regularTextbooks: readonly string[];
-  existing: readonly { content: string; school: string; textbook: string }[];
+  existing: readonly { content: string; school: string; grade: string; textbook: string }[];
 }): ClassifiedTask[] {
   return input.entries
     .filter((entry) => entry.content.trim())
     .map((entry) => {
       const school = entry.school.trim();
+      const grade = school ? entry.grade || null : null;
       const textbook = entry.textbook.trim();
       if (school) {
         if (input.mode === "regular") {
           return { ...entry, status: "incompatible" as const, reason: REASONS.examOff };
         }
-        if (input.mode === "mixed" && !input.activeTargetSchools.includes(school)) {
+        if (input.mode === "mixed" && !scopeAvailable(school, grade, input.activeTargetTokens)) {
           return { ...entry, status: "incompatible" as const, reason: REASONS.notTarget };
         }
-        if (input.mode === "legacy_exam" && !input.memberSchools.includes(school)) {
+        if (input.mode === "legacy_exam" && !scopeAvailable(school, grade, input.memberScopeTokens)) {
           return { ...entry, status: "incompatible" as const, reason: REASONS.notMemberSchool };
         }
       } else if (textbook && !input.regularTextbooks.includes(textbook)) {
@@ -469,6 +516,7 @@ export function classifyTaskImports(input: {
         (item) =>
           item.content.trim() === entry.content.trim() &&
           item.school.trim() === school &&
+          (item.school.trim() ? item.grade || "" : "") === (grade ?? "") &&
           item.textbook.trim() === textbook,
       );
       if (dup) {

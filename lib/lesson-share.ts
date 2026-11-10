@@ -1,5 +1,5 @@
 import { homeworkShareBlocks, type ShareableHomeworkItem } from "@/lib/homework-share";
-import { formatTextbookLinked } from "@/lib/textbooks";
+import { formatTextbookLinked, sectionDisplayName } from "@/lib/textbooks";
 
 // "수업 안내 공유" 텍스트 — source는 항상 현재 Daily Log 폼 state (DB 조회 아님).
 // 섹션 순서는 항상 진도 → 숙제 → 다음 계획 (체크 순서와 무관), 빈 섹션은 header째 제외.
@@ -11,15 +11,16 @@ export const LESSON_SHARE_TITLE = "📚 오늘 수업 안내";
 // schoolSections = 학교(시험) context, textbookSections = 교재 context,
 // extra = 기타 메모/legacy raw (mirror가 이미 제거된 값 — 문자열 parsing 금지, 그대로 출력).
 export type ShareContextSections = {
-  schoolSections: readonly { name: string; text: string }[];
+  schoolSections: readonly { name: string; grade?: string | null; text: string }[];
   textbookSections: readonly { name: string; text: string }[];
   extra: string;
 };
 
-const sectionLines = (sections: readonly { name: string; text: string }[]) =>
+// 학교 섹션은 학년까지 표시 ("가산중학교 · 중1 - 내용") — 같은 학교 다른 학년이 구분된다
+const sectionLines = (sections: readonly { name: string; grade?: string | null; text: string }[]) =>
   sections
     .filter((section) => section.text.trim())
-    .map((section) => formatTextbookLinked(section.name, section.text.trim()))
+    .map((section) => formatTextbookLinked(sectionDisplayName(section), section.text.trim()))
     .join("\n");
 
 // 학교+교재가 공존(mixed)하면 구획 라벨(시험 대비/일반 수업)로 구분하고,

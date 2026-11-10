@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { validateAssessmentInput } from "@/lib/assessments";
+import { gradeValues } from "@/lib/grades";
 
 const dateString = z
   .string()
@@ -64,6 +65,9 @@ export const studentLessonEntrySchema = z.object({
   effortLevel: z.enum(["high", "normal", "low"]).optional().or(z.literal("")),
 });
 
+// 학교 context의 학년 scope — students.grade enum 값만 허용 (빈 문자열 = legacy 전체)
+const schoolGradeField = z.enum(gradeValues).optional().or(z.literal(""));
+
 // 오늘 숙제(구조화) — 항목마다 내용+완료일 필수, 내용은 여러 줄 가능(trim은 가장자리만).
 // textbook: 연결 교재 이름 스냅샷 (선택 — "교재 없음"은 빈 문자열)
 export const homeworkAssignmentSchema = z.object({
@@ -77,6 +81,8 @@ export const homeworkAssignmentSchema = z.object({
   textbook: shortText(100, "숙제 교재"),
   // 시험 기간 ON 당시 학교 context (textbook과 배타적 — 폼이 한쪽만 채운다)
   school: shortText(100, "숙제 학교"),
+  // 학교 context의 학년 scope (school과 한 쌍 — 같은 학교 다른 학년 숙제를 구분)
+  grade: schoolGradeField,
   // 숙제 대상 학생 — 빈 문자열/null = 반 공통. 실제 소속 검증은 서버(save)에서 한다.
   assignedStudentId: z.string().uuid().nullable().optional().or(z.literal("")),
 });
@@ -87,11 +93,17 @@ export const textbookSectionSchema = z.object({
   text: z.string().trim().max(2000, "내용은 2000자 이내로 입력해주세요."),
 });
 
+// 학교 context 섹션 — name(학교 스냅샷) + grade(학년 scope, 빈 값 = legacy 전체)
+export const schoolSectionSchema = textbookSectionSchema.extend({
+  grade: schoolGradeField,
+});
+
 // 해야 할 일 항목 — stable id + 교재/날짜 optional, 내용 필수(빈 항목은 폼에서 제외)
 export const dailyLogTaskSchema = z.object({
   id: z.string().min(1),
   textbook: shortText(100, "해야 할 일 교재"),
   school: shortText(100, "해야 할 일 학교"),
+  grade: schoolGradeField,
   content: z
     .string()
     .trim()
@@ -123,9 +135,9 @@ export const dailyLogSchema = z
     // 교재별 진도/다음 수업 계획 스냅샷 (내용이 있는 교재만 전송)
     textbookProgress: z.array(textbookSectionSchema).max(20).optional(),
     textbookPlans: z.array(textbookSectionSchema).max(20).optional(),
-    // 학교 context 진도/다음 수업 계획 (시험 기간 ON — name=학교명)
-    schoolProgress: z.array(textbookSectionSchema).max(20).optional(),
-    schoolPlans: z.array(textbookSectionSchema).max(20).optional(),
+    // 학교 context 진도/다음 수업 계획 (시험 기간 ON — name=학교명, grade=학년 scope)
+    schoolProgress: z.array(schoolSectionSchema).max(40).optional(),
+    schoolPlans: z.array(schoolSectionSchema).max(40).optional(),
     // 오늘 시험 목록 (추가한 순서) — id는 stable (draft/저장/다시 열기에서 유지), category는 시험 종류일 뿐 identity 아님
     assessments: z
       .array(

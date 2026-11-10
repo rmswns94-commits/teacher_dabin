@@ -258,6 +258,8 @@ export function LessonLogDetail({
                 dueDate: hw.due_date,
                 textbook: hw.textbook,
                 school: hw.school,
+                // 저장 mirror가 학년 라벨까지 포함하므로 같은 기준으로 재구성해야 일치한다
+                grade: hw.grade ?? null,
                 assignedStudentName: hw.assignedStudentName,
               })),
             ) ? (

@@ -37,15 +37,26 @@ export function examDdayInfo(today: string, startDate: string, endDate: string):
   return { label: "종료", className: "bg-[#f4f4f6] text-[#8a8a93]", ended: true };
 }
 
-// Daily Log 시험 대비 미리보기용: 학교 하나의 "보여줄 시험" 선택.
+// Daily Log 시험 대비 미리보기용: scope(학교+학년) 하나의 "보여줄 시험" 선택.
 // - school_name 정확 일치만 (substring/fuzzy 금지 — Student.school과 같은 텍스트 도메인)
+// - grade가 지정된 scope면 exam.grade 정확 일치만 (같은 학교 다른 학년 시험은 절대 선택 금지)
+// - legacy scope(grade null)는 기존 동작 유지: 학교 일치 + Group 학년 우선 정렬
 // - 진행 중/다가오는 시험만 (end_date >= today) — 과거 시험을 임의로 선택하지 않는다
-// - 같은 학교에 여러 시험이면 Group 학년과 일치하는 시험 우선, 그다음 시작일이 가까운 순
 export function resolveExamForSchool<
   T extends { school_name: string; grade: string; event: { start_date: string; end_date: string } | null },
->(exams: T[], school: string, groupGrade: string | null | undefined, today: string): T | null {
+>(
+  exams: T[],
+  school: string,
+  grade: string | null,
+  groupGrade: string | null | undefined,
+  today: string,
+): T | null {
   const candidates = exams.filter(
-    (exam) => exam.event && exam.school_name === school && exam.event.end_date >= today,
+    (exam) =>
+      exam.event &&
+      exam.school_name === school &&
+      (grade === null || exam.grade === grade) &&
+      exam.event.end_date >= today,
   );
 
   candidates.sort((a, b) => {

@@ -1,7 +1,7 @@
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 import { getCompletedAssessmentHistory } from "@/lib/supabase/queries/growth-notes";
 import { vocabularyTestsOf, type VocabularyTest } from "@/lib/vocabulary-streak";
-import type { TextbookSection } from "@/lib/textbooks";
+import type { ContextSection, TextbookSection } from "@/lib/textbooks";
 import type {
   AttendanceStatus,
   HomeworkStatus,
@@ -28,7 +28,8 @@ export type BriefingLastLog = {
   class_date: string;
   next_lesson_plan: string | null;
   textbook_plans: TextbookSection[] | null;
-  school_plans: TextbookSection[] | null;
+  // 학교 계획 — grade(학년 scope) 포함 스냅샷 (없으면 legacy 학교 전체)
+  school_plans: ContextSection[] | null;
   homeworkAssignments: BriefingHomework[];
   homework: string | null;
   vocab_total: number | null;
@@ -42,6 +43,8 @@ export type BriefingHomework = {
   sort_order: number;
   textbook: string | null;
   school: string | null;
+  // 학교 context 학년 scope (migration 미적용이면 없음 — legacy 학교 전체)
+  grade?: string | null;
   // 학생별 적용 판정용 (null = 공통) — 이름 문자열이 아니라 id로 매칭한다
   assigned_student_id: string | null;
   assignedStudentName: string | null;
@@ -173,7 +176,7 @@ export async function getGroupsBriefingData(
         supabase
           .from("daily_logs")
           .select(
-            "id, class_date, next_lesson_plan, textbook_plans, school_plans, homework, vocab_total, student_lesson_logs(student_id, attendance, homework_status, vocab_correct, vocab_retest, online_review_completed), daily_log_homework_assignments(id, content, due_date, sort_order, textbook, school, assigned_student_id, assigned_student:students(name))",
+            "id, class_date, next_lesson_plan, textbook_plans, school_plans, homework, vocab_total, student_lesson_logs(student_id, attendance, homework_status, vocab_correct, vocab_retest, online_review_completed), daily_log_homework_assignments(*, assigned_student:students(name))",
           )
           .eq("user_id", user.id)
           .eq("group_id", groupId)

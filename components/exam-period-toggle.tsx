@@ -4,26 +4,30 @@ import { GraduationCap } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { setExamPeriodAction, startExamPeriodAction } from "@/app/groups/actions";
-import { SchoolSelectDialog } from "@/components/exam-target-schools";
+import { SchoolSelectDialog, type ExamScopeOption } from "@/components/exam-target-schools";
 import { Button } from "@/components/ui/button";
+import type { ExamTarget } from "@/lib/school-scope";
 
 // 그룹 상세 우측 상단의 시험 기간 ON/OFF toggle.
-// OFF → ON: 즉시 켜지 않고 "이번 시험 대상 학교" 선택 다이얼로그를 먼저 연다 —
-//   [시험 대비 시작]을 눌러야 대상 학교 저장 + ON이 한 번의 UPDATE로 함께 적용된다(취소 = 무변화).
+// OFF → ON: 즉시 켜지 않고 "이번 시험 대상(학교·학년)" 선택 다이얼로그를 먼저 연다 —
+//   [시험 대비 시작]을 눌러야 대상 저장 + ON이 한 번의 UPDATE로 함께 적용된다(취소 = 무변화).
 // ON → OFF: 기존 "시험이 잘 끝나셨나요?" 확인 유지. 끄는 동작은 is_exam_period만 false —
-//   시험 대상 학교/시험 대비용 교재/일지 등 어떤 데이터도 지우지 않는다 (재활성화 때 prefill).
+//   시험 대상/시험 대비용 교재/일지 등 어떤 데이터도 지우지 않는다 (재활성화 때 prefill).
 export function ExamPeriodToggle({
   groupId,
   isOn,
-  schools,
-  targetSchools,
+  scopes,
+  staleScopes,
+  targets,
 }: {
   groupId: string;
   isOn: boolean;
-  // 현재 그룹 학생들의 학교 (page가 이미 조회한 멤버에서 유도 — 추가 쿼리 없음)
-  schools: string[];
-  // 저장된 시험 대상 학교 (null = 아직 설정 안 함)
-  targetSchools: string[] | null;
+  // 현재 그룹 학생들의 학교·학년 조합 (page가 이미 조회한 멤버에서 유도 — 추가 쿼리 없음)
+  scopes: ExamScopeOption[];
+  // 저장돼 있지만 현재 매칭 학생이 0명인 target (legacy 전체 scope 포함)
+  staleScopes: ExamScopeOption[];
+  // 저장된 시험 대상 scope (null = 아직 설정 안 함)
+  targets: ExamTarget[] | null;
 }) {
   const [error, setError] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -31,16 +35,15 @@ export function ExamPeriodToggle({
   const [isPending, startTransition] = useTransition();
 
   // 시작 다이얼로그 prefill: 저장된 선택이 있으면 그대로(이번 시험 기준으로 확인만),
-  // 없고 학교가 정확히 1개면 그 학교를 기본 체크 (저장은 [시험 대비 시작]을 눌러야).
-  const staleTargets = (targetSchools ?? []).filter((name) => !schools.includes(name));
-  const startInitial =
-    targetSchools && targetSchools.length > 0
-      ? targetSchools
-      : schools.length === 1
-        ? [schools[0]]
+  // 없고 scope가 정확히 1개면 그 scope를 기본 체크 (저장은 [시험 대비 시작]을 눌러야).
+  const startInitial: ExamTarget[] =
+    targets && targets.length > 0
+      ? targets
+      : scopes.length === 1
+        ? [{ school: scopes[0].school, grade: scopes[0].grade }]
         : [];
 
-  const startExam = (selected: string[]) => {
+  const startExam = (selected: ExamTarget[]) => {
     if (isPending) {
       return;
     }
@@ -109,10 +112,10 @@ export function ExamPeriodToggle({
       {startOpen ? (
         <SchoolSelectDialog
           title="시험 대비를 시작할까요?"
-          helper="이번 시험을 준비하는 학교를 선택해주세요."
+          helper="이번 시험을 준비하는 학교·학년을 선택해주세요."
           confirmLabel="시험 대비 시작"
-          schools={schools}
-          staleTargets={staleTargets}
+          scopes={scopes}
+          staleScopes={staleScopes}
           initialSelected={startInitial}
           pending={isPending}
           error={error}

@@ -70,6 +70,7 @@ function homeworkOf(row: {
   due_date: string;
   textbook: string | null;
   school: string | null;
+  grade?: string | null;
   assigned_student_id: string | null;
   completed: boolean;
   completed_at: string | null;
@@ -78,7 +79,7 @@ function homeworkOf(row: {
     id: row.id,
     content: row.content,
     dueDate: row.due_date,
-    contextLabel: linkedContextLabel({ textbook: row.textbook, school: row.school }),
+    contextLabel: linkedContextLabel({ textbook: row.textbook, school: row.school, grade: row.grade }),
     audienceLabel: row.assigned_student_id ? studentName : "공통",
     completed: row.completed,
     completedDate: row.completed_at ? kstDateAndTime(row.completed_at).date : null,

@@ -1,7 +1,15 @@
-import { buildTextbookSectionsText, formatTextbookLinked, stripDerivedPrefix, type TextbookSection } from "@/lib/textbooks";
+import {
+  buildTextbookSectionsText,
+  formatTextbookLinked,
+  sectionDisplayName,
+  stripDerivedPrefix,
+  type ContextSection,
+  type TextbookSection,
+} from "@/lib/textbooks";
 
 // Read model only: saved fields determine context, never today's group settings.
-export type SavedContext = { school?: string | null; textbook?: string | null };
+// grade: 학교 context의 학년 scope 스냅샷 (없으면 legacy 학교 전체 — 현재 학년으로 추측 표시 금지)
+export type SavedContext = { school?: string | null; grade?: string | null; textbook?: string | null };
 
 export function groupMixedContextsForDisplay<T extends SavedContext>(items: readonly T[]) {
   const school: T[] = [];
@@ -21,14 +29,19 @@ export function groupMixedContextsForDisplay<T extends SavedContext>(items: read
 }
 
 export function savedSectionsForDisplay({ school, textbook, raw }: {
-  school?: TextbookSection[] | null;
+  school?: ContextSection[] | null;
   textbook?: TextbookSection[] | null;
   raw?: string | null;
 }) {
   const schools = (school ?? []).filter((item) => item.text.trim());
   const textbooks = (textbook ?? []).filter((item) => item.text.trim());
   const entries = [
-    ...schools.map((item, index) => ({ id: `school-${index}`, school: item.name, text: item.text })),
+    ...schools.map((item, index) => ({
+      id: `school-${index}`,
+      school: item.name,
+      grade: item.grade ?? null,
+      text: item.text,
+    })),
     ...textbooks.map((item, index) => ({ id: `textbook-${index}`, textbook: item.name, text: item.text })),
   ];
   // Strip only the exact deterministic mirror; never parse labels out of legacy text.
@@ -42,7 +55,10 @@ export function formatMixedProgressForExcel(input: Parameters<typeof savedSectio
   if (!entries.length) return input.raw ?? "";
   const groups = groupMixedContextsForDisplay(entries);
   const blocks = groups.map((group) => `[${group.label}]\n${group.items.map((item) =>
-    formatTextbookLinked("school" in item ? item.school : item.textbook, item.text),
+    formatTextbookLinked(
+      "school" in item ? sectionDisplayName({ name: item.school, grade: item.grade }) : item.textbook,
+      item.text,
+    ),
   ).join("\n")}`);
   if (extra) blocks.push(extra);
   return blocks.join("\n\n");

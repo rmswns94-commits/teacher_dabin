@@ -12,6 +12,7 @@ export type MultiAssignHomeworkItem = {
   dueDate: string;
   textbook: string;
   school: string;
+  grade: string;
   assignedStudentId: string;
   section?: "exam" | "regular";
 };
@@ -23,6 +24,8 @@ export function buildStudentHomeworkItems(input: {
   dueDate: string;
   textbook: string;
   school: string;
+  // 학교 context의 학년 scope ("" = legacy 학교 전체) — 생략 시 ""
+  grade?: string;
   section?: "exam" | "regular";
   // 테스트 주입용 — 실제 호출은 기존 항목과 동일하게 crypto.randomUUID
   createId?: () => string;
@@ -35,6 +38,7 @@ export function buildStudentHomeworkItems(input: {
     dueDate: input.dueDate,
     textbook: input.textbook,
     school: input.school,
+    grade: input.grade ?? "",
     assignedStudentId: studentId,
     ...(input.section ? { section: input.section } : {}),
   }));

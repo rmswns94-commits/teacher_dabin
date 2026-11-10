@@ -1,3 +1,5 @@
+import { formatGrade } from "@/lib/grades";
+
 // 교재 연동 공용 헬퍼.
 // 이 앱의 교재 canonical 저장소는 class_groups.textbook(줄바꿈 구분 이름 목록)이며
 // 별도 id 체계가 없다 — 교재 identity는 "작성 시점 이름 스냅샷"이다:
@@ -6,6 +8,18 @@
 //  - 표시할 때는 항상 "교재명 - 내용" 형식으로 합성한다 (합성 문자열을 저장 소스로 쓰지 않음).
 
 export type TextbookSection = { name: string; text: string };
+
+// 학교 context 섹션 — name(학교 스냅샷)과 grade(학년 enum 값)를 분리 저장한다.
+// grade 없는 항목은 legacy "학교 전체" 기록으로 읽는다 (현재 학생 학년으로 추측 금지).
+export type ContextSection = TextbookSection & { grade?: string | null };
+
+// 섹션 표시 이름 — 교재는 name 그대로, 학교+학년 섹션은 "학교 · 중1"로 합성한다.
+// (합성 문자열은 표시/mirror 전용 — 저장 identity는 분리된 name/grade 필드)
+export function sectionDisplayName(section: { name: string; grade?: string | null }): string {
+  return section.grade
+    ? `${section.name.trim()} · ${formatGrade(section.grade)}`
+    : section.name.trim();
+}
 
 // class_groups.textbook → 이름 목록 (그룹 상세/일지 폼과 동일 파싱, 중복 이름은 하나로)
 export function parseGroupTextbooks(raw: string | null | undefined): string[] {
@@ -50,8 +64,18 @@ export function uniqueSchoolList(values: (string | null | undefined)[]): string[
 export function linkedContextLabel(item: {
   textbook?: string | null;
   school?: string | null;
+  grade?: string | null;
 }): string | null {
-  return item.textbook?.trim() || item.school?.trim() || null;
+  const textbook = item.textbook?.trim();
+  if (textbook) {
+    return textbook;
+  }
+  const school = item.school?.trim();
+  if (!school) {
+    return null;
+  }
+  // 학교+학년 scope 항목은 학년까지 표시 — 같은 학교 다른 학년 항목이 구분된다
+  return sectionDisplayName({ name: school, grade: item.grade ?? null });
 }
 
 // 교재별 섹션들 → 파생 mirror 텍스트. 내용이 있는 교재만, 블록 사이 빈 줄 구분.
@@ -60,10 +84,10 @@ export function linkedContextLabel(item: {
 //
 //   백발백중 중2 - 5과 문법
 // 기존 free-text 소비처(전체 학생 적용/Excel/브리핑/지난 계획 카드)가 이 텍스트를 그대로 쓴다.
-export function buildTextbookSectionsText(sections: TextbookSection[]): string {
+export function buildTextbookSectionsText(sections: ContextSection[]): string {
   return sections
     .filter((section) => section.text.trim())
-    .map((section) => formatTextbookLinked(section.name, section.text.trim()))
+    .map((section) => formatTextbookLinked(sectionDisplayName(section), section.text.trim()))
     .join("\n\n");
 }
 

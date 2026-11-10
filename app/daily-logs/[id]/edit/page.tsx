@@ -15,6 +15,7 @@ import { vocabularyStreakBefore, vocabularyTestsOf } from "@/lib/vocabulary-stre
 import { getCompletedAssessmentHistory } from "@/lib/supabase/queries/growth-notes";
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import { buildTextbookSectionsText, stripDerivedPrefix, uniqueSchoolList } from "@/lib/textbooks";
+import { activeTargetScopes } from "@/lib/progress-mode";
 import { getDailyLogDraft } from "@/lib/supabase/queries/daily-log-drafts";
 import {
   getDailyLogDetailForCurrentUser,
@@ -23,7 +24,7 @@ import {
   getPreviousReflectionNext,
   getPreviousStudentEvaluations,
 } from "@/lib/supabase/queries/daily-logs";
-import { getCurrentUserGroups, getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
+import { getCurrentUserGroups, getGroupExamTargets, getGroupStudentsForCurrentUser } from "@/lib/supabase/queries/groups";
 import { buildScheduleExceptionIndex } from "@/lib/schedule-exceptions";
 import { getAcademyClosuresInRange } from "@/lib/supabase/queries/academy-closures";
 import { getKoreanHolidaysInRange } from "@/lib/korean-holidays";
@@ -221,19 +222,17 @@ export default async function EditDailyLogPage({
   // 현재 그룹 학생 학교 기준. 저장된 일지 데이터는 어떤 것도 변환/복제하지 않는다)
   // PHASE 2: 시험 대상 학교가 설정된 그룹은 대상 학교만 미리보기에 표시
   // (legacy null은 기존대로 전체 — 자동 mixed 전환 없음)
-  const memberSchools = uniqueSchoolList(
-    currentMembers.filter((member) => !member.archived).map((member) => member.school),
-  );
-  const editTargetSet = new Set(
-    (log.group?.exam_target_schools ?? []).map((name) => name.trim()),
-  );
-  const examPreviewSchools =
-    log.group?.exam_target_schools == null
-      ? memberSchools
-      : memberSchools.filter((school) => editTargetSet.has(school.trim()));
+  const activeEditMembers = currentMembers.filter((member) => !member.archived);
+  const memberSchools = uniqueSchoolList(activeEditMembers.map((member) => member.school));
+  // 시험 대상 scope(학교+학년) — exam_targets 우선, legacy는 학교 전체 (migration 미적용 내성)
+  const examTargets = log.group?.is_exam_period ? await getGroupExamTargets(log.group_id) : null;
+  const examPreviewScopes =
+    examTargets === null
+      ? memberSchools.map((school) => ({ school, grade: null }))
+      : activeTargetScopes(examTargets, activeEditMembers);
   const examPreviewEntries =
-    log.group?.is_exam_period && examPreviewSchools.length > 0
-      ? await getDailyLogExamPreviewEntries(examPreviewSchools, log.group?.grade, todayDateString())
+    log.group?.is_exam_period && examPreviewScopes.length > 0
+      ? await getDailyLogExamPreviewEntries(examPreviewScopes, log.group?.grade, todayDateString())
       : [];
 
   return (
@@ -328,6 +327,7 @@ export default async function EditDailyLogPage({
             dueDate: hw.due_date,
             textbook: hw.textbook ?? "",
             school: hw.school ?? "",
+            grade: hw.grade ?? "",
             // 저장된 대상(null=공통) 그대로 복원 — 그룹에서 빠진 학생이어도 공통으로 바꾸지 않는다
             assignedStudentId: hw.assigned_student_id ?? "",
             assignedStudentName: hw.assignedStudentName,
@@ -336,9 +336,9 @@ export default async function EditDailyLogPage({
           // 학교 목록 source = 이 그룹 소속 학생들의 students.school (이미 조회한 멤버 재사용)
           examPeriod={log.group?.is_exam_period ?? false}
           schools={memberSchools}
-          // PHASE 2 혼합 진도 — 그룹의 시험 대상 학교 설정 (null = legacy, 기존 방식 유지).
+          // 혼합 진도 — 그룹의 시험 대상 scope(학교+학년) 설정 (null = legacy, 기존 방식 유지).
           // 기존 저장 항목은 저장 필드가 identity라 설정과 무관하게 그대로 hydrate/보존된다.
-          examTargetSchools={log.group?.exam_target_schools ?? null}
+          examTargets={examTargets}
           // [지난 수업에서 가져오기] 후보는 폼이 다이얼로그를 열 때 (group, 이 일지 class_date) 기준으로 조회한다
           // (자기 자신은 lt 조건으로 자연 제외 — Finalized Edit에서도 안전)
           // 학생 평가 카드 "지난 수업 참고" (read-only — 오늘 평가로 복사하지 않음)
