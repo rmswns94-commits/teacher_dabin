@@ -16,6 +16,7 @@ import { getCompletedAssessmentHistory } from "@/lib/supabase/queries/growth-not
 import { mergeLegacyLessonContent } from "@/lib/progress";
 import { buildTextbookSectionsText, stripDerivedPrefix, uniqueSchoolList } from "@/lib/textbooks";
 import { activeTargetScopes } from "@/lib/progress-mode";
+import { uniqueSchoolGradeScopes } from "@/lib/school-scope";
 import { getDailyLogDraft } from "@/lib/supabase/queries/daily-log-drafts";
 import {
   getDailyLogDetailForCurrentUser,
@@ -226,9 +227,10 @@ export default async function EditDailyLogPage({
   const memberSchools = uniqueSchoolList(activeEditMembers.map((member) => member.school));
   // 시험 대상 scope(학교+학년) — exam_targets 우선, legacy는 학교 전체 (migration 미적용 내성)
   const examTargets = log.group?.is_exam_period ? await getGroupExamTargets(log.group_id) : null;
+  // 표시 단위는 항상 학교+학년 (학교 전체 target은 현재 학생 학년별로 펼침)
   const examPreviewScopes =
     examTargets === null
-      ? memberSchools.map((school) => ({ school, grade: null }))
+      ? uniqueSchoolGradeScopes(activeEditMembers)
       : activeTargetScopes(examTargets, activeEditMembers);
   const examPreviewEntries =
     log.group?.is_exam_period && examPreviewScopes.length > 0

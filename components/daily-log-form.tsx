@@ -1969,7 +1969,8 @@ export function DailyLogForm({
   // 같은 학교의 여러 학년은 각각 독립 항목이다 (학교만으로 dedupe 금지).
   const memberScopeTokens = uniqueSchoolGradeScopes(currentHomeworkStudents).map(examTargetToken);
   // 시험 진도 입력 대상 = 저장된 target 중 현재 매칭 학생이 있는 scope (학생 0명 stale 제외
-  // — 설정 자체는 삭제하지 않는다, 관리는 그룹 상세에서)
+  // — 설정 자체는 삭제하지 않는다, 관리는 그룹 상세에서). 학교 전체(legacy) target은 현재
+  // 학생 학년별로 펼쳐 입력/선택지에 항상 학년이 보인다 (저장된 설정은 그대로).
   const examInputTokens = activeTargetScopes(progressTargets, currentHomeworkStudents).map(
     examTargetToken,
   );

@@ -11,7 +11,13 @@
 // legacy target(grade null)은 "그 학교 전 학년" 의미로만 읽는다 — 자동 학년 부여 금지.
 // 학교 미등록 학생은 어떤 target과도 매칭될 수 없으므로 항상 일반 수업(regular) 측이다.
 
-import { compareExamTargets, targetMatchesStudent, type ExamTarget } from "@/lib/school-scope";
+import {
+  compareExamTargets,
+  examTargetToken,
+  targetMatchesStudent,
+  uniqueSchoolGradeScopes,
+  type ExamTarget,
+} from "@/lib/school-scope";
 import {
   buildTextbookSectionsText,
   formatTextbookLinked,
@@ -63,17 +69,34 @@ export function classifyStudentsByExamTarget<T extends ScopedStudent>(
   return { examStudents, regularStudents };
 }
 
-// 신규 일지의 시험 진도 입력에 표시할 scope = 저장된 target 중 "현재 매칭 학생이 있는" 것만.
+// 일지의 시험 입력/미리보기에 표시할 scope = 저장된 target을 현재 학생의 (학교, 학년)으로 펼친 것.
+//   학년 target       → 현재 매칭 학생이 있으면 그대로
+//   legacy(학교 전체) → 그 학교 현재 학생들의 학년별 scope. "전 학년" 의미를 화면에서만
+//                       학년별로 나눠 보여줄 뿐 — 저장된 설정을 바꾸거나 학년을 추측해 채우지 않는다.
 // 학생 0명인 stale target은 입력에서 제외된다 (저장된 설정 자체는 삭제하지 않는다 —
-// 관리 UI는 그룹 상세). 정렬: 학교 가나다 → 전체(legacy) → 학년 순.
+// 관리 UI는 그룹 상세). 정렬: 학교 가나다 → 학년 순.
 export function activeTargetScopes(
   targets: readonly ExamTarget[],
   students: readonly ScopedStudent[],
 ): ExamTarget[] {
-  return targets
-    .filter((target) => students.some((student) => targetMatchesStudent(target, student)))
-    .slice()
-    .sort(compareExamTargets);
+  const seen = new Set<string>();
+  const scopes: ExamTarget[] = [];
+  for (const target of targets) {
+    const matched = studentsOfScope(students, target);
+    if (matched.length === 0) {
+      continue;
+    }
+    const gradeScopes = target.grade === null ? uniqueSchoolGradeScopes(matched) : [target];
+    // 학년 없는 학생만 매칭된 legacy target은 학교 전체 scope 그대로 (grade NOT NULL — 방어용)
+    for (const scope of gradeScopes.length > 0 ? gradeScopes : [target]) {
+      const key = examTargetToken(scope);
+      if (!seen.has(key)) {
+        seen.add(key);
+        scopes.push(scope);
+      }
+    }
+  }
+  return scopes.sort(compareExamTargets);
 }
 
 // 한 scope의 현재 학생만 — 학교 trim 정확 일치 + 학년 일치(legacy는 전 학년)

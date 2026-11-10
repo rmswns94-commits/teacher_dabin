@@ -16,7 +16,7 @@ import { sortByKoreanName } from "@/lib/korean-sort";
 import { vocabularyStreakBefore, vocabularyTestsOf } from "@/lib/vocabulary-streak";
 import { getCompletedAssessmentHistory } from "@/lib/supabase/queries/growth-notes";
 import { uniqueSchoolList } from "@/lib/textbooks";
-import { normalizeExamTargets } from "@/lib/school-scope";
+import { normalizeExamTargets, uniqueSchoolGradeScopes } from "@/lib/school-scope";
 import { activeTargetScopes } from "@/lib/progress-mode";
 import {
   getActiveDraftResumeTarget,
@@ -130,15 +130,16 @@ export default async function NewDailyLogPage({
   // PHASE 2: 시험 대상 학교가 설정된 그룹은 대상 학교만 미리보기에 표시한다
   // (시험을 안 보는 학교는 제외 — 데이터/저장은 불변, 표시 필터만).
   // legacy(exam_target_schools null)는 기존대로 학생 학교 전체.
+  // 표시 단위는 항상 학교+학년 — 학년별 시험을 정확히 고르고 선택지에 학년이 보이도록.
   const activeGroupMembers = groupStudentsRaw.filter((student) => !student.archived);
   const memberSchoolList = uniqueSchoolList(activeGroupMembers.map((student) => student.school));
   // 시험 대상 scope(학교+학년) — exam_targets 우선, legacy exam_target_schools는 전체 scope
   const examTargets = selectedGroup ? normalizeExamTargets(selectedGroup) : null;
   const examPreviewScopes = selectedGroup?.is_exam_period
     ? examTargets === null
-      ? // legacy 미설정: 기존대로 학생 학교 전체 (학교 단위 — 자동 학년 부여 없음)
-        memberSchoolList.map((school) => ({ school, grade: null }))
-      : // mixed: 현재 매칭 학생이 있는 대상 scope만 (같은 학교 여러 학년 = 여러 항목)
+      ? // legacy 미설정: 학생 학교 전체를 현재 학생의 (학교, 학년)별로
+        uniqueSchoolGradeScopes(activeGroupMembers)
+      : // mixed: 현재 매칭 학생이 있는 대상 scope만 (학교 전체 target은 학년별로 펼침)
         activeTargetScopes(examTargets, activeGroupMembers)
     : [];
   // 시험 선택/D-day 기준은 오늘(KST) — "지금 곧 있을 시험"을 참고하는 기능이라
