@@ -93,7 +93,9 @@ export type CompletedMakeupForExport = {
 
 // 보충 수업 Excel 내보내기용 — completed만 (required/scheduled/cancelled 제외).
 // 학생/그룹 relation embed 쿼리 1번 (Excel row 수와 무관 — N+1 금지). read-only.
-export async function getCompletedMakeupsForExport() {
+// completedRange가 있으면 실제 보충 진행일(completed_date, date-only KST)이 그 기간인 것만 —
+// 월간 export도 같은 1쿼리에 기간 조건만 더한다 (날짜별 반복 조회 금지).
+export async function getCompletedMakeupsForExport(completedRange?: { start: string; end: string }) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
@@ -101,27 +103,30 @@ export async function getCompletedMakeupsForExport() {
     return [] as CompletedMakeupForExport[];
   }
 
-  const primary = await supabase
-    .from("makeup_lessons")
-    .select(
-      "id, source, completed_date, original_class_date, missed_progress, completed_progress, start_time, end_time, students(name), direct_group:class_groups!makeup_lessons_group_id_fkey(id), student_lesson_logs(daily_logs(group_id))",
-    )
-    .eq("user_id", user.id)
-    .eq("status", "completed");
+  const query = (columns: string) => {
+    const base = supabase
+      .from("makeup_lessons")
+      .select(columns)
+      .eq("user_id", user.id)
+      .eq("status", "completed");
+    return completedRange
+      ? base.gte("completed_date", completedRange.start).lte("completed_date", completedRange.end)
+      : base;
+  };
 
-  let data: Record<string, unknown>[] | null = primary.data;
+  const primary = await query(
+    "id, source, completed_date, original_class_date, missed_progress, completed_progress, start_time, end_time, students(name), direct_group:class_groups!makeup_lessons_group_id_fkey(id), student_lesson_logs(daily_logs(group_id))",
+  );
+
+  let data = primary.data as Record<string, unknown>[] | null;
   let error = primary.error;
 
   if (error && SCHEMA_MISMATCH_CODES.has(error.code ?? "")) {
     // 직접 등록 migration 적용 전 legacy 모양 재시도 (결석 연동 보충만 존재하는 계정)
-    const fallback = await supabase
-      .from("makeup_lessons")
-      .select(
-        "id, completed_date, original_class_date, missed_progress, completed_progress, start_time, end_time, students(name), student_lesson_logs(daily_logs(group_id))",
-      )
-      .eq("user_id", user.id)
-      .eq("status", "completed");
-    data = fallback.data;
+    const fallback = await query(
+      "id, completed_date, original_class_date, missed_progress, completed_progress, start_time, end_time, students(name), student_lesson_logs(daily_logs(group_id))",
+    );
+    data = fallback.data as Record<string, unknown>[] | null;
     error = fallback.error;
   }
 

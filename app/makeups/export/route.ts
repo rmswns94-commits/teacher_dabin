@@ -1,26 +1,24 @@
-import { NextResponse } from "next/server";
-
-import { dayOfWeekOf } from "@/lib/calendar";
-import { fillMakeupTemplate, type MakeupExportRow } from "@/lib/excel/makeup-export";
-import { formatTimeRange, type ScheduleSlot } from "@/lib/schedule";
+import { monthLabel, monthRange } from "@/lib/calendar";
+import { fillMakeupTemplate } from "@/lib/excel/makeup-export";
+import { buildMakeupExportRows } from "@/lib/excel/makeup-rows";
+import { monthlySheetName } from "@/lib/excel/print-layout";
+import {
+  excelErrorResponse as errorResponse,
+  MONTH_PARAM_PATTERN,
+  monthlyExportFilename,
+  xlsxDownloadResponse,
+} from "@/lib/excel/xlsx-response";
 import { getCompletedMakeupsForExport } from "@/lib/supabase/queries/makeups";
 import { getCurrentUserSchedulesWithGroup } from "@/lib/supabase/queries/schedules";
 import { createServerSupabaseClient, getServerUser } from "@/lib/supabase/server";
 
 // 보충 수업 Excel 내보내기 — 기존 양식("보충 수업.xlsx") template에 값만 채운다.
-// - 대상: status = completed 만 (required/scheduled/cancelled 제외) — 전체 완료 history
-// - Excel row 1개 = 완료된 makeup record 1개 (학생 이름 기준 merge 없음)
-// - 날짜 = completed_date(실제 보충 진행일, date-only KST) / 결석일 = original_class_date
-//   (결석 연동 보충의 원래 수업 lesson_date snapshot — 직접 등록 보충은 결석이 아니므로 공란)
-// - 수업시간 = 해당 보충이 연결된 원래 그룹 시간표에서 "결석일 요일"과 일치하는 slot
-//   (직접 등록 보충은 등록된 보충 시간 자체를 사용)
-// - 보충 내용 = 결석 당시 snapshot(missed_progress) 우선, 없으면 실제 보충한 내용
+// - 대상: status = completed 만 (required/scheduled/cancelled 제외)
+// - (파라미터 없음) 전체 완료 history — 기존 동작
+// - ?month=YYYY-MM  그 달(KST 달력 월)에 실제로 보충한(completed_date) 기록만 — 월간 파일
+// 행 조립/정렬은 두 경우 모두 lib/excel/makeup-rows (같은 기록 = 같은 행).
 // - read-only: 어떤 makeup/attendance/daily log row도 수정하지 않는다
-function errorResponse(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status });
-}
-
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
   const user = await getServerUser();
 
@@ -28,11 +26,17 @@ export async function GET() {
     return errorResponse("로그인이 필요합니다.", 401);
   }
 
+  const month = new URL(request.url).searchParams.get("month");
+
+  if (month !== null && !MONTH_PARAM_PATTERN.test(month)) {
+    return errorResponse("내보낼 달을 확인해주세요.");
+  }
+
   let makeups;
   let schedules;
   try {
     [makeups, schedules] = await Promise.all([
-      getCompletedMakeupsForExport(),
+      getCompletedMakeupsForExport(month ? monthRange(month) : undefined),
       getCurrentUserSchedulesWithGroup(),
     ]);
   } catch (error) {
@@ -41,61 +45,23 @@ export async function GET() {
   }
 
   if (makeups.length === 0) {
-    return errorResponse("내보낼 완료된 보충 수업이 없어요.");
+    return errorResponse(
+      month
+        ? `${monthLabel(month)}에는 내보낼 완료된 보충 수업이 없어요.`
+        : "내보낼 완료된 보충 수업이 없어요.",
+    );
   }
 
-  // 그룹별 시간표 map — 요일 매칭용 (전체 시간표 1쿼리, 보충 건수와 무관)
-  const slotsByGroup = new Map<string, Pick<ScheduleSlot, "day_of_week" | "start_time" | "end_time">[]>();
-  for (const slot of schedules) {
-    slotsByGroup.set(slot.group_id, [...(slotsByGroup.get(slot.group_id) ?? []), slot]);
-  }
-
-  const rows: MakeupExportRow[] = makeups.map((makeup) => {
-    let timeLabel = "";
-    let absenceDate = "";
-
-    if (makeup.source === "manual") {
-      // 직접 등록 보충: 결석 연동이 없어 "원래 수업" 개념이 없다 —
-      // 결석일은 공란(보드와 동일 정책), 수업시간은 등록된 보충 시간 자체.
-      if (makeup.start_time && makeup.end_time) {
-        timeLabel = formatTimeRange(makeup.start_time, makeup.end_time);
-      }
-    } else {
-      absenceDate = makeup.original_class_date ?? "";
-      if (makeup.groupId && absenceDate) {
-        // 결석일 요일과 일치하는 그 그룹의 schedule slot (요일별 시간이 달라도 정확히).
-        // 같은 요일 slot이 여러 개면 전부 표기. 시간표가 바뀌어 일치 요일이 없으면 공란.
-        const dow = dayOfWeekOf(absenceDate);
-        const matched = (slotsByGroup.get(makeup.groupId) ?? [])
-          .filter((slot) => slot.day_of_week === dow)
-          .sort((a, b) => a.start_time.localeCompare(b.start_time));
-        timeLabel = [
-          ...new Set(matched.map((slot) => formatTimeRange(slot.start_time, slot.end_time))),
-        ].join(", ");
-      }
-    }
-
-    return {
-      date: makeup.completed_date ?? "",
-      timeLabel,
-      name: makeup.studentName ?? "",
-      content: makeup.missed_progress?.trim() || makeup.completed_progress?.trim() || "",
-      absenceDate,
-    };
-  });
-
-  // 보충 진행 날짜 ASC → 수업시간 ASC → 학생 이름 가나다
-  const collator = new Intl.Collator("ko-KR");
-  rows.sort(
-    (a, b) =>
-      a.date.localeCompare(b.date) ||
-      a.timeLabel.localeCompare(b.timeLabel) ||
-      collator.compare(a.name, b.name),
-  );
+  const rows = buildMakeupExportRows(makeups, schedules);
 
   let buffer: Buffer;
   try {
-    buffer = await fillMakeupTemplate(rows);
+    buffer = await fillMakeupTemplate(
+      rows,
+      month
+        ? { minBands: 1, sheetName: monthlySheetName(month, "보충수업"), fitToWidth: true }
+        : {},
+    );
   } catch (error) {
     if (error instanceof Error && error.message) {
       console.error("makeup export template error", error.message);
@@ -104,13 +70,11 @@ export async function GET() {
     return errorResponse("보충 수업 엑셀을 만들지 못했어요. 다시 시도해주세요.", 500);
   }
 
-  const filename = "강사일지_보충수업.xlsx";
-
-  return new Response(new Uint8Array(buffer), {
-    headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="makeups.xlsx"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-      "Cache-Control": "no-store",
-    },
-  });
+  return month
+    ? xlsxDownloadResponse(
+        buffer,
+        monthlyExportFilename("강사일지_보충수업", month),
+        `makeups-${month}.xlsx`,
+      )
+    : xlsxDownloadResponse(buffer, "강사일지_보충수업.xlsx", "makeups.xlsx");
 }

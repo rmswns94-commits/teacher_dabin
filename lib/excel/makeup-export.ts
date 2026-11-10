@@ -9,11 +9,14 @@
 //        | 데이터 22행(행마다 D:E 병합) | 빈 구분행(A:F 병합)]
 // 완료 기록이 44건(2밴드)을 넘으면 두 번째 밴드의 스타일/병합/행높이를 그대로 복제해
 // 밴드를 뒤에 이어붙인다 — 다음 페이지에서도 제목+헤더가 동일 양식으로 반복된다.
+// 밴드 = 인쇄 1페이지: 밴드 경계마다 수동 페이지 나누기, 인쇄 영역 = 실제 밴드 범위
+// (여러 줄 내용으로 밴드가 길어져도 다음 밴드는 항상 새 페이지의 제목부터 시작한다).
 //
 // exceljs는 서버(route handler)에서만 import한다.
 import ExcelJS from "exceljs";
 
 import { makeupTemplateBase64 } from "./makeup-template-data";
+import { fitToPageWidth, mergesWithin, setBlockPageBreaks, setPrintArea } from "./print-layout";
 
 export const MAKEUP_TEMPLATE = {
   sheetName: "보충수업",
@@ -39,7 +42,15 @@ export type MakeupExportRow = {
 };
 
 // 완료된 보충 record 1건 = Excel row 1개 (이름 기준 merge/dedupe 없음)
-export async function fillMakeupTemplate(rows: MakeupExportRow[]) {
+// options.minBands: 전체 완료 기록 export는 원본처럼 2밴드(2페이지) 유지(기본값),
+//   월간 export는 1 — 필요한 밴드만 남겨 빈 양식 페이지를 인쇄하지 않는다.
+// options.sheetName: 월간 시트 이름 ("11월 보충수업")
+// options.fitToWidth: 월간 — 가로 1페이지 맞춤(세로 자동). 원본 양식은 A4 세로 인쇄 폭보다 조금 넓어
+//   Excel에서 가로로 두 장으로 잘리므로 축소해 한 장 폭에 맞춘다 (수동 페이지 나누기는 유지됨).
+export async function fillMakeupTemplate(
+  rows: MakeupExportRow[],
+  options: { minBands?: number; sheetName?: string; fitToWidth?: boolean } = {},
+) {
   if (rows.length === 0) {
     throw new Error("내보낼 완료된 보충 수업이 없어요.");
   }
@@ -61,7 +72,29 @@ export async function fillMakeupTemplate(rows: MakeupExportRow[]) {
   }
 
   const { bandSize, dataRowsPerBand, templateBands, columns } = MAKEUP_TEMPLATE;
-  const bandsNeeded = Math.max(templateBands, Math.ceil(rows.length / dataRowsPerBand));
+  const bandsNeeded = Math.max(
+    options.minBands ?? templateBands,
+    Math.ceil(rows.length / dataRowsPerBand),
+  );
+
+  // 필요한 밴드가 template보다 적으면(월간 22건 이하) 남는 template 밴드를 병합째 비운다.
+  // (exceljs spliceRows는 시트 끝 행 삭제가 동작하지 않아 값/스타일/행높이를 지운다 —
+  //  빈 행만 남고 인쇄 영역 밖이라 인쇄되지 않는다)
+  if (bandsNeeded < templateBands) {
+    const firstUnused = bandsNeeded * bandSize + 1;
+    const unusedRows = (templateBands - bandsNeeded) * bandSize;
+    for (const range of mergesWithin(sheet, firstUnused, unusedRows)) {
+      sheet.unMergeCells(range.top, range.left, range.bottom, range.right);
+    }
+    for (let rowNumber = firstUnused; rowNumber < firstUnused + unusedRows; rowNumber += 1) {
+      const row = sheet.getRow(rowNumber);
+      row.height = undefined as unknown as number;
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        cell.value = null;
+        cell.style = {};
+      });
+    }
+  }
 
   // 44건 초과: 두 번째 밴드(R26~R50)를 스타일 원본으로 밴드를 뒤에 복제한다.
   // 스타일/행높이/제목·헤더 값을 먼저 복사한 뒤 병합(A:F 제목/구분행, D:E 헤더+데이터)을 건다.
@@ -108,6 +141,13 @@ export async function fillMakeupTemplate(rows: MakeupExportRow[]) {
     }
   });
 
+  // 밴드 = 인쇄 1페이지 — 밴드 경계마다 수동 페이지 나누기(마지막 뒤에는 없음), 인쇄 영역 = 밴드 범위
+  setBlockPageBreaks(sheet, bandSize, bandsNeeded);
+  setPrintArea(sheet, 6, bandSize * bandsNeeded);
+  if (options.sheetName) {
+    sheet.name = options.sheetName;
+  }
+
   // 인쇄 설정을 원본과 동일하게 유지 — 원본 XML은
   // <pageSetup paperSize="9" orientation="portrait"/> 뿐인데 exceljs가 load 시
   // 기본값(scale/fitToWidth 등)을 merge해 저장 때 원본에 없던 attribute를 함께 쓴다.
@@ -125,6 +165,9 @@ export async function fillMakeupTemplate(rows: MakeupExportRow[]) {
     "verticalDpi",
   ]) {
     delete pageSetup[key];
+  }
+  if (options.fitToWidth) {
+    fitToPageWidth(sheet);
   }
 
   const buffer = await workbook.xlsx.writeBuffer();

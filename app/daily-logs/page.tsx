@@ -446,7 +446,7 @@ export default async function DailyLogsPage({
             description="매일의 수업 기록을 날짜별로 꺼내볼 수 있어요."
             action={
               <div className="flex flex-wrap gap-2">
-                <ExcelExportButton date={selectedDate} />
+                <ExcelExportButton date={selectedDate} month={month} />
                 <Button className="gap-2" asChild>
                   {/* generic 진입(bare): 작성 중 draft가 있으면 그 날짜로 resume되므로
                       "오늘"이 아닌 generic 라벨을 쓴다 — 오늘 고정 진입은 오늘 탭 CTA가 담당 */}

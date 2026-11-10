@@ -7,6 +7,15 @@
 // exceljs는 서버(route handler)에서만 import한다.
 import ExcelJS from "exceljs";
 
+import {
+  cloneRowBlock,
+  fitToPageWidth,
+  mergesWithin,
+  monthlySheetName,
+  offsetAddress,
+  setBlockPageBreaks,
+  setPrintArea,
+} from "./print-layout";
 import { teacherLogTemplateBase64 } from "./teacher-log-template-data";
 
 // ---- Business constants (요구사항 고정값 — 한 곳에서 관리) ----
@@ -44,6 +53,9 @@ export const TEACHER_LOG_TEMPLATE = {
   periods: Array.from({ length: TEACHER_LOG_CONSTANTS.MAX_PERIODS }, (_, index) =>
     periodAnchor(index),
   ),
+  // 하루 = 블록 1개 = 원본 인쇄 영역 A1:AU73 (A4 세로 100%에서 정확히 한 장)
+  blockRows: 73,
+  blockColumns: 47, // AU
 } as const;
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
@@ -79,11 +91,7 @@ export type TeacherLogExportData = {
   rows: TeacherLogExportRow[]; // 시작 시간순, 최대 7개 (1교시부터 채움)
 };
 
-export async function fillTeacherLogTemplate(data: TeacherLogExportData) {
-  if (data.rows.length > TEACHER_LOG_CONSTANTS.MAX_PERIODS) {
-    throw new Error("교사일지는 하루 최대 7교시까지 내보낼 수 있어요.");
-  }
-
+async function loadTeacherLogTemplate() {
   const workbook = new ExcelJS.Workbook();
   // exceljs 타입 정의가 구버전 Node Buffer 시그니처라 파라미터 타입으로만 맞춘다 (런타임 동일)
   type XlsxLoadInput = Parameters<(typeof workbook.xlsx)["load"]>[0];
@@ -96,21 +104,82 @@ export async function fillTeacherLogTemplate(data: TeacherLogExportData) {
     throw new Error("교사일지 template이 올바르지 않아요.");
   }
 
-  sheet.getCell(TEACHER_LOG_TEMPLATE.dateCell).value = data.dateLabel;
-  sheet.getCell(TEACHER_LOG_TEMPLATE.teacherCell).value = TEACHER_LOG_CONSTANTS.TEACHER_NAME;
+  return { workbook, sheet };
+}
+
+function assertPeriodLimit(data: TeacherLogExportData) {
+  if (data.rows.length > TEACHER_LOG_CONSTANTS.MAX_PERIODS) {
+    throw new Error("교사일지는 하루 최대 7교시까지 내보낼 수 있어요.");
+  }
+}
+
+// 하루치 값 채우기 — 일 단위/월 단위가 같은 함수를 쓴다 (출력 내용 drift 방지).
+// rowOffset = 그 날짜 블록의 시작 행 - 1 (일 단위는 0)
+function writeTeacherLogBlock(sheet: ExcelJS.Worksheet, data: TeacherLogExportData, rowOffset: number) {
+  const cell = (address: string) => sheet.getCell(offsetAddress(address, rowOffset));
+
+  cell(TEACHER_LOG_TEMPLATE.dateCell).value = data.dateLabel;
+  cell(TEACHER_LOG_TEMPLATE.teacherCell).value = TEACHER_LOG_CONSTANTS.TEACHER_NAME;
 
   // 값만 clear 후 채움 (스타일/병합은 건드리지 않는다 — template은 이미 clean이지만 방어적으로)
   TEACHER_LOG_TEMPLATE.periods.forEach((anchor, index) => {
     const row = data.rows[index];
-    sheet.getCell(anchor.timeCell).value = row
-      ? formatPeriodTime(row.startTime, row.endTime)
-      : null;
-    sheet.getCell(anchor.textbookCell).value = row?.textbook ? row.textbook : null;
-    sheet.getCell(anchor.progressCell).value = row?.progress ? row.progress : null;
-    sheet.getCell(anchor.noteCell).value = null; // 비고는 이번 요구에서 항상 blank
+    cell(anchor.timeCell).value = row ? formatPeriodTime(row.startTime, row.endTime) : null;
+    cell(anchor.textbookCell).value = row?.textbook ? row.textbook : null;
+    cell(anchor.progressCell).value = row?.progress ? row.progress : null;
+    cell(anchor.noteCell).value = null; // 비고는 이번 요구에서 항상 blank
   });
 
   // 출근 2:00 / 퇴근 9:20은 template 원본 셀 값(h:mm 시간값)을 그대로 유지한다.
+}
+
+export async function fillTeacherLogTemplate(data: TeacherLogExportData) {
+  assertPeriodLimit(data);
+
+  const { workbook, sheet } = await loadTeacherLogTemplate();
+  writeTeacherLogBlock(sheet, data, 0);
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}
+
+// 월간 교사일지 — 시트 1개에 날짜마다 원본 블록(A1:AU73)을 이어 붙인다.
+// 블록 = A4 한 장(원본 인쇄 설정: 세로, 여백 0, 가로·세로 가운데)이고 블록 경계마다
+// 수동 페이지 나누기를 넣으므로 k번째 날짜 = k쪽 — 양면 인쇄 시 앞/뒤가 날짜 순서대로 이어진다.
+// 가로 1페이지 맞춤(세로 자동)을 더한다: 블록은 100%에서 이미 A4 폭 안이라 배율은 그대로이고,
+// 인쇄 가능 폭이 좁은 프린터에서만 축소돼 가로로 잘리지 않는다.
+export async function fillMonthlyTeacherLogTemplate({
+  month,
+  days,
+}: {
+  month: string; // "YYYY-MM"
+  days: TeacherLogExportData[]; // 날짜 오름차순, 기록이 있는 날짜만
+}) {
+  if (days.length === 0) {
+    throw new Error("내보낼 수업 기록이 없어요.");
+  }
+  days.forEach(assertPeriodLimit);
+
+  const { workbook, sheet } = await loadTeacherLogTemplate();
+  const { blockRows, blockColumns } = TEACHER_LOG_TEMPLATE;
+
+  // 값을 채우기 전에 clean template 블록을 먼저 복제한다
+  const block = {
+    fromRow: 1,
+    rowCount: blockRows,
+    columnCount: blockColumns,
+    merges: mergesWithin(sheet, 1, blockRows),
+  };
+  for (let index = 1; index < days.length; index += 1) {
+    cloneRowBlock(sheet, block, index * blockRows + 1);
+  }
+
+  days.forEach((day, index) => writeTeacherLogBlock(sheet, day, index * blockRows));
+
+  setBlockPageBreaks(sheet, blockRows, days.length);
+  setPrintArea(sheet, blockColumns, blockRows * days.length);
+  fitToPageWidth(sheet);
+  sheet.name = monthlySheetName(month, TEACHER_LOG_TEMPLATE.sheetName);
 
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
